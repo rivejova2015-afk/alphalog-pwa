@@ -31,7 +31,14 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env* # envs (NO commitear secretos)
+.env.local
+.env.*.local
+.env
+
+# PERMITIR el template sin valores
+!.env.example
+
 
 # vercel
 .vercel
@@ -39,6 +46,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Base44 export (solo lectura local, NO versionar)
 reference/base44_export/
 
 
