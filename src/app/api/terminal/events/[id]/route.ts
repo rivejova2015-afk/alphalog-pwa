@@ -1,0 +1,121 @@
+// src/app/api/terminal/events/[id]/route.ts
+import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+
+/**
+ * PATCH /api/terminal/events/{id}
+ * Update calendar event
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = params;
+    const body = await request.json();
+    const { name, impact, timestamp_utc } = body;
+
+    // Verify ownership
+    const { data: existingEvent } = await supabase
+      .from("terminal_events")
+      .select("user_id, name, impact, timestamp_utc")
+      .eq("id", id)
+      .single();
+
+    if (!existingEvent || existingEvent.user_id !== userData.user.id) {
+      return NextResponse.json(
+        { error: "Event not found or unauthorized" },
+        { status: 404 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("terminal_events")
+      .update({
+        name: name !== undefined ? name : existingEvent.name,
+        impact: impact !== undefined ? impact : existingEvent.impact,
+        timestamp_utc: timestamp_utc !== undefined ? timestamp_utc : existingEvent.timestamp_utc,
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating event:", error);
+      return NextResponse.json(
+        { error: "Failed to update event" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(data);
+  } catch (err: unknown) {
+    console.error("Error in PATCH /api/terminal/events/[id]:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/terminal/events/{id}
+ * Soft-delete calendar event
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = params;
+
+    // Verify ownership
+    const { data: existingEvent } = await supabase
+      .from("terminal_events")
+      .select("user_id")
+      .eq("id", id)
+      .single();
+
+    if (!existingEvent || existingEvent.user_id !== userData.user.id) {
+      return NextResponse.json(
+        { error: "Event not found or unauthorized" },
+        { status: 404 }
+      );
+    }
+
+    const { error } = await supabase
+      .from("terminal_events")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error deleting event:", error);
+      return NextResponse.json(
+        { error: "Failed to delete event" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: unknown) {
+    console.error("Error in DELETE /api/terminal/events/[id]:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
