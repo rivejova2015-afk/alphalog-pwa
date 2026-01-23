@@ -1,32 +1,30 @@
 // src/proxy.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
+/**
+ * Lightweight proxy for middleware
+ * Defers Supabase client creation to runtime (lazy eval)
+ * Prevents build-time environment variable evaluation
+ */
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookies) => {
-          cookies.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
+  try {
+    // Lazy import to prevent build-time env evaluation
+    const { createClientForAPIRoute } = await import("@/lib/supabase/server");
+    const supabase = createClientForAPIRoute();
 
-  // Refresca/valida sesión (si existe) y deja cookies bien puestas.
-  await supabase.auth.getUser();
+    // Refresh/validate session (if exists) and update cookies
+    await supabase.auth.getUser();
+  } catch (error) {
+    // Log but don't fail: auth is optional for public routes
+    console.debug("Proxy auth check failed (optional):", error);
+  }
 
   return response;
 }
 
-// Evita correr proxy en assets estáticos
+// Avoid running proxy on static assets
 export const config = {
   matcher: ["/((?!_next/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 };

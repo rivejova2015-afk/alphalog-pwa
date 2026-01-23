@@ -2,17 +2,13 @@
 // Server-side utility to send push to a user (called by internal triggers)
 // Note: This is used by report generation and goal completion endpoints
 
-import { createClient } from '@supabase/supabase-js';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
 import { NextRequest, NextResponse } from 'next/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: { persistSession: false },
-  }
-);
+// Ensure Node.js runtime for compatibility with web-push and Supabase client
+export const runtime = 'nodejs';
+// Force dynamic to prevent build-time static evaluation (avoids env checks during Turbopack build)
+export const dynamic = 'force-dynamic';
 
 interface NotifyUserPayload {
   userId: string;
@@ -47,6 +43,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      );
+    }
+
+    // Create Supabase client at runtime (safe for build)
+    // Uses CommonJS require module (lazy-client.js) to prevent Turbopack static analysis
+    let supabase;
+    try {
+      // Lazy import of CommonJS module prevents build-time evaluation
+      const { getSupabaseClient } = await import('@/lib/supabase/lazy-client.js');
+      supabase = getSupabaseClient();
+    } catch (error) {
+      console.error('Failed to initialize Supabase:', error);
+      return NextResponse.json(
+        { error: 'Service unavailable: missing configuration' },
+        { status: 500 }
       );
     }
 
