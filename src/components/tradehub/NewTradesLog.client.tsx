@@ -258,10 +258,14 @@ export default function NewTradesLog() {
 
   const handleSave = async () => {
     try {
-      if (!formData.accountId) {
-        setError("Selecciona una cuenta");
+      // Validate account is selected
+      if (!formData.accountId && !selectedAccountId) {
+        setError("Debes seleccionar una cuenta antes de crear una operación");
         return;
       }
+
+      // Use selectedAccountId if formData.accountId is not set
+      const accountIdToUse = formData.accountId || selectedAccountId;
 
       if (!formData.symbol.trim()) {
         setError("Symbol es requerido");
@@ -320,7 +324,7 @@ export default function NewTradesLog() {
         : "/api/tradehub/trades";
 
       const payload = {
-        account_id: formData.accountId,
+        account_id: accountIdToUse,
         symbol: formData.symbol.trim(),
         direction: formData.direction.trim(),
         status: formData.status.trim(),
@@ -345,13 +349,28 @@ export default function NewTradesLog() {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        const errData = await response.json();
+        throw new Error(errData.error || errData.message || await response.text());
       }
 
-      await fetchTrades();
+      // Get the created/updated trade from response
+      const savedTrade = await response.json();
+
+      // Optimistic update: Add to list immediately
+      if (!editingTrade) {
+        // New trade - prepend to list
+        setTrades(prev => [savedTrade, ...prev]);
+      } else {
+        // Updated trade - replace in list
+        setTrades(prev => prev.map(t => t.id === savedTrade.id ? savedTrade : t));
+      }
+
       resetForm();
+      
+      // Refetch to ensure consistency with server
+      await fetchTrades();
     } catch (err: any) {
-      console.error("Error saving trade:", err);
+      console.error("[NewTradesLog] Error saving trade:", err);
       setError(`Error: ${err.message}`);
     }
   };
@@ -447,15 +466,30 @@ export default function NewTradesLog() {
                 </option>
               ))}
             </select>
+            {accounts.length === 0 && (
+              <p className="mt-2 text-sm text-yellow-400">
+                No tienes cuentas. <a href="/dashboard/tradehub?tab=accounts" className="underline">Ir a Accounts</a>
+              </p>
+            )}
           </div>
           <button
             onClick={() => {
+              if (!selectedAccountId) {
+                setError("Debes seleccionar una cuenta antes de crear una operación");
+                return;
+              }
               setShowForm(!showForm);
               if (!showForm) {
                 setFormData({ ...formData, accountId: selectedAccountId });
               }
             }}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold"
+            disabled={!selectedAccountId}
+            className={`px-4 py-2 rounded font-semibold ${
+              selectedAccountId
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-slate-600 text-slate-400 cursor-not-allowed"
+            }`}
+            title={!selectedAccountId ? "Selecciona una cuenta primero" : ""}
           >
             {showForm ? "Cancelar" : "+ Nueva Operación"}
           </button>

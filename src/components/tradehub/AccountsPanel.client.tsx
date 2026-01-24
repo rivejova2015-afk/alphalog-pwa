@@ -96,34 +96,55 @@ export default function AccountsPanel() {
 
       if (!response.ok) {
         const errData = await response.json();
-        setError(errData.message || "Error al guardar");
+        setError(errData.error || errData.message || "Error al guardar");
         return;
+      }
+
+      // Get the created/updated account from response
+      const savedAccount = await response.json();
+      
+      // Optimistic update: Add to list immediately
+      if (!editingAccount) {
+        // New account - prepend to list
+        setAccounts(prev => [savedAccount, ...prev]);
+      } else {
+        // Updated account - replace in list
+        setAccounts(prev => prev.map(acc => acc.id === savedAccount.id ? savedAccount : acc));
       }
 
       setShowDialog(false);
       setEditingAccount(null);
+      
+      // Refetch to ensure consistency with server
       fetchAccounts();
     } catch (err: any) {
-      console.error("Error saving account:", err);
-      setError("Error al guardar cuenta");
+      console.error("[AccountsPanel] Error saving account:", err);
+      setError(err?.message || "Error al guardar cuenta");
     }
   };
 
   const handleDelete = async (accountId: string) => {
     try {
+      setError("");
       const response = await fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete account");
+        const errData = await response.json();
+        setError(errData.error || "Failed to delete account");
+        return;
       }
 
+      // Optimistic update: Remove from list
+      setAccounts(prev => prev.filter(acc => acc.id !== accountId));
       setDeleteConfirm(null);
+      
+      // Refetch to ensure consistency
       fetchAccounts();
     } catch (err: any) {
-      console.error("Error deleting account:", err);
-      setError("Error al eliminar cuenta");
+      console.error("[AccountsPanel] Error deleting account:", err);
+      setError(err?.message || "Error al eliminar cuenta");
     }
   };
 

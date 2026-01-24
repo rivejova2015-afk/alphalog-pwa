@@ -151,17 +151,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify category exists and belongs to user
+    // Verify category exists (categories are global, no user_id check needed)
     const { data: category, error: catError } = await supabase
       .from("account_categories")
       .select("id")
       .eq("id", category_id)
-      .eq("user_id", userData.user.id)
+      .is("deleted_at", null)
       .single();
 
     if (catError || !category) {
       return NextResponse.json(
-        { error: "Category not found or unauthorized" },
+        { error: "Category not found" },
         { status: 404 }
       );
     }

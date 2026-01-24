@@ -18,12 +18,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Note: account_categories table does NOT have user_id - categories are global
     const { data: categories, error } = await supabase
       .from("account_categories")
       .select("id, name")
-      .eq("user_id", userData.user.id)
       .is("deleted_at", null)
-      .order("sort_index", { ascending: true });
+      .order("name", { ascending: true });
 
     if (error) {
       console.error("Error fetching categories:", error);
@@ -68,13 +68,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for duplicates (case-insensitive)
-    const nameLower = name.toLowerCase();
+    // Check for duplicates (case-insensitive) - categories are global
+    const nameLower = name.trim().toLowerCase();
     const { data: existing, error: checkError } = await supabase
       .from("account_categories")
       .select("id")
-      .eq("user_id", userData.user.id)
-      .eq("name_lower", nameLower)
+      .ilike("name", nameLower)
       .is("deleted_at", null)
       .single();
 
@@ -95,11 +94,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create category
+    // Create category (no user_id - categories are global)
     const { data: category, error: createError } = await supabase
       .from("account_categories")
       .insert({
-        user_id: userData.user.id,
         name: name.trim(),
       })
       .select("id, name")
