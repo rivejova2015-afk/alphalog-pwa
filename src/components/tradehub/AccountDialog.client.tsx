@@ -13,11 +13,14 @@ interface Account {
   phase_status: string | null;
   role: string | null;
   withdrawals_enabled: boolean;
+  currency?: string;
+  status?: string;
 }
 
 interface Category {
   id: string;
   name: string;
+  description?: string | null;
 }
 
 interface AccountDialogProps {
@@ -49,8 +52,17 @@ export default function AccountDialog({
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState(
     account?.withdrawals_enabled ?? true
   );
+  const [currency, setCurrency] = useState(account?.currency || "USD");
+  const [status, setStatus] = useState(account?.status || "active");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const parseNumber = (value: string) => {
+    if (!value) return null;
+    const normalized = value.replace(/,/g, "");
+    const parsed = Number.parseFloat(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,16 +84,19 @@ export default function AccountDialog({
         ...(account && { id: account.id }),
         name: name.trim(),
         category_id: categoryId,
-        account_size: accountSize ? parseFloat(accountSize) : null,
-        current_balance: currentBalance ? parseFloat(currentBalance) : null,
+        account_size: parseNumber(accountSize),
+        current_balance: parseNumber(currentBalance),
         operation_state: operationState || null,
         phase_status: phaseStatus || null,
         role: role || null,
         withdrawals_enabled: withdrawalsEnabled,
+        currency,
+        status,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving account:", err);
-      setError(err?.message || "Error al guardar cuenta");
+      const message = err instanceof Error ? err.message : "Error al guardar cuenta";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -186,6 +201,39 @@ export default function AccountDialog({
               placeholder="Ej: 9500"
               className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
+          </div>
+
+          {/* Currency */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Moneda
+            </label>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              disabled={loading}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              {["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CHF", "MXN"].map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Estado
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              disabled={loading}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              <option value="active">Activa</option>
+              <option value="archived">Archivada</option>
+            </select>
           </div>
 
           {/* Estado Operacional */}

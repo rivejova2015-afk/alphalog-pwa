@@ -2,6 +2,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+function unauthorized() {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
 /**
  * PATCH /api/accounts/[id]
  * Update or restore account
@@ -18,7 +22,7 @@ export async function PATCH(
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorized();
     }
 
     type PatchBody = {
@@ -31,6 +35,8 @@ export async function PATCH(
       phase_status?: string | null;
       role?: string | null;
       withdrawals_enabled?: boolean | null;
+      currency?: string;
+      status?: string;
     };
     const body = (await request.json()) as unknown as PatchBody;
     const { restore, ...updateData } = body;
@@ -65,10 +71,76 @@ export async function PATCH(
         );
       }
     } else {
-      // Update fields
+      const preparedUpdate: Record<string, unknown> = {};
+
+      if (updateData.name && updateData.name.trim()) {
+        preparedUpdate.name = updateData.name.trim();
+      }
+
+      if (updateData.category_id) {
+        const { data: category, error: catError } = await supabase
+          .from("account_categories")
+          .select("id")
+          .eq("id", updateData.category_id)
+          .eq("user_id", userData.user.id)
+          .is("deleted_at", null)
+          .single();
+
+        if (catError || !category) {
+          return NextResponse.json(
+            { error: "Category not found" },
+            { status: 404 }
+          );
+        }
+
+        preparedUpdate.category_id = category.id;
+      }
+
+      if (updateData.account_size !== undefined) {
+        preparedUpdate.account_size =
+          typeof updateData.account_size === "number"
+            ? updateData.account_size
+            : updateData.account_size
+            ? parseFloat(updateData.account_size as string)
+            : null;
+      }
+
+      if (updateData.current_balance !== undefined) {
+        preparedUpdate.current_balance =
+          typeof updateData.current_balance === "number"
+            ? updateData.current_balance
+            : updateData.current_balance
+            ? parseFloat(updateData.current_balance as string)
+            : null;
+      }
+
+      if (updateData.operation_state !== undefined) {
+        preparedUpdate.operation_state = updateData.operation_state || null;
+      }
+
+      if (updateData.phase_status !== undefined) {
+        preparedUpdate.phase_status = updateData.phase_status || null;
+      }
+
+      if (updateData.role !== undefined) {
+        preparedUpdate.role = updateData.role || null;
+      }
+
+      if (updateData.withdrawals_enabled !== undefined) {
+        preparedUpdate.withdrawals_enabled = !!updateData.withdrawals_enabled;
+      }
+
+      if (updateData.currency !== undefined) {
+        preparedUpdate.currency = updateData.currency?.trim?.() || "USD";
+      }
+
+      if (updateData.status !== undefined) {
+        preparedUpdate.status = updateData.status?.trim?.() || "active";
+      }
+
       const { error: updateError } = await supabase
         .from("accounts")
-        .update(updateData)
+        .update(preparedUpdate)
         .eq("id", params.id);
 
       if (updateError) {
@@ -103,7 +175,7 @@ export async function DELETE(
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorized();
     }
 
     // Verify account exists and belongs to user

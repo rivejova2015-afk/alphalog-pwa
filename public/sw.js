@@ -1,6 +1,7 @@
 // Service Worker for AlphaLog PWA
-const CACHE_VERSION = "v6a-2";
+const CACHE_VERSION = "v6b-3"; // Incrementar versión detecta cambios
 const CACHE_NAME = `alphalog-${CACHE_VERSION}`;
+let buildHash = null;
 
 // Precache on install
 const PRECACHE_URLS = [
@@ -44,6 +45,15 @@ self.addEventListener("activate", (event) => {
     })
   );
   self.clients.claim();
+  // Notificar a todos los clientes que hay una actualización
+  self.clients.matchAll().then((clients) => {
+    clients.forEach((client) => {
+      client.postMessage({
+        type: "SW_UPDATED",
+        timestamp: Date.now(),
+      });
+    });
+  });
 });
 
 self.addEventListener("fetch", (event) => {
@@ -153,5 +163,21 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === "CHECK_UPDATE") {
+    // Verificar si hay cambios en el manifest
+    fetch("/manifest.webmanifest?" + Date.now())
+      .then((res) => res.text())
+      .then((text) => {
+        const newHash = btoa(text).substring(0, 16);
+        if (buildHash && newHash !== buildHash) {
+          console.log("[SW] Update detected, new hash:", newHash);
+          event.ports[0].postMessage({ type: "UPDATE_AVAILABLE", hash: newHash });
+        }
+        buildHash = newHash;
+      })
+      .catch(() => {
+        // silenciar errores
+      });
   }
 });

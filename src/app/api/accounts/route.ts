@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
  * Query: trash = "true" (show deleted) or "false" (show active)
  * Returns: Array<Account>
  */
-type AccountCategory = { id: string; name: string };
+type AccountCategory = { id: string; name: string; description?: string | null };
 type AccountRow = {
   id: string;
   name: string;
@@ -19,6 +19,8 @@ type AccountRow = {
   phase_status: string | null;
   role: string | null;
   withdrawals_enabled: boolean | null;
+  currency: string;
+  status: string;
   sort_index: number | null;
   account_categories?: AccountCategory | null;
 };
@@ -46,11 +48,14 @@ export async function GET(request: NextRequest) {
         phase_status,
         role,
         withdrawals_enabled,
+        currency,
+        status,
         sort_index,
-        account_categories:category_id(id, name)
+        account_categories:category_id(id, name, description)
       `)
       .eq("user_id", userData.user.id)
-      .order("sort_index", { ascending: true });
+      .order("sort_index", { ascending: true })
+      .order("name", { ascending: true });
 
     // Filter by soft-delete status
     if (trash) {
@@ -80,6 +85,8 @@ export async function GET(request: NextRequest) {
       phase_status: acc.phase_status,
       role: acc.role,
       withdrawals_enabled: acc.withdrawals_enabled,
+      currency: acc.currency,
+      status: acc.status,
       sort_index: acc.sort_index,
       category: acc.account_categories ?? null,
     }));
@@ -109,6 +116,8 @@ type CreateAccountBody = {
   phase_status?: string | null;
   role?: string | null;
   withdrawals_enabled?: boolean | null;
+  currency?: string;
+  status?: string;
 };
 
 function isCreateAccountBody(body: unknown): body is CreateAccountBody {
@@ -142,6 +151,8 @@ export async function POST(request: NextRequest) {
       phase_status,
       role,
       withdrawals_enabled,
+      currency,
+      status,
     } = rawBody;
 
     if (!name || !name.trim() || !category_id) {
@@ -151,11 +162,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify category exists (categories are global, no user_id check needed)
+    // Verify category exists for this user
     const { data: category, error: catError } = await supabase
       .from("account_categories")
       .select("id")
       .eq("id", category_id)
+      .eq("user_id", userData.user.id)
       .is("deleted_at", null)
       .single();
 
@@ -179,6 +191,8 @@ export async function POST(request: NextRequest) {
         phase_status: phase_status || null,
         role: role || null,
         withdrawals_enabled: withdrawals_enabled ?? true,
+        currency: typeof currency === "string" && currency.trim() ? currency.trim() : "USD",
+        status: typeof status === "string" && status.trim() ? status.trim() : "active",
       })
       .select("*")
       .single();

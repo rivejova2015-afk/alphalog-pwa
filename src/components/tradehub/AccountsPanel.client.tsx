@@ -1,8 +1,9 @@
-// src/components/tradehub/AccountsPanel.client.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AccountDialog from "./AccountDialog.client";
+import CategoryManagerModal, { Category as CategoryType } from "./CategoryManagerModal.client";
+import AccountDetailsModal from "./AccountDetailsModal.client";
 
 interface Account {
   id: string;
@@ -14,416 +15,391 @@ interface Account {
   phase_status: string | null;
   role: string | null;
   withdrawals_enabled: boolean;
-  category?: { name: string };
+  currency: string;
+  status: string;
+  category?: { id: string; name: string; description?: string | null } | null;
 }
 
-interface Category {
-  id: string;
-  name: string;
+interface AccountStats {
+  wins: number;
+  losses: number;
+  ops: number;
+  winRate: number | null;
+  topSetup: { name: string; count: number } | null;
+  loading?: boolean;
+  error?: string;
+}
+
+function formatCurrency(value: number | null | undefined, currency = "USD") {
+  if (value === null || value === undefined) return "—";
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
+  } catch (_e) {
+    return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 }
 
 export default function AccountsPanel() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<CategoryType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showTrash, setShowTrash] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [showDialog, setShowDialog] = useState(false);
-  const [emptyingTrash, setEmptyingTrash] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [detailsAccountId, setDetailsAccountId] = useState<string | null>(null);
+  const [detailsAccountName, setDetailsAccountName] = useState("—");
+  const [detailsCurrency, setDetailsCurrency] = useState<string | undefined>("USD");
+  const [detailsBalance, setDetailsBalance] = useState<number | null | undefined>(null);
+  const [detailsEquity, setDetailsEquity] = useState<number | null | undefined>(null);
+  const [detailsStatus, setDetailsStatus] = useState<string | undefined>("active");
+  const [stats, setStats] = useState<Record<string, AccountStats>>({});
+
+  const sortedCategories = useMemo(() => {
+    const list = [...categories];
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories]);
+
+  const accountsByCategory = useMemo(() => {
+    const map: Record<string, Account[]> = {};
+    sortedCategories.forEach((cat) => {
+      map[cat.id] = [];
+    });
+    accounts.forEach((acc) => {
+      const key = acc.category_id || "__sin__";
+      if (!map[key]) map[key] = [];
+      map[key].push(acc);
+    });
+    Object.values(map).forEach((arr) => arr.sort((a, b) => a.name.localeCompare(b.name)));
+    return map;
+  }, [accounts, sortedCategories]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/account-categories");
+      if (!res.ok) {
+        throw new Error("failed");
+      }
+      const data = (await res.json()) as CategoryType[];
+      setCategories(Array.isArray(data) ? data : []);
+    } catch {
+      // keep previous categories
+    }
+  }, []);
 
   const fetchAccounts = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
+      setSessionExpired(false);
+      await loadCategories();
 
-      // Fetch categories (non-blocking)
-      try {
-        const categoriesResponse = await fetch("/api/account-categories");
-        if (categoriesResponse.ok) {
-          const cats: Category[] = await categoriesResponse.json();
-          setCategories(Array.isArray(cats) ? cats : []);
-        }
-      } catch (err) {
-        console.warn("[AccountsPanel] Categories fetch failed:", err);
-        // Continue without categories
-      }
-
-      // Fetch accounts (active or deleted based on showTrash)
-      const params = new URLSearchParams({
-        trash: showTrash ? "true" : "false",
-      });
-      const response = await fetch(`/api/accounts?${params}`);
-      if (!response.ok) {
-        const statusCode = response.status;
-        if (statusCode === 401) {
-          // Unauthorized - redirect to auth
-          window.location.href = "/auth";
-          return;
-        }
-        console.error(`[AccountsPanel] GET /api/accounts returned ${statusCode}`);
-        // Still show empty list with warning
+      const res = await fetch("/api/accounts");
+      const data = await res.json().catch(() => []);
+      if (res.status === 401 || res.status === 403) {
+        setSessionExpired(true);
         setAccounts([]);
         return;
       }
-
-      const data = await response.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudieron cargar las cuentas");
+      }
       setAccounts(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      console.error("[AccountsPanel] Error fetching accounts:", err);
-      // Network error or JSON parse error - show empty list
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al cargar cuentas";
+      setError(message);
       setAccounts([]);
     } finally {
       setLoading(false);
     }
-  }, [showTrash]);
+  }, [loadCategories]);
 
   useEffect(() => {
-    fetchAccounts();
-  }, [showTrash, fetchAccounts]);
+    void fetchAccounts();
+  }, [fetchAccounts]);
 
-  const handleSave = async (accountData: Partial<Account>) => {
+  useEffect(() => {
+    accounts.forEach((acc) => {
+      if (!stats[acc.id]) {
+        void fetchAccountStats(acc.id);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts]);
+
+  const fetchAccountStats = async (accountId: string) => {
+    setStats((prev) => ({
+      ...prev,
+      [accountId]: { wins: 0, losses: 0, ops: 0, winRate: null, topSetup: null, loading: true },
+    }));
+    try {
+      const params = new URLSearchParams({
+        accountId,
+        closedOnly: "true",
+        range: "all",
+        limit: "200",
+        offset: "0",
+      });
+      const res = await fetch(`/api/tradehub/trades?${params.toString()}`);
+      const data = await res.json().catch(() => []);
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudo calcular KPIs");
+      }
+      const trades = Array.isArray(data) ? data : [];
+      const closed = trades.filter((t: { pnl?: number | null; exit_date?: string | null }) => t.exit_date && t.pnl !== 0 && t.pnl !== null);
+      const wins = closed.filter((t: { pnl?: number | null }) => (t.pnl ?? 0) > 0).length;
+      const losses = closed.filter((t: { pnl?: number | null }) => (t.pnl ?? 0) < 0).length;
+      const ops = wins + losses;
+      const winRate = ops > 0 ? Math.round((wins / ops) * 100) : null;
+      const setupCounts = new Map<string, { name: string; count: number }>();
+      closed.forEach((t: { setup?: { name?: string | null } }) => {
+        const key = t.setup?.name || "Sin setup";
+        const current = setupCounts.get(key) ?? { name: key, count: 0 };
+        setupCounts.set(key, { name: current.name, count: current.count + 1 });
+      });
+      const topSetup = Array.from(setupCounts.values()).sort((a, b) => b.count - a.count)[0] || null;
+      setStats((prev) => ({
+        ...prev,
+        [accountId]: { wins, losses, ops, winRate, topSetup },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al calcular KPIs";
+      setStats((prev) => ({
+        ...prev,
+        [accountId]: { wins: 0, losses: 0, ops: 0, winRate: null, topSetup: null, error: message },
+      }));
+    }
+  };
+
+  const handleSaveAccount = async (accountData: Partial<Account>) => {
     try {
       setError("");
       const method = editingAccount ? "PATCH" : "POST";
       const url = editingAccount ? `/api/accounts/${editingAccount.id}` : "/api/accounts";
-      const response = await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(accountData),
       });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        setError(errData.error || errData.message || "Error al guardar");
-        return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || data?.message || "Error al guardar");
       }
-
-      // Get the created/updated account from response
-      const savedAccount = await response.json();
-      
-      // Optimistic update: Add to list immediately
-      if (!editingAccount) {
-        // New account - prepend to list
-        setAccounts(prev => [savedAccount, ...prev]);
-      } else {
-        // Updated account - replace in list
-        setAccounts(prev => prev.map(acc => acc.id === savedAccount.id ? savedAccount : acc));
-      }
-
-      setShowDialog(false);
+      setShowAccountDialog(false);
       setEditingAccount(null);
-      
-      // Refetch to ensure consistency with server
-      fetchAccounts();
-    } catch (err: any) {
-      console.error("[AccountsPanel] Error saving account:", err);
-      setError(err?.message || "Error al guardar cuenta");
+      void fetchAccounts();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al guardar cuenta";
+      setError(message);
     }
   };
 
-  const handleDelete = async (accountId: string) => {
+  const handleDeleteAccount = async (accountId: string) => {
+    if (!confirm("¿Eliminar esta cuenta?")) return;
     try {
-      setError("");
-      const response = await fetch(`/api/accounts/${accountId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        setError(errData.error || "Failed to delete account");
-        return;
+      const res = await fetch(`/api/accounts/${accountId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudo eliminar");
       }
-
-      // Optimistic update: Remove from list
-      setAccounts(prev => prev.filter(acc => acc.id !== accountId));
-      setDeleteConfirm(null);
-      
-      // Refetch to ensure consistency
-      fetchAccounts();
-    } catch (err: any) {
-      console.error("[AccountsPanel] Error deleting account:", err);
-      setError(err?.message || "Error al eliminar cuenta");
+      setAccounts((prev) => prev.filter((a) => a.id !== accountId));
+      void fetchAccounts();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al eliminar";
+      setError(message);
     }
   };
 
-  const handleRestore = async (accountId: string) => {
-    try {
-      const response = await fetch(`/api/accounts/${accountId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restore: true }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to restore account");
-      }
-
-      fetchAccounts();
-    } catch (err: any) {
-      console.error("Error restoring account:", err);
-      setError("Error al restaurar cuenta");
-    }
-  };
-
-  const handleEmptyTrash = async () => {
-    const confirmed = confirm(
-      "¿Estás seguro? Se eliminarán PERMANENTEMENTE todas las cuentas en la papelera. Esta acción NO se puede deshacer."
-    );
-    if (!confirmed) return;
-
-    try {
-      setEmptyingTrash(true);
-      setError("");
-
-      const response = await fetch("/api/accounts/trash/empty", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to empty trash");
-      }
-
-      setShowTrash(false);
-      fetchAccounts();
-    } catch (err: any) {
-      console.error("Error emptying trash:", err);
-      setError("Error al vaciar papelera");
-    } finally {
-      setEmptyingTrash(false);
-    }
+  const openDetails = (acc: Account) => {
+    setDetailsAccountId(acc.id);
+    setDetailsAccountName(acc.name);
+    setDetailsCurrency(acc.currency);
+    setDetailsBalance(acc.current_balance);
+    setDetailsEquity(acc.account_size);
+    setDetailsStatus(acc.status);
   };
 
   if (loading) {
-    return (
-      <div style={{ padding: "16px", color: "#6b7280" }}>
-        Cargando cuentas...
-      </div>
-    );
+    return <div className="text-slate-400 p-4">Cargando cuentas...</div>;
   }
 
   return (
-    <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700" }}>
-          {showTrash ? "🗑️ Papelera" : "📋 Cuentas"}
-        </h2>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          {!showTrash && (
-            <button
-              onClick={() => {
-                setEditingAccount(null);
-                setShowDialog(true);
-              }}
-              style={{
-                padding: "8px 16px",
-                fontSize: "14px",
-                backgroundColor: "#3b82f6",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              + Nueva Cuenta
-            </button>
-          )}
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              cursor: "pointer",
-            }}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-50">Accounts</h2>
+          <p className="text-sm text-slate-400">Categorías siempre visibles y KPIs por cuenta</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowCategoryManager(true)}
+            className="px-3 py-2 rounded-lg border border-slate-700 text-slate-100 bg-slate-900 hover:bg-slate-800 text-sm"
           >
-            <input
-              type="checkbox"
-              checked={showTrash}
-              onChange={(e) => setShowTrash(e.target.checked)}
-              style={{ cursor: "pointer" }}
-            />
-            <span style={{ fontSize: "14px", color: "#4b5563" }}>
-              Ver papelera
-            </span>
-          </label>
+            Nueva/Manage Categoría
+          </button>
+          <button
+            onClick={() => {
+              setEditingAccount(null);
+              setShowAccountDialog(true);
+            }}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+          >
+            Nueva Cuenta
+          </button>
+          <button
+            onClick={() => void fetchAccounts()}
+            className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm"
+          >
+            Refrescar
+          </button>
         </div>
       </div>
 
-      {/* Error */}
+      {sessionExpired && (
+        <div className="p-4 rounded-lg border border-yellow-800 bg-yellow-900/20 text-yellow-200">
+          Tu sesión expiró. Vuelve a iniciar sesión. <a className="underline" href="/auth">Ir a Login</a>
+        </div>
+      )}
+
       {error && (
-        <div
-          style={{
-            padding: "12px",
-            backgroundColor: "#fee2e2",
-            color: "#991b1b",
-            borderRadius: "4px",
-            fontSize: "13px",
-          }}
-        >
-          {error}
-        </div>
+        <div className="p-4 rounded-lg border border-red-800 bg-red-900/20 text-red-200">{error}</div>
       )}
 
-      {/* Vaciar Papelera */}
-      {showTrash && accounts.length > 0 && (
-        <button
-          onClick={handleEmptyTrash}
-          disabled={emptyingTrash}
-          style={{
-            padding: "10px 16px",
-            fontSize: "14px",
-            backgroundColor: "#ef4444",
-            color: "#fff",
-            border: "none",
-            borderRadius: "4px",
-            cursor: emptyingTrash ? "not-allowed" : "pointer",
-            opacity: emptyingTrash ? 0.6 : 1,
-          }}
-        >
-          {emptyingTrash ? "Vaciando..." : "🗑️ Vaciar papelera"}
-        </button>
-      )}
+      <div className="space-y-4">
+        {sortedCategories.map((cat) => {
+          const accountsForCat = accountsByCategory[cat.id] || [];
+          return (
+            <div key={cat.id} className="rounded-xl border border-slate-800 bg-slate-900/60">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+                <div>
+                  <div className="text-base font-semibold text-slate-50">{cat.name}</div>
+                  {cat.description && <div className="text-sm text-slate-400">{cat.description}</div>}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCategoryManager(true)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => setShowCategoryManager(true)}
+                    className="px-3 py-1.5 rounded-lg bg-red-900/40 hover:bg-red-800 text-red-200 text-xs"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
 
-      {/* Accounts List */}
-      {accounts.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "32px", color: "#9ca3af" }}>
-          {showTrash ? "Sin cuentas en papelera" : "Sin cuentas. ¡Crea una!"}
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: "8px" }}>
-          {accounts.map((account) => (
-            <div
-              key={account.id}
-              style={{
-                padding: "12px",
-                backgroundColor: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: "4px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937" }}>
-                  {account.name}
-                </div>
-                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
-                  {account.category?.name || "Sin categoría"}
-                  {account.role && ` • ${account.role}`}
-                  {account.operation_state && ` • ${account.operation_state}`}
-                </div>
-                {account.current_balance !== null && (
-                  <div style={{ fontSize: "12px", color: "#059669", marginTop: "2px" }}>
-                    Balance: ${account.current_balance.toFixed(2)}
+              <div className="p-4 space-y-3">
+                {accountsForCat.length === 0 ? (
+                  <div className="text-sm text-slate-400">Sin cuentas en esta categoría.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {accountsForCat.map((acc) => {
+                      const stat = stats[acc.id];
+                      return (
+                        <div key={acc.id} className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <div className="text-lg font-semibold text-slate-50">{acc.name}</div>
+                              <div className="text-sm text-slate-400">
+                                {acc.currency} · Balance {formatCurrency(acc.current_balance, acc.currency)} · Equity {formatCurrency(acc.account_size, acc.currency)}
+                              </div>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-full border ${acc.status === "archived" ? "border-slate-700 text-slate-400" : "border-green-700 text-green-300"}`}>
+                              {acc.status === "archived" ? "Archivada" : "Activa"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 text-sm">
+                            <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2">
+                              <div className="text-xs text-slate-400">Winrate</div>
+                              <div className="text-slate-50 font-semibold">{stat?.winRate !== undefined && stat?.winRate !== null ? `${stat.winRate}%` : stat?.loading ? "..." : "—"}</div>
+                            </div>
+                            <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2">
+                              <div className="text-xs text-slate-400">Ops</div>
+                              <div className="text-slate-50 font-semibold">{stat?.ops ?? (stat?.loading ? "..." : 0)}</div>
+                            </div>
+                            <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2">
+                              <div className="text-xs text-slate-400">Top setup</div>
+                              <div className="text-slate-50 font-semibold truncate">{stat?.topSetup?.name || (stat?.loading ? "..." : "—")}</div>
+                            </div>
+                          </div>
+                          {stat?.error && <div className="text-xs text-red-300">{stat.error}</div>}
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingAccount(acc);
+                                setShowAccountDialog(true);
+                              }}
+                              className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => openDetails(acc)}
+                              className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                            >
+                              Detalles
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAccount(acc.id)}
+                              className="px-3 py-1.5 rounded-md bg-red-900/40 hover:bg-red-800 text-red-200 text-xs"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-
-              <div style={{ display: "flex", gap: "6px" }}>
-                {!showTrash ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setEditingAccount(account);
-                        setShowDialog(true);
-                      }}
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: "12px",
-                        backgroundColor: "#e0e7ff",
-                        color: "#4338ca",
-                        border: "none",
-                        borderRadius: "3px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Editar
-                    </button>
-                    {deleteConfirm === account.id ? (
-                      <>
-                        <button
-                          onClick={() => handleDelete(account.id)}
-                          style={{
-                            padding: "6px 12px",
-                            fontSize: "12px",
-                            backgroundColor: "#ef4444",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "3px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm(null)}
-                          style={{
-                            padding: "6px 12px",
-                            fontSize: "12px",
-                            backgroundColor: "#e5e7eb",
-                            color: "#1f2937",
-                            border: "none",
-                            borderRadius: "3px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Cancelar
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setDeleteConfirm(account.id)}
-                        style={{
-                          padding: "6px 12px",
-                          fontSize: "12px",
-                          backgroundColor: "#fee2e2",
-                          color: "#991b1b",
-                          border: "none",
-                          borderRadius: "3px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Borrar
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => handleRestore(account.id)}
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: "12px",
-                        backgroundColor: "#dcfce7",
-                        color: "#166534",
-                        border: "none",
-                        borderRadius: "3px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Restaurar
-                    </button>
-                  </>
-                )}
-              </div>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
 
-      {/* Dialog */}
-      {showDialog && (
+        {sortedCategories.length === 0 && (
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900 text-slate-300">No hay categorías. Crea una para comenzar.</div>
+        )}
+      </div>
+
+      {showAccountDialog && (
         <AccountDialog
           account={editingAccount || undefined}
           categories={categories}
-          onSave={handleSave}
+          onSave={handleSaveAccount}
           onClose={() => {
-            setShowDialog(false);
+            setShowAccountDialog(false);
             setEditingAccount(null);
           }}
+        />
+      )}
+
+      {showCategoryManager && (
+        <CategoryManagerModal
+          open={showCategoryManager}
+          onClose={() => setShowCategoryManager(false)}
+          onUpdated={() => {
+            void loadCategories();
+            void fetchAccounts();
+          }}
+        />
+      )}
+
+      {detailsAccountId && (
+        <AccountDetailsModal
+          open={!!detailsAccountId}
+          accountId={detailsAccountId}
+          accountName={detailsAccountName}
+          currency={detailsCurrency}
+          balance={detailsBalance}
+          equity={detailsEquity}
+          status={detailsStatus}
+          onClose={() => setDetailsAccountId(null)}
         />
       )}
     </div>

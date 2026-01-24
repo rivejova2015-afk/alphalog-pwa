@@ -18,12 +18,37 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const accountId = url.searchParams.get("accountId");
     const trash = url.searchParams.get("trash") === "true";
+    const status = url.searchParams.get("status");
+    const closedOnly = url.searchParams.get("closedOnly") === "true";
+    const range = url.searchParams.get("range");
+    const limit = Number(url.searchParams.get("limit") || 50);
+    const offset = Number(url.searchParams.get("offset") || 0);
+
+    let dateFrom: string | null = null;
+    if (range && range !== "all") {
+      const today = new Date();
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      const daysMap: Record<string, number> = {
+        "30": 30,
+        "90": 90,
+        "120": 120,
+        "365": 365,
+      };
+
+      if (range === "ytd") {
+        dateFrom = startOfYear.toISOString().slice(0, 10);
+      } else if (daysMap[range]) {
+        const d = new Date();
+        d.setDate(d.getDate() - daysMap[range]);
+        dateFrom = d.toISOString().slice(0, 10);
+      }
+    }
 
     let query = supabase
       .from("trades")
       .select("*, account:accounts(id, name), setup:setups(id, name)")
       .eq("user_id", userData.user.id)
-      .order("created_at", { ascending: false });
+      .order("exit_date", { ascending: false });
 
     if (accountId) {
       query = query.eq("account_id", accountId);
@@ -33,6 +58,24 @@ export async function GET(request: NextRequest) {
       query = query.not("deleted_at", "is", null);
     } else {
       query = query.is("deleted_at", null);
+    }
+
+    if (status) {
+      query = query.ilike("status", status);
+    }
+
+    if (closedOnly) {
+      query = query.not("exit_date", "is", null);
+    }
+
+    if (dateFrom) {
+      query = query.gte("exit_date", dateFrom);
+    }
+
+    if (Number.isFinite(limit) && limit > 0) {
+      const from = Math.max(0, offset);
+      const to = from + limit - 1;
+      query = query.range(from, to);
     }
 
     const { data, error } = await query;
