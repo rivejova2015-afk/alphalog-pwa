@@ -1,5 +1,4 @@
-// src/app/dashboard/terminal/layout.tsx
-import BackToDashboardButton from "@/components/dashboard/BackToDashboardButton";
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 
 export default function TerminalLayout({
   children,
@@ -7,11 +6,18 @@ export default function TerminalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-        <BackToDashboardButton />
-      </div>
-      {children}
+    <div className="min-h-screen bg-slate-950 md:ml-56">
+      {/* Header */}
+      <header className="border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-slate-50">Terminal</h1>
+          <BackToDashboardButton />
+        </div>
+      </header>
+      {/* Content */}
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {children}
+      </main>
     </div>
   );
 }

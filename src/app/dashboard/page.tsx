@@ -1,9 +1,7 @@
 // src/app/dashboard/page.tsx
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
-import ModulesStatus from "@/components/dashboard/ModulesStatus.client";
 import DashboardPerformancePanel from "@/components/dashboard/DashboardPerformancePanel";
 import { getAccountGroups, getPerformanceMetrics } from "@/lib/dashboard/queries";
 
@@ -28,27 +26,20 @@ export default async function Dashboard() {
     getPerformanceMetrics(userId),
   ]);
 
-  // Menú de navegación
-  const menuItems = [
-    { label: "TradeHub", href: "/dashboard/tradehub", icon: "📊" },
-    { label: "Terminal", href: "/dashboard/terminal", icon: "💹" },
-    { label: "Journal PT", href: "/dashboard/logs", icon: "📓" },
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950">
       {/* Header */}
-      <header className="border-b bg-white shadow-sm">
+      <header className="border-b border-slate-800 bg-slate-900 shadow-sm sticky top-0 z-10 md:ml-56">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">AlphaLog</h1>
-              <p className="mt-1 text-sm text-gray-500">Trading & Analysis Platform</p>
+              <h1 className="text-3xl font-bold text-slate-50">AlphaLog</h1>
+              <p className="mt-1 text-sm text-slate-400">Trading & Analysis Platform</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user.email}</p>
-                <p className="text-xs text-gray-500">Conectado</p>
+                <p className="text-sm font-medium text-slate-50">{user.email}</p>
+                <p className="text-xs text-slate-400">Conectado</p>
               </div>
               <LogoutButton />
             </div>
@@ -57,13 +48,13 @@ export default async function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 md:ml-56">
         {/* Welcome Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-2xl font-bold text-slate-50">
             Bienvenido, {user.user_metadata?.full_name?.split(" ")[0] || user.email?.split("@")[0]}
           </h2>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-slate-400">
             Accede a tus herramientas de trading y análisis.
           </p>
         </div>
@@ -71,13 +62,8 @@ export default async function Dashboard() {
         {/* Dashboard Performance Panel */}
         <DashboardPerformancePanel groups={groups} metrics={metrics} />
 
-        {/* Modules Status Panel */}
-        <div className="mt-12 rounded-lg bg-white p-6 shadow-sm sm:p-8">
-          <ModulesStatus />
-        </div>
-
         {/* Footer */}
-        <footer className="mt-12 border-t pt-8 text-center text-sm text-gray-600">
+        <footer className="mt-12 border-t border-slate-800 pt-8 text-center text-sm text-slate-400">
           <p>
             AlphaLog © 2024 | Trading & Analysis Platform
           </p>

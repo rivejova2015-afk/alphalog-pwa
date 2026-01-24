@@ -23,6 +23,7 @@ $$ language plpgsql;
 -- account_categories
 create table if not exists public.account_categories (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   deleted_at timestamptz null,
   created_at timestamptz not null default now(),
@@ -35,7 +36,7 @@ before update on public.account_categories
 for each row execute function public.set_updated_at();
 
 create unique index if not exists ux_account_categories_name_active
-  on public.account_categories (name)
+  on public.account_categories (user_id, name)
   where deleted_at is null;
 
 -- accounts

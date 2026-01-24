@@ -1,9 +1,7 @@
-// src/components/tradehub/AccountDialog.client.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/browser";
-import AccountCategorySelect from "./AccountCategorySelect.client";
+import { useState } from "react";
+import Link from "next/link";
 
 interface Account {
   id: string;
@@ -53,54 +51,18 @@ export default function AccountDialog({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showSeedButton, setShowSeedButton] = useState(!account);
-
-  useEffect(() => {
-    // Show seed button only if no categories and creating new
-    if (!account && categories.length === 0) {
-      setShowSeedButton(true);
-    } else {
-      setShowSeedButton(false);
-    }
-  }, [account, categories]);
-
-  const handleSeedCategories = async () => {
-    try {
-      setLoading(true);
-      const supabase = await createClient();
-
-      const defaultCategories = [
-        "Propfirm Forex",
-        "Propfirm Futuros",
-        "Forex Real",
-        "Futuros Real",
-        "Opciones",
-      ];
-
-      for (const catName of defaultCategories) {
-        await fetch("/api/account-categories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: catName }),
-        });
-      }
-
-      // Refetch categories (parent component will do this)
-      window.location.reload(); // Simple refresh
-    } catch (err: any) {
-      console.error("Error seeding categories:", err);
-      setError("Error al crear categorías");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!name.trim() || !categoryId) {
-      setError("Por favor completa los campos obligatorios");
+    if (!name.trim()) {
+      setError("El nombre es obligatorio");
+      return;
+    }
+
+    if (!categoryId) {
+      setError("Debes seleccionar una categoría. Si no hay ninguna, créala en Categorías");
       return;
     }
 
@@ -119,70 +81,44 @@ export default function AccountDialog({
       });
     } catch (err: any) {
       console.error("Error saving account:", err);
-      setError("Error al guardar cuenta");
+      setError(err?.message || "Error al guardar cuenta");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          backgroundColor: "#fff",
-          borderRadius: "8px",
-          padding: "24px",
-          maxWidth: "500px",
-          width: "90%",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2
-          style={{
-            fontSize: "20px",
-            fontWeight: "700",
-            color: "#1f2937",
-            margin: "0 0 16px 0",
-          }}
-        >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-lg bg-slate-900 border border-slate-800 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-semibold text-slate-50 mb-4">
           {account ? "Editar Cuenta" : "Nueva Cuenta"}
         </h2>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div
-              style={{
-                padding: "12px",
-                backgroundColor: "#fee2e2",
-                color: "#991b1b",
-                borderRadius: "4px",
-                fontSize: "13px",
-              }}
-            >
+            <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-300 text-sm">
               {error}
+            </div>
+          )}
+
+          {/* Categorías vacías: mostrar CTA */}
+          {!account && categories.length === 0 && (
+            <div className="p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
+              <p className="text-sm text-blue-300 mb-2">
+                No hay categorías disponibles. Crea una para continuar.
+              </p>
+              <Link
+                href="/dashboard/tradehub/categories"
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium underline"
+              >
+                → Ir a Categorías
+              </Link>
             </div>
           )}
 
           {/* Nombre */}
           <div>
-            <label style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937", display: "block", marginBottom: "6px" }}>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Nombre *
             </label>
             <input
@@ -191,29 +127,38 @@ export default function AccountDialog({
               onChange={(e) => setName(e.target.value)}
               disabled={loading}
               placeholder="Ej: Forex EURUSD"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: "14px",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                boxSizing: "border-box",
-              }}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
-          {/* Categoría */}
-          <AccountCategorySelect
-            value={categoryId}
-            onChange={setCategoryId}
-            categories={categories}
-            showSeedButton={showSeedButton && categories.length === 0}
-            onSeedSuccess={() => window.location.reload()}
-          />
+          {/* Categoría - OBLIGATORIA */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Categoría * {!categoryId && <span className="text-red-400">(requerida)</span>}
+            </label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              disabled={loading || categories.length === 0}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              <option value="">-- Selecciona una categoría --</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            {categories.length === 0 && (
+              <p className="text-xs text-yellow-400 mt-1">
+                Crea una categoría primero en la sección de Categorías
+              </p>
+            )}
+          </div>
 
           {/* Tamaño */}
           <div>
-            <label style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937", display: "block", marginBottom: "6px" }}>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Tamaño de Cuenta
             </label>
             <input
@@ -223,20 +168,13 @@ export default function AccountDialog({
               onChange={(e) => setAccountSize(e.target.value)}
               disabled={loading}
               placeholder="Ej: 10000"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: "14px",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                boxSizing: "border-box",
-              }}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Balance Actual */}
           <div>
-            <label style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937", display: "block", marginBottom: "6px" }}>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Balance Actual
             </label>
             <input
@@ -246,20 +184,13 @@ export default function AccountDialog({
               onChange={(e) => setCurrentBalance(e.target.value)}
               disabled={loading}
               placeholder="Ej: 9500"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: "14px",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                boxSizing: "border-box",
-              }}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Estado Operacional */}
           <div>
-            <label style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937", display: "block", marginBottom: "6px" }}>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Estado Operacional
             </label>
             <input
@@ -268,20 +199,13 @@ export default function AccountDialog({
               onChange={(e) => setOperationState(e.target.value)}
               disabled={loading}
               placeholder="Ej: Active, Paused, Closed"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: "14px",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                boxSizing: "border-box",
-              }}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Estado de Fase */}
           <div>
-            <label style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937", display: "block", marginBottom: "6px" }}>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Estado de Fase (Propfirm)
             </label>
             <input
@@ -290,20 +214,13 @@ export default function AccountDialog({
               onChange={(e) => setPhaseStatus(e.target.value)}
               disabled={loading}
               placeholder="Ej: Phase 1, Phase 2, Passed, Failed"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: "14px",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                boxSizing: "border-box",
-              }}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Rol */}
           <div>
-            <label style={{ fontSize: "14px", fontWeight: "500", color: "#1f2937", display: "block", marginBottom: "6px" }}>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Rol
             </label>
             <input
@@ -312,70 +229,36 @@ export default function AccountDialog({
               onChange={(e) => setRole(e.target.value)}
               disabled={loading}
               placeholder="Ej: Demo, Real, Propfirm"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: "14px",
-                border: "1px solid #d1d5db",
-                borderRadius: "4px",
-                boxSizing: "border-box",
-              }}
+              className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Retiros */}
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              cursor: "pointer",
-            }}
-          >
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={withdrawalsEnabled}
               onChange={(e) => setWithdrawalsEnabled(e.target.checked)}
               disabled={loading}
-              style={{ cursor: "pointer" }}
+              className="cursor-pointer"
             />
-            <span style={{ fontSize: "14px", color: "#4b5563" }}>
-              Retiros habilitados
-            </span>
+            <span className="text-sm text-slate-300">Retiros habilitados</span>
           </label>
 
           {/* Buttons */}
-          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+          <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              style={{
-                padding: "8px 16px",
-                fontSize: "14px",
-                backgroundColor: "#e5e7eb",
-                color: "#1f2937",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                opacity: loading ? 0.6 : 1,
-              }}
+              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg transition disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={loading}
-              style={{
-                padding: "8px 16px",
-                fontSize: "14px",
-                backgroundColor: "#3b82f6",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.6 : 1,
-              }}
+              disabled={loading || categories.length === 0}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50"
             >
               {loading ? "Guardando..." : account ? "Actualizar" : "Crear"}
             </button>
