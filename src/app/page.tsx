@@ -6,14 +6,19 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
 
-  if (!error && data?.user) {
-    // Hay sesión, redirige a dashboard
-    redirect("/dashboard");
+    if (!error && data?.user) {
+      // Hay sesión, redirige a dashboard
+      redirect("/dashboard");
+    }
+  } catch (error) {
+    // Log errors but don't crash
+    console.error("[Home] Auth check failed:", error instanceof Error ? error.message : error);
   }
 
-  // No hay sesión, redirige a auth
+  // No hay sesión (o error), redirige a auth
   redirect("/auth");
 }

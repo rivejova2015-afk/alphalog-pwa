@@ -12,10 +12,40 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
+        setAll(cookiesToSet) {
+          // IMPORTANT: In Server Components, we CANNOT set cookies during render.
+          // This function is called by Supabase when handling auth responses.
+          // Setting cookies here would cause: "Cookies can only be modified in a Server Action or Route Handler"
+          // 
+          // Solutions:
+          // 1. In Route Handlers (API routes): Safe to call cookieStore.set()
+          // 2. In Middleware: Safe to use response.cookies.set()
+          // 3. In Server Components: NOT safe during render - cookies are read-only
+          //
+          // For auth session updates, use:
+          // - POST /api/auth/refresh to update auth cookies
+          // - Or rely on middleware.ts which has safe cookie modification
+          
+          try {
+            // Try to set cookies, but fail gracefully if we're in a Server Component render
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch (error: any) {
+            // If we get "Cookies can only be modified in a Server Action or Route Handler",
+            // it means we're in a Server Component render - this is expected and safe to ignore
+            // because middleware will handle cookie updates on the next request
+            if (
+              error?.message?.includes?.('Cookies can only be modified') ||
+              error?.digest?.includes?.('NEXT_DYNAMIC_ASYNC_CLIENT_COMPONENT')
+            ) {
+              console.debug('[Supabase] Cookie set deferred to middleware/route handler');
+              // Silently continue - middleware or a Route Handler will update cookies
+            } else {
+              // For other errors, log but don't fail
+              console.error('[Supabase] Cookie set error:', error?.message || error);
+            }
+          }
         },
       },
     }

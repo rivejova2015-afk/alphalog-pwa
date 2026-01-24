@@ -5,27 +5,45 @@ import { NextResponse, type NextRequest } from "next/server";
  * Lightweight proxy for middleware
  * Defers Supabase client creation to runtime (lazy eval)
  * Prevents build-time environment variable evaluation
+ * 
+ * IMPORTANT: Middleware IS allowed to modify cookies via NextResponse.
+ * This is where we safely handle auth session updates.
  */
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   try {
     // Lazy import to prevent build-time env evaluation
-    const { createClientForAPIRoute } = await import("@/lib/supabase/server");
-    const supabase = createClientForAPIRoute();
+    const { createServerClient } = await import("@supabase/ssr");
+    const { cookies: getCookies } = await import("next/headers");
+    
+    const cookieStore = await getCookies();
 
-    // Refresh/validate session (if exists) and update cookies
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            // SAFE: Middleware CAN modify cookies via response object
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options);
+            });
+          },
+        },
+      }
+    );
+
+    // Validate/refresh session (this may update cookies)
     await supabase.auth.getUser();
   } catch (error) {
     // Log but don't fail: auth is optional for public routes
-    console.debug("Proxy auth check failed (optional):", error);
+    console.debug("[Proxy] Auth check failed (optional):", error instanceof Error ? error.message : error);
   }
 
   return response;
 }
-
-// Avoid running proxy on static assets
-export const config = {
-  matcher: ["/((?!_next/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
-};
 
