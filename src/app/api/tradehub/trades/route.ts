@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const accountId = url.searchParams.get("accountId");
+    const setupId = url.searchParams.get("setupId");
     const trash = url.searchParams.get("trash") === "true";
     const status = url.searchParams.get("status");
     const closedOnly = url.searchParams.get("closedOnly") === "true";
@@ -52,6 +53,10 @@ export async function GET(request: NextRequest) {
 
     if (accountId) {
       query = query.eq("account_id", accountId);
+    }
+
+    if (setupId) {
+      query = query.eq("setup_id", setupId);
     }
 
     if (trash) {

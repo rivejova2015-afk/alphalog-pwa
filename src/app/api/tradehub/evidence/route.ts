@@ -5,7 +5,8 @@ import { randomUUID } from "crypto";
 
 /**
  * GET /api/tradehub/evidence
- * Returns evidence for authenticated user
+ * Returns evidence for authenticated user, optionally filtered by setup or range
+ * Params: setupId (optional), range (optional: 30/90/120/365/ytd/all)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,12 +17,48 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    const url = new URL(request.url);
+    const setupId = url.searchParams.get("setupId");
+    const range = url.searchParams.get("range") || "all";
+
+    let dateFrom: string | null = null;
+    if (range && range !== "all") {
+      const today = new Date();
+      const startOfYear = new Date(today.getFullYear(), 0, 1);
+      const daysMap: Record<string, number> = {
+        "30": 30,
+        "90": 90,
+        "120": 120,
+        "365": 365,
+      };
+
+      if (range === "ytd") {
+        dateFrom = startOfYear.toISOString().slice(0, 10);
+      } else if (daysMap[range]) {
+        const d = new Date();
+        d.setDate(d.getDate() - daysMap[range]);
+        dateFrom = d.toISOString().slice(0, 10);
+      }
+    }
+
+    let query = supabase
       .from("tv_analysis_evidence")
-      .select("*, account:accounts(id, name), trade:trades(id, symbol, direction)")
+      .select("*, account:accounts(id, name), trade:trades(id, symbol, direction, setup_id)")
       .eq("user_id", userData.user.id)
-      .is("deleted_at", null)
-      .order("captured_at", { ascending: false });
+      .is("deleted_at", null);
+
+    // Filter by setup if provided
+    if (setupId) {
+      // Get evidence directly for this setup, OR evidence from trades of this setup
+      query = query.or(`setup_id.eq.${setupId},trade.setup_id.eq.${setupId}`);
+    }
+
+    // Filter by date range if provided
+    if (dateFrom) {
+      query = query.gte("captured_at", dateFrom);
+    }
+
+    const { data, error } = await query.order("captured_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching evidence:", error);
@@ -31,7 +68,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || []);
+    // Deduplicate by id
+    const seen = new Set<string>();
+    const dedupedData = (data || []).filter((ev: { id: string }) => {
+      if (seen.has(ev.id)) return false;
+      seen.add(ev.id);
+      return true;
+    });
+
+    return NextResponse.json(dedupedData);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/evidence:", err);
     return NextResponse.json(
