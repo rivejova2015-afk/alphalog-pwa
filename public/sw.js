@@ -1,5 +1,5 @@
 // Service Worker for AlphaLog PWA
-const CACHE_VERSION = "v6b-3"; // Incrementar versión detecta cambios
+const CACHE_VERSION = "v6b-4"; // Incrementar versión detecta cambios
 const CACHE_NAME = `alphalog-${CACHE_VERSION}`;
 let buildHash = null;
 
@@ -77,8 +77,11 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .then((response) => {
           if (response.status === 200) {
+            const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, response.clone());
+              cache.put(request, responseClone).catch(() => {
+                // Ignore cache write errors
+              });
             });
           }
           return response;
@@ -102,8 +105,11 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .then((response) => {
           if (response.status === 200) {
+            const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, response.clone());
+              cache.put(request, responseClone).catch(() => {
+                // Ignore cache write errors
+              });
             });
           }
           return response;
@@ -130,8 +136,11 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
         return fetch(request).then((response) => {
           if (response.status === 200) {
+            const responseClone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, response.clone());
+              cache.put(request, responseClone).catch(() => {
+                // Ignore cache write errors
+              });
             });
           }
           return response;
@@ -146,8 +155,11 @@ self.addEventListener("fetch", (event) => {
     fetch(request)
       .then((response) => {
         if (response.status === 200 && request.method === "GET") {
+          const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, response.clone());
+            cache.put(request, responseClone).catch(() => {
+              // Ignore cache write errors
+            });
           });
         }
         return response;

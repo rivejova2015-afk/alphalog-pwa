@@ -12,7 +12,6 @@ interface Setup {
   created_at?: string;
   updated_at?: string;
 }
-
 interface Trade {
   id: string;
   setup_id?: string | null;
@@ -234,7 +233,7 @@ export default function Playbook() {
                   <div className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2">
                     <div className="text-xs text-slate-400">Winrate</div>
                     <div className="text-slate-50 font-semibold">
-                      {stat?.loading ? "..." : stat?.winrate !== null ? `${stat.winrate}%` : "—"}
+                      {stat?.loading ? "..." : stat?.winrate != null ? `${stat.winrate}%` : "—"}
                     </div>
                   </div>
                   <div className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2">
@@ -245,7 +244,7 @@ export default function Playbook() {
                   </div>
                   <div className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2">
                     <div className="text-xs text-slate-400">Profit</div>
-                    <div className={`font-semibold ${stat?.profitNeto ?? 0 >= 0 ? "text-green-300" : "text-red-300"}`}>
+                    <div className={`font-semibold ${(stat?.profitNeto ?? 0) >= 0 ? "text-green-300" : "text-red-300"}`}>
                       {stat?.loading ? "..." : formatCurrency(stat?.profitNeto ?? 0)}
                     </div>
                   </div>
@@ -297,3 +296,4 @@ export default function Playbook() {
     </div>
   );
 }
+
