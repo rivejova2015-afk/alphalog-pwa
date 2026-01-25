@@ -1,12 +1,11 @@
-// Service Worker for AlphaLog PWA
-const CACHE_VERSION = "v6b-4"; // Incrementar versión detecta cambios
+﻿// Service Worker for AlphaLog PWA
+const CACHE_VERSION = "v6b-5"; // Incrementar version detecta cambios
 const CACHE_NAME = `alphalog-${CACHE_VERSION}`;
 let buildHash = null;
 
 // Precache on install
 const PRECACHE_URLS = [
   "/offline",
-  "/dashboard",
   "/manifest.webmanifest",
 ];
 
@@ -45,7 +44,7 @@ self.addEventListener("activate", (event) => {
     })
   );
   self.clients.claim();
-  // Notificar a todos los clientes que hay una actualización
+  // Notify all clients that there is an update
   self.clients.matchAll().then((clients) => {
     clients.forEach((client) => {
       client.postMessage({
@@ -73,6 +72,10 @@ self.addEventListener("fetch", (event) => {
 
   // Navigation requests (HTML pages)
   if (request.mode === "navigate") {
+    if (url.pathname.startsWith("/dashboard")) {
+      event.respondWith(fetch(request, { cache: "no-store" }));
+      return;
+    }
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -177,7 +180,7 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
   if (event.data && event.data.type === "CHECK_UPDATE") {
-    // Verificar si hay cambios en el manifest
+    // Check if manifest changed
     fetch("/manifest.webmanifest?" + Date.now())
       .then((res) => res.text())
       .then((text) => {
@@ -189,7 +192,7 @@ self.addEventListener("message", (event) => {
         buildHash = newHash;
       })
       .catch(() => {
-        // silenciar errores
+        // Silence errors
       });
   }
 });
