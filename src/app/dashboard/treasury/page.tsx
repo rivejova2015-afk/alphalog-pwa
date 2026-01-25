@@ -1,4 +1,4 @@
-// src/app/dashboard/treasury/page.tsx
+﻿// src/app/dashboard/treasury/page.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -53,25 +53,25 @@ export default function TreasuryPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
+      <div className="flex items-center justify-center min-h-screen bg-slate-50/70">
         <div className="text-center">
           <div className="text-4xl mb-4">💰</div>
-          <p className="text-slate-300">Loading Treasury Dashboard...</p>
+          <p className="text-slate-500">Loading Treasury Dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-slate-950">
+    <div className="flex min-h-screen text-slate-700">
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col`}>
+      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-white/75 border-r border-white/60 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-all duration-300 flex flex-col`}>
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          {isSidebarOpen && <h2 className="font-bold text-white">Treasury</h2>}
+        <div className="p-4 border-b border-white/70 flex items-center justify-between">
+          {isSidebarOpen && <h2 className="font-semibold text-slate-900">Treasury</h2>}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-slate-800 rounded-lg transition"
+            className="p-2 hover:bg-white/70 text-slate-500 rounded-lg transition"
           >
             {isSidebarOpen ? "◀" : "▶"}
           </button>
@@ -84,10 +84,10 @@ export default function TreasuryPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition ${
                   activeTab === tab.id
-                    ? "bg-green-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:bg-white"
                 }`}
                 title={isSidebarOpen ? undefined : tab.label}
               >
@@ -99,18 +99,18 @@ export default function TreasuryPage() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-white/70">
           {isSidebarOpen ? (
-            <div className="text-xs text-slate-400">
-              <div className="font-medium text-slate-300 mb-1">Treasury Hub</div>
+            <div className="text-xs text-slate-500">
+              <div className="font-medium text-slate-700 mb-1">Treasury Hub</div>
               <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
                 <span>Financial Monitoring</span>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
             </div>
           )}
         </div>
@@ -119,17 +119,17 @@ export default function TreasuryPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto flex flex-col">
         {/* Header */}
-        <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <header className="bg-white/70 border-b border-white/70 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-sm">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">💰</span>
-              <h1 className="text-2xl font-bold text-white">{currentTab?.label}</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{currentTab?.label}</h1>
             </div>
-            <p className="text-sm text-slate-400">{currentTab?.description}</p>
+            <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg">
-            <Wallet className="w-4 h-4 text-green-400" />
-            <span className="text-sm text-slate-300">Treasury Operations</span>
+          <div className="flex items-center gap-3 px-4 py-2 bg-white/80 border border-white/70 rounded-xl text-slate-600 shadow-sm">
+            <Wallet className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm">Treasury Operations</span>
           </div>
         </header>
 

@@ -29,68 +29,68 @@ function TerminalOverview() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Market Status</span>
-            <span className="text-green-400">🟢</span>
+            <span className="text-sm text-slate-500">Market Status</span>
+            <span className="text-green-600">🟢</span>
           </div>
-          <div className="text-2xl font-bold text-white">OPEN</div>
+          <div className="text-2xl font-semibold text-slate-900">OPEN</div>
           <div className="text-xs text-slate-500 mt-1">Forex markets active</div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Volatility Index</span>
-            <span className="text-orange-400">📊</span>
+            <span className="text-sm text-slate-500">Volatility Index</span>
+            <span className="text-orange-600">📊</span>
           </div>
-          <div className="text-2xl font-bold text-white">24.5</div>
+          <div className="text-2xl font-semibold text-slate-900">24.5</div>
           <div className="text-xs text-slate-500 mt-1">Moderate</div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Economic Events</span>
-            <span className="text-blue-400">📅</span>
+            <span className="text-sm text-slate-500">Economic Events</span>
+            <span className="text-blue-600">📅</span>
           </div>
-          <div className="text-2xl font-bold text-white">8</div>
+          <div className="text-2xl font-semibold text-slate-900">8</div>
           <div className="text-xs text-slate-500 mt-1">This week</div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Liquidity</span>
-            <span className="text-green-400">💧</span>
+            <span className="text-sm text-slate-500">Liquidity</span>
+            <span className="text-green-600">💧</span>
           </div>
-          <div className="text-2xl font-bold text-white">High</div>
+          <div className="text-2xl font-semibold text-slate-900">High</div>
           <div className="text-xs text-slate-500 mt-1">All pairs</div>
         </div>
       </div>
 
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Market Alerts</h3>
+      <div className="rounded-2xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">Market Alerts</h3>
         <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-slate-900 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-white/90 rounded-xl border border-white/60">
             <span className="text-xl">⚠️</span>
             <div className="flex-1">
-              <div className="font-medium text-white">ECB Interest Rate Decision</div>
-              <div className="text-sm text-slate-400">High impact on EUR pairs</div>
-              <div className="text-xs text-slate-500 mt-1">1 hour</div>
+              <div className="font-medium text-slate-900">ECB Interest Rate Decision</div>
+              <div className="text-sm text-slate-500">High impact on EUR pairs</div>
+              <div className="text-xs text-slate-400 mt-1">1 hour</div>
             </div>
           </div>
-          <div className="flex items-start gap-3 p-3 bg-slate-900 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-white/90 rounded-xl border border-white/60">
             <span className="text-xl">📈</span>
             <div className="flex-1">
-              <div className="font-medium text-white">US Non-Farm Payrolls</div>
-              <div className="text-sm text-slate-400">Major market moving event</div>
-              <div className="text-xs text-slate-500 mt-1">2 days</div>
+              <div className="font-medium text-slate-900">US Non-Farm Payrolls</div>
+              <div className="text-sm text-slate-500">Major market moving event</div>
+              <div className="text-xs text-slate-400 mt-1">2 days</div>
             </div>
           </div>
-          <div className="flex items-start gap-3 p-3 bg-slate-900 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-white/90 rounded-xl border border-white/60">
             <span className="text-xl">🔔</span>
             <div className="flex-1">
-              <div className="font-medium text-white">Bank of England Policy</div>
-              <div className="text-sm text-slate-400">GBP volatility expected</div>
-              <div className="text-xs text-slate-500 mt-1">3 days</div>
+              <div className="font-medium text-slate-900">Bank of England Policy</div>
+              <div className="text-sm text-slate-500">GBP volatility expected</div>
+              <div className="text-xs text-slate-400 mt-1">3 days</div>
             </div>
           </div>
         </div>
@@ -122,15 +122,15 @@ export default function TerminalPage() {
   const currentTab = TABS.find(t => t.id === activeTab);
 
   return (
-    <div className="flex h-screen bg-slate-950">
+    <div className="flex min-h-screen text-slate-700">
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col`}>
+      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-white/75 border-r border-white/60 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-all duration-300 flex flex-col`}>
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          {isSidebarOpen && <h2 className="font-bold text-white">Terminal</h2>}
+        <div className="p-4 border-b border-white/70 flex items-center justify-between">
+          {isSidebarOpen && <h2 className="font-semibold text-slate-900">Terminal</h2>}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-slate-800 rounded-lg transition"
+            className="p-2 hover:bg-white/70 text-slate-500 rounded-lg transition"
           >
             {isSidebarOpen ? "◀" : "▶"}
           </button>
@@ -143,10 +143,10 @@ export default function TerminalPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition ${
                   activeTab === tab.id
-                    ? "bg-purple-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:bg-white"
                 }`}
                 title={isSidebarOpen ? undefined : tab.label}
               >
@@ -158,10 +158,10 @@ export default function TerminalPage() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-white/70">
           {isSidebarOpen ? (
-            <div className="text-xs text-slate-400">
-              <div className="font-medium text-slate-300 mb-1">Market Terminal</div>
+            <div className="text-xs text-slate-500">
+              <div className="font-medium text-slate-700 mb-1">Market Terminal</div>
               <div className="flex items-center gap-1">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span>Live Data</span>
@@ -178,13 +178,13 @@ export default function TerminalPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto flex flex-col">
         {/* Header */}
-        <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <header className="bg-white/70 border-b border-white/70 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-sm">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">📡</span>
-              <h1 className="text-2xl font-bold text-white">{currentTab?.label}</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{currentTab?.label}</h1>
             </div>
-            <p className="text-sm text-slate-400">{currentTab?.description}</p>
+            <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
         </header>
 
@@ -197,8 +197,8 @@ export default function TerminalPage() {
             {activeTab === "evidence" && <EvidenceReports />}
             {activeTab === "search" && (
               <div className="text-center py-12">
-                <Search className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                <h3 className="text-slate-300 font-medium">Search Markets</h3>
+                <Search className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-slate-700 font-medium">Search Markets</h3>
                 <p className="text-slate-500 text-sm">Coming soon</p>
               </div>
             )}

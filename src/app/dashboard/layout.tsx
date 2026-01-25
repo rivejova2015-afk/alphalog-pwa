@@ -25,35 +25,38 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
+    <div className="min-h-screen text-slate-700">
       <SafeModeBanner />
       <OfflineBanner />
       <LiveAlphaLog />
 
       {/* Mobile menu toggle */}
-      <div className="fixed left-0 top-0 z-40 flex md:hidden items-center gap-2 p-4 bg-slate-900">
+      <div className="fixed left-0 top-0 z-40 flex md:hidden items-center gap-2 px-4 py-3 bg-white/70 backdrop-blur-xl border-b border-white/60 shadow-sm">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 rounded hover:bg-slate-800 transition"
+          className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-white/70 transition"
         >
           {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
-        <span className="text-lg font-bold">AlphaLog</span>
+        <span className="text-base font-semibold tracking-tight text-slate-900">AlphaLog</span>
       </div>
 
       {/* Sidebar - Desktop visible (md+), Mobile overlay */}
       <aside
         className={`${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed left-0 top-0 z-30 h-full w-56 bg-slate-900 border-r border-slate-800 transition-transform duration-300 md:translate-x-0 md:relative md:z-0 pt-16 md:pt-0 overflow-y-auto`}
+        } fixed left-0 top-0 z-30 h-full w-60 bg-white/75 border-r border-white/60 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-transform duration-300 md:translate-x-0 md:relative md:z-0 pt-16 md:pt-6 overflow-y-auto`}
       >
-        <nav className="space-y-1 p-4">
+        <nav className="space-y-1 px-4 pb-6">
+          <div className="hidden md:block px-2 pb-4">
+            <div className="text-xs uppercase tracking-[0.3em] text-slate-400">AlphaLog</div>
+          </div>
           {menuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
-              className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition hover:bg-slate-800 active:bg-slate-700"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-900 hover:shadow-sm"
             >
               <span className="text-lg">{item.icon}</span>
               <span>{item.label}</span>
@@ -65,7 +68,7 @@ export default function DashboardLayout({
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+          className="fixed inset-0 z-20 bg-slate-900/20 backdrop-blur-sm md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}

@@ -1,4 +1,4 @@
-// src/app/dashboard/logs/page.tsx
+﻿// src/app/dashboard/logs/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -28,80 +28,80 @@ function JournalOverview() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Total Entries</span>
-            <span className="text-blue-400">📝</span>
+            <span className="text-sm text-slate-500">Total Entries</span>
+            <span className="text-blue-600">📝</span>
           </div>
-          <div className="text-2xl font-bold text-white">156</div>
+          <div className="text-2xl font-semibold text-slate-900">156</div>
           <div className="text-xs text-slate-500 mt-1">All time</div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">This Month</span>
-            <span className="text-green-400">📊</span>
+            <span className="text-sm text-slate-500">This Month</span>
+            <span className="text-green-600">📊</span>
           </div>
-          <div className="text-2xl font-bold text-white">24</div>
+          <div className="text-2xl font-semibold text-slate-900">24</div>
           <div className="text-xs text-slate-500 mt-1">January 2026</div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Avg. Mood</span>
-            <span className="text-purple-400">😊</span>
+            <span className="text-sm text-slate-500">Avg. Mood</span>
+            <span className="text-purple-600">😊</span>
           </div>
-          <div className="text-2xl font-bold text-white">Good</div>
+          <div className="text-2xl font-semibold text-slate-900">Good</div>
           <div className="text-xs text-slate-500 mt-1">7.2/10</div>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Top Tag</span>
-            <span className="text-pink-400">🏷️</span>
+            <span className="text-sm text-slate-500">Top Tag</span>
+            <span className="text-rose-600">🏷️</span>
           </div>
-          <div className="text-2xl font-bold text-white">Trading</div>
+          <div className="text-2xl font-semibold text-slate-900">Trading</div>
           <div className="text-xs text-slate-500 mt-1">45 entries</div>
         </div>
       </div>
 
-      <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Recent Entries</h3>
+      <div className="rounded-2xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">Recent Entries</h3>
         <div className="space-y-3">
-          <div className="flex items-start gap-3 p-4 bg-slate-900 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+          <div className="flex items-start gap-3 p-4 bg-white/90 rounded-xl border border-white/60 shadow-sm transition hover:bg-white cursor-pointer">
             <span className="text-2xl">😊</span>
             <div className="flex-1">
-              <div className="font-medium text-white">Great trading day</div>
-              <div className="text-sm text-slate-400">4 winning trades, 3 losers. Stayed disciplined with risk management.</div>
+              <div className="font-medium text-slate-900">Great trading day</div>
+              <div className="text-sm text-slate-500">4 winning trades, 3 losers. Stayed disciplined with risk management.</div>
               <div className="flex gap-2 mt-2">
-                <span className="text-xs bg-blue-900 text-blue-200 px-2 py-1 rounded">trading</span>
-                <span className="text-xs bg-green-900 text-green-200 px-2 py-1 rounded">discipline</span>
+                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-100">trading</span>
+                <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-100">discipline</span>
               </div>
-              <div className="text-xs text-slate-500 mt-2">Today at 18:30</div>
+              <div className="text-xs text-slate-400 mt-2">Today at 18:30</div>
             </div>
           </div>
-          <div className="flex items-start gap-3 p-4 bg-slate-900 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+          <div className="flex items-start gap-3 p-4 bg-white/90 rounded-xl border border-white/60 shadow-sm transition hover:bg-white cursor-pointer">
             <span className="text-2xl">😐</span>
             <div className="flex-1">
-              <div className="font-medium text-white">Mixed results</div>
-              <div className="text-sm text-slate-400">Closed 2 winners early. Need to let profits run. Learned important lesson.</div>
+              <div className="font-medium text-slate-900">Mixed results</div>
+              <div className="text-sm text-slate-500">Closed 2 winners early. Need to let profits run. Learned important lesson.</div>
               <div className="flex gap-2 mt-2">
-                <span className="text-xs bg-purple-900 text-purple-200 px-2 py-1 rounded">lessons_learned</span>
-                <span className="text-xs bg-orange-900 text-orange-200 px-2 py-1 rounded">risk_management</span>
+                <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-100">lessons_learned</span>
+                <span className="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-full border border-amber-100">risk_management</span>
               </div>
-              <div className="text-xs text-slate-500 mt-2">Yesterday at 17:15</div>
+              <div className="text-xs text-slate-400 mt-2">Yesterday at 17:15</div>
             </div>
           </div>
-          <div className="flex items-start gap-3 p-4 bg-slate-900 rounded-lg hover:bg-slate-800 transition cursor-pointer">
+          <div className="flex items-start gap-3 p-4 bg-white/90 rounded-xl border border-white/60 shadow-sm transition hover:bg-white cursor-pointer">
             <span className="text-2xl">😟</span>
             <div className="flex-1">
-              <div className="font-medium text-white">Challenging session</div>
-              <div className="text-sm text-slate-400">Overtraded after loss. Need to follow the rules. Reset for tomorrow.</div>
+              <div className="font-medium text-slate-900">Challenging session</div>
+              <div className="text-sm text-slate-500">Overtraded after loss. Need to follow the rules. Reset for tomorrow.</div>
               <div className="flex gap-2 mt-2">
-                <span className="text-xs bg-red-900 text-red-200 px-2 py-1 rounded">emotional_control</span>
-                <span className="text-xs bg-blue-900 text-blue-200 px-2 py-1 rounded">trading_rules</span>
+                <span className="text-xs bg-rose-50 text-rose-700 px-2 py-1 rounded-full border border-rose-100">emotional_control</span>
+                <span className="text-xs bg-sky-50 text-sky-700 px-2 py-1 rounded-full border border-sky-100">trading_rules</span>
               </div>
-              <div className="text-xs text-slate-500 mt-2">2 days ago at 19:00</div>
+              <div className="text-xs text-slate-400 mt-2">2 days ago at 19:00</div>
             </div>
           </div>
         </div>
@@ -137,25 +137,25 @@ export default function JournalPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
+      <div className="flex items-center justify-center min-h-screen bg-slate-50/70">
         <div className="text-center">
           <div className="text-4xl mb-4">📝</div>
-          <p className="text-slate-300">Loading Journal...</p>
+          <p className="text-slate-500">Loading Journal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-slate-950">
+    <div className="flex min-h-screen text-slate-700">
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col`}>
+      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-white/75 border-r border-white/60 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-all duration-300 flex flex-col`}>
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          {isSidebarOpen && <h2 className="font-bold text-white">Journal</h2>}
+        <div className="p-4 border-b border-white/70 flex items-center justify-between">
+          {isSidebarOpen && <h2 className="font-semibold text-slate-900">Journal</h2>}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-slate-800 rounded-lg transition"
+            className="p-2 hover:bg-white/70 text-slate-500 rounded-lg transition"
           >
             {isSidebarOpen ? "◀" : "▶"}
           </button>
@@ -168,10 +168,10 @@ export default function JournalPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition ${
                   activeTab === tab.id
-                    ? "bg-pink-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-600 hover:bg-white"
                 }`}
                 title={isSidebarOpen ? undefined : tab.label}
               >
@@ -183,18 +183,18 @@ export default function JournalPage() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-white/70">
           {isSidebarOpen ? (
-            <div className="text-xs text-slate-400">
-              <div className="font-medium text-slate-300 mb-1">Personal Journal</div>
+            <div className="text-xs text-slate-500">
+              <div className="font-medium text-slate-700 mb-1">Personal Journal</div>
               <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
                 <span>Reflection & Growth</span>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
+              <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
             </div>
           )}
         </div>
@@ -203,13 +203,13 @@ export default function JournalPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto flex flex-col">
         {/* Header */}
-        <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+        <header className="bg-white/70 border-b border-white/70 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-sm">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">📝</span>
-              <h1 className="text-2xl font-bold text-white">{currentTab?.label}</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{currentTab?.label}</h1>
             </div>
-            <p className="text-sm text-slate-400">{currentTab?.description}</p>
+            <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
         </header>
 
@@ -227,15 +227,15 @@ export default function JournalPage() {
             )}
             {activeTab === "search" && (
               <div className="text-center py-12">
-                <Search className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                <h3 className="text-slate-300 font-medium">Search Journal Entries</h3>
+                <Search className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-slate-700 font-medium">Search Journal Entries</h3>
                 <p className="text-slate-500 text-sm">Find entries by keywords or dates</p>
               </div>
             )}
             {activeTab === "tags" && (
               <div className="text-center py-12">
-                <Filter className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                <h3 className="text-slate-300 font-medium">Browse by Tags</h3>
+                <Filter className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-slate-700 font-medium">Browse by Tags</h3>
                 <p className="text-slate-500 text-sm">Organize entries by categories</p>
               </div>
             )}
