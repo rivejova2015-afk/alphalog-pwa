@@ -14,6 +14,8 @@ interface ErrorTimestamp {
 const STORAGE_KEY = 'alphashield_safe_mode';
 const ERROR_WINDOW_MS = 60000; // 60 seconds
 const ERROR_THRESHOLD = 3; // 3 errors to trigger
+const RECOVERY_KEY = 'alphashield_recovery_attempt';
+const RECOVERY_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Check if safe mode is currently active
@@ -242,4 +244,41 @@ export function initializeSafeModeTracking(
 ): void {
   // Register callback with logger to track errors
   loggerInstance.registerSafeModeCallback(trackErrorForSafeMode);
+}
+
+/**
+ * Attempt recovery when safe mode is active.
+ * Clears SW caches and forces a hard reload (throttled).
+ */
+export async function attemptAlphaShieldRecovery(force = false): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const lastAttempt = localStorage.getItem(RECOVERY_KEY);
+    const lastAttemptMs = lastAttempt ? Number(lastAttempt) : 0;
+    const now = Date.now();
+
+    if (!force && lastAttemptMs && now - lastAttemptMs < RECOVERY_COOLDOWN_MS) {
+      return false;
+    }
+
+    localStorage.setItem(RECOVERY_KEY, String(now));
+
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((reg) => reg.unregister()));
+    }
+
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('asr', String(now));
+    window.location.replace(url.toString());
+    return true;
+  } catch {
+    return false;
+  }
 }

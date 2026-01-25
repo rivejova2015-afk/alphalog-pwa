@@ -5,19 +5,32 @@
  * Discretely displayed at top of dashboard when safe mode is active
  */
 
-import React, { useState } from 'react';
-import { useSafeModeStatus } from '@/lib/alphashield/safeMode';
+import React, { useEffect, useState } from 'react';
+import { useSafeModeStatus, attemptAlphaShieldRecovery } from '@/lib/alphashield/safeMode';
 
 export default function SafeModeBanner() {
   const [active, exitSafeMode] = useSafeModeStatus();
-  const [mounted] = useState<boolean>(() => typeof window !== 'undefined');
+  const [isRecovering, setIsRecovering] = useState(false);
 
-  if (!mounted || !active) {
+  useEffect(() => {
+    if (!active) return;
+    attemptAlphaShieldRecovery(false).catch(() => {
+      // Recovery is best-effort
+    });
+  }, [active]);
+
+  if (!active) {
     return null;
   }
 
   const handleExit = () => {
     exitSafeMode();
+  };
+
+  const handleRecover = async () => {
+    setIsRecovering(true);
+    await attemptAlphaShieldRecovery(true);
+    setIsRecovering(false);
   };
 
   return (
@@ -36,12 +49,21 @@ export default function SafeModeBanner() {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleExit}
-          className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-orange-600 rounded hover:bg-orange-700 transition"
-        >
-          Salir
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRecover}
+            disabled={isRecovering}
+            className="flex-shrink-0 px-3 py-2 text-sm font-medium text-orange-700 bg-white border border-orange-200 rounded hover:bg-orange-100 transition disabled:opacity-60"
+          >
+            {isRecovering ? 'Actualizando...' : 'Actualizar'}
+          </button>
+          <button
+            onClick={handleExit}
+            className="flex-shrink-0 px-3 py-2 text-sm font-medium text-white bg-orange-600 rounded hover:bg-orange-700 transition"
+          >
+            Salir
+          </button>
+        </div>
       </div>
     </div>
   );
