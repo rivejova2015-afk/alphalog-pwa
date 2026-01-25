@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
@@ -10,36 +10,28 @@ export default function LogoutButton() {
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         console.error("[LogoutButton] Logout error:", error);
-        alert("Error al cerrar sesión: " + error.message);
+        alert("Error al cerrar sesion: " + error.message);
         return;
       }
 
       console.log("[LogoutButton] Logged out successfully");
-      router.refresh(); // Refresca la sesión en el servidor
-      router.push("/auth"); // Redirige a login
+      router.refresh();
+      router.push("/auth");
     } catch (err) {
       console.error("[LogoutButton] Unexpected error:", err);
-      alert("Error inesperado al cerrar sesión");
+      alert("Error inesperado al cerrar sesion");
     }
   };
 
   return (
     <button
       onClick={handleLogout}
-      style={{
-        marginTop: 16,
-        padding: "8px 16px",
-        backgroundColor: "#ef4444",
-        color: "#fff",
-        border: "none",
-        borderRadius: "4px",
-        cursor: "pointer",
-      }}
+      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-rose-600"
     >
-      Cerrar sesión
+      Cerrar sesion
     </button>
   );
 }
