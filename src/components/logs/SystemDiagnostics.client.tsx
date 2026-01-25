@@ -146,7 +146,7 @@ export function SystemDiagnostics() {
   };
 
   return (
-    <div className="space-y-4 p-4 border rounded-lg bg-slate-50">
+    <div className="space-y-4 p-4 border rounded-lg bg-slate-900">
       <h3 className="font-semibold text-sm text-gray-900">System Diagnostics</h3>
 
       {loading ? (
@@ -203,3 +203,4 @@ export function SystemDiagnostics() {
     </div>
   );
 }
+

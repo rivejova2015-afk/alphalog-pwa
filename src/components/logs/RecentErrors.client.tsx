@@ -62,7 +62,7 @@ export function RecentErrors() {
 
   if (loading) {
     return (
-      <div className="p-4 border rounded-lg bg-slate-50">
+      <div className="p-4 border rounded-lg bg-slate-900">
         <div className="text-sm text-gray-500">Loading errors...</div>
       </div>
     );
@@ -70,7 +70,7 @@ export function RecentErrors() {
 
   if (errors.length === 0) {
     return (
-      <div className="p-4 border rounded-lg bg-slate-50">
+      <div className="p-4 border rounded-lg bg-slate-900">
         <div className="text-sm text-gray-500">✓ No errors logged</div>
       </div>
     );
@@ -120,3 +120,4 @@ export function RecentErrors() {
     </div>
   );
 }
+

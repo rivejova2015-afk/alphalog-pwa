@@ -207,7 +207,7 @@ export default function SystemPage() {
           </div>
 
           {/* Instructions */}
-          <div className="border rounded-lg p-4 bg-slate-50">
+          <div className="border rounded-lg p-4 bg-slate-900">
             <h3 className="font-semibold text-sm text-gray-900 mb-3">How to Use</h3>
             <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
               <li>Review system status and recent errors above</li>
@@ -229,3 +229,4 @@ export default function SystemPage() {
     </div>
   );
 }
+
