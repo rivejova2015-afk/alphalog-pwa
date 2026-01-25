@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, TrendingUp, DollarSign, Target, Calendar, AlertCircle, Grid, Zap } from 'lucide-react';
 import TreasuryTabs from '@/components/treasury/TreasuryTabs.client';
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import { createClient } from '@/lib/supabase/browser';
 
 type TreasuryTabType = 'overview' | 'milestone' | 'cashflow' | 'calendario' | 'splits' | 'umbral' | 'anti-dd' | 'heatmap';
@@ -127,9 +128,12 @@ export default function TreasuryPage() {
             </div>
             <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 bg-white/80 border border-white/70 rounded-xl text-slate-600 shadow-sm">
-            <Wallet className="w-4 h-4 text-emerald-600" />
-            <span className="text-sm">Treasury Operations</span>
+          <div className="flex items-center gap-3">
+            <BackToDashboardButton />
+            <div className="flex items-center gap-3 px-4 py-2 bg-white/80 border border-white/70 rounded-xl text-slate-600 shadow-sm">
+              <Wallet className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm">Treasury Operations</span>
+            </div>
           </div>
         </header>
 

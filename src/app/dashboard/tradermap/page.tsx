@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Zap, Target, TrendingUp, Award, Calendar } from "lucide-react";
 import GoalsPanel from "@/components/tradermap/GoalsPanel.client";
 import ProgressCard from "@/components/tradermap/ProgressCard.client";
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import { createClient } from "@/lib/supabase/browser";
 
 type TraderMapTabType = "overview" | "goals" | "progress" | "achievements" | "calendar";
@@ -186,6 +187,7 @@ export default function TraderMapPage() {
             </div>
             <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
+          <BackToDashboardButton />
         </header>
 
         {/* Content */}

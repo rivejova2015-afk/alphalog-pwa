@@ -7,7 +7,7 @@ export default function BackToDashboardButton() {
   return (
     <Link
       href="/dashboard"
-      className="hidden md:inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition text-slate-300 hover:text-slate-50 text-sm font-medium"
+      className="hidden md:inline-flex items-center gap-2 rounded-xl border border-white/70 bg-white/80 px-3 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900"
     >
       <ArrowLeft size={16} />
       Back

@@ -6,6 +6,7 @@ import { Radio, Calendar, BarChart3, Search, Zap } from "lucide-react";
 import NewsPanel from "@/components/terminal/NewsPanel.client";
 import CalendarPanel from "@/components/terminal/CalendarPanel.client";
 import EvidenceReports from "@/components/terminal/EvidenceReports.client";
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import { createClient } from "@/lib/supabase/browser";
 
 type TerminalTabType = "news" | "calendar" | "evidence" | "search" | "overview";
@@ -186,6 +187,7 @@ export default function TerminalPage() {
             </div>
             <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
+          <BackToDashboardButton />
         </header>
 
         {/* Content */}

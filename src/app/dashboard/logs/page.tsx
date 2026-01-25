@@ -6,6 +6,7 @@ import { BookOpen, Search, Filter, Zap, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 import { JournalEntryList } from "@/components/journal/JournalEntryList.client";
 import { JournalEntryForm } from "@/components/journal/JournalEntryForm.client";
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 
 type JournalTabType = "all" | "recent" | "search" | "tags" | "new";
 
@@ -211,6 +212,7 @@ export default function JournalPage() {
             </div>
             <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
+          <BackToDashboardButton />
         </header>
 
         {/* Content */}

@@ -9,6 +9,7 @@ import EvidenceVault from "@/components/tradehub/EvidenceVault.client";
 import Playbook from "@/components/tradehub/Playbook.client";
 import Reports from "@/components/tradehub/Reports.client";
 import { PushNotificationButton } from "@/components/push/PushNotificationButton.client";
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import { createClient } from "@/lib/supabase/browser";
 
 type TabType = "accounts" | "trades" | "evidence" | "playbook" | "reports" | "overview";
@@ -191,6 +192,7 @@ export default function TradeHubPage() {
             <p className="text-sm text-slate-500">{currentTab?.description}</p>
           </div>
           <div className="flex items-center gap-3">
+            <BackToDashboardButton />
             <div className="w-64">
               <PushNotificationButton />
             </div>
