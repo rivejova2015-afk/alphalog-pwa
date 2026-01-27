@@ -164,53 +164,53 @@ export default function MessageDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Loading message...</p>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <p className="text-slate-400">Loading message...</p>
       </div>
     );
   }
 
   if (!message || !mailbox) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">Message not found</p>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <p className="text-slate-400">Message not found</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-4xl mx-auto py-8 px-4">
         <button
           onClick={() => router.push('/inbox')}
-          className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          className="mb-6 flex items-center gap-2 text-slate-400 hover:text-slate-200"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Inbox
         </button>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <span className="text-sm text-red-800">{error}</span>
+          <div className="mb-4 p-3 bg-red-600/10 border border-red-500/30 rounded-2xl flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+            <span className="text-sm text-red-200">{error}</span>
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-slate-900/70 rounded-2xl shadow-[0_18px_40px_rgba(2,4,10,0.45)] border border-slate-700/60 p-6">
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <Mail className="w-6 h-6 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">
+              <Mail className="w-6 h-6 text-blue-300" />
+              <h1 className="display-font text-2xl font-semibold text-slate-50">
                 {isDecrypted ? decryptedSubject : 'Encrypted Message'}
               </h1>
               {isDecrypted ? (
-                <Unlock className="w-5 h-5 text-green-600" />
+                <Unlock className="w-5 h-5 text-emerald-300" />
               ) : (
-                <Lock className="w-5 h-5 text-gray-400" />
+                <Lock className="w-5 h-5 text-slate-500" />
               )}
             </div>
 
-            <div className="space-y-2 text-sm text-gray-600">
+            <div className="space-y-2 text-sm text-slate-400">
               <p>
                 <span className="font-medium">From:</span> {message.from_email}
               </p>
@@ -225,8 +225,8 @@ export default function MessageDetail() {
           </div>
 
           {!isDecrypted ? (
-            <div className="p-6 bg-gray-50 rounded-lg">
-              <p className="text-gray-700 mb-4">
+            <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-700/60">
+              <p className="text-slate-300 mb-4">
                 This message is encrypted. Enter your passphrase to decrypt.
               </p>
               <div className="flex gap-2">
@@ -235,13 +235,13 @@ export default function MessageDetail() {
                   value={passphrase}
                   onChange={(e) => setPassphrase(e.target.value)}
                   placeholder="Enter passphrase"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
                   onKeyDown={(e) => e.key === 'Enter' && handleDecrypt()}
                 />
                 <button
                   onClick={handleDecrypt}
                   disabled={decrypting || !passphrase}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="px-6 py-2 bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 disabled:opacity-50"
                 >
                   {decrypting ? 'Decrypting...' : 'Decrypt'}
                 </button>
@@ -249,13 +249,13 @@ export default function MessageDetail() {
             </div>
           ) : (
             <>
-              <div className="prose max-w-none">
-                <pre className="whitespace-pre-wrap text-gray-900">{decryptedBody}</pre>
+              <div className="prose prose-invert max-w-none">
+                <pre className="whitespace-pre-wrap text-slate-100">{decryptedBody}</pre>
               </div>
 
               {attachments.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <h3 className="font-semibold text-gray-900 mb-3">
+                <div className="mt-6 pt-6 border-t border-slate-700/60">
+                  <h3 className="font-semibold text-slate-100 mb-3">
                     Attachments ({attachments.length})
                   </h3>
                   <div className="space-y-2">
@@ -263,12 +263,12 @@ export default function MessageDetail() {
                       <button
                         key={att.id}
                         onClick={() => handleDownloadAttachment(att)}
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 flex items-center justify-between"
+                        className="w-full p-3 bg-slate-900/60 border border-slate-700/60 rounded-lg hover:bg-slate-800/70 flex items-center justify-between"
                       >
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-slate-100">
                           {att.filename_ciphertext}
                         </span>
-                        <Download className="w-4 h-4 text-gray-600" />
+                        <Download className="w-4 h-4 text-slate-400" />
                       </button>
                     ))}
                   </div>

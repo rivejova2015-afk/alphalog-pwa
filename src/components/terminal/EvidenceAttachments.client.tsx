@@ -126,7 +126,7 @@ export default function EvidenceAttachments({ reportId }: Props) {
   };
 
   return (
-    <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 space-y-4">
+    <div className="bg-slate-900/70 rounded-3xl border border-slate-700/60 p-6 space-y-4 shadow-[0_18px_40px_rgba(2,4,10,0.45)]">
       <h3 className="text-lg font-semibold text-white">📎 Adjuntos</h3>
 
       {error && (
@@ -135,7 +135,7 @@ export default function EvidenceAttachments({ reportId }: Props) {
         </div>
       )}
 
-      <div className="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center hover:border-slate-500 transition cursor-pointer">
+      <div className="border border-dashed border-slate-700/70 rounded-2xl p-6 text-center bg-slate-950/40 hover:border-slate-600 transition cursor-pointer">
         <label className="block cursor-pointer">
           <input
             type="file"
@@ -150,10 +150,10 @@ export default function EvidenceAttachments({ reportId }: Props) {
             <p className="text-white font-medium">
               {uploading ? "Cargando..." : "Arrastra archivos aquí"}
             </p>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-slate-400">
               o haz clic para seleccionar (máx 100MB por archivo)
             </p>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-slate-500 mt-2">
               Bloqueados: .exe, .bat
             </p>
           </div>
@@ -161,31 +161,31 @@ export default function EvidenceAttachments({ reportId }: Props) {
       </div>
 
       {loading ? (
-        <div className="text-gray-400">Cargando adjuntos...</div>
+        <div className="text-slate-400">Cargando adjuntos...</div>
       ) : attachments.length === 0 ? (
-        <div className="text-gray-400">Sin adjuntos aún</div>
+        <div className="text-slate-400">Sin adjuntos aún</div>
       ) : (
         <div className="space-y-3">
           {attachments.map((att) => (
             <div
               key={att.id}
-              className="bg-slate-700 p-4 rounded border border-slate-600 space-y-2"
+              className="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60 space-y-2 shadow-[0_14px_30px_rgba(2,4,10,0.4)]"
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <p className="font-medium text-white break-all">
                     {att.filename}
                   </p>
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-slate-400">
                     {formatFileSize(att.size_bytes)} • {att.mime_type}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     {new Date(att.created_at).toLocaleDateString("es-ES")}
                   </p>
                 </div>
                 <button
                   onClick={() => handleDelete(att.id)}
-                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-sm whitespace-nowrap"
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-full text-white text-sm font-medium whitespace-nowrap"
                 >
                   Borrar
                 </button>

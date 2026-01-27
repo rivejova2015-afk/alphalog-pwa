@@ -303,7 +303,7 @@ export default function EvidenceReports() {
               resetForm();
               setShowForm(!showForm);
             }}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium text-sm"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-full text-slate-950 font-medium text-sm shadow-[0_10px_22px_rgba(2,4,10,0.35)] transition"
           >
             {showForm ? "Cancelar" : "+ Nuevo Reporte"}
           </button>
@@ -312,7 +312,7 @@ export default function EvidenceReports() {
         {showForm && (
           <form
             onSubmit={handleSubmit}
-            className="bg-slate-700 p-4 rounded-lg border border-slate-600 space-y-3"
+            className="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60 space-y-3 shadow-[0_18px_36px_rgba(2,4,10,0.4)]"
           >
             {error && (
               <div className="p-2 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
@@ -320,7 +320,7 @@ export default function EvidenceReports() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">
+              <label className="block text-xs font-medium text-slate-300 mb-1">
                 Título (obligatorio)
               </label>
               <input
@@ -329,12 +329,12 @@ export default function EvidenceReports() {
                 onChange={(e) =>
                   setFormData({ ...formData, title: e.target.value })
                 }
-                className="w-full px-3 py-2 rounded bg-slate-600 border border-slate-500 text-white text-sm"
+                className="w-full px-3 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 text-sm placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
                 placeholder="Ej: Análisis de ruptura"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">
+              <label className="block text-xs font-medium text-slate-300 mb-1">
                 Instrumento (opcional)
               </label>
               <select
@@ -342,7 +342,7 @@ export default function EvidenceReports() {
                 onChange={(e) =>
                   setFormData({ ...formData, instrument_id: e.target.value })
                 }
-                className="w-full px-3 py-2 rounded bg-slate-600 border border-slate-500 text-white text-sm"
+                className="w-full px-3 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 text-sm placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
               >
                 <option value="">Sin instrumento específico</option>
                 {instruments.length === 0 ? (
@@ -360,13 +360,13 @@ export default function EvidenceReports() {
               type="button"
               onClick={handleGenerateWithAI}
               disabled={generating}
-              className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded text-white font-medium text-sm"
+              className="w-full px-3 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 rounded-full text-slate-50 font-medium text-sm transition"
             >
               {generating ? "Generando..." : "🤖 Generar con IA (stub)"}
             </button>
             {formData.content && (
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-slate-300 mb-1">
                   Contenido
                 </label>
                 <textarea
@@ -375,21 +375,21 @@ export default function EvidenceReports() {
                     setFormData({ ...formData, content: e.target.value })
                   }
                   rows={6}
-                  className="w-full px-3 py-2 rounded bg-slate-600 border border-slate-500 text-white text-sm font-mono"
+                  className="w-full px-3 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 text-sm font-mono placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
                 />
               </div>
             )}
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-white font-medium text-sm"
+                className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 rounded-full text-slate-50 font-medium text-sm transition"
               >
                 {editingReport ? "Actualizar" : "Guardar"}
               </button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="flex-1 px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded text-white font-medium text-sm"
+                className="flex-1 px-3 py-2 rounded-full bg-slate-800/80 text-slate-200 font-medium text-sm transition hover:bg-slate-800"
               >
                 Cancelar
               </button>
@@ -398,26 +398,26 @@ export default function EvidenceReports() {
         )}
 
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          <p className="text-sm font-medium text-gray-300">Reportes</p>
+          <p className="text-sm font-medium text-slate-300">Reportes</p>
           {reportsLoading ? (
-            <div className="text-gray-400 text-sm">Cargando...</div>
+            <div className="text-slate-400 text-sm">Cargando...</div>
           ) : reports.length === 0 ? (
-            <div className="text-gray-400 text-sm">Sin reportes aún</div>
+            <div className="text-slate-400 text-sm">Sin reportes aún</div>
           ) : (
             reports.map((report) => (
               <div
                 key={report.id}
                 onClick={() => setSelectedReportId(report.id)}
-                className={`p-3 rounded border cursor-pointer transition text-sm ${
+                className={`p-3 rounded-2xl border cursor-pointer transition text-sm ${
                   selectedReportId === report.id
-                    ? "bg-blue-700 border-blue-600"
-                    : "bg-slate-700 border-slate-600 hover:border-slate-500"
+                    ? "bg-slate-800/90 border-blue-600/60 shadow-[0_10px_22px_rgba(2,4,10,0.35)]"
+                    : "bg-slate-900/70 border-slate-700/60 hover:border-slate-600"
                 }`}
               >
                 <p className="font-medium text-white truncate">
                   {report.title}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   {new Date(report.created_at).toLocaleDateString("es-ES")}
                 </p>
               </div>
@@ -430,13 +430,13 @@ export default function EvidenceReports() {
       <div className="lg:col-span-2 space-y-4">
         {selectedReport ? (
           <>
-            <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 space-y-4">
+            <div className="bg-slate-900/70 rounded-3xl border border-slate-700/60 p-6 space-y-4 shadow-[0_18px_40px_rgba(2,4,10,0.45)]">
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-2xl font-bold text-white">
                     {selectedReport.title}
                   </h2>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <p className="text-sm text-slate-400 mt-1">
                     {new Date(selectedReport.created_at).toLocaleString(
                       "es-ES"
                     )}
@@ -445,13 +445,13 @@ export default function EvidenceReports() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(selectedReport)}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm"
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-full text-slate-950 text-sm font-medium"
                   >
                     Editar
                   </button>
                   <button
                     onClick={() => handleDelete(selectedReport.id)}
-                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-sm"
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-full text-white text-sm font-medium"
                   >
                     Borrar
                   </button>
@@ -459,7 +459,7 @@ export default function EvidenceReports() {
               </div>
 
               <div className="prose prose-invert max-w-none">
-                <pre className="bg-slate-700 p-4 rounded overflow-x-auto text-sm text-gray-200 whitespace-pre-wrap break-words">
+                <pre className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/60 text-sm text-slate-200 whitespace-pre-wrap break-words">
                   {selectedReport.content}
                 </pre>
               </div>
@@ -469,7 +469,7 @@ export default function EvidenceReports() {
             <EvidenceAttachments reportId={selectedReport.id} />
           </>
         ) : (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center text-gray-400">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center text-slate-400">
             Selecciona un reporte para ver detalles
           </div>
         )}

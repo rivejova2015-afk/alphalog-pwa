@@ -139,26 +139,26 @@ export default function KeySetup() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+        <h2 className="display-font text-2xl font-semibold text-slate-50 mb-2 flex items-center gap-2">
           <Key className="w-6 h-6" />
           PGP Key Setup
         </h2>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-slate-400">
           Generate new keys or import existing PGP keys for secure email encryption.
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <span className="text-sm text-red-800">{error}</span>
+        <div className="mb-4 p-3 bg-red-600/10 border border-red-500/30 rounded-2xl flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+          <span className="text-sm text-red-200">{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
-          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <span className="text-sm text-green-800">{success}</span>
+        <div className="mb-4 p-3 bg-emerald-600/10 border border-emerald-500/30 rounded-2xl flex items-start gap-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
+          <span className="text-sm text-emerald-200">{success}</span>
         </div>
       )}
 
@@ -166,20 +166,20 @@ export default function KeySetup() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={() => setStep('generate')}
-            className="p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 transition-colors text-left"
+            className="p-6 border border-slate-700/60 rounded-2xl bg-slate-900/70 hover:border-blue-600/40 transition-colors text-left"
           >
-            <Download className="w-8 h-8 text-blue-600 mb-3" />
-            <h3 className="font-semibold text-gray-900 mb-1">Generate New Keys</h3>
-            <p className="text-sm text-gray-600">Create a new PGP key pair for secure email</p>
+            <Download className="w-8 h-8 text-blue-300 mb-3" />
+            <h3 className="font-semibold text-slate-100 mb-1">Generate New Keys</h3>
+            <p className="text-sm text-slate-400">Create a new PGP key pair for secure email</p>
           </button>
 
           <button
             onClick={() => setStep('import')}
-            className="p-6 border-2 border-gray-200 rounded-lg hover:border-green-500 transition-colors text-left"
+            className="p-6 border border-slate-700/60 rounded-2xl bg-slate-900/70 hover:border-emerald-500/40 transition-colors text-left"
           >
-            <Upload className="w-8 h-8 text-green-600 mb-3" />
-            <h3 className="font-semibold text-gray-900 mb-1">Import Existing Keys</h3>
-            <p className="text-sm text-gray-600">Use your existing PGP keys</p>
+            <Upload className="w-8 h-8 text-emerald-300 mb-3" />
+            <h3 className="font-semibold text-slate-100 mb-1">Import Existing Keys</h3>
+            <p className="text-sm text-slate-400">Use your existing PGP keys</p>
           </button>
         </div>
       )}
@@ -187,45 +187,45 @@ export default function KeySetup() {
       {step === 'generate' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
               placeholder="John Doe"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email (will be used as mailbox alias)</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Email (will be used as mailbox alias)</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
               placeholder="john@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Passphrase (min 12 chars)</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Passphrase (min 12 chars)</label>
             <input
               type="password"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
               placeholder="••••••••••••"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Passphrase</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Confirm Passphrase</label>
             <input
               type="password"
               value={passphraseConfirm}
               onChange={(e) => setPassphraseConfirm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
               placeholder="••••••••••••"
             />
           </div>
@@ -233,14 +233,14 @@ export default function KeySetup() {
           <div className="flex gap-2">
             <button
               onClick={() => setStep('choice')}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 border border-slate-700/60 rounded-lg hover:bg-slate-900/60 text-slate-200"
             >
               Back
             </button>
             <button
               onClick={handleGenerate}
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Generating...' : 'Generate Keys'}
             </button>
@@ -251,45 +251,45 @@ export default function KeySetup() {
       {step === 'import' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email Alias</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Email Alias</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-emerald-500/40 focus:border-transparent"
               placeholder="john@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Public Key (ASCII Armored)</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Public Key (ASCII Armored)</label>
             <textarea
               value={importPublicKey}
               onChange={(e) => setImportPublicKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-xs"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-emerald-500/40 focus:border-transparent font-mono text-xs"
               rows={6}
               placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Private Key (ASCII Armored)</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Private Key (ASCII Armored)</label>
             <textarea
               value={importPrivateKey}
               onChange={(e) => setImportPrivateKey(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-xs"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-emerald-500/40 focus:border-transparent font-mono text-xs"
               rows={6}
               placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Passphrase for Private Key</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Passphrase for Private Key</label>
             <input
               type="password"
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-emerald-500/40 focus:border-transparent"
               placeholder="••••••••••••"
             />
           </div>
@@ -297,14 +297,14 @@ export default function KeySetup() {
           <div className="flex gap-2">
             <button
               onClick={() => setStep('choice')}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 border border-slate-700/60 rounded-lg hover:bg-slate-900/60 text-slate-200"
             >
               Back
             </button>
             <button
               onClick={handleImport}
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-emerald-600 text-slate-950 rounded-full hover:bg-emerald-700 disabled:opacity-50"
             >
               {loading ? 'Importing...' : 'Import Keys'}
             </button>

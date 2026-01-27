@@ -29,7 +29,7 @@ export default function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-rose-600"
+      className="inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-4 py-2 text-sm font-medium text-slate-100 shadow-[0_12px_24px_rgba(2,4,10,0.35)] transition hover:bg-slate-800/80 hover:text-slate-50"
     >
       Cerrar sesion
     </button>

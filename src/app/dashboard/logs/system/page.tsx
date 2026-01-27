@@ -78,21 +78,21 @@ export default function SystemPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 max-w-4xl">
+    <div className="space-y-6 p-6 max-w-4xl text-slate-200">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">System Diagnostics & Audit</h1>
-        <p className="text-sm text-gray-600 mt-1">Debug logging system and verify sprint implementation status</p>
+        <h1 className="display-font text-2xl font-semibold text-slate-50">System Diagnostics & Audit</h1>
+        <p className="text-sm text-slate-400 mt-1">Debug logging system and verify sprint implementation status</p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 flex gap-8">
+      <div className="border-b border-slate-700/60 flex gap-8">
         <button
           onClick={() => setActiveTab('diagnostics')}
           className={`px-4 py-3 font-semibold border-b-2 transition ${
             activeTab === 'diagnostics'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
+              ? 'border-blue-600 text-blue-200'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
           🔧 Diagnostics
@@ -101,8 +101,8 @@ export default function SystemPage() {
           onClick={() => setActiveTab('sprint-status')}
           className={`px-4 py-3 font-semibold border-b-2 transition ${
             activeTab === 'sprint-status'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-600 hover:text-gray-900'
+              ? 'border-blue-600 text-blue-200'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
           📊 Sprint Status
@@ -111,15 +111,15 @@ export default function SystemPage() {
 
       {/* Safe Mode Banner */}
       {safeMode && activeTab === 'diagnostics' && (
-        <div className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
+        <div className="p-4 border border-orange-500/40 bg-orange-600/10 rounded-2xl">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="font-semibold text-orange-900">⚠️ Safe Mode Active</h3>
-              <p className="text-sm text-orange-800 mt-1">Error loop detected. Write operations are disabled.</p>
+              <h3 className="font-semibold text-orange-200">⚠️ Safe Mode Active</h3>
+              <p className="text-sm text-orange-200/80 mt-1">Error loop detected. Write operations are disabled.</p>
             </div>
             <button
               onClick={handleExitSafeMode}
-              className="px-3 py-2 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 transition"
+              className="px-3 py-2 text-sm bg-orange-300 text-slate-950 rounded-lg hover:bg-orange-400 transition"
             >
               Exit Safe Mode
             </button>
@@ -132,32 +132,32 @@ export default function SystemPage() {
         <>
           {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Loading diagnostics...</div>
+          <div className="text-slate-400">Loading diagnostics...</div>
         </div>
       ) : (
         <div className="space-y-6">
           {/* System Status */}
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">System Status</h2>
+            <h2 className="text-lg font-semibold text-slate-100 mb-4">System Status</h2>
             <SystemDiagnostics />
           </div>
 
           {/* Recent Errors */}
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Errors</h2>
+            <h2 className="text-lg font-semibold text-slate-100 mb-4">Recent Errors</h2>
             <RecentErrors />
           </div>
 
           {/* Debug Bundle */}
-          <div className="border rounded-lg p-4 bg-white space-y-4">
+          <div className="border border-slate-700/60 rounded-2xl p-4 bg-slate-900/70 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Debug Bundle</h3>
+              <h3 className="text-lg font-semibold text-slate-100">Debug Bundle</h3>
               <button
                 onClick={handleCopyBundle}
                 className={`px-4 py-2 text-sm rounded transition ${
                   copied === 'bundle'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    ? 'bg-emerald-600/15 text-emerald-200'
+                    : 'bg-blue-600 text-slate-950 hover:bg-blue-700'
                 }`}
               >
                 {copied === 'bundle' ? '✓ Copied' : 'Copy JSON'}
@@ -166,28 +166,28 @@ export default function SystemPage() {
 
             {debugBundle && (
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                <div className="text-sm space-y-2 font-mono bg-gray-100 p-3 rounded text-gray-700 text-xs whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                <div className="text-sm space-y-2 font-mono bg-slate-900/80 p-3 rounded text-slate-200 text-xs whitespace-pre-wrap break-words max-h-48 overflow-y-auto border border-slate-700/60">
                   {JSON.stringify(debugBundle, null, 2).substring(0, 1000)}
                   {JSON.stringify(debugBundle).length > 1000 && '...\n(full bundle in clipboard)'}
                 </div>
               </div>
             )}
 
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-400">
               Contains system diagnostics and recent errors. Sanitized (no tokens/secrets).
             </p>
           </div>
 
           {/* Codex Fix Prompt */}
-          <div className="border rounded-lg p-4 bg-white space-y-4">
+          <div className="border border-slate-700/60 rounded-2xl p-4 bg-slate-900/70 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Codex Fix Prompt</h3>
+              <h3 className="text-lg font-semibold text-slate-100">Codex Fix Prompt</h3>
               <button
                 onClick={handleCopyPrompt}
                 className={`px-4 py-2 text-sm rounded transition ${
                   copied === 'prompt'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    ? 'bg-emerald-600/15 text-emerald-200'
+                    : 'bg-blue-600 text-slate-950 hover:bg-blue-700'
                 }`}
               >
                 {copied === 'prompt' ? '✓ Copied' : 'Copy Prompt'}
@@ -195,21 +195,21 @@ export default function SystemPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm space-y-2 bg-gray-100 p-3 rounded text-gray-700 text-xs whitespace-pre-wrap max-h-48 overflow-y-auto">
+              <div className="text-sm space-y-2 bg-slate-900/80 p-3 rounded text-slate-200 text-xs whitespace-pre-wrap max-h-48 overflow-y-auto border border-slate-700/60">
                 {prompt.substring(0, 1000)}
                 {prompt.length > 1000 && '...\n(full prompt in clipboard)'}
               </div>
             </div>
 
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-400">
               Auto-generated prompt for Claude/GPT. Includes error summary, system context, and debug bundle.
             </p>
           </div>
 
           {/* Instructions */}
-          <div className="border rounded-lg p-4 bg-slate-900">
-            <h3 className="font-semibold text-sm text-gray-900 mb-3">How to Use</h3>
-            <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+          <div className="border border-slate-700/60 rounded-2xl p-4 bg-slate-900/80">
+            <h3 className="font-semibold text-sm text-slate-100 mb-3">How to Use</h3>
+            <ol className="text-sm text-slate-300 space-y-2 list-decimal list-inside">
               <li>Review system status and recent errors above</li>
               <li>Copy the Debug Bundle (JSON) to see full diagnostic data</li>
               <li>Copy the Codex Fix Prompt and paste into Claude/ChatGPT</li>

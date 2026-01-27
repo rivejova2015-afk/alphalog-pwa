@@ -66,7 +66,7 @@ export default function AlphaShieldBanner() {
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-red-50 border-b-2 border-red-400 shadow-lg">
+    <div className="w-full bg-red-950/80 border border-red-700/60 shadow-[0_18px_40px_rgba(12,6,6,0.6)] backdrop-blur rounded-2xl">
       <div className="max-w-7xl mx-auto px-4 py-3">
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
@@ -74,7 +74,7 @@ export default function AlphaShieldBanner() {
             {/* Warning Icon */}
             <div className="flex-shrink-0">
               <svg
-                className="h-6 w-6 text-red-600 animate-pulse"
+                className="h-6 w-6 text-red-300 animate-pulse"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -87,10 +87,10 @@ export default function AlphaShieldBanner() {
             </div>
 
             <div>
-              <h3 className="text-sm font-bold text-red-800">
+              <h3 className="text-sm font-bold text-red-200">
                 🛡️ Safe Mode Active
               </h3>
-              <p className="text-xs text-red-700 mt-0.5">
+              <p className="text-xs text-red-300 mt-0.5">
                 {badge?.errorCount} errors detected in the last 60 seconds
               </p>
             </div>
@@ -98,35 +98,35 @@ export default function AlphaShieldBanner() {
 
           <div className="flex items-center gap-2">
             {/* Timer */}
-            <div className="text-xs font-mono bg-red-100 text-red-800 px-3 py-1 rounded">
+            <div className="text-xs font-mono bg-red-900/40 text-red-200 px-3 py-1 rounded-full border border-red-700/50">
               {timeRemaining}s
             </div>
 
             {/* Actions */}
             <button
               onClick={() => setShowDetails(!showDetails)}
-              className="text-xs font-medium text-red-700 hover:text-red-900 underline"
+              className="text-xs font-medium text-red-300 hover:text-red-100 underline"
             >
               {showDetails ? 'Hide' : 'Details'}
             </button>
 
             <button
               onClick={handleCopyBundle}
-              className="text-xs font-medium px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition"
+              className="text-xs font-medium px-3 py-1 bg-red-600 text-white rounded-full hover:bg-red-700 transition"
             >
               {copied ? '✓ Copied' : 'Copy Bundle'}
             </button>
 
             <button
               onClick={handleClearErrors}
-              className="text-xs font-medium px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition"
+              className="text-xs font-medium px-3 py-1 bg-slate-800/80 text-slate-200 rounded-full hover:bg-slate-800 transition"
             >
               Clear
             </button>
 
             <button
               onClick={() => setShowDetails(false)}
-              className="text-red-600 hover:text-red-800 text-xl leading-none"
+              className="text-red-200 hover:text-red-100 text-xl leading-none"
             >
               ×
             </button>
@@ -135,33 +135,33 @@ export default function AlphaShieldBanner() {
 
         {/* Details Section */}
         {showDetails && (
-          <div className="border-t border-red-200 pt-3 mt-3 space-y-3">
+          <div className="border-t border-red-700/50 pt-3 mt-3 space-y-3">
             {/* Top Bugs */}
             {topBugs.length > 0 && (
               <div>
-                <h4 className="text-xs font-bold text-red-800 mb-2">
+                <h4 className="text-xs font-bold text-red-200 mb-2">
                   🐛 Most Common Errors
                 </h4>
                 <div className="space-y-2">
                   {topBugs.map((bug, idx) => (
                     <div
                       key={idx}
-                      className="bg-white border border-red-200 rounded p-2 text-xs"
+                      className="bg-slate-900/70 border border-red-700/40 rounded-xl p-2 text-xs"
                     >
                       <div className="flex items-start justify-between mb-1">
                         <div>
-                          <span className="font-bold text-red-700">
+                          <span className="font-bold text-red-300">
                             [{bug.code}]
                           </span>
-                          <span className="text-gray-700 ml-2">
+                          <span className="text-slate-200 ml-2">
                             {bug.message}
                           </span>
                         </div>
-                        <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded font-mono">
+                        <span className="bg-red-900/40 text-red-200 px-2 py-0.5 rounded-full font-mono">
                           {bug.count}x
                         </span>
                       </div>
-                      <p className="text-gray-600">
+                      <p className="text-slate-300">
                         💡 {getSuggestedAction(bug.code)}
                       </p>
                     </div>
@@ -171,11 +171,11 @@ export default function AlphaShieldBanner() {
             )}
 
             {/* Recovery Guide */}
-            <div className="bg-white border border-red-200 rounded p-2">
-              <h4 className="text-xs font-bold text-red-800 mb-2">
+            <div className="bg-slate-900/70 border border-red-700/40 rounded-xl p-2">
+              <h4 className="text-xs font-bold text-red-200 mb-2">
                 🔧 Recovery Steps
               </h4>
-              <ol className="text-xs text-gray-700 space-y-1 list-decimal list-inside">
+              <ol className="text-xs text-slate-200 space-y-1 list-decimal list-inside">
                 <li>Review the errors above to understand what went wrong</li>
                 <li>Copy the debug bundle for detailed analysis</li>
                 <li>Check your data for duplicates or missing references</li>
@@ -185,7 +185,7 @@ export default function AlphaShieldBanner() {
             </div>
 
             {/* Debug Info */}
-            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded font-mono">
+            <div className="text-xs text-slate-300 bg-slate-900/60 p-2 rounded-xl font-mono border border-slate-800/60">
               <p>Mode: Safe | Errors: {badge?.errorCount} | Timer: {timeRemaining}s</p>
             </div>
           </div>

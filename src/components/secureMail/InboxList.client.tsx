@@ -129,23 +129,23 @@ export default function InboxList() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-7xl mx-auto py-8 px-4">
         {offline && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-yellow-600" />
-            <span className="text-sm text-yellow-800">Offline mode - showing cached messages</span>
+          <div className="mb-4 p-3 bg-amber-600/10 border border-amber-500/30 rounded-2xl flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-amber-300" />
+            <span className="text-sm text-amber-200">Offline mode - showing cached messages</span>
           </div>
         )}
 
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <InboxIcon className="w-8 h-8 text-blue-600" />
+          <h1 className="display-font text-3xl font-semibold text-slate-50 flex items-center gap-3">
+            <InboxIcon className="w-8 h-8 text-blue-300" />
             Secure Inbox
           </h1>
           <Link
             href="/inbox/compose"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 flex items-center gap-2"
           >
             <Send className="w-4 h-4" />
             Compose
@@ -153,19 +153,19 @@ export default function InboxList() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <span className="text-sm text-red-800">{error}</span>
+          <div className="mb-4 p-3 bg-red-600/10 border border-red-500/30 rounded-2xl flex items-start gap-2">
+            <AlertCircle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+            <span className="text-sm text-red-200">{error}</span>
           </div>
         )}
 
         {mailboxes.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
-            <Mail className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600 mb-4">No mailboxes configured</p>
+          <div className="text-center py-12 bg-slate-900/70 rounded-2xl shadow-[0_18px_40px_rgba(2,4,10,0.45)] border border-slate-700/60">
+            <Mail className="w-16 h-16 text-slate-500 mx-auto mb-4" />
+            <p className="text-slate-400 mb-4">No mailboxes configured</p>
             <Link
               href="/inbox/settings"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-block"
+              className="px-4 py-2 bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 inline-block"
             >
               Set up your mailbox
             </Link>
@@ -176,7 +176,7 @@ export default function InboxList() {
               <select
                 value={selectedMailbox}
                 onChange={(e) => setSelectedMailbox(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
               >
                 {mailboxes.map((mailbox) => (
                   <option key={mailbox.id} value={mailbox.id}>
@@ -192,8 +192,8 @@ export default function InboxList() {
                     onClick={() => setFilter(f)}
                     className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                       filter === f
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                        ? 'bg-blue-600 text-slate-950'
+                        : 'bg-slate-900/60 text-slate-200 border border-slate-700/60 hover:bg-slate-800/70'
                     }`}
                   >
                     {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -202,43 +202,43 @@ export default function InboxList() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="bg-slate-900/70 rounded-2xl shadow-[0_18px_40px_rgba(2,4,10,0.45)] border border-slate-700/60">
               {loading ? (
-                <div className="p-12 text-center text-gray-500">Loading messages...</div>
+                <div className="p-12 text-center text-slate-400">Loading messages...</div>
               ) : messages.length === 0 ? (
-                <div className="p-12 text-center text-gray-500">
-                  <Mail className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <div className="p-12 text-center text-slate-400">
+                  <Mail className="w-12 h-12 text-slate-500 mx-auto mb-3" />
                   No messages found
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-slate-700/60">
                   {messages.map((message) => (
                     <Link
                       key={message.id}
                       href={`/inbox/${message.id}`}
-                      className="block p-4 hover:bg-gray-50 transition-colors"
+                      className="block p-4 hover:bg-slate-800/60 transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             {message.direction === 'inbound' ? (
-                              <Mail className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                              <Mail className="w-4 h-4 text-blue-300 flex-shrink-0" />
                             ) : (
-                              <Send className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              <Send className="w-4 h-4 text-emerald-300 flex-shrink-0" />
                             )}
-                            <span className="font-medium text-gray-900 truncate">
+                            <span className="font-medium text-slate-100 truncate">
                               {message.direction === 'inbound' ? message.from_email : message.to_email}
                             </span>
                             {message.status === 'failed' && (
-                              <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full">
+                              <span className="px-2 py-0.5 text-xs bg-red-600/15 text-red-200 rounded-full border border-red-500/30">
                                 Failed
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 truncate mb-1">
+                          <p className="text-sm text-slate-400 truncate mb-1">
                             {message.subject_ciphertext.slice(0, 80)}...
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-slate-500">
                             {formatDate(message.created_at)}
                           </p>
                         </div>

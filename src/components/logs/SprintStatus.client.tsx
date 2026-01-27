@@ -58,11 +58,11 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
   const getStatusBadge = (status: 'ok' | 'partial' | 'missing') => {
     switch (status) {
       case 'ok':
-        return <span className="inline-block px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">✅ Complete</span>;
+        return <span className="inline-block px-2 py-1 bg-emerald-600/15 text-emerald-200 border border-emerald-500/30 rounded text-xs font-semibold">✅ Complete</span>;
       case 'partial':
-        return <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-semibold">⚠️ Partial</span>;
+        return <span className="inline-block px-2 py-1 bg-amber-600/15 text-amber-200 border border-amber-500/30 rounded text-xs font-semibold">⚠️ Partial</span>;
       case 'missing':
-        return <span className="inline-block px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">❌ Missing</span>;
+        return <span className="inline-block px-2 py-1 bg-red-600/15 text-red-200 border border-red-500/30 rounded text-xs font-semibold">❌ Missing</span>;
     }
   };
 
@@ -78,15 +78,15 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Sprint Status</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="display-font text-2xl font-semibold text-slate-50">Sprint Status</h2>
+          <p className="text-sm text-slate-400 mt-1">
             {report ? `Last updated: ${new Date(report.generatedAt).toLocaleString()}` : 'No audit data yet'}
           </p>
         </div>
         <button
           onClick={runAudit}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-slate-950 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <>
@@ -104,7 +104,7 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
 
       {/* Error */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="p-4 bg-red-600/10 border border-red-500/30 rounded-2xl text-red-200">
           <p className="font-semibold">Audit Error</p>
           <p className="text-sm mt-1">{error}</p>
         </div>
@@ -114,25 +114,25 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
       {report && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-xs text-gray-500 font-semibold">Total</p>
-              <p className="text-2xl font-bold mt-1">{report.summary.totalSprints}</p>
+            <div className="bg-slate-900/70 border border-slate-700/60 p-4 rounded-2xl">
+              <p className="text-xs text-slate-400 font-semibold">Total</p>
+              <p className="text-2xl font-bold mt-1 text-slate-100">{report.summary.totalSprints}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <p className="text-xs text-gray-500 font-semibold">✅ Complete</p>
-              <p className="text-2xl font-bold text-green-700 mt-1">{report.summary.okSprints}</p>
+            <div className="bg-emerald-600/10 border border-emerald-500/30 p-4 rounded-2xl">
+              <p className="text-xs text-slate-400 font-semibold">✅ Complete</p>
+              <p className="text-2xl font-bold text-emerald-200 mt-1">{report.summary.okSprints}</p>
             </div>
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <p className="text-xs text-gray-500 font-semibold">⚠️ Partial</p>
-              <p className="text-2xl font-bold text-yellow-700 mt-1">{report.summary.partialSprints}</p>
+            <div className="bg-amber-600/10 border border-amber-500/30 p-4 rounded-2xl">
+              <p className="text-xs text-slate-400 font-semibold">⚠️ Partial</p>
+              <p className="text-2xl font-bold text-amber-200 mt-1">{report.summary.partialSprints}</p>
             </div>
-            <div className="bg-red-50 p-4 rounded-lg">
-              <p className="text-xs text-gray-500 font-semibold">❌ Missing</p>
-              <p className="text-2xl font-bold text-red-700 mt-1">{report.summary.missingSprints}</p>
+            <div className="bg-red-600/10 border border-red-500/30 p-4 rounded-2xl">
+              <p className="text-xs text-slate-400 font-semibold">❌ Missing</p>
+              <p className="text-2xl font-bold text-red-200 mt-1">{report.summary.missingSprints}</p>
             </div>
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-xs text-gray-500 font-semibold">Overall</p>
-              <p className="text-2xl font-bold text-blue-700 mt-1">{report.summary.overallCompleteness}%</p>
+            <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-2xl">
+              <p className="text-xs text-slate-400 font-semibold">Overall</p>
+              <p className="text-2xl font-bold text-blue-200 mt-1">{report.summary.overallCompleteness}%</p>
             </div>
           </div>
 
@@ -140,9 +140,9 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm font-semibold">Overall Progress</span>
-              <span className="text-sm text-gray-500">{report.summary.overallCompleteness}%</span>
+              <span className="text-sm text-slate-400">{report.summary.overallCompleteness}%</span>
             </div>
-            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all ${getCompletenessColor(report.summary.overallCompleteness)}`}
                 style={{ width: `${report.summary.overallCompleteness}%` }}
@@ -153,10 +153,10 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
           {/* Recommendations */}
           {report.recommendations.length > 0 && (
             <div className="space-y-2">
-              <h3 className="font-semibold text-sm">📋 Recommendations</h3>
+              <h3 className="font-semibold text-sm text-slate-100">📋 Recommendations</h3>
               <ul className="space-y-1">
                 {report.recommendations.map((rec, i) => (
-                  <li key={i} className="text-sm text-gray-700 flex gap-2">
+                  <li key={i} className="text-sm text-slate-300 flex gap-2">
                     <span className="flex-shrink-0">{rec.charAt(0) === '✅' ? '✅' : rec.charAt(0) === '⚠️' ? '⚠️' : '👍'}</span>
                     <span>{rec}</span>
                   </li>
@@ -167,11 +167,11 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
 
           {/* Sprints Details */}
           <div className="space-y-3">
-            <h3 className="font-semibold text-sm">🎯 Sprint Details</h3>
+            <h3 className="font-semibold text-sm text-slate-100">🎯 Sprint Details</h3>
             {report.sprints.map((sprint) => (
               <div
                 key={sprint.id}
-                className="border rounded-lg overflow-hidden"
+                className="border border-slate-700/60 rounded-2xl overflow-hidden"
               >
                 {/* Sprint Header */}
                 <button
@@ -180,21 +180,21 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
                       expandedSprintId === sprint.id ? null : sprint.id,
                     )
                   }
-                  className="w-full p-4 bg-gray-50 hover:bg-gray-100 transition flex items-center justify-between"
+                  className="w-full p-4 bg-slate-900/70 hover:bg-slate-800/70 transition flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
                     {getStatusBadge(sprint.status)}
                     <div className="text-left">
-                      <p className="font-semibold text-sm">Sprint {sprint.id}: {sprint.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">{sprint.description}</p>
+                      <p className="font-semibold text-sm text-slate-100">Sprint {sprint.id}: {sprint.name}</p>
+                      <p className="text-xs text-slate-400 mt-1">{sprint.description}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="font-bold text-lg">{sprint.completeness}%</p>
-                      <p className="text-xs text-gray-500">{sprint.checks.length} checks</p>
+                      <p className="font-bold text-lg text-slate-100">{sprint.completeness}%</p>
+                      <p className="text-xs text-slate-400">{sprint.checks.length} checks</p>
                     </div>
-                    <span className="text-gray-400">
+                    <span className="text-slate-500">
                       {expandedSprintId === sprint.id ? '▼' : '▶'}
                     </span>
                   </div>
@@ -202,14 +202,14 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
 
                 {/* Sprint Details */}
                 {expandedSprintId === sprint.id && (
-                  <div className="p-4 bg-white border-t space-y-4">
+                  <div className="p-4 bg-slate-900/70 border-t border-slate-700/60 space-y-4">
                     {/* Completeness Bar */}
                     <div className="space-y-2">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-semibold">Completeness</span>
-                        <span className="text-gray-500">{sprint.completeness}%</span>
+                        <span className="text-slate-400">{sprint.completeness}%</span>
                       </div>
-                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className={`h-full transition-all ${getCompletenessColor(sprint.completeness)}`}
                           style={{ width: `${sprint.completeness}%` }}
@@ -224,16 +224,16 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
                         {sprint.checks.map((check, i) => (
                           <li
                             key={i}
-                            className="flex items-start gap-2 text-xs text-gray-700 p-2 bg-gray-50 rounded"
+                            className="flex items-start gap-2 text-xs text-slate-300 p-2 bg-slate-900/70 rounded border border-slate-700/50"
                           >
                             <span className="flex-shrink-0 mt-0.5">
                               {check.ok ? '✅' : '❌'}
                             </span>
                             <div className="flex-1">
                               <p className="font-semibold">{check.name}</p>
-                              <p className="text-gray-500 mt-0.5">{check.detail}</p>
+                              <p className="text-slate-400 mt-0.5">{check.detail}</p>
                               {check.fileRefs.length > 0 && (
-                                <p className="text-gray-400 mt-1 text-xs">
+                                <p className="text-slate-500 mt-1 text-xs">
                                   📁 {check.fileRefs.join(', ')}
                                 </p>
                               )}
@@ -252,9 +252,9 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
 
       {/* No Data */}
       {!report && !loading && (
-        <div className="p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
-          <p className="text-blue-700 font-semibold">No audit data yet</p>
-          <p className="text-sm text-blue-600 mt-1">
+        <div className="p-6 bg-blue-600/10 border border-blue-500/30 rounded-2xl text-center">
+          <p className="text-blue-200 font-semibold">No audit data yet</p>
+          <p className="text-sm text-blue-200/80 mt-1">
             Click &quot;Run Audit&quot; to generate the first status report
           </p>
         </div>

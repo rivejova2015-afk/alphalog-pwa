@@ -23,15 +23,15 @@ export default function OfflineBanner() {
   if (isOnline) return null;
 
   return (
-    <div className="w-full bg-amber-900/30 border-b border-amber-700 px-4 py-2">
+    <div className="w-full bg-amber-600/10 border-b border-amber-500/30 px-4 py-2">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-sm text-amber-300">
+        <div className="flex items-center gap-2 text-sm text-amber-200">
           <span>📡</span>
           <span>Offline — modo lectura</span>
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="px-3 py-1 text-xs bg-amber-700 hover:bg-amber-600 text-white rounded"
+          className="px-3 py-1 text-xs bg-amber-300 hover:bg-amber-400 text-slate-950 rounded"
         >
           Reintentar
         </button>

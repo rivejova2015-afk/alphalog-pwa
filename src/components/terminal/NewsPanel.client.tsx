@@ -249,18 +249,18 @@ export default function NewsPanel() {
 
       <div className="flex gap-4 items-end">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             Instrumento (obligatorio)
           </label>
           {instruments.length === 0 ? (
-            <div className="w-full px-4 py-2 rounded bg-slate-700 border border-slate-600 text-gray-400">
+            <div className="w-full px-4 py-2 rounded bg-slate-900/60 border border-slate-700/60 text-slate-400">
               Cargando instrumentos...
             </div>
           ) : (
             <select
               value={selectedInstrumentId}
               onChange={(e) => setSelectedInstrumentId(e.target.value)}
-              className="w-full px-4 py-2 rounded bg-slate-700 border border-slate-600 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-900/60 border border-slate-700/60 text-slate-100"
             >
               {instruments.map((inst) => (
                 <option key={inst.id} value={inst.id}>
@@ -275,7 +275,7 @@ export default function NewsPanel() {
             resetForm();
             setShowForm(!showForm);
           }}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium"
+          className="px-4 py-2 rounded-full bg-blue-600 text-slate-950 font-medium shadow-[0_10px_22px_rgba(2,4,10,0.35)] transition hover:bg-blue-700"
         >
           {showForm ? "Cancelar" : "+ Nueva Noticia"}
         </button>
@@ -284,7 +284,7 @@ export default function NewsPanel() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-slate-700 p-6 rounded-lg border border-slate-600 space-y-4"
+          className="bg-slate-900/70 p-6 rounded-2xl border border-slate-700/60 space-y-4 shadow-[0_18px_40px_rgba(2,4,10,0.45)]"
         >
           {error && (
             <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
@@ -292,32 +292,32 @@ export default function NewsPanel() {
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Título (obligatorio)
             </label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
               placeholder="Ej: FED anunció aumento de tasas"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               URL
             </label>
             <input
               type="url"
               value={formData.url}
               onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-              className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
               placeholder="https://..."
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-300 mb-1">
                 Fuente
               </label>
               <input
@@ -326,12 +326,12 @@ export default function NewsPanel() {
                 onChange={(e) =>
                   setFormData({ ...formData, source: e.target.value })
                 }
-                className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+                className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
                 placeholder="Bloomberg, Reuters, etc."
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-slate-300 mb-1">
                 Relevancia (0-100)
               </label>
               <input
@@ -342,13 +342,13 @@ export default function NewsPanel() {
                 onChange={(e) =>
                   setFormData({ ...formData, relevancy_score: e.target.value })
                 }
-                className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+                className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
                 placeholder="50"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Impacto
             </label>
             <select
@@ -356,7 +356,7 @@ export default function NewsPanel() {
               onChange={(e) =>
                 setFormData({ ...formData, impact_label: e.target.value })
               }
-              className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
             >
               <option value="">Selecciona impacto</option>
               <option value="High">Alto</option>
@@ -367,14 +367,14 @@ export default function NewsPanel() {
           <div className="flex gap-2">
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white font-medium"
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-full text-slate-50 font-medium transition"
             >
               {editingNews ? "Actualizar" : "Crear"}
             </button>
             <button
               type="button"
               onClick={resetForm}
-              className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded text-white font-medium"
+              className="flex-1 px-4 py-2 rounded-full bg-slate-800/80 text-slate-200 font-medium transition hover:bg-slate-800"
             >
               Cancelar
             </button>
@@ -383,33 +383,33 @@ export default function NewsPanel() {
       )}
 
       {loading ? (
-        <div className="text-gray-400">Cargando noticias...</div>
+        <div className="text-slate-400">Cargando noticias...</div>
       ) : news.length === 0 ? (
-        <div className="text-gray-400">No hay noticias para este instrumento</div>
+        <div className="text-slate-400">No hay noticias para este instrumento</div>
       ) : (
         <div className="space-y-4">
           {news.map((item) => (
             <div
               key={item.id}
-              className="bg-slate-700 p-4 rounded-lg border border-slate-600 space-y-2"
+              className="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60 space-y-2 shadow-[0_16px_36px_rgba(2,4,10,0.4)]"
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <h3 className="font-semibold text-white">{item.title}</h3>
                   {item.source && (
-                    <p className="text-sm text-gray-400">{item.source}</p>
+                    <p className="text-sm text-slate-400">{item.source}</p>
                   )}
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(item)}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm"
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-full text-slate-950 text-sm font-medium"
                   >
                     Editar
                   </button>
                   <button
                     onClick={() => handleDelete(item.id)}
-                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-sm"
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-full text-white text-sm font-medium"
                   >
                     Borrar
                   </button>
@@ -420,12 +420,12 @@ export default function NewsPanel() {
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline text-sm"
+                  className="text-blue-600 hover:text-blue-700 hover:underline text-sm"
                 >
                   Ver noticia →
                 </a>
               )}
-              <div className="flex gap-4 text-xs text-gray-400">
+              <div className="flex gap-4 text-xs text-slate-400">
                 {item.relevancy_score && (
                   <span>Relevancia: {item.relevancy_score}%</span>
                 )}

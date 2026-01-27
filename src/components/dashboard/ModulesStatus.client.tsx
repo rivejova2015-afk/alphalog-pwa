@@ -107,17 +107,17 @@ const modules: ModuleItem[] = [
 const statusConfig = {
   active: {
     badge: 'Activo',
-    badgeColor: 'bg-green-100 text-green-800',
+    badgeColor: 'bg-green-600/15 text-green-200 border border-green-500/30',
     dotColor: 'bg-green-500',
   },
   beta: {
     badge: 'Beta',
-    badgeColor: 'bg-blue-100 text-blue-800',
+    badgeColor: 'bg-blue-600/15 text-blue-200 border border-blue-500/30',
     dotColor: 'bg-blue-500',
   },
   'coming-soon': {
     badge: 'Próximamente',
-    badgeColor: 'bg-gray-100 text-gray-800',
+    badgeColor: 'bg-slate-800/70 text-slate-300 border border-slate-600/40',
     dotColor: 'bg-gray-400',
   },
 };
@@ -130,7 +130,7 @@ export default function ModulesStatus() {
     <div className="space-y-12">
       {/* Active/Beta Modules Section */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Módulos Disponibles</h2>
+        <h2 className="display-font text-2xl font-semibold text-slate-50 mb-6">Módulos Disponibles</h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {activeModules.map((module) => {
             const config = statusConfig[module.status];
@@ -141,7 +141,7 @@ export default function ModulesStatus() {
                 {isLink ? (
                   <Link
                     href={module.href}
-                    className="group relative h-full flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-6 transition-all duration-200 hover:border-blue-300 hover:shadow-lg"
+                    className="group relative h-full flex flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 transition-all duration-200 hover:border-blue-600/40 hover:shadow-[0_18px_40px_rgba(2,4,10,0.45)]"
                   >
                     {/* Content */}
                     <div className="flex-1 flex flex-col">
@@ -153,17 +153,17 @@ export default function ModulesStatus() {
                           {config.badge}
                         </span>
                       </div>
-                      <h3 className="mt-4 font-bold text-gray-900 text-lg group-hover:text-blue-600">
+                      <h3 className="mt-4 font-semibold text-slate-50 text-lg group-hover:text-blue-200">
                         {module.label}
                       </h3>
-                      <p className="mt-2 text-sm text-gray-600">{module.description}</p>
+                      <p className="mt-2 text-sm text-slate-400">{module.description}</p>
                     </div>
 
                     {/* Gradient overlay */}
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent to-blue-50 transition-transform duration-300 group-hover:translate-x-0" />
+                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent to-blue-600/10 transition-transform duration-300 group-hover:translate-x-0" />
                   </Link>
                 ) : (
-                  <div className="relative h-full flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-6 opacity-75">
+                  <div className="relative h-full flex flex-col overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900/40 p-6 opacity-70">
                     <div className="flex-1 flex flex-col">
                       <div className="flex items-start justify-between gap-3">
                         <div className="text-3xl opacity-50">{module.icon}</div>
@@ -173,8 +173,8 @@ export default function ModulesStatus() {
                           {config.badge}
                         </span>
                       </div>
-                      <h3 className="mt-4 font-bold text-gray-600 text-lg">{module.label}</h3>
-                      <p className="mt-2 text-sm text-gray-500">{module.description}</p>
+                      <h3 className="mt-4 font-semibold text-slate-300 text-lg">{module.label}</h3>
+                      <p className="mt-2 text-sm text-slate-500">{module.description}</p>
                     </div>
                   </div>
                 )}
@@ -185,8 +185,8 @@ export default function ModulesStatus() {
 
         {/* Treasury Sub-Items (if Treasury is rendered) */}
         {activeModules.some((m) => m.id === 'treasury') && (
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="font-semibold text-blue-900 mb-4">🎯 Atajos de Treasury</h3>
+          <div className="mt-8 bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6">
+            <h3 className="font-semibold text-slate-100 mb-4">🎯 Atajos de Treasury</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               {modules
                 .find((m) => m.id === 'treasury')
@@ -194,14 +194,14 @@ export default function ModulesStatus() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="group flex items-start gap-3 rounded-md bg-white p-3 border border-blue-100 hover:bg-blue-100 transition-colors"
+                    className="group flex items-start gap-3 rounded-xl bg-slate-900/70 p-3 border border-slate-700/60 hover:bg-slate-800/70 transition-colors"
                   >
-                    <div className="mt-0.5 text-sm text-blue-600">→</div>
+                    <div className="mt-0.5 text-sm text-blue-200">→</div>
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900 group-hover:text-blue-600">
+                      <p className="font-medium text-slate-100 group-hover:text-blue-200">
                         {item.label}
                       </p>
-                      <p className="text-xs text-gray-500">{item.description}</p>
+                      <p className="text-xs text-slate-400">{item.description}</p>
                     </div>
                   </Link>
                 ))}
@@ -213,14 +213,14 @@ export default function ModulesStatus() {
       {/* Coming Soon Section */}
       {comingSoonModules.length > 0 && (
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Próximamente</h2>
+          <h2 className="display-font text-2xl font-semibold text-slate-50 mb-6">Próximamente</h2>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {comingSoonModules.map((module) => {
               const config = statusConfig[module.status];
               return (
                 <div
                   key={module.id}
-                  className="relative flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-6 opacity-60"
+                  className="relative flex flex-col overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900/40 p-6 opacity-60"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="text-3xl opacity-50">{module.icon}</div>
@@ -230,8 +230,8 @@ export default function ModulesStatus() {
                       {config.badge}
                     </span>
                   </div>
-                  <h3 className="mt-4 font-bold text-gray-600 text-lg">{module.label}</h3>
-                  <p className="mt-2 text-sm text-gray-500">{module.description}</p>
+                  <h3 className="mt-4 font-semibold text-slate-300 text-lg">{module.label}</h3>
+                  <p className="mt-2 text-sm text-slate-500">{module.description}</p>
                 </div>
               );
             })}

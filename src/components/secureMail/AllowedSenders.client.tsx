@@ -130,35 +130,35 @@ export default function AllowedSenders() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+        <h2 className="display-font text-2xl font-semibold text-slate-50 mb-2 flex items-center gap-2">
           <Shield className="w-6 h-6" />
           Allowed Senders
         </h2>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-slate-400">
           Only emails from these addresses will be accepted. Unauthorized senders are rejected.
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <span className="text-sm text-red-800">{error}</span>
+        <div className="mb-4 p-3 bg-red-600/10 border border-red-500/30 rounded-2xl flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+          <span className="text-sm text-red-200">{error}</span>
         </div>
       )}
 
       {mailboxes.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Shield className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600">No mailboxes found. Set up your PGP keys first.</p>
+        <div className="text-center py-12 bg-slate-900/60 border border-slate-700/60 rounded-2xl">
+          <Shield className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+          <p className="text-slate-400">No mailboxes found. Set up your PGP keys first.</p>
         </div>
       ) : (
         <>
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Mailbox</label>
+            <label className="block text-sm font-medium text-slate-200 mb-2">Select Mailbox</label>
             <select
               value={selectedMailbox}
               onChange={(e) => setSelectedMailbox(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
             >
               {mailboxes.map((mailbox) => (
                 <option key={mailbox.id} value={mailbox.id}>
@@ -174,13 +174,13 @@ export default function AllowedSenders() {
               value={newSenderEmail}
               onChange={(e) => setNewSenderEmail(e.target.value)}
               placeholder="sender@example.com"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
               onKeyDown={(e) => e.key === 'Enter' && handleAddSender()}
             />
             <button
               onClick={handleAddSender}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -189,34 +189,34 @@ export default function AllowedSenders() {
 
           <div className="space-y-2">
             {senders.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-600">No allowed senders yet. Add one above.</p>
+              <div className="text-center py-8 bg-slate-900/60 border border-slate-700/60 rounded-2xl">
+                <p className="text-slate-400">No allowed senders yet. Add one above.</p>
               </div>
             ) : (
               senders.map((sender) => (
                 <div
                   key={sender.id}
-                  className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+                  className="flex items-center justify-between p-3 bg-slate-900/70 border border-slate-700/60 rounded-xl hover:border-blue-600/40 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={sender.is_active}
                       onChange={() => handleToggleActive(sender)}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-600/40"
                     />
-                    <span className={`font-medium ${sender.is_active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
+                    <span className={`font-medium ${sender.is_active ? 'text-slate-100' : 'text-slate-500 line-through'}`}>
                       {sender.sender_email}
                     </span>
                     {sender.is_active && (
-                      <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
+                      <span className="px-2 py-0.5 text-xs bg-emerald-600/15 text-emerald-200 rounded-full border border-emerald-500/30">
                         Active
                       </span>
                     )}
                   </div>
                   <button
                     onClick={() => handleRemoveSender(sender.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-rose-300 hover:bg-rose-600/10 rounded-lg transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

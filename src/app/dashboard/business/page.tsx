@@ -12,23 +12,23 @@ export default function BusinessPage() {
   >("health");
 
   return (
-    <div className="min-h-screen text-slate-700">
+    <div className="min-h-screen text-slate-200">
       <div className="max-w-7xl mx-auto px-6 py-10">
         {/* Header */}
-        <div className="mb-8 rounded-3xl border border-white/70 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <div className="mb-8 rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_20px_50px_rgba(2,4,10,0.45)] backdrop-blur">
           <Link href="/dashboard">
-            <button className="text-slate-500 hover:text-slate-700 flex items-center gap-2 mb-4 text-sm">
+            <button className="text-slate-400 hover:text-slate-200 flex items-center gap-2 mb-4 text-sm">
               <ChevronLeft className="w-4 h-4" />
               Back to Dashboard
             </button>
           </Link>
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/90 border border-white/70 shadow-sm">
-              <Briefcase className="w-6 h-6 text-slate-700" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/60 border border-slate-700/60 shadow-sm">
+              <Briefcase className="w-6 h-6 text-slate-200" />
             </div>
             <div>
-              <h1 className="text-3xl font-semibold text-slate-900">Business</h1>
-              <p className="text-slate-500 text-sm mt-1">
+              <h1 className="display-font text-3xl font-semibold text-slate-50">Business</h1>
+              <p className="text-slate-400 text-sm mt-1">
                 Trading business management: finances, KPIs, SOPs, and strategic decisions
               </p>
             </div>

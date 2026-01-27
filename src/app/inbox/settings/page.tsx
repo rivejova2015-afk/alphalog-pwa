@@ -21,20 +21,20 @@ export default function InboxSettingsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="max-w-7xl mx-auto py-8 px-4">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-            <Settings className="w-8 h-8 text-blue-600" />
+          <h1 className="display-font text-3xl font-semibold text-slate-50 mb-2 flex items-center gap-3">
+            <Settings className="w-8 h-8 text-blue-300" />
             Secure Inbox Settings
           </h1>
-          <p className="text-gray-600">
+          <p className="text-slate-400">
             Configure your end-to-end encrypted email system
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="flex border-b border-gray-200">
+        <div className="bg-slate-900/70 rounded-2xl shadow-[0_18px_40px_rgba(2,4,10,0.45)] border border-slate-700/60 overflow-hidden">
+          <div className="flex border-b border-slate-700/60">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -43,8 +43,8 @@ export default function InboxSettingsPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 px-6 py-4 font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
                     activeTab === tab.id
-                      ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      ? 'text-blue-200 border-b-2 border-blue-600 bg-blue-600/10'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
                   }`}
                 >
                   <Icon className="w-5 h-5" />

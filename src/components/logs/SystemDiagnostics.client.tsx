@@ -127,8 +127,8 @@ export function SystemDiagnostics() {
 
   const StatusBadge = ({ active, label }: { active: boolean; label: string }) => (
     <div className="flex items-center gap-2 text-sm">
-      <div className={`w-2 h-2 rounded-full ${active ? 'bg-green-500' : 'bg-gray-400'}`} />
-      <span className={active ? 'text-green-700' : 'text-gray-600'}>{label}</span>
+      <div className={`w-2 h-2 rounded-full ${active ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+      <span className={active ? 'text-emerald-200' : 'text-slate-400'}>{label}</span>
     </div>
   );
 
@@ -146,11 +146,11 @@ export function SystemDiagnostics() {
   };
 
   return (
-    <div className="space-y-4 p-4 border rounded-lg bg-slate-900">
-      <h3 className="font-semibold text-sm text-gray-900">System Diagnostics</h3>
+    <div className="space-y-4 p-4 border border-slate-700/60 rounded-2xl bg-slate-900/70">
+      <h3 className="font-semibold text-sm text-slate-100">System Diagnostics</h3>
 
       {loading ? (
-        <div className="text-sm text-gray-500">Loading...</div>
+        <div className="text-sm text-slate-400">Loading...</div>
       ) : (
         <div className="space-y-3">
           <StatusBadge active={status.online} label={`Connection: ${status.online ? 'Online' : 'Offline'}`} />
@@ -162,30 +162,30 @@ export function SystemDiagnostics() {
           />
 
           {status.outbox && (
-            <div className="pt-2 border-t space-y-2">
-              <div className="text-xs font-semibold text-gray-700">Outbox Queue</div>
+            <div className="pt-2 border-t border-slate-700/60 space-y-2">
+              <div className="text-xs font-semibold text-slate-300">Outbox Queue</div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-gray-600">Pending: {status.outbox.pending}</span>
+                  <span className="text-slate-400">Pending: {status.outbox.pending}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-gray-600">Synced: {status.outbox.synced}</span>
+                  <span className="text-slate-400">Synced: {status.outbox.synced}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-red-500" />
-                  <span className="text-gray-600">Failed: {status.outbox.failed}</span>
+                  <span className="text-slate-400">Failed: {status.outbox.failed}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                  <span className="text-gray-600">Conflicts: {status.outbox.conflicts}</span>
+                  <span className="text-slate-400">Conflicts: {status.outbox.conflicts}</span>
                 </div>
               </div>
               {(status.outbox.pending > 0 || status.outbox.failed > 0) && (
                 <button
                   onClick={handleSyncNow}
-                  className="w-full mt-2 px-3 py-1.5 text-xs font-medium text-white bg-cyan-600 hover:bg-cyan-700 rounded transition-colors"
+                  className="w-full mt-2 px-3 py-1.5 text-xs font-medium text-slate-950 bg-cyan-600 hover:bg-cyan-700 rounded transition-colors"
                 >
                   Sync Now
                 </button>
@@ -194,8 +194,8 @@ export function SystemDiagnostics() {
           )}
 
           {status.buildVersion && (
-            <div className="text-xs text-gray-500 pt-2 border-t">
-              Build: <code className="bg-white px-2 py-1 rounded">{status.buildVersion}</code>
+            <div className="text-xs text-slate-400 pt-2 border-t border-slate-700/60">
+              Build: <code className="bg-slate-900/80 px-2 py-1 rounded border border-slate-700/60">{status.buildVersion}</code>
             </div>
           )}
         </div>

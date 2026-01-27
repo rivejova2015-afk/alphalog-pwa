@@ -104,13 +104,13 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-6 bg-white rounded-lg border border-gray-200">
-      <h2 className="text-2xl font-bold mb-6">📝 Journal Entry</h2>
+    <div className="w-full max-w-2xl mx-auto p-6 bg-slate-950/70 rounded-3xl border border-slate-800/70 shadow-[0_22px_50px_rgba(2,4,10,0.45)]">
+      <h2 className="display-font text-2xl font-semibold text-slate-100 mb-6">📝 Journal Entry</h2>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Main Text Area */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             What&apos;s on your mind? *
           </label>
           <textarea
@@ -118,10 +118,10 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
             onChange={(e) => setText(e.target.value)}
             placeholder="Write your journal entry here..."
             rows={5}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-4 py-2 rounded-2xl border border-slate-700/60 bg-slate-950/60 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30 resize-none"
             disabled={isSubmitting}
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {text.length} / 50,000 characters
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
         {/* Mood Section */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Mood (Optional)
             </label>
             <select
@@ -138,7 +138,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
                 const v = e.target.value as Mood | '';
                 setMood(v === '' ? undefined : (v as Mood));
               }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 rounded-2xl border border-slate-700/60 bg-slate-950/60 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
               disabled={isSubmitting}
             >
               <option value="">-- Select mood --</option>
@@ -151,7 +151,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
               Mood Score: {moodScore}/10
             </label>
             <input
@@ -160,7 +160,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
               max="10"
               value={moodScore}
               onChange={(e) => setMoodScore(parseInt(e.target.value))}
-              className="w-full"
+              className="w-full accent-blue-600"
               disabled={isSubmitting}
             />
           </div>
@@ -168,7 +168,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
 
         {/* Tags */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             Tags (Optional, comma-separated)
           </label>
           <input
@@ -176,14 +176,14 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="e.g., winning_day, risk_management, discipline"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-4 py-2 rounded-2xl border border-slate-700/60 bg-slate-950/60 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
             disabled={isSubmitting}
           />
         </div>
 
         {/* Lessons Learned */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             Lessons Learned (Optional)
           </label>
           <textarea
@@ -191,14 +191,14 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
             onChange={(e) => setLessonsLearned(e.target.value)}
             placeholder="What did you learn today?"
             rows={3}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-4 py-2 rounded-2xl border border-slate-700/60 bg-slate-950/60 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30 resize-none"
             disabled={isSubmitting}
           />
         </div>
 
         {/* Action Items */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             Action Items (Optional, comma-separated)
           </label>
           <textarea
@@ -206,18 +206,18 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
             onChange={(e) => setActionItems(e.target.value)}
             placeholder="e.g., review risk limits, backtest strategy, study price action"
             rows={3}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-4 py-2 rounded-2xl border border-slate-700/60 bg-slate-950/60 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30 resize-none"
             disabled={isSubmitting}
           />
         </div>
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded p-3">
-            <p className="text-sm font-medium text-red-800 mb-2">
+          <div className="bg-red-950/60 border border-red-700/60 rounded-2xl p-3">
+            <p className="text-sm font-medium text-red-200 mb-2">
               ❌ Validation Errors:
             </p>
-            <ul className="list-disc list-inside space-y-1 text-sm text-red-700">
+            <ul className="list-disc list-inside space-y-1 text-sm text-red-300">
               {validationErrors.map((err, idx) => (
                 <li key={idx}>{err}</li>
               ))}
@@ -227,22 +227,22 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
 
         {/* Success Message */}
         {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded p-3">
-            <p className="text-sm text-green-800">{successMessage}</p>
+          <div className="bg-green-950/60 border border-green-700/60 rounded-2xl p-3">
+            <p className="text-sm text-green-200">{successMessage}</p>
           </div>
         )}
 
         {/* Error Message */}
         {errorMessage && (
-          <div className="bg-red-50 border border-red-200 rounded p-3">
-            <p className="text-sm text-red-800">❌ {errorMessage}</p>
+          <div className="bg-red-950/60 border border-red-700/60 rounded-2xl p-3">
+            <p className="text-sm text-red-200">❌ {errorMessage}</p>
           </div>
         )}
 
         {/* Offline Indicator */}
         {!navigator?.onLine && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-amber-950/60 border border-amber-700/60 rounded-2xl p-3">
+            <p className="text-sm text-amber-200">
               ⊘ You are offline. Your entry will be saved locally and synced
               when you reconnect.
             </p>
@@ -254,7 +254,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
           <button
             type="submit"
             disabled={isSubmitting || text.trim().length === 0}
-            className="flex-1 px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="flex-1 px-6 py-2 bg-blue-600 text-slate-950 font-medium rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-[0_10px_22px_rgba(2,4,10,0.35)]"
           >
             {isSubmitting ? (
               <>
@@ -279,7 +279,7 @@ export default function JournalEntryForm({ userId }: { userId: string }) {
               setSuccessMessage('');
               setErrorMessage('');
             }}
-            className="px-6 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400 transition"
+            className="px-6 py-2 bg-slate-800/80 text-slate-200 font-medium rounded-full hover:bg-slate-800 transition"
           >
             Clear
           </button>

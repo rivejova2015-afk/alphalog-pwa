@@ -221,13 +221,13 @@ export default function CalendarPanel() {
 
       <div className="flex gap-4 items-end">
         <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
             Instrumento (obligatorio)
           </label>
           <select
             value={selectedInstrumentId}
             onChange={(e) => setSelectedInstrumentId(e.target.value)}
-            className="w-full px-4 py-2 rounded bg-slate-700 border border-slate-600 text-white"
+            className="w-full px-4 py-2 rounded bg-slate-900/60 border border-slate-700/60 text-slate-100"
           >
             {instruments.length === 0 ? (
               <option disabled>Cargando instrumentos...</option>
@@ -245,7 +245,7 @@ export default function CalendarPanel() {
             resetForm();
             setShowForm(!showForm);
           }}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white font-medium"
+          className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-slate-950 font-medium shadow-[0_10px_22px_rgba(2,4,10,0.35)] transition"
         >
           {showForm ? "Cancelar" : "+ Nuevo Evento"}
         </button>
@@ -254,7 +254,7 @@ export default function CalendarPanel() {
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-slate-700 p-6 rounded-lg border border-slate-600 space-y-4"
+          className="bg-slate-900/70 p-6 rounded-2xl border border-slate-700/60 space-y-4 shadow-[0_18px_40px_rgba(2,4,10,0.45)]"
         >
           {error && (
             <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200">
@@ -262,19 +262,19 @@ export default function CalendarPanel() {
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Nombre del evento (obligatorio)
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
               placeholder="Ej: Earnings release, FOMC meeting"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Fecha y hora (obligatorio, UTC)
             </label>
             <input
@@ -283,11 +283,11 @@ export default function CalendarPanel() {
               onChange={(e) =>
                 setFormData({ ...formData, timestamp_utc: e.target.value })
               }
-              className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="block text-sm font-medium text-slate-300 mb-1">
               Impacto esperado
             </label>
             <select
@@ -295,7 +295,7 @@ export default function CalendarPanel() {
               onChange={(e) =>
                 setFormData({ ...formData, impact: e.target.value })
               }
-              className="w-full px-4 py-2 rounded bg-slate-600 border border-slate-500 text-white"
+              className="w-full px-4 py-2 rounded bg-slate-950/60 border border-slate-700/60 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600/30"
             >
               <option value="">Selecciona impacto</option>
               <option value="High">Alto</option>
@@ -306,14 +306,14 @@ export default function CalendarPanel() {
           <div className="flex gap-2">
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white font-medium"
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-full text-slate-50 font-medium transition"
             >
               {editingEvent ? "Actualizar" : "Crear"}
             </button>
             <button
               type="button"
               onClick={resetForm}
-              className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded text-white font-medium"
+              className="flex-1 px-4 py-2 rounded-full bg-slate-800/80 text-slate-200 font-medium transition hover:bg-slate-800"
             >
               Cancelar
             </button>
@@ -322,21 +322,21 @@ export default function CalendarPanel() {
       )}
 
       {loading ? (
-        <div className="text-gray-400">Cargando eventos...</div>
+        <div className="text-slate-400">Cargando eventos...</div>
       ) : events.length === 0 ? (
-        <div className="text-gray-400">No hay eventos para este instrumento</div>
+        <div className="text-slate-400">No hay eventos para este instrumento</div>
       ) : (
         <div className="space-y-3">
           {events.map((event) => (
             <div
               key={event.id}
-              className="bg-slate-700 p-4 rounded-lg border border-slate-600 flex justify-between items-start"
+              className="bg-slate-900/70 p-4 rounded-2xl border border-slate-700/60 flex justify-between items-start shadow-[0_16px_36px_rgba(2,4,10,0.4)]"
             >
               <div className="flex-1">
                 <h3 className="font-semibold text-white">{event.name}</h3>
-                <p className="text-sm text-gray-400">{formatDate(event.timestamp_utc)}</p>
+                <p className="text-sm text-slate-400">{formatDate(event.timestamp_utc)}</p>
                 {event.impact && (
-                  <p className="text-sm text-gray-300 mt-1">
+                  <p className="text-sm text-slate-300 mt-1">
                     Impacto: <span className="font-medium">{event.impact}</span>
                   </p>
                 )}
@@ -344,13 +344,13 @@ export default function CalendarPanel() {
               <div className="flex gap-2">
                 <button
                   onClick={() => handleEdit(event)}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm"
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-full text-slate-950 text-sm font-medium"
                 >
                   Editar
                 </button>
                 <button
                   onClick={() => handleDelete(event.id)}
-                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-sm"
+                  className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-full text-white text-sm font-medium"
                 >
                   Borrar
                 </button>

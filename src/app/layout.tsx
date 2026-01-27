@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Sora, JetBrains_Mono } from "next/font/google";
-import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import AppAutoRefresh from "@/components/AppAutoRefresh.client";
+import { Fraunces, JetBrains_Mono, Manrope } from "next/font/google";
+import UpdateManager from "@/components/pwa/UpdateManager";
 import "./globals.css";
 
-const soraSans = Sora({
-  variable: "--font-sora",
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
 });
 
@@ -32,7 +36,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#e7ebf4",
+  themeColor: "#0f1115",
 };
 
 export default function RootLayout({
@@ -42,10 +46,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${soraSans.variable} ${jetbrainsMono.variable}`}>
+      <body className={`${manrope.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}>
         {children}
-        <ServiceWorkerRegister />
-        <AppAutoRefresh />
+        <UpdateManager />
       </body>
     </html>
   );

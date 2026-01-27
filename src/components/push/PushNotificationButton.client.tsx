@@ -171,12 +171,12 @@ export function PushNotificationButton() {
   return (
     <div className="flex flex-col gap-2">
       {error && (
-        <div className="text-sm text-red-500 bg-red-50 p-2 rounded">
+        <div className="text-sm text-red-200 bg-red-950/60 p-2 rounded-2xl border border-red-700/60">
           {error}
         </div>
       )}
       {success && (
-        <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
+        <div className="text-sm text-green-200 bg-green-950/60 p-2 rounded-2xl border border-green-700/60">
           {success}
         </div>
       )}
@@ -185,7 +185,7 @@ export function PushNotificationButton() {
           <button
             onClick={handleSubscribe}
             disabled={isLoading}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="px-3 py-1 text-sm bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 disabled:opacity-50 shadow-[0_10px_22px_rgba(2,4,10,0.35)]"
           >
             {isLoading ? 'Activando...' : '🔔 Activar notificaciones'}
           </button>
@@ -194,14 +194,14 @@ export function PushNotificationButton() {
             <button
               onClick={handleSendTest}
               disabled={isLoading}
-              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              className="px-3 py-1 text-sm bg-green-600 text-slate-50 rounded-full hover:bg-green-700 disabled:opacity-50"
             >
               {isLoading ? 'Enviando...' : '✉️ Enviar prueba'}
             </button>
             <button
               onClick={handleUnsubscribe}
               disabled={isLoading}
-              className="px-3 py-1 text-sm bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
+              className="px-3 py-1 text-sm bg-slate-800/80 text-slate-200 rounded-full hover:bg-slate-800 disabled:opacity-50"
             >
               Desactivar
             </button>

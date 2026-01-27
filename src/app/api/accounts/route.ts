@@ -67,11 +67,48 @@ export async function GET(request: NextRequest) {
     const { data: accounts, error } = await query as unknown as { data: AccountRow[] | null; error: unknown };
 
     if (error) {
-      console.error("Error fetching accounts:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch accounts" },
-        { status: 500 }
-      );
+      console.error("Error fetching accounts (with category join):", error);
+      const fallbackQuery = supabase
+        .from("accounts")
+        .select(
+          "id, name, category_id, account_size, current_balance, operation_state, phase_status, role, withdrawals_enabled, currency, status, sort_index"
+        )
+        .eq("user_id", userData.user.id)
+        .order("sort_index", { ascending: true })
+        .order("name", { ascending: true });
+
+      const filteredFallback = trash
+        ? fallbackQuery.not("deleted_at", "is", null)
+        : fallbackQuery.is("deleted_at", null);
+
+      const { data: fallbackAccounts, error: fallbackError } =
+        (await filteredFallback) as unknown as { data: AccountRow[] | null; error: unknown };
+
+      if (fallbackError) {
+        console.error("Error fetching accounts (fallback):", fallbackError);
+        return NextResponse.json(
+          { error: "Failed to fetch accounts" },
+          { status: 500 }
+        );
+      }
+
+      const fallbackMapped = (fallbackAccounts || []).map((acc) => ({
+        id: acc.id,
+        name: acc.name,
+        category_id: acc.category_id,
+        account_size: acc.account_size,
+        current_balance: acc.current_balance,
+        operation_state: acc.operation_state,
+        phase_status: acc.phase_status,
+        role: acc.role,
+        withdrawals_enabled: acc.withdrawals_enabled,
+        currency: acc.currency,
+        status: acc.status,
+        sort_index: acc.sort_index,
+        category: null,
+      }));
+
+      return NextResponse.json(fallbackMapped);
     }
 
     // Map category to flattened structure

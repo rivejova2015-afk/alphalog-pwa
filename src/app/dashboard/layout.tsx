@@ -25,38 +25,42 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen text-slate-700">
+    <div className="min-h-screen text-slate-200">
       <SafeModeBanner />
       <OfflineBanner />
       <LiveAlphaLog />
 
       {/* Mobile menu toggle */}
-      <div className="fixed left-0 top-0 z-40 flex md:hidden items-center gap-2 px-4 py-3 bg-white/70 backdrop-blur-xl border-b border-white/60 shadow-sm">
+      <div className="fixed left-0 top-0 z-40 flex md:hidden items-center gap-2 px-4 py-3 bg-slate-900/75 backdrop-blur-xl border-b border-slate-700/60 shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-white/70 transition"
+          className="p-2 rounded-lg text-slate-300 hover:text-slate-50 hover:bg-slate-800/70 transition"
         >
           {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
-        <span className="text-base font-semibold tracking-tight text-slate-900">AlphaLog</span>
+        <span className="display-font text-base font-semibold tracking-[0.2em] text-slate-100 uppercase">
+          AlphaLog
+        </span>
       </div>
 
       {/* Sidebar - Desktop visible (md+), Mobile overlay */}
       <aside
         className={`${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed left-0 top-0 z-30 h-full w-60 bg-white/75 border-r border-white/60 shadow-[0_18px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-transform duration-300 md:translate-x-0 md:relative md:z-0 pt-16 md:pt-6 overflow-y-auto`}
+        } fixed left-0 top-0 z-30 h-full w-60 bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-transform duration-300 md:translate-x-0 md:relative md:z-0 pt-16 md:pt-6 overflow-y-auto`}
       >
-        <nav className="space-y-1 px-4 pb-6">
+        <nav className="space-y-1 px-4 pb-6 stagger-fade">
           <div className="hidden md:block px-2 pb-4">
-            <div className="text-xs uppercase tracking-[0.3em] text-slate-400">AlphaLog</div>
+            <div className="display-font text-xs uppercase tracking-[0.4em] text-slate-400">
+              AlphaLog
+            </div>
           </div>
           {menuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-white hover:text-slate-900 hover:shadow-sm"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800/70 hover:text-slate-50 hover:shadow-[0_10px_24px_rgba(2,4,10,0.4)]"
             >
               <span className="text-lg">{item.icon}</span>
               <span>{item.label}</span>
@@ -68,13 +72,13 @@ export default function DashboardLayout({
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-slate-900/20 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-20 bg-slate-900/60 backdrop-blur-sm md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Main content */}
-      <main className="flex-1 md:ml-0">
+      <main className="flex-1 md:ml-0 animate-fade-rise">
         <div className="md:hidden h-16" /> {/* Spacer for mobile header */}
         {children}
       </main>

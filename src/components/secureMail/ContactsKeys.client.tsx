@@ -112,56 +112,56 @@ export default function ContactsKeys() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+        <h2 className="display-font text-2xl font-semibold text-slate-50 mb-2 flex items-center gap-2">
           <Users className="w-6 h-6" />
           Contacts Public Keys
         </h2>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-slate-400">
           Store public keys for contacts to send them encrypted emails.
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <span className="text-sm text-red-800">{error}</span>
+        <div className="mb-4 p-3 bg-red-600/10 border border-red-500/30 rounded-2xl flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-red-300 flex-shrink-0 mt-0.5" />
+          <span className="text-sm text-red-200">{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
-          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <span className="text-sm text-green-800">{success}</span>
+        <div className="mb-4 p-3 bg-emerald-600/10 border border-emerald-500/30 rounded-2xl flex items-start gap-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
+          <span className="text-sm text-emerald-200">{success}</span>
         </div>
       )}
 
-      <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg">
-        <h3 className="font-semibold text-gray-900 mb-4">Add New Contact</h3>
+      <div className="mb-6 p-4 bg-slate-900/70 border border-slate-700/60 rounded-2xl">
+        <h3 className="font-semibold text-slate-100 mb-4">Add New Contact</h3>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">Email</label>
             <input
               type="email"
               value={newContactEmail}
               onChange={(e) => setNewContactEmail(e.target.value)}
               placeholder="contact@example.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">PGP Public Key (ASCII Armored)</label>
+            <label className="block text-sm font-medium text-slate-200 mb-1">PGP Public Key (ASCII Armored)</label>
             <textarea
               value={newContactKey}
               onChange={(e) => setNewContactKey(e.target.value)}
               placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs"
+              className="w-full px-3 py-2 border border-slate-700/70 rounded-lg bg-slate-900/60 text-slate-100 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-600/40 focus:border-transparent font-mono text-xs"
               rows={8}
             />
           </div>
           <button
             onClick={handleAddContact}
             disabled={loading}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full px-4 py-2 bg-blue-600 text-slate-950 rounded-full hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" />
             {loading ? 'Adding...' : 'Add Contact'}
@@ -170,27 +170,27 @@ export default function ContactsKeys() {
       </div>
 
       <div className="space-y-2">
-        <h3 className="font-semibold text-gray-900 mb-3">Saved Contacts ({contacts.length})</h3>
+        <h3 className="font-semibold text-slate-100 mb-3">Saved Contacts ({contacts.length})</h3>
         {contacts.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">No contacts yet. Add one above.</p>
+          <div className="text-center py-8 bg-slate-900/60 border border-slate-700/60 rounded-2xl">
+            <Users className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+            <p className="text-slate-400">No contacts yet. Add one above.</p>
           </div>
         ) : (
           contacts.map((contact) => (
             <div
               key={contact.id}
-              className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+              className="flex items-center justify-between p-4 bg-slate-900/70 border border-slate-700/60 rounded-xl hover:border-blue-600/40 transition-colors"
             >
               <div>
-                <p className="font-medium text-gray-900">{contact.contact_email}</p>
-                <p className="text-xs text-gray-500 font-mono mt-1">
+                <p className="font-medium text-slate-100">{contact.contact_email}</p>
+                <p className="text-xs text-slate-500 font-mono mt-1">
                   {contact.pgp_public_key.slice(0, 50)}...
                 </p>
               </div>
               <button
                 onClick={() => handleRemoveContact(contact.id)}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="p-2 text-rose-300 hover:bg-rose-600/10 rounded-lg transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
