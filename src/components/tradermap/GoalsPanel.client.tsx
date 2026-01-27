@@ -1,12 +1,14 @@
 // src/components/tradermap/GoalsPanel.client.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import GoalCard from "./GoalCard.client";
+import { createClient } from "@/lib/supabase/browser";
 
 interface Account {
   id: string;
   name: string;
+  currency?: string;
 }
 
 interface GoalQuarter {
@@ -17,6 +19,7 @@ interface GoalQuarter {
   end_date: string;
   start_balance: number;
   target_balance: number;
+  current_balance?: number | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -52,6 +55,7 @@ export default function GoalsPanel() {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const realtimeLock = useRef(false);
 
   const [formData, setFormData] = useState<GoalForm>({
     title: "",
@@ -101,6 +105,36 @@ export default function GoalsPanel() {
     fetchAccounts();
     fetchGoals();
   }, [fetchAccounts, fetchGoals]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const tables = ["tradermap_goals", "tradermap_goal_quarters", "trades"];
+
+    const channels = tables.map((table) =>
+      supabase
+        .channel(`tradermap:${table}`)
+        .on("postgres_changes", { event: "*", schema: "public", table }, () => {
+          if (realtimeLock.current) return;
+          realtimeLock.current = true;
+          setTimeout(async () => {
+            try {
+              await fetchGoals();
+            } finally {
+              realtimeLock.current = false;
+            }
+          }, 300);
+        })
+        .subscribe()
+    );
+
+    return () => {
+      channels.forEach((ch) => {
+        try {
+          supabase.removeChannel(ch);
+        } catch {}
+      });
+    };
+  }, [fetchGoals]);
 
   const handleCreateGoal = async () => {
     try {

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       .from("tradermap_goals")
       .select(
         `*, 
-        account:accounts(id, name),
+        account:accounts(id, name, currency),
         quarters:tradermap_goal_quarters(*)`
       )
       .eq("user_id", userData.user.id)
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
         end_date: endDate.toISOString().split("T")[0],
         start_balance: 0,
         target_balance: 0,
+        current_balance: null,
       };
     });
 
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
       .from("tradermap_goals")
       .select(
         `*, 
-        account:accounts(id, name),
+        account:accounts(id, name, currency),
         quarters:tradermap_goal_quarters(*)`
       )
       .eq("id", goalData.id)

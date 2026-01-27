@@ -1,7 +1,8 @@
 // src/components/tradermap/QuarterEditor.client.tsx
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { formatMoney, parseMoneyInput } from "./money";
 
 interface GoalQuarter {
   id: string;
@@ -11,6 +12,7 @@ interface GoalQuarter {
   end_date: string;
   start_balance: number;
   target_balance: number;
+  current_balance?: number | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -19,6 +21,7 @@ interface GoalQuarter {
 
 interface QuarterEditorProps {
   quarter: GoalQuarter;
+  currency?: string;
   onSave: () => Promise<void>;
   onCancel: () => void;
   onError: (error: string) => void;
@@ -26,31 +29,87 @@ interface QuarterEditorProps {
 
 export default function QuarterEditor({
   quarter,
+  currency,
   onSave,
   onCancel,
   onError,
 }: QuarterEditorProps) {
   const [saving, setSaving] = useState(false);
+  const [localError, setLocalError] = useState("");
   const [formData, setFormData] = useState({
     start_date: quarter.start_date,
     end_date: quarter.end_date,
     start_balance: quarter.start_balance.toString(),
     target_balance: quarter.target_balance.toString(),
+    current_balance: quarter.current_balance?.toString() ?? "",
   });
+
+  const validation = useMemo(() => {
+    const errors: string[] = [];
+    if (!formData.start_date || !formData.end_date) {
+      errors.push("Las fechas son requeridas");
+    }
+
+    const startValue = parseMoneyInput(formData.start_balance);
+    const targetValue = parseMoneyInput(formData.target_balance);
+    const hasCurrentInput = Boolean(formData.current_balance.trim());
+    const currentValue = hasCurrentInput
+      ? parseMoneyInput(formData.current_balance)
+      : null;
+
+    if (startValue === null) {
+      errors.push("El monto inicial es requerido");
+    } else if (startValue < 0) {
+      errors.push("El monto inicial no puede ser negativo");
+    }
+
+    if (targetValue === null) {
+      errors.push("El monto objetivo es requerido");
+    } else if (targetValue < 0) {
+      errors.push("El monto objetivo no puede ser negativo");
+    }
+
+    if (startValue !== null && targetValue !== null && targetValue <= startValue) {
+      errors.push("El monto objetivo debe ser mayor al inicial");
+    }
+
+    if (hasCurrentInput && currentValue === null) {
+      errors.push("El monto actual es inválido");
+    } else if (currentValue !== null && currentValue < 0) {
+      errors.push("El monto actual no puede ser negativo");
+    }
+
+    return {
+      startValue,
+      targetValue,
+      currentValue,
+      errors,
+      isReady:
+        errors.length === 0 &&
+        Boolean(formData.start_date && formData.end_date && startValue !== null && targetValue !== null),
+    };
+  }, [formData]);
+
+  const missingAmount =
+    validation.startValue !== null && validation.targetValue !== null
+      ? validation.targetValue - validation.startValue
+      : null;
+  const progressPercent =
+    validation.currentValue !== null && validation.targetValue && validation.targetValue > 0
+      ? (validation.currentValue / validation.targetValue) * 100
+      : null;
 
   const handleSave = async () => {
     try {
-      if (!formData.start_date || !formData.end_date) {
-        onError("Las fechas son requeridas");
-        return;
-      }
-
-      if (!formData.start_balance || !formData.target_balance) {
-        onError("Los balances son requeridos");
+      if (!validation.isReady) {
+        const message = validation.errors[0] || "Revisa los datos antes de aplicar";
+        setLocalError(message);
+        onError(message);
         return;
       }
 
       setSaving(true);
+      setLocalError("");
       onError("");
 
       const response = await fetch(`/api/tradermap/quarters/${quarter.id}`, {
@@ -59,8 +118,9 @@ export default function QuarterEditor({
         body: JSON.stringify({
           start_date: formData.start_date,
           end_date: formData.end_date,
-          start_balance: parseFloat(formData.start_balance),
-          target_balance: parseFloat(formData.target_balance),
+          start_balance: validation.startValue,
+          target_balance: validation.targetValue,
+          current_balance: validation.currentValue,
         }),
       });
 
@@ -71,7 +131,9 @@ export default function QuarterEditor({
       await onSave();
     } catch (err: any) {
       console.error("Error saving quarter:", err);
-      onError(err.message || "Error al guardar trimestre");
+      const message = err.message || "Error al guardar trimestre";
+      setLocalError(message);
+      onError(message);
     } finally {
       setSaving(false);
     }
@@ -112,8 +174,8 @@ export default function QuarterEditor({
             Balance Inicial
           </label>
           <input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={formData.start_balance}
             onChange={(e) => setFormData({ ...formData, start_balance: e.target.value })}
             className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
@@ -126,23 +188,65 @@ export default function QuarterEditor({
             Balance Meta
           </label>
           <input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={formData.target_balance}
             onChange={(e) => setFormData({ ...formData, target_balance: e.target.value })}
             className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
           />
         </div>
+
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-slate-400 mb-1">
+            Monto actual (opcional)
+          </label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={formData.current_balance}
+            onChange={(e) => setFormData({ ...formData, current_balance: e.target.value })}
+            className="w-full px-2 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+          />
+        </div>
       </div>
+
+      <div className="space-y-1 text-xs text-slate-400">
+        <p>
+          Faltan:{" "}
+          <span className="text-white font-semibold">
+            {missingAmount === null
+              ? "--"
+              : formatMoney(missingAmount, currency || "USD")}
+          </span>
+        </p>
+        {validation.currentValue !== null && validation.targetValue !== null && (
+          <p>
+            Progreso real:{" "}
+            <span className="text-white font-semibold">
+              {formatMoney(validation.currentValue, currency || "USD")}
+            </span>{" "}
+            / {formatMoney(validation.targetValue, currency || "USD")}{" "}
+            {progressPercent !== null && (
+              <span className="text-slate-300">({progressPercent.toFixed(1)}%)</span>
+            )}
+          </p>
+        )}
+      </div>
+
+      {localError && (
+        <div className="text-xs text-red-300 bg-red-900/30 border border-red-700 rounded px-2 py-1">
+          {localError}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-2">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !validation.isReady}
           className="flex-1 px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-xs text-white rounded"
         >
-          {saving ? "Guardando..." : "Guardar"}
+          {saving ? "Guardando..." : "Aplicar"}
         </button>
         <button
           onClick={onCancel}

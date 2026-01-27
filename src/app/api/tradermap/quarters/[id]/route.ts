@@ -36,6 +36,70 @@ export async function PATCH(
       );
     }
 
+    const {
+      start_balance,
+      target_balance,
+      current_balance,
+    } = body as {
+      start_balance?: number;
+      target_balance?: number;
+      current_balance?: number | null;
+    };
+
+    if (start_balance !== undefined) {
+      if (typeof start_balance !== "number" || Number.isNaN(start_balance)) {
+        return NextResponse.json(
+          { error: "Invalid start_balance" },
+          { status: 400 }
+        );
+      }
+      if (start_balance < 0) {
+        return NextResponse.json(
+          { error: "start_balance must be >= 0" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (target_balance !== undefined) {
+      if (typeof target_balance !== "number" || Number.isNaN(target_balance)) {
+        return NextResponse.json(
+          { error: "Invalid target_balance" },
+          { status: 400 }
+        );
+      }
+      if (target_balance < 0) {
+        return NextResponse.json(
+          { error: "target_balance must be >= 0" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (start_balance !== undefined && target_balance !== undefined) {
+      if (target_balance <= start_balance) {
+        return NextResponse.json(
+          { error: "target_balance must be greater than start_balance" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (current_balance !== undefined && current_balance !== null) {
+      if (typeof current_balance !== "number" || Number.isNaN(current_balance)) {
+        return NextResponse.json(
+          { error: "Invalid current_balance" },
+          { status: 400 }
+        );
+      }
+      if (current_balance < 0) {
+        return NextResponse.json(
+          { error: "current_balance must be >= 0" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Update quarter
     const { data, error } = await supabase
       .from("tradermap_goal_quarters")

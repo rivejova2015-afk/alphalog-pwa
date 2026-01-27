@@ -1,12 +1,14 @@
 // src/components/tradermap/GoalCard.client.tsx
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import QuarterEditor from "./QuarterEditor.client";
+import { formatMoney } from "./money";
 
 interface Account {
   id: string;
   name: string;
+  currency?: string;
 }
 
 interface GoalQuarter {
@@ -17,6 +19,7 @@ interface GoalQuarter {
   end_date: string;
   start_balance: number;
   target_balance: number;
+  current_balance?: number | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -47,6 +50,8 @@ interface GoalCardProps {
 export default function GoalCard({ goal, onRefresh, onError }: GoalCardProps) {
   const [editingQuarterId, setEditingQuarterId] = useState<string | null>(null);
   const [completingQuarter, setCompletingQuarter] = useState(false);
+
+  const currency = goal.account?.currency || "USD";
 
   // Sort quarters by quarter number
   const sortedQuarters = [...(goal.quarters || [])].sort((a, b) => a.quarter - b.quarter);
@@ -118,6 +123,7 @@ export default function GoalCard({ goal, onRefresh, onError }: GoalCardProps) {
             {editingQuarterId === quarter.id ? (
               <QuarterEditor
                 quarter={quarter}
+                currency={currency}
                 onSave={async () => {
                   setEditingQuarterId(null);
                   await onRefresh();
@@ -155,22 +161,52 @@ export default function GoalCard({ goal, onRefresh, onError }: GoalCardProps) {
                   <div>
                     <p className="text-slate-500">Balance Inicial</p>
                     <p className="text-white font-semibold">
-                      ${quarter.start_balance.toLocaleString()}
+                      {formatMoney(quarter.start_balance, currency)}
                     </p>
                   </div>
                   <div>
                     <p className="text-slate-500">Meta</p>
                     <p className="text-white font-semibold">
-                      ${quarter.target_balance.toLocaleString()}
+                      {formatMoney(quarter.target_balance, currency)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500">Necesario</p>
+                    <p className="text-slate-500">Faltan</p>
                     <p className="text-white font-semibold">
-                      ${(quarter.target_balance - quarter.start_balance).toLocaleString()}
+                      {formatMoney(quarter.target_balance - quarter.start_balance, currency)}
                     </p>
                   </div>
                 </div>
+
+                {quarter.current_balance !== null && quarter.current_balance !== undefined && (
+                  <div className="text-xs text-slate-400 mb-3">
+                    <p className="text-slate-500">Progreso real</p>
+                    <p className="text-white font-semibold">
+                      {formatMoney(quarter.current_balance, currency)} /{" "}
+                      {formatMoney(quarter.target_balance, currency)}{" "}
+                      {quarter.target_balance > 0 && (
+                        <span className="text-slate-300">
+                          ({((quarter.current_balance / quarter.target_balance) * 100).toFixed(1)}%)
+                        </span>
+                      )}
+                    </p>
+                    <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      {(() => {
+                        const rawPercent =
+                          quarter.target_balance > 0
+                            ? (quarter.current_balance / quarter.target_balance) * 100
+                            : 0;
+                        const clamped = Math.min(100, Math.max(0, rawPercent));
+                        return (
+                          <div
+                            className="h-full bg-blue-500/80"
+                            style={{ width: `${clamped}%` }}
+                          />
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-2">
