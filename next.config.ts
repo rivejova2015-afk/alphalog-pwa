@@ -1,17 +1,5 @@
 import type { NextConfig } from "next";
 
-type WithPWA = (options: Record<string, unknown>) => (config: NextConfig) => NextConfig;
-
-let withPWA: WithPWA = () => (config) => config;
-
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod = require("next-pwa");
-  withPWA = mod?.default ?? mod;
-} catch (error) {
-  console.warn("[PWA] next-pwa not available, skipping PWA config", error);
-}
-
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
@@ -62,12 +50,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-const withPWAConfig = withPWA({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development",
-  register: true,
-  skipWaiting: true,
-  clientsClaim: true,
-});
-
-export default withPWAConfig(nextConfig);
+export default nextConfig;
