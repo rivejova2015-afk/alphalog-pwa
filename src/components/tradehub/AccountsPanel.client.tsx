@@ -170,7 +170,7 @@ export default function AccountsPanel() {
         ignoreZero: true,
       });
       const setupCounts = new Map<string, { name: string; count: number }>();
-      closed.forEach((t: { setup?: { name?: string | null } }) => {
+      closed.forEach((t) => {
         const key = t.setup?.name || "Sin setup";
         const current = setupCounts.get(key) ?? { name: key, count: 0 };
         setupCounts.set(key, { name: current.name, count: current.count + 1 });

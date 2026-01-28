@@ -2,6 +2,7 @@ export interface PnlTradeLike {
   pnl?: number | string | null;
   status?: string | null;
   exit_date?: string | null;
+  setup?: { id: string; name: string | null } | null;
 }
 
 export interface PnlFilterOptions {

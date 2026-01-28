@@ -374,14 +374,6 @@ export default function NewTradesLog() {
       });
 
       resetForm();
-      
-      // Refetch to ensure consistency with server
-      notifyTradeUpdate({
-        reason: "delete",
-        tradeId,
-        source: "tradehub",
-      });
-
       await fetchTrades();
     } catch (err: any) {
       console.error("[NewTradesLog] Error saving trade:", err);
