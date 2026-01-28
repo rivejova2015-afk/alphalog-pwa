@@ -11,6 +11,7 @@ import CostForm from "../forms/CostForm.client";
 import type { BusinessCost } from "@/lib/business/types";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 import type { Trade } from "@/lib/treasury/calculations";
+import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
 interface PLPanelProps {
   offlineData?: BusinessOfflineData | null;
@@ -19,42 +20,48 @@ interface PLPanelProps {
 
 export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
   const [costs, setCosts] = useState<BusinessCost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [costsLoading, setCostsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(getMonthStr());
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const { trades, loading: tradesLoading } = usePnlMetrics({
+    fetcher: async () => {
+      const { getAllTrades } = await import("@/lib/treasury/queries");
+      return (await getAllTrades()) as Trade[];
+    },
+    closedOnly: true,
+    requireExitDate: true,
+    ignoreZero: false,
+  });
   const [plMetrics, setPlMetrics] = useState<PLMetrics | null>(null);
   const [trendData, setTrendData] = useState<TrendData[]>([]);
+  const loading = costsLoading || tradesLoading;
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadCosts();
+  }, [offlineData]);
 
   useEffect(() => {
+    if (tradesLoading || costsLoading) return;
     if (trades.length > 0 || costs.length > 0) {
-      const metrics = calculatePLMetrics(trades, costs, currentMonth);
+      const metrics = calculatePLMetrics(trades as Trade[], costs, currentMonth);
       setPlMetrics(metrics);
-      const trend = calculateTrendMetrics(trades, costs);
+      const trend = calculateTrendMetrics(trades as Trade[], costs);
       setTrendData(trend);
+    } else {
+      setPlMetrics(null);
+      setTrendData([]);
     }
-  }, [trades, costs, currentMonth]);
+  }, [trades, costs, currentMonth, tradesLoading, costsLoading]);
 
-  async function loadData() {
+  async function loadCosts() {
     try {
-      setLoading(true);
+      setCostsLoading(true);
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
-      try {
-        const { getAllTrades } = await import("@/lib/treasury/queries");
-        const tradeData = (await getAllTrades()) as Trade[];
-        setTrades(tradeData || []);
-      } catch {
-        setTrades([]);
-      }
     } catch (err) {
       console.error("Error loading P&L data:", err);
     } finally {
-      setLoading(false);
+      setCostsLoading(false);
     }
   }
 
@@ -62,7 +69,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
     if (!confirm("Delete this cost?")) return;
     try {
       await deleteBusinessCost(id);
-      await loadData();
+      await loadCosts();
     } catch (err) {
       console.error("Error deleting cost:", err);
     }
@@ -206,7 +213,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
       </Card>
 
       {showForm && (
-        <CostForm onClose={() => setShowForm(false)} onSave={() => { setShowForm(false); loadData(); }} />
+        <CostForm onClose={() => setShowForm(false)} onSave={() => { setShowForm(false); loadCosts(); }} />
       )}
     </div>
   );

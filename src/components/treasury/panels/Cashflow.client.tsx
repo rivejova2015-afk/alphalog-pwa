@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { TreasuryTransaction, TreasuryPayout, TreasuryBudget } from '@/lib/treasury/queries';
 import { formatCurrency, formatDate } from '@/lib/treasury/calculations';
+import { subscribeTradeUpdates } from '@/lib/metrics/tradeUpdates';
 
 interface Account {
   id: string;
@@ -43,7 +44,7 @@ export default function CashflowPanel({
   const [payoutStatusUpdating, setPayoutStatusUpdating] = useState<string | null>(null);
 
   // Handle preview calculation
-  const handleCalculatePreview = async () => {
+  const handleCalculatePreview = useCallback(async () => {
     setPreviewLoading(true);
     setPreviewError(null);
     setCreateError(null);
@@ -71,7 +72,7 @@ export default function CashflowPanel({
     } finally {
       setPreviewLoading(false);
     }
-  };
+  }, [selectedAccount]);
 
   // Handle create payout
   const handleCreatePayout = async (accountId: string) => {
@@ -102,6 +103,14 @@ export default function CashflowPanel({
       setCreateLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!previewData) return;
+    return subscribeTradeUpdates(() => {
+      if (previewLoading) return;
+      void handleCalculatePreview();
+    });
+  }, [handleCalculatePreview, previewData, previewLoading]);
 
   // Handle payout status update
   const handleUpdatePayoutStatus = async (payoutId: string, newStatus: string) => {

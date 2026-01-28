@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AccountDialog from "./AccountDialog.client";
 import CategoryManagerModal, { Category as CategoryType } from "./CategoryManagerModal.client";
 import AccountDetailsModal from "./AccountDetailsModal.client";
+import { computePnlTotals, filterTradesForPnl } from "@/lib/metrics/pnl";
+import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 
 interface Account {
   id: string;
@@ -55,6 +57,7 @@ export default function AccountsPanel() {
   const [detailsEquity, setDetailsEquity] = useState<number | null | undefined>(null);
   const [detailsStatus, setDetailsStatus] = useState<string | undefined>("active");
   const [stats, setStats] = useState<Record<string, AccountStats>>({});
+  const [statsRefresh, setStatsRefresh] = useState(0);
 
   const sortedCategories = useMemo(() => {
     const list = [...categories];
@@ -120,13 +123,18 @@ export default function AccountsPanel() {
   }, [fetchAccounts]);
 
   useEffect(() => {
+    if (accounts.length === 0) return;
     accounts.forEach((acc) => {
-      if (!stats[acc.id]) {
-        void fetchAccountStats(acc.id);
-      }
+      void fetchAccountStats(acc.id);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts]);
+  }, [accounts, statsRefresh]);
+
+  useEffect(() => {
+    return subscribeTradeUpdates(() => {
+      setStatsRefresh((prev) => prev + 1);
+    });
+  }, []);
 
   const fetchAccountStats = async (accountId: string) => {
     setStats((prev) => ({
@@ -147,11 +155,20 @@ export default function AccountsPanel() {
         throw new Error(data?.error || "No se pudo calcular KPIs");
       }
       const trades = Array.isArray(data) ? data : [];
-      const closed = trades.filter((t: { pnl?: number | null; exit_date?: string | null }) => t.exit_date && t.pnl !== 0 && t.pnl !== null);
-      const wins = closed.filter((t: { pnl?: number | null }) => (t.pnl ?? 0) > 0).length;
-      const losses = closed.filter((t: { pnl?: number | null }) => (t.pnl ?? 0) < 0).length;
-      const ops = wins + losses;
-      const winRate = ops > 0 ? Math.round((wins / ops) * 100) : null;
+      const metrics = computePnlTotals(trades, {
+        closedOnly: true,
+        requireExitDate: true,
+        ignoreZero: true,
+      });
+      const wins = metrics.wins;
+      const losses = metrics.losses;
+      const ops = metrics.ops;
+      const winRate = metrics.winRate !== null ? Math.round(metrics.winRate) : null;
+      const closed = filterTradesForPnl(trades, {
+        closedOnly: true,
+        requireExitDate: true,
+        ignoreZero: true,
+      });
       const setupCounts = new Map<string, { name: string; count: number }>();
       closed.forEach((t: { setup?: { name?: string | null } }) => {
         const key = t.setup?.name || "Sin setup";

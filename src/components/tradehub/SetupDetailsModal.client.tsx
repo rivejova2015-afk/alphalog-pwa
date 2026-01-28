@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { computePnlTotals, filterTradesForPnl } from "@/lib/metrics/pnl";
+import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 
 interface SetupDetailsModalProps {
   open: boolean;
@@ -91,6 +93,7 @@ export default function SetupDetailsModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const fetchData = useCallback(async () => {
     if (!open) return;
@@ -120,15 +123,22 @@ export default function SetupDetailsModal({
       }
 
       // Calculate KPIs
-      const closed = (Array.isArray(tradesData) ? tradesData : []).filter(
-        (t: Trade) => t.exit_date && t.pnl !== null && t.pnl !== 0
-      );
-
-      const wins = closed.filter((t: Trade) => (t.pnl ?? 0) > 0).length;
-      const losses = closed.filter((t: Trade) => (t.pnl ?? 0) < 0).length;
-      const ops = wins + losses;
-      const winrate = ops > 0 ? Math.round((wins / ops) * 100) : null;
-      const profitNeto = closed.reduce((sum: number, t: Trade) => sum + (t.pnl ?? 0), 0);
+      const tradeList = Array.isArray(tradesData) ? tradesData : [];
+      const metrics = computePnlTotals(tradeList, {
+        closedOnly: true,
+        requireExitDate: true,
+        ignoreZero: true,
+      });
+      const wins = metrics.wins;
+      const losses = metrics.losses;
+      const ops = metrics.ops;
+      const winrate = metrics.winRate !== null ? Math.round(metrics.winRate) : null;
+      const profitNeto = metrics.totalPnl;
+      const closed = filterTradesForPnl(tradeList, {
+        closedOnly: true,
+        requireExitDate: true,
+        ignoreZero: true,
+      });
       const lastUsedRange = closed.length > 0 && closed[0]?.exit_date ? closed[0].exit_date : null;
 
       setKpis({ winrate, wins, losses, ops, profitNeto, lastUsedRange });
@@ -142,7 +152,14 @@ export default function SetupDetailsModal({
 
   useEffect(() => {
     void fetchData();
-  }, [fetchData]);
+  }, [fetchData, refreshTick]);
+
+  useEffect(() => {
+    if (!open) return;
+    return subscribeTradeUpdates(() => {
+      setRefreshTick((prev) => prev + 1);
+    });
+  }, [open]);
 
   if (!open) {
     return null;

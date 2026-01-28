@@ -14,6 +14,7 @@ import type { RunwayMetrics } from "@/lib/business/metrics";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 import type { BusinessCost } from "@/lib/business/types";
 import type { Trade } from "@/lib/treasury/calculations";
+import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
 interface RunwayPanelProps {
   offlineData?: BusinessOfflineData | null;
@@ -21,46 +22,50 @@ interface RunwayPanelProps {
 }
 
 export default function RunwayPanel({ offlineData }: RunwayPanelProps) {
-  const [loading, setLoading] = useState(true);
   const [costs, setCosts] = useState<BusinessCost[]>([]);
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [costsLoading, setCostsLoading] = useState(true);
+  const { trades, loading: tradesLoading } = usePnlMetrics({
+    fetcher: async () => {
+      const { getAllTrades } = await import("@/lib/treasury/queries");
+      return (await getAllTrades()) as Trade[];
+    },
+    closedOnly: true,
+    requireExitDate: true,
+    ignoreZero: false,
+  });
   const [cashReserve, setCashReserve] = useState<number>(0);
   const [runwayMetrics, setRunwayMetrics] = useState<RunwayMetrics | null>(null);
+  const loading = costsLoading || tradesLoading;
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    try {
-      setLoading(true);
-      const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
-      setCosts(costData || []);
-
-      try {
-        const { getAllTrades } = await import("@/lib/treasury/queries");
-        const tradeData = (await getAllTrades()) as Trade[];
-        setTrades(tradeData || []);
-      } catch {
-        setTrades([]);
-      }
-    } catch (err) {
-      console.error("Error loading runway data:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
+    void loadCosts();
+  }, [offlineData]);
 
   useEffect(() => {
+    if (loading) return;
     if (trades.length > 0 || costs.length > 0) {
       const last3Months = getLastNMonths(3);
       const plMetricsLast3 = last3Months.map((m) =>
-        calculatePLMetrics(trades, costs, m)
+        calculatePLMetrics(trades as Trade[], costs, m)
       );
       const runway = calculateRunwayMetrics(plMetricsLast3, cashReserve);
       setRunwayMetrics(runway);
+    } else {
+      setRunwayMetrics(null);
     }
-  }, [trades, costs, cashReserve]);
+  }, [trades, costs, cashReserve, loading]);
+
+  async function loadCosts() {
+    try {
+      setCostsLoading(true);
+      const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
+      setCosts(costData || []);
+    } catch (err) {
+      console.error("Error loading runway data:", err);
+    } finally {
+      setCostsLoading(false);
+    }
+  }
 
   const formatNumber = (value: number, decimals = 2) => {
     return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",");

@@ -4,6 +4,7 @@ import Image from "next/image";
 // src/components/tradehub/NewTradesLog.client.tsx
 
 import { useState, useEffect, useCallback } from "react";
+import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
 
 interface Account {
   id: string;
@@ -365,9 +366,22 @@ export default function NewTradesLog() {
         setTrades(prev => prev.map(t => t.id === savedTrade.id ? savedTrade : t));
       }
 
+      notifyTradeUpdate({
+        reason: editingTrade ? "update" : "create",
+        tradeId: savedTrade?.id,
+        accountId: savedTrade?.account_id,
+        source: "tradehub",
+      });
+
       resetForm();
       
       // Refetch to ensure consistency with server
+      notifyTradeUpdate({
+        reason: "delete",
+        tradeId,
+        source: "tradehub",
+      });
+
       await fetchTrades();
     } catch (err: any) {
       console.error("[NewTradesLog] Error saving trade:", err);
@@ -385,6 +399,12 @@ export default function NewTradesLog() {
       if (!response.ok) {
         throw new Error("Failed to delete trade");
       }
+
+      notifyTradeUpdate({
+        reason: "restore",
+        tradeId,
+        source: "tradehub",
+      });
 
       await fetchTrades();
       setDeleteConfirm(null);

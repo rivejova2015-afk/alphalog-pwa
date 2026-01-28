@@ -10,6 +10,7 @@ import type { HealthAlert } from "@/lib/business/metrics";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 import type { BusinessCost } from "@/lib/business/types";
 import type { Trade } from "@/lib/treasury/calculations";
+import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
 interface HealthPanelProps {
   offlineData?: BusinessOfflineData | null;
@@ -17,40 +18,43 @@ interface HealthPanelProps {
 }
 
 export default function HealthPanel({ offlineData }: HealthPanelProps) {
-  const [loading, setLoading] = useState(true);
   const [costs, setCosts] = useState<BusinessCost[]>([]);
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [costsLoading, setCostsLoading] = useState(true);
+  const { trades, loading: tradesLoading } = usePnlMetrics({
+    fetcher: async () => {
+      const { getAllTrades } = await import("@/lib/treasury/queries");
+      return (await getAllTrades()) as Trade[];
+    },
+    closedOnly: true,
+    requireExitDate: true,
+    ignoreZero: false,
+  });
   const [alerts, setAlerts] = useState<HealthAlert[]>([]);
+  const loading = costsLoading || tradesLoading;
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadCosts();
+  }, [offlineData]);
 
-  async function loadData() {
+  useEffect(() => {
+    if (loading) return;
+    const last3Months = getLastNMonths(3);
+    const plMetricsLast3 = last3Months.map((m) =>
+      calculatePLMetrics(trades as Trade[], costs, m)
+    );
+    const healthAlerts = calculateHealthAlerts(plMetricsLast3, 3, 3);
+    setAlerts(healthAlerts);
+  }, [trades, costs, loading]);
+
+  async function loadCosts() {
     try {
-      setLoading(true);
+      setCostsLoading(true);
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
-      
-      try {
-        const { getAllTrades } = await import("@/lib/treasury/queries");
-        const tradeData = (await getAllTrades()) as Trade[];
-        setTrades(tradeData || []);
-        
-        const last3Months = getLastNMonths(3);
-        const plMetricsLast3 = last3Months.map((m) =>
-          calculatePLMetrics(tradeData || [], costData || [], m)
-        );
-        const healthAlerts = calculateHealthAlerts(plMetricsLast3, 3, 3);
-        setAlerts(healthAlerts);
-      } catch {
-        setTrades([]);
-        setAlerts([]);
-      }
     } catch (err) {
       console.error("Error loading health data:", err);
     } finally {
-      setLoading(false);
+      setCostsLoading(false);
     }
   }
 

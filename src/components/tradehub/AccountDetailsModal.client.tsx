@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { computePnlTotals, filterTradesForPnl } from "@/lib/metrics/pnl";
+import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 
 type Trade = {
   id: string;
@@ -56,12 +58,21 @@ function formatNumber(value: number | null | undefined) {
 }
 
 function computeSummary(trades: Trade[]) {
-  const closed = trades.filter((t) => t.pnl !== null && t.exit_date);
-  const wins = closed.filter((t) => (t.pnl ?? 0) > 0).length;
-  const losses = closed.filter((t) => (t.pnl ?? 0) < 0).length;
-  const ops = wins + losses;
-  const winRate = ops > 0 ? Math.round((wins / ops) * 100) : null;
+  const metrics = computePnlTotals(trades, {
+    closedOnly: true,
+    requireExitDate: true,
+    ignoreZero: true,
+  });
+  const wins = metrics.wins;
+  const losses = metrics.losses;
+  const ops = metrics.ops;
+  const winRate = metrics.winRate !== null ? Math.round(metrics.winRate) : null;
 
+  const closed = filterTradesForPnl(trades, {
+    closedOnly: true,
+    requireExitDate: true,
+    ignoreZero: true,
+  });
   const setupCounts = new Map<string, { name: string; count: number }>();
   closed.forEach((t) => {
     const key = t.setup?.name || "Sin setup";
@@ -91,6 +102,14 @@ export default function AccountDetailsModal({
   const [error, setError] = useState("");
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    return subscribeTradeUpdates(() => {
+      setRefreshTick((prev) => prev + 1);
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,7 +141,7 @@ export default function AccountDetailsModal({
       }
     };
     void load();
-  }, [accountId, open, range]);
+  }, [accountId, open, range, refreshTick]);
 
   const loadMore = async () => {
     try {

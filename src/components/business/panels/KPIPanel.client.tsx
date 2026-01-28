@@ -14,6 +14,7 @@ import type { KPIMetrics } from "@/lib/business/metrics";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 import type { BusinessCost } from "@/lib/business/types";
 import type { Trade } from "@/lib/treasury/calculations";
+import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
 interface KPIPanelProps {
   offlineData?: BusinessOfflineData | null;
@@ -21,44 +22,46 @@ interface KPIPanelProps {
 }
 
 export default function KPIPanel({ offlineData }: KPIPanelProps) {
-  const [loading, setLoading] = useState(true);
   const [costs, setCosts] = useState<BusinessCost[]>([]);
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [currentMonth, setCurrentMonth] = useState<string>("");
+  const [costsLoading, setCostsLoading] = useState(true);
+  const { trades, loading: tradesLoading } = usePnlMetrics({
+    fetcher: async () => {
+      const { getAllTrades } = await import("@/lib/treasury/queries");
+      return (await getAllTrades()) as Trade[];
+    },
+    closedOnly: true,
+    requireExitDate: true,
+    ignoreZero: false,
+  });
+  const [currentMonth, setCurrentMonth] = useState<string>(getMonthStr());
   const [kpiMetrics, setKpiMetrics] = useState<KPIMetrics | null>(null);
+  const loading = costsLoading || tradesLoading;
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadCosts();
+  }, [offlineData]);
 
-  async function loadData() {
+  useEffect(() => {
+    if (loading) return;
+    if (trades.length > 0 || costs.length > 0) {
+      const metrics = calculateKPIMetrics(trades as Trade[], costs, currentMonth);
+      setKpiMetrics(metrics);
+    } else {
+      setKpiMetrics(null);
+    }
+  }, [trades, costs, currentMonth, loading]);
+
+  async function loadCosts() {
     try {
-      setLoading(true);
+      setCostsLoading(true);
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
-
-      try {
-        const { getAllTrades } = await import("@/lib/treasury/queries");
-        const tradeData = (await getAllTrades()) as Trade[];
-        setTrades(tradeData || []);
-        setCurrentMonth(getMonthStr());
-      } catch {
-        setTrades([]);
-        setCurrentMonth(getMonthStr());
-      }
     } catch (err) {
       console.error("Error loading KPI data:", err);
     } finally {
-      setLoading(false);
+      setCostsLoading(false);
     }
   }
-
-  useEffect(() => {
-    if (trades.length > 0 || costs.length > 0) {
-      const metrics = calculateKPIMetrics(trades, costs, currentMonth);
-      setKpiMetrics(metrics);
-    }
-  }, [trades, costs, currentMonth]);
 
   const formatNumber = (value: number, decimals = 2) => {
     return value.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",");

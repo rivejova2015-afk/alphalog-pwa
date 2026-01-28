@@ -1,12 +1,13 @@
 ﻿// src/app/dashboard/tradermap/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Zap, Target, TrendingUp, Award, Calendar } from "lucide-react";
 import GoalsPanel from "@/components/tradermap/GoalsPanel.client";
 import ProgressCard from "@/components/tradermap/ProgressCard.client";
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import { createClient } from "@/lib/supabase/browser";
+import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 
 type TraderMapTabType = "overview" | "goals" | "progress" | "achievements" | "calendar";
 
@@ -105,6 +106,20 @@ export default function TraderMapPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [levelState, setLevelState] = useState<any>(null);
 
+  const fetchLevelState = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const response = await fetch("/api/tradermap/level");
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setLevelState(data ?? null);
+    } catch (err) {
+      console.error("[TraderMap] Error fetching level state:", err);
+    }
+  }, [userId]);
+
   useEffect(() => {
     const getUser = async () => {
       try {
@@ -119,6 +134,17 @@ export default function TraderMapPage() {
     };
     getUser();
   }, []);
+
+  useEffect(() => {
+    void fetchLevelState();
+  }, [fetchLevelState]);
+
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeTradeUpdates(() => {
+      void fetchLevelState();
+    });
+  }, [fetchLevelState, userId]);
 
   const currentTab = TABS.find(t => t.id === activeTab);
 
