@@ -393,7 +393,7 @@ export default function NewTradesLog() {
       }
 
       notifyTradeUpdate({
-        reason: "restore",
+        reason: "delete",
         tradeId,
         source: "tradehub",
       });
@@ -418,6 +418,12 @@ export default function NewTradesLog() {
       if (!response.ok) {
         throw new Error("Failed to restore trade");
       }
+
+      notifyTradeUpdate({
+        reason: "restore",
+        tradeId,
+        source: "tradehub",
+      });
 
       await fetchTrades();
     } catch (err: any) {
