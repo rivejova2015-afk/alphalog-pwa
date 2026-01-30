@@ -1,7 +1,7 @@
 // src/components/terminal/EvidenceReports.client.tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { toArray, normalizeListResponse, normalizeSingleResponse } from "@/lib/safe";
 import { logError } from "@/lib/log";
@@ -65,6 +65,13 @@ export default function EvidenceReports() {
   });
 
   const instruments = toArray<Instrument>(instrumentsRaw || []);
+  const instrumentMap = useMemo(
+    () =>
+      new Map(
+        instruments.map((instrument) => [instrument.id, instrument.display_name])
+      ),
+    [instruments]
+  );
 
   // Auto-refresh para reports (60 segundos)
   const {
@@ -417,6 +424,11 @@ export default function EvidenceReports() {
                 <p className="font-medium text-white truncate">
                   {report.title}
                 </p>
+                {report.instrument_id && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    {instrumentMap.get(report.instrument_id) || "Instrumento"}
+                  </p>
+                )}
                 <p className="text-xs text-slate-400 mt-1">
                   {new Date(report.created_at).toLocaleDateString("es-ES")}
                 </p>
@@ -441,6 +453,12 @@ export default function EvidenceReports() {
                       "es-ES"
                     )}
                   </p>
+                  {selectedReport.instrument_id && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      {instrumentMap.get(selectedReport.instrument_id) ||
+                        "Instrumento"}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button

@@ -1,4 +1,10 @@
 {
   "installCommand": "npm ci",
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "crons": [
+    {
+      "path": "/api/terminal/reports/refresh",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
