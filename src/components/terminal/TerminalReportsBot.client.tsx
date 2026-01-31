@@ -65,7 +65,7 @@ export default function TerminalReportsBot() {
         outcomes.length > 0 && outcomes.every((outcome: string) => outcome === "done_no_changes");
       setMessage(
         onlyNoChanges
-          ? "No hay cambios relevantes. No se guardÃ³ nueva evidencia."
+          ? "No hay cambios relevantes. No se guardó nueva evidencia."
           : "Reporte generado. Revisa Evidence."
       );
     } catch (err) {
@@ -128,7 +128,7 @@ export default function TerminalReportsBot() {
       <div>
         <h2 className="text-lg font-semibold text-slate-100">Terminal News Bot</h2>
         <p className="text-sm text-slate-400">
-          Reportes profesionales (7 dÃ­as) en horario Puerto Rico (UTC-4).
+          Reportes profesionales (7 días) en horario Puerto Rico (UTC-4).
         </p>
       </div>
 

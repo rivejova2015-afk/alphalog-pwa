@@ -31,7 +31,22 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 });
-
+const toNodeBuffer = async (data: unknown): Promise<Buffer> => {
+  if (Buffer.isBuffer(data)) return data;
+  if (data instanceof Uint8Array) return Buffer.from(data);
+  if (data instanceof ArrayBuffer) return Buffer.from(new Uint8Array(data));
+  if (data && typeof (data as { getReader?: () => unknown }).getReader === "function") {
+    const reader = (data as ReadableStream<Uint8Array>).getReader();
+    const chunks: Uint8Array[] = [];
+    let result = await reader.read();
+    while (!result.done) {
+      if (result.value) chunks.push(result.value);
+      result = await reader.read();
+    }
+    return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+  }
+  throw new Error("Unsupported PDF buffer type");
+};
 export const renderReportPdf = async (report: ReportBuild): Promise<Buffer> => {
   const doc = (
     <Document>
@@ -54,5 +69,5 @@ export const renderReportPdf = async (report: ReportBuild): Promise<Buffer> => {
 
   const instance = pdf(doc);
   const buffer = await instance.toBuffer();
-  return Buffer.from(buffer);
+  return toNodeBuffer(buffer);
 };
