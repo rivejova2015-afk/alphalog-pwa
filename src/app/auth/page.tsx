@@ -1,18 +1,65 @@
 // src/app/auth/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
+
+declare global {
+  interface Window {
+    hcaptcha?: {
+      render: (container: HTMLElement, params: Record<string, unknown>) => number;
+      reset: (widgetId?: number) => void;
+    };
+  }
+}
 
 export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+  const captchaRef = useRef<HTMLDivElement | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReady, setCaptchaReady] = useState(false);
+  const [captchaWidgetId, setCaptchaWidgetId] = useState<number | null>(null);
 
   useEffect(() => {
     document.title = mode === "signup" ? "Signup | AlphaLog" : "Login | AlphaLog";
   }, [mode]);
+
+  useEffect(() => {
+    if (!hcaptchaSiteKey || !captchaRef.current) return;
+
+    const renderCaptcha = () => {
+      if (!window.hcaptcha || !captchaRef.current) return;
+      if (captchaWidgetId !== null) return;
+      const widgetId = window.hcaptcha.render(captchaRef.current, {
+        sitekey: hcaptchaSiteKey,
+        callback: (token: string) => setCaptchaToken(token),
+        "expired-callback": () => setCaptchaToken(null),
+        "error-callback": () => setError("No se pudo validar el captcha"),
+      });
+      setCaptchaWidgetId(widgetId);
+      setCaptchaReady(true);
+    };
+
+    if (window.hcaptcha) {
+      renderCaptcha();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://js.hcaptcha.com/1/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderCaptcha;
+    document.body.appendChild(script);
+
+    return () => {
+      script.remove();
+    };
+  }, [hcaptchaSiteKey, captchaWidgetId]);
 
   // Email/password form
   const [email, setEmail] = useState("");
@@ -52,6 +99,11 @@ export default function AuthPage() {
       setLoading(true);
       setError(null);
       setInfo(null);
+      if (hcaptchaSiteKey && !captchaToken) {
+        setError("Completa el captcha para continuar");
+        setLoading(false);
+        return;
+      }
       const supabase = createClient();
 
       if (mode === "signup") {
@@ -71,6 +123,7 @@ export default function AuthPage() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
+            captchaToken: captchaToken ?? undefined,
           },
         });
 
@@ -87,6 +140,9 @@ export default function AuthPage() {
         const { error: err } = await supabase.auth.signInWithPassword({
           email,
           password,
+          options: {
+            captchaToken: captchaToken ?? undefined,
+          },
         });
 
         if (err) {
@@ -95,6 +151,10 @@ export default function AuthPage() {
           // Redirect to dashboard
           window.location.href = "/dashboard";
         }
+      }
+      if (window.hcaptcha && captchaWidgetId !== null) {
+        window.hcaptcha.reset(captchaWidgetId);
+        setCaptchaToken(null);
       }
     } catch (err) {
       console.error("[Auth] Email auth error:", err);
@@ -114,9 +174,15 @@ export default function AuthPage() {
       setLoading(true);
       setError(null);
       setInfo(null);
+      if (hcaptchaSiteKey && !captchaToken) {
+        setError("Completa el captcha para continuar");
+        setLoading(false);
+        return;
+      }
       const supabase = createClient();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset`,
+        captchaToken: captchaToken ?? undefined,
       });
 
       if (resetError) {
@@ -125,6 +191,10 @@ export default function AuthPage() {
       }
 
       setInfo("Te enviamos un enlace para crear tu contraseña.");
+      if (window.hcaptcha && captchaWidgetId !== null) {
+        window.hcaptcha.reset(captchaWidgetId);
+        setCaptchaToken(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo enviar el enlace.");
     } finally {
@@ -253,6 +323,25 @@ export default function AuthPage() {
                   className="mt-2 w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-600/70 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
                 />
               </div>
+            )}
+
+            {hcaptchaSiteKey ? (
+              <div>
+                <label className="block text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Verificacion
+                </label>
+                <div
+                  ref={captchaRef}
+                  className="mt-3 rounded-xl border border-slate-700/70 bg-slate-900/60 p-3"
+                />
+                {!captchaReady && (
+                  <p className="mt-2 text-xs text-slate-500">Cargando captcha...</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-amber-300">
+                Falta configurar hCaptcha (NEXT_PUBLIC_HCAPTCHA_SITE_KEY).
+              </p>
             )}
 
             <button
