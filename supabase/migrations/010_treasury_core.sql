@@ -5,7 +5,7 @@
 -- ============================================================================
 -- A) TREASURY_CONFIGS - Configuración de retiros y protecciones por cuenta
 -- ============================================================================
-CREATE TABLE treasury_configs (
+CREATE TABLE IF NOT EXISTS treasury_configs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -38,20 +38,20 @@ CREATE TABLE treasury_configs (
   -- Audit
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  deleted_at TIMESTAMP WITH TIME ZONE NULL,
-  
-  -- Unique: one config per user+account
-  UNIQUE(user_id, account_id) WHERE deleted_at IS NULL
+  deleted_at TIMESTAMP WITH TIME ZONE NULL
+
+  -- Unique: one config per user+account (handled via partial index below)
 );
 
-CREATE INDEX idx_treasury_configs_user_id ON treasury_configs(user_id);
-CREATE INDEX idx_treasury_configs_account_id ON treasury_configs(account_id);
-CREATE INDEX idx_treasury_configs_user_account ON treasury_configs(user_id, account_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS treasury_configs_user_account_uq ON treasury_configs(user_id, account_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_configs_user_id ON treasury_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_configs_account_id ON treasury_configs(account_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_configs_user_account ON treasury_configs(user_id, account_id) WHERE deleted_at IS NULL;
 
 -- ============================================================================
 -- B) TREASURY_WALLETS - Multi-currency wallets (cash, savings, crypto, etc)
 -- ============================================================================
-CREATE TABLE treasury_wallets (
+CREATE TABLE IF NOT EXISTS treasury_wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   
@@ -64,19 +64,19 @@ CREATE TABLE treasury_wallets (
   -- Audit
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  deleted_at TIMESTAMP WITH TIME ZONE NULL,
-  
-  -- Unique: one wallet per user+name (case-insensitive)
-  UNIQUE(user_id, LOWER(name)) WHERE deleted_at IS NULL
+  deleted_at TIMESTAMP WITH TIME ZONE NULL
+
+  -- Unique: one wallet per user+name (case-insensitive) handled via partial index below
 );
 
-CREATE INDEX idx_treasury_wallets_user_id ON treasury_wallets(user_id);
-CREATE INDEX idx_treasury_wallets_user_name ON treasury_wallets(user_id, name) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS treasury_wallets_user_name_uq ON treasury_wallets(user_id, LOWER(name)) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_wallets_user_id ON treasury_wallets(user_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_wallets_user_name ON treasury_wallets(user_id, name) WHERE deleted_at IS NULL;
 
 -- ============================================================================
 -- C) TREASURY_TRANSACTIONS - Income, expenses, transfers, adjustments
 -- ============================================================================
-CREATE TABLE treasury_transactions (
+CREATE TABLE IF NOT EXISTS treasury_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   wallet_id UUID NOT NULL REFERENCES treasury_wallets(id) ON DELETE CASCADE,
@@ -102,16 +102,16 @@ CREATE TABLE treasury_transactions (
   deleted_at TIMESTAMP WITH TIME ZONE NULL
 );
 
-CREATE INDEX idx_treasury_transactions_user_id ON treasury_transactions(user_id);
-CREATE INDEX idx_treasury_transactions_wallet_id ON treasury_transactions(wallet_id);
-CREATE INDEX idx_treasury_transactions_account_id ON treasury_transactions(account_id);
-CREATE INDEX idx_treasury_transactions_user_date ON treasury_transactions(user_id, occurred_on DESC) WHERE deleted_at IS NULL;
-CREATE INDEX idx_treasury_transactions_user_wallet ON treasury_transactions(user_id, wallet_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_user_id ON treasury_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_wallet_id ON treasury_transactions(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_account_id ON treasury_transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_user_date ON treasury_transactions(user_id, occurred_on DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_transactions_user_wallet ON treasury_transactions(user_id, wallet_id) WHERE deleted_at IS NULL;
 
 -- ============================================================================
 -- D) TREASURY_BUDGETS - Period-based budgets (income/expense targets)
 -- ============================================================================
-CREATE TABLE treasury_budgets (
+CREATE TABLE IF NOT EXISTS treasury_budgets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   wallet_id UUID NOT NULL REFERENCES treasury_wallets(id) ON DELETE CASCADE,
@@ -134,14 +134,14 @@ CREATE TABLE treasury_budgets (
   deleted_at TIMESTAMP WITH TIME ZONE NULL
 );
 
-CREATE INDEX idx_treasury_budgets_user_id ON treasury_budgets(user_id);
-CREATE INDEX idx_treasury_budgets_wallet_id ON treasury_budgets(wallet_id);
-CREATE INDEX idx_treasury_budgets_user_period ON treasury_budgets(user_id, period_start DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_budgets_user_id ON treasury_budgets(user_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_budgets_wallet_id ON treasury_budgets(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_budgets_user_period ON treasury_budgets(user_id, period_start DESC) WHERE deleted_at IS NULL;
 
 -- ============================================================================
 -- E) TREASURY_PAYOUTS - Withdrawal plan and tracking
 -- ============================================================================
-CREATE TABLE treasury_payouts (
+CREATE TABLE IF NOT EXISTS treasury_payouts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -166,11 +166,11 @@ CREATE TABLE treasury_payouts (
   deleted_at TIMESTAMP WITH TIME ZONE NULL
 );
 
-CREATE INDEX idx_treasury_payouts_user_id ON treasury_payouts(user_id);
-CREATE INDEX idx_treasury_payouts_account_id ON treasury_payouts(account_id);
-CREATE INDEX idx_treasury_payouts_wallet_id ON treasury_payouts(wallet_id);
-CREATE INDEX idx_treasury_payouts_user_date ON treasury_payouts(user_id, payout_date DESC) WHERE deleted_at IS NULL;
-CREATE INDEX idx_treasury_payouts_user_account ON treasury_payouts(user_id, account_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_payouts_user_id ON treasury_payouts(user_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_payouts_account_id ON treasury_payouts(account_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_payouts_wallet_id ON treasury_payouts(wallet_id);
+CREATE INDEX IF NOT EXISTS idx_treasury_payouts_user_date ON treasury_payouts(user_id, payout_date DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_payouts_user_account ON treasury_payouts(user_id, account_id) WHERE deleted_at IS NULL;
 
 -- ============================================================================
 -- RLS POLICIES - Owner-only access for all treasury tables
@@ -179,97 +179,122 @@ CREATE INDEX idx_treasury_payouts_user_account ON treasury_payouts(user_id, acco
 -- treasury_configs RLS
 ALTER TABLE treasury_configs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can insert own treasury configs" ON treasury_configs;
 CREATE POLICY "Users can insert own treasury configs"
   ON treasury_configs FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can read own treasury configs" ON treasury_configs;
 CREATE POLICY "Users can read own treasury configs"
   ON treasury_configs FOR SELECT
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own treasury configs" ON treasury_configs;
 CREATE POLICY "Users can update own treasury configs"
   ON treasury_configs FOR UPDATE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own treasury configs" ON treasury_configs;
 CREATE POLICY "Users can delete own treasury configs"
   ON treasury_configs FOR DELETE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
 -- treasury_wallets RLS
 ALTER TABLE treasury_wallets ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can insert own treasury wallets" ON treasury_wallets;
 CREATE POLICY "Users can insert own treasury wallets"
   ON treasury_wallets FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can read own treasury wallets" ON treasury_wallets;
 CREATE POLICY "Users can read own treasury wallets"
   ON treasury_wallets FOR SELECT
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own treasury wallets" ON treasury_wallets;
 CREATE POLICY "Users can update own treasury wallets"
   ON treasury_wallets FOR UPDATE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own treasury wallets" ON treasury_wallets;
 CREATE POLICY "Users can delete own treasury wallets"
   ON treasury_wallets FOR DELETE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
 -- treasury_transactions RLS
 ALTER TABLE treasury_transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can insert own treasury transactions" ON treasury_transactions;
 CREATE POLICY "Users can insert own treasury transactions"
   ON treasury_transactions FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can read own treasury transactions" ON treasury_transactions;
 CREATE POLICY "Users can read own treasury transactions"
   ON treasury_transactions FOR SELECT
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own treasury transactions" ON treasury_transactions;
 CREATE POLICY "Users can update own treasury transactions"
   ON treasury_transactions FOR UPDATE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own treasury transactions" ON treasury_transactions;
 CREATE POLICY "Users can delete own treasury transactions"
   ON treasury_transactions FOR DELETE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
 -- treasury_budgets RLS
 ALTER TABLE treasury_budgets ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can insert own treasury budgets" ON treasury_budgets;
 CREATE POLICY "Users can insert own treasury budgets"
   ON treasury_budgets FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can read own treasury budgets" ON treasury_budgets;
 CREATE POLICY "Users can read own treasury budgets"
   ON treasury_budgets FOR SELECT
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own treasury budgets" ON treasury_budgets;
 CREATE POLICY "Users can update own treasury budgets"
   ON treasury_budgets FOR UPDATE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own treasury budgets" ON treasury_budgets;
 CREATE POLICY "Users can delete own treasury budgets"
   ON treasury_budgets FOR DELETE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
 -- treasury_payouts RLS
 ALTER TABLE treasury_payouts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can insert own treasury payouts" ON treasury_payouts;
 CREATE POLICY "Users can insert own treasury payouts"
   ON treasury_payouts FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can read own treasury payouts" ON treasury_payouts;
 CREATE POLICY "Users can read own treasury payouts"
   ON treasury_payouts FOR SELECT
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own treasury payouts" ON treasury_payouts;
 CREATE POLICY "Users can update own treasury payouts"
   ON treasury_payouts FOR UPDATE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own treasury payouts" ON treasury_payouts;
 CREATE POLICY "Users can delete own treasury payouts"
   ON treasury_payouts FOR DELETE
-  WHERE auth.uid() = user_id;
+  USING (auth.uid() = user_id);
 
 -- ============================================================================
 -- TRIGGERS - Auto-update updated_at timestamps
@@ -285,30 +310,35 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- treasury_configs updated_at trigger
+DROP TRIGGER IF EXISTS treasury_configs_updated_at_trigger ON treasury_configs;
 CREATE TRIGGER treasury_configs_updated_at_trigger
 BEFORE UPDATE ON treasury_configs
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
 -- treasury_wallets updated_at trigger
+DROP TRIGGER IF EXISTS treasury_wallets_updated_at_trigger ON treasury_wallets;
 CREATE TRIGGER treasury_wallets_updated_at_trigger
 BEFORE UPDATE ON treasury_wallets
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
 -- treasury_transactions updated_at trigger
+DROP TRIGGER IF EXISTS treasury_transactions_updated_at_trigger ON treasury_transactions;
 CREATE TRIGGER treasury_transactions_updated_at_trigger
 BEFORE UPDATE ON treasury_transactions
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
 -- treasury_budgets updated_at trigger
+DROP TRIGGER IF EXISTS treasury_budgets_updated_at_trigger ON treasury_budgets;
 CREATE TRIGGER treasury_budgets_updated_at_trigger
 BEFORE UPDATE ON treasury_budgets
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
 -- treasury_payouts updated_at trigger
+DROP TRIGGER IF EXISTS treasury_payouts_updated_at_trigger ON treasury_payouts;
 CREATE TRIGGER treasury_payouts_updated_at_trigger
 BEFORE UPDATE ON treasury_payouts
 FOR EACH ROW

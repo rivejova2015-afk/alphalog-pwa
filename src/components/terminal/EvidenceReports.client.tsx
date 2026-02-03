@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { toArray, normalizeListResponse, normalizeSingleResponse } from "@/lib/safe";
-import { logError } from "@/lib/log";
+import { logger } from "@/lib/alphashield/logger";
 import EvidenceAttachments from "./EvidenceAttachments.client";
 
 interface Instrument {
@@ -34,6 +34,24 @@ export default function EvidenceReports() {
   });
   const [error, setError] = useState<string>("");
 
+  const parseJsonSafe = async (response: Response) => {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchWithTimeout = async (input: RequestInfo, init?: RequestInit, timeoutMs = 20000) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
   // Auto-refresh para instruments (60 segundos)
   const {
     data: instrumentsRaw,
@@ -43,23 +61,24 @@ export default function EvidenceReports() {
   } = useAutoRefresh<Instrument[]>({
     key: "EvidenceReports:instruments",
     fetcher: async () => {
-      const response = await fetch("/api/terminal/instruments");
+      const response = await fetchWithTimeout("/api/terminal/instruments", {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (!response.ok) {
         throw new Error(
           `HTTP ${response.status}: No se pudieron cargar instrumentos`
         );
       }
-      const data = await response.json();
+      const data = await parseJsonSafe(response);
       return normalizeListResponse<Instrument>(data);
     },
     intervalMs: 60000,
     enabled: true,
     onError: (err) => {
-      logError("EvidenceReports", {
+      logger.error("terminal_evidence", "Fetch instruments failed", err, {
         component: "EvidenceReports",
-        action: "fetch instruments",
         endpoint: "/api/terminal/instruments",
-        message: err.message,
       });
     },
   });
@@ -82,23 +101,24 @@ export default function EvidenceReports() {
   } = useAutoRefresh<Report[]>({
     key: "EvidenceReports:reports",
     fetcher: async () => {
-      const response = await fetch("/api/terminal/evidence");
+      const response = await fetchWithTimeout("/api/terminal/evidence", {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (!response.ok) {
         throw new Error(
           `HTTP ${response.status}: No se pudieron cargar reportes`
         );
       }
-      const data = await response.json();
+      const data = await parseJsonSafe(response);
       return normalizeListResponse<Report>(data);
     },
     intervalMs: 60000,
     enabled: true,
     onError: (err) => {
-      logError("EvidenceReports", {
+      logger.error("terminal_evidence", "Fetch reports failed", err, {
         component: "EvidenceReports",
-        action: "fetch reports",
         endpoint: "/api/terminal/evidence",
-        message: err.message,
       });
     },
   });
@@ -115,8 +135,10 @@ export default function EvidenceReports() {
     setError("");
 
     try {
-      const response = await fetch("/api/terminal/evidence/generate", {
+      const response = await fetchWithTimeout("/api/terminal/evidence/generate", {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instrumentId: formData.instrument_id || null,
@@ -125,12 +147,11 @@ export default function EvidenceReports() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        const msg = errorData.error || `HTTP ${response.status}`;
+        const errorData = await parseJsonSafe(response);
+        const msg = errorData?.error || `HTTP ${response.status}`;
         setError(msg);
-        logError("EvidenceReports", {
+        await logger.error("terminal_evidence", "Generate with AI failed", undefined, {
           component: "EvidenceReports",
-          action: "generate with AI",
           endpoint: "/api/terminal/evidence/generate",
           status: response.status,
           message: msg,
@@ -141,7 +162,7 @@ export default function EvidenceReports() {
       const result = normalizeSingleResponse<{
         reportId: string;
         content: string;
-      }>(await response.json());
+      }>(await parseJsonSafe(response));
 
       if (result?.reportId && result?.content) {
         setFormData((prev) => ({
@@ -149,13 +170,13 @@ export default function EvidenceReports() {
           content: result.content,
         }));
         setSelectedReportId(result.reportId);
+        await refreshReports();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
       setError(msg);
-      logError("EvidenceReports", {
+      await logger.error("terminal_evidence", "Generate with AI error", err instanceof Error ? err : undefined, {
         component: "EvidenceReports",
-        action: "generate with AI",
         endpoint: "/api/terminal/evidence/generate",
         message: msg,
       });
@@ -182,19 +203,20 @@ export default function EvidenceReports() {
       const url = editingReport
         ? `/api/terminal/evidence/${editingReport.id}`
         : "/api/terminal/evidence";
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         method,
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        const msg = errorData.error || `HTTP ${response.status}`;
+        const errorData = await parseJsonSafe(response);
+        const msg = errorData?.error || `HTTP ${response.status}`;
         setError(msg);
-        logError("EvidenceReports", {
+        await logger.error("terminal_evidence", "Save report failed", undefined, {
           component: "EvidenceReports",
-          action: "save report",
           endpoint: url,
           status: response.status,
           message: msg,
@@ -202,7 +224,7 @@ export default function EvidenceReports() {
         return;
       }
 
-      const data = normalizeSingleResponse<Report>(await response.json());
+      const data = normalizeSingleResponse<Report>(await parseJsonSafe(response));
       if (data?.id) {
         setSelectedReportId(data.id);
       }
@@ -211,9 +233,8 @@ export default function EvidenceReports() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
       setError(msg);
-      logError("EvidenceReports", {
+      await logger.error("terminal_evidence", "Save report error", err instanceof Error ? err : undefined, {
         component: "EvidenceReports",
-        action: "save report",
         message: msg,
       });
     }
@@ -236,11 +257,17 @@ export default function EvidenceReports() {
     }
 
     try {
-      const response = await fetch(`/api/terminal/evidence/${reportId}`, {
+      const response = await fetchWithTimeout(`/api/terminal/evidence/${reportId}`, {
         method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
       });
 
       if (!response.ok) {
+        await logger.error("terminal_evidence", "Delete report failed", undefined, {
+          endpoint: `/api/terminal/evidence/${reportId}`,
+          status: response.status,
+        });
         throw new Error(`HTTP ${response.status}: No se pudo eliminar`);
       }
 
@@ -250,9 +277,8 @@ export default function EvidenceReports() {
       await refreshReports();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
-      logError("EvidenceReports", {
+      await logger.error("terminal_evidence", "Delete report error", err instanceof Error ? err : undefined, {
         component: "EvidenceReports",
-        action: "delete report",
         endpoint: `/api/terminal/evidence/${reportId}`,
         message: msg,
       });

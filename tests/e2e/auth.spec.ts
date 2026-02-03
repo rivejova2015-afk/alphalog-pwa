@@ -1,36 +1,14 @@
 import { test, expect } from '@playwright/test';
+import { login } from './utils/auth';
 
 test.describe('Authentication', () => {
   test('should login with email and password', async ({ page }) => {
-    // Navigate to login page
-    await page.goto('/auth/login');
-
-    // Verify we're on the login page
-    await expect(page).toHaveTitle(/login|sign in|auth/i);
-
-    // Get credentials from environment
-    const email = process.env.E2E_EMAIL || 'test@alphalog.local';
-    const password = process.env.E2E_PASSWORD || 'Test@123456';
-
-    // Fill in email
-    const emailInput = page.locator('input[type="email"], input[placeholder*="email" i]');
-    await emailInput.fill(email);
-
-    // Fill in password
-    const passwordInput = page.locator('input[type="password"]');
-    await passwordInput.fill(password);
-
-    // Submit form
-    const submitButton = page.locator('button[type="submit"]:has-text("Sign In"), button[type="submit"]:has-text("Login"), button[type="submit"]');
-    await submitButton.click();
-
-    // Wait for navigation (either to dashboard or home)
-    await page.waitForURL(/\/(dashboard|home|[^\/]*)?$/, { timeout: 10000 });
+    await login(page);
 
     // Verify we're logged in by checking for dashboard elements
     // Could be on dashboard or home page
     const pageUrl = page.url();
-    expect(pageUrl).toMatch(/\/(dashboard|home|[^\/]*)?$/);
+    expect(pageUrl).toMatch(/\/dashboard(\/|$)/);
 
     // Verify no error messages
     const errorElements = page.locator('[role="alert"], .error, .alert-error');
@@ -40,7 +18,7 @@ test.describe('Authentication', () => {
   });
 
   test('should show error on invalid credentials', async ({ page }) => {
-    await page.goto('/auth/login');
+    await page.goto('/auth');
 
     // Fill in invalid credentials
     const emailInput = page.locator('input[type="email"], input[placeholder*="email" i]');
@@ -60,17 +38,7 @@ test.describe('Authentication', () => {
 
   test('should logout successfully', async ({ page }) => {
     // Login first
-    const email = process.env.E2E_EMAIL || 'test@alphalog.local';
-    const password = process.env.E2E_PASSWORD || 'Test@123456';
-
-    await page.goto('/auth/login');
-    await page.fill('input[type="email"], input[placeholder*="email" i]', email);
-    await page.fill('input[type="password"]', password);
-    const submitButton = page.locator('button[type="submit"]:has-text("Sign In"), button[type="submit"]:has-text("Login"), button[type="submit"]');
-    await submitButton.click();
-
-    // Wait for dashboard
-    await page.waitForURL(/\/(dashboard|home|[^\/]*)?$/, { timeout: 10000 });
+    await login(page);
 
     // Find and click logout button (usually in header/nav)
     const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"], .logout-btn');

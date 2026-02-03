@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/browser";
 export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function AuthPage() {
     try {
       setLoading(true);
       setError(null);
+      setInfo(null);
       const supabase = createClient();
 
       if (mode === "signup") {
@@ -102,6 +104,34 @@ export default function AuthPage() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError("Ingresa tu email para continuar.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setInfo(null);
+      const supabase = createClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset`,
+      });
+
+      if (resetError) {
+        setError(resetError.message);
+        return;
+      }
+
+      setInfo("Te enviamos un enlace para crear tu contraseña.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo enviar el enlace.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Detecta error en params (ej. ?error=missing_code)
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const queryError = searchParams.get("error");
@@ -143,6 +173,10 @@ export default function AuthPage() {
               </h2>
               <p className="mt-1 text-sm text-slate-400">
                 Usa Google o tu email para continuar.
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                Si ya usaste Google con este email, no crees otra cuenta. Usa el mismo email al
+                crear/iniciar sesion con contraseña para mantener tus datos.
               </p>
             </div>
           </div>
@@ -232,6 +266,16 @@ export default function AuthPage() {
                   ? "Iniciar sesion"
                   : "Registrarse"}
             </button>
+            {mode === "login" && (
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={loading}
+                className="w-full text-xs uppercase tracking-[0.2em] text-slate-400 hover:text-slate-200"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
           </form>
 
           <div className="my-6 flex items-center gap-3 text-xs text-slate-400">
@@ -249,6 +293,28 @@ export default function AuthPage() {
             Continuar con Google
           </button>
 
+          <div className="mt-6 rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4 text-xs text-slate-300">
+            <p className="text-sm font-semibold text-slate-100">Crear contraseña con tu email</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Si ya entraste con Google, usa el mismo email y te enviaremos un enlace para crear
+              contraseña.
+            </p>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={loading}
+              className="mt-3 w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2 text-xs font-semibold text-slate-100 transition hover:bg-slate-800/80 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Enviar enlace de contraseña
+            </button>
+            <a
+              href="/auth/set-password"
+              className="mt-3 block text-center text-xs uppercase tracking-[0.2em] text-slate-400 hover:text-slate-200"
+            >
+              Ya tengo sesion con Google
+            </a>
+          </div>
+
           {(error || queryError) && (
             <div className="mt-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
               <p>
@@ -259,6 +325,12 @@ export default function AuthPage() {
                   El servidor no recibio un codigo de autorizacion de Google. Intenta de nuevo.
                 </p>
               )}
+            </div>
+          )}
+
+          {info && !(error || queryError) && (
+            <div className="mt-5 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+              {info}
             </div>
           )}
         </section>

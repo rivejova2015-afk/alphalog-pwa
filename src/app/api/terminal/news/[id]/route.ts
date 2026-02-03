@@ -1,5 +1,6 @@
 // src/app/api/terminal/news/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -39,9 +40,9 @@ export async function PATCH(
     const { data, error } = await supabase
       .from("terminal_news")
       .update({
-        title: title !== undefined ? title : existingNews.title,
-        url: url !== undefined ? url : existingNews.url,
-        source: source !== undefined ? source : existingNews.source,
+        title: title !== undefined ? encryptText(title) : existingNews.title,
+        url: url !== undefined ? encryptText(url) : existingNews.url,
+        source: source !== undefined ? encryptText(source) : existingNews.source,
         relevancy_score: relevancy_score !== undefined ? relevancy_score : existingNews.relevancy_score,
         impact_label: impact_label !== undefined ? impact_label : existingNews.impact_label,
       })
@@ -57,7 +58,12 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      title: decryptText(data.title),
+      url: decryptText(data.url),
+      source: decryptText(data.source),
+    });
   } catch (err: any) {
     console.error("Error in PATCH /api/terminal/news/[id]:", err);
     return NextResponse.json(
@@ -69,7 +75,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/terminal/news/{id}
- * Soft-delete news
+ * Hard-delete news
  */
 export async function DELETE(
   request: NextRequest,
@@ -101,8 +107,9 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("terminal_news")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userData.user.id);
 
     if (error) {
       console.error("Error deleting news:", error);

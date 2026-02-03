@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withPWA from "next-pwa";
+import runtimeCaching from "next-pwa/cache";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -57,6 +58,10 @@ const withPWAConfig = withPWA({
   register: true,
   skipWaiting: true,
   clientsClaim: true,
+  runtimeCaching,
+  fallbacks: {
+    document: "/offline",
+  },
 });
 
 export default withPWAConfig(nextConfig);

@@ -1,6 +1,7 @@
 // src/app/api/tradehub/trades/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 
 /**
  * GET /api/tradehub/trades
@@ -93,7 +94,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || []);
+    const decrypted = (data || []).map((trade: any) => ({
+      ...trade,
+      notes: decryptText(trade.notes),
+    }));
+
+    return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/trades:", err);
     return NextResponse.json(
@@ -205,7 +211,7 @@ export async function POST(request: NextRequest) {
         take_profit_price,
         pnl,
         pnl_percent,
-        notes,
+        notes: encryptText(notes),
         setup_id,
         is_featured_in_report: is_featured_in_report || false,
       })
@@ -220,7 +226,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      notes: decryptText(data.notes),
+    });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/trades:", err);
     return NextResponse.json(

@@ -318,7 +318,7 @@ export async function updateJournalEntry(
         edited_at: new Date().toISOString()
       },
       {
-        onOptimisticApplied: (data) => {
+        onOptimisticApplied: () => {
           console.log('[JournalEntry] Updated entry:', input.id);
         }
       }

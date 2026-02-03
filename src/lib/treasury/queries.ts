@@ -11,6 +11,19 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+const logTreasuryError = async (message: string, error?: unknown) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const { logger } = await import('@/lib/alphashield/logger');
+      await logger.error('treasury', message, error instanceof Error ? error : undefined);
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+  console.error(message, error);
+};
+
 import type {
   Account,
   TreasuryConfig,
@@ -105,7 +118,7 @@ export async function getAccounts(): Promise<Account[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching accounts:', error);
+    await logTreasuryError('Error fetching accounts:', error);
     return [];
   }
 
@@ -125,7 +138,7 @@ export async function getAccountsByIds(ids: string[]): Promise<Account[]> {
     .is('deleted_at', null);
 
   if (error) {
-    console.error('Error fetching accounts by IDs:', error);
+    await logTreasuryError('Error fetching accounts by IDs:', error);
     return [];
   }
 
@@ -146,7 +159,7 @@ export async function getAccount(id: string): Promise<Account | null> {
   if (error) {
     if (error.code !== 'PGRST116') {
       // PGRST116 = no rows returned
-      console.error('Error fetching account:', error);
+      await logTreasuryError('Error fetching account:', error);
     }
     return null;
   }
@@ -169,7 +182,7 @@ export async function getTreasuryConfig(
 
   if (error) {
     if (error.code !== 'PGRST116') {
-      console.error('Error fetching treasury config:', error);
+      await logTreasuryError('Error fetching treasury config:', error);
     }
     return null;
   }
@@ -188,7 +201,7 @@ export async function getTreasuryConfigs(): Promise<TreasuryConfig[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching treasury configs:', error);
+    await logTreasuryError('Error fetching treasury configs:', error);
     return [];
   }
 
@@ -218,7 +231,7 @@ export async function upsertTreasuryConfig(
       .single();
 
     if (error) {
-      console.error('Error updating treasury config:', error);
+      await logTreasuryError('Error updating treasury config:', error);
       return null;
     }
 
@@ -242,7 +255,7 @@ export async function upsertTreasuryConfig(
       .single();
 
     if (error) {
-      console.error('Error creating treasury config:', error);
+      await logTreasuryError('Error creating treasury config:', error);
       return null;
     }
 
@@ -264,7 +277,7 @@ export async function getAccountTrades(accountId: string): Promise<Trade[]> {
     .order('exit_date', { ascending: true, nullsFirst: false });
 
   if (error) {
-    console.error('Error fetching account trades:', error);
+    await logTreasuryError('Error fetching account trades:', error);
     return [];
   }
 
@@ -284,7 +297,7 @@ export async function getAllTrades(): Promise<Trade[]> {
     .order('exit_date', { ascending: true, nullsFirst: false });
 
   if (error) {
-    console.error('Error fetching all trades:', error);
+    await logTreasuryError('Error fetching all trades:', error);
     return [];
   }
 
@@ -302,7 +315,7 @@ export async function getTreasuryTransactions() {
     .order('occurred_on', { ascending: false });
 
   if (error) {
-    console.error('Error fetching treasury transactions:', error);
+    await logTreasuryError('Error fetching treasury transactions:', error);
     return [];
   }
 
@@ -321,7 +334,7 @@ export async function getTreasuryPayouts() {
     .order('payout_date', { ascending: true });
 
   if (error) {
-    console.error('Error fetching treasury payouts:', error);
+    await logTreasuryError('Error fetching treasury payouts:', error);
     return [];
   }
 
@@ -338,7 +351,7 @@ export async function deleteTreasuryConfig(id: string): Promise<boolean> {
     .eq('id', id);
 
   if (error) {
-    console.error('Error deleting treasury config:', error);
+    await logTreasuryError('Error deleting treasury config:', error);
     return false;
   }
 
@@ -355,7 +368,7 @@ export async function restoreTreasuryConfig(id: string): Promise<boolean> {
     .eq('id', id);
 
   if (error) {
-    console.error('Error restoring treasury config:', error);
+    await logTreasuryError('Error restoring treasury config:', error);
     return false;
   }
 
@@ -373,7 +386,7 @@ export async function getWallets(): Promise<TreasuryWallet[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching wallets:', error);
+    await logTreasuryError('Error fetching wallets:', error);
     return [];
   }
 
@@ -405,7 +418,7 @@ export async function getTransactions(
     .order('occurred_on', { ascending: false });
 
   if (error) {
-    console.error('Error fetching transactions:', error);
+    await logTreasuryError('Error fetching transactions:', error);
     return [];
   }
 
@@ -425,7 +438,7 @@ export async function createTransaction(
     .single();
 
   if (error) {
-    console.error('Error creating transaction:', error);
+    await logTreasuryError('Error creating transaction:', error);
     return null;
   }
 
@@ -447,7 +460,7 @@ export async function updateTransaction(
     .single();
 
   if (error) {
-    console.error('Error updating transaction:', error);
+    await logTreasuryError('Error updating transaction:', error);
     return null;
   }
 
@@ -464,7 +477,7 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     .eq('id', id);
 
   if (error) {
-    console.error('Error deleting transaction:', error);
+    await logTreasuryError('Error deleting transaction:', error);
     return false;
   }
 
@@ -483,7 +496,7 @@ export async function getBudgets(walletId: string): Promise<TreasuryBudget[]> {
     .order('period_start', { ascending: false });
 
   if (error) {
-    console.error('Error fetching budgets:', error);
+    await logTreasuryError('Error fetching budgets:', error);
     return [];
   }
 
@@ -503,7 +516,7 @@ export async function createBudget(
     .single();
 
   if (error) {
-    console.error('Error creating budget:', error);
+    await logTreasuryError('Error creating budget:', error);
     return null;
   }
 
@@ -525,7 +538,7 @@ export async function updateBudget(
     .single();
 
   if (error) {
-    console.error('Error updating budget:', error);
+    await logTreasuryError('Error updating budget:', error);
     return null;
   }
 
@@ -542,7 +555,7 @@ export async function deleteBudget(id: string): Promise<boolean> {
     .eq('id', id);
 
   if (error) {
-    console.error('Error deleting budget:', error);
+    await logTreasuryError('Error deleting budget:', error);
     return false;
   }
 
@@ -576,7 +589,7 @@ export async function getPayouts(
     .order('payout_date', { ascending: false });
 
   if (error) {
-    console.error('Error fetching payouts:', error);
+    await logTreasuryError('Error fetching payouts:', error);
     return [];
   }
 
@@ -596,7 +609,7 @@ export async function createPayout(
     .single();
 
   if (error) {
-    console.error('Error creating payout:', error);
+    await logTreasuryError('Error creating payout:', error);
     return null;
   }
 
@@ -618,7 +631,7 @@ export async function updatePayout(
     .single();
 
   if (error) {
-    console.error('Error updating payout:', error);
+    await logTreasuryError('Error updating payout:', error);
     return null;
   }
 
@@ -635,7 +648,7 @@ export async function deletePayout(id: string): Promise<boolean> {
     .eq('id', id);
 
   if (error) {
-    console.error('Error deleting payout:', error);
+    await logTreasuryError('Error deleting payout:', error);
     return false;
   }
 
@@ -667,7 +680,7 @@ export async function getAllTransactions(
   const { data, error } = await query;
 
   if (error) {
-    console.error('Error fetching all transactions:', error);
+    await logTreasuryError('Error fetching all transactions:', error);
     return [];
   }
 
@@ -686,7 +699,7 @@ export async function getAllBudgets(): Promise<TreasuryBudget[]> {
     .order('period_start', { ascending: false });
 
   if (error) {
-    console.error('Error fetching all budgets:', error);
+    await logTreasuryError('Error fetching all budgets:', error);
     return [];
   }
 
@@ -718,7 +731,7 @@ export async function getAllPayouts(
   const { data, error } = await query;
 
   if (error) {
-    console.error('Error fetching all payouts:', error);
+    await logTreasuryError('Error fetching all payouts:', error);
     return [];
   }
 

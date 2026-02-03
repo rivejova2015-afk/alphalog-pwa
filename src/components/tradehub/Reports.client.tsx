@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from "@/lib/alphashield/logger";
 
 interface Report {
   id: string;
@@ -40,7 +41,10 @@ export default function Reports() {
           window.location.href = "/auth";
           return;
         }
-        console.error(`[Reports] GET /api/tradehub/reports returned ${statusCode}`);
+        await logger.error("tradehub", "Fetch reports failed", undefined, {
+          endpoint: "/api/tradehub/reports",
+          status: statusCode,
+        });
         setReports([]);
         return;
       }
@@ -48,7 +52,11 @@ export default function Reports() {
       const data = await response.json();
       setReports(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("[Reports] Error fetching reports:", err);
+      await logger.error(
+        "tradehub",
+        "Fetch reports error",
+        err instanceof Error ? err : undefined
+      );
       setReports([]);
     } finally {
       setLoading(false);
@@ -66,7 +74,9 @@ export default function Reports() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate report");
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData?.error || `HTTP ${response.status}`;
+        throw new Error(msg);
       }
 
       const { existing, report } = await response.json();
@@ -83,8 +93,17 @@ export default function Reports() {
 
       setExpandedReportId(report.id);
     } catch (err: any) {
-      setError(err.message || "Error al generar reporte");
-      console.error("Error generating report:", err);
+      const message = err?.message || "Error al generar reporte";
+      setError("No se pudo generar el reporte. Intenta de nuevo.");
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[TradeHub] Generate report error", err);
+      }
+      await logger.error(
+        "tradehub",
+        "Generate report error",
+        err instanceof Error ? err : undefined,
+        { feature: "alphabrief", action: "generate", message }
+      );
     } finally {
       setGenerating(false);
     }
@@ -106,7 +125,11 @@ export default function Reports() {
       setExpandedReportId(null);
     } catch (err: any) {
       setError(err.message || "Error al eliminar reporte");
-      console.error("Error deleting report:", err);
+      await logger.error(
+        "tradehub",
+        "Delete report error",
+        err instanceof Error ? err : undefined
+      );
     }
   };
 

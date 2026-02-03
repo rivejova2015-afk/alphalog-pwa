@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { SystemDiagnostics } from '@/components/logs/SystemDiagnostics.client';
 import { RecentErrors } from '@/components/logs/RecentErrors.client';
 import SprintStatus from '@/components/logs/SprintStatus.client';
@@ -16,6 +17,8 @@ import { isSafeModeActive, disableSafeMode } from '@/lib/alphashield/safeMode';
 type TabType = 'diagnostics' | 'sprint-status';
 
 export default function SystemPage() {
+  const router = useRouter();
+  const enableSystemLogs = process.env.NEXT_PUBLIC_ENABLE_SYSTEM_LOGS === 'true';
   const [activeTab, setActiveTab] = useState<TabType>('diagnostics');
   const [debugBundle, setDebugBundle] = useState<DebugBundle | null>(null);
   const [prompt, setPrompt] = useState<string>('');
@@ -24,6 +27,13 @@ export default function SystemPage() {
   const [safeMode, setSafeMode] = useState(false);
 
   useEffect(() => {
+    if (!enableSystemLogs) {
+      router.replace('/dashboard');
+    }
+  }, [enableSystemLogs, router]);
+
+  useEffect(() => {
+    if (!enableSystemLogs) return;
     const loadData = async () => {
       try {
         setLoading(true);
@@ -46,7 +56,7 @@ export default function SystemPage() {
     };
 
     loadData();
-  }, []);
+  }, [enableSystemLogs]);
 
   const handleCopyBundle = async () => {
     if (!debugBundle) return;
@@ -76,6 +86,10 @@ export default function SystemPage() {
     disableSafeMode();
     setSafeMode(false);
   };
+
+  if (!enableSystemLogs) {
+    return null;
+  }
 
   return (
     <div className="space-y-6 p-6 max-w-4xl text-slate-200">

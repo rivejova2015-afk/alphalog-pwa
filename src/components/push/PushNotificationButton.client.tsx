@@ -2,7 +2,8 @@
 'use client';
 
 import { useState } from 'react';
-import { requestNotificationPermission, subscribeToPush, getPushSubscription, sendTestPushNotification, unsubscribeFromPush } from '@/lib/push/vapid.client';
+import { captureException, captureMessage } from '@/lib/sentry';
+import { requestNotificationPermission, subscribeToPush, getPushSubscription, unsubscribeFromPush, getVapidPublicKey } from '@/lib/push/vapid.client';
 
 export function PushNotificationButton() {
   const [isLoading, setIsLoading] = useState(false);
@@ -10,12 +11,38 @@ export function PushNotificationButton() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const logClientError = (err: unknown, context: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[PushNotificationButton]', err, context);
+      return;
+    }
+    captureException(err, context);
+  };
+
+  const logClientMessage = (message: string, context: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[PushNotificationButton]', message, context);
+      return;
+    }
+    captureMessage(message, context);
+  };
+
   const handleSubscribe = async () => {
     setIsLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
+      if (!getVapidPublicKey()) {
+        setError('Notificaciones no disponibles (configuración pendiente).');
+        logClientMessage('Missing VAPID public key', {
+          feature: 'push',
+          action: 'subscribe',
+          reason: 'missing_vapid_public_key',
+        });
+        return;
+      }
+
       // Request notification permission
       const permission = await requestNotificationPermission();
 
@@ -74,7 +101,13 @@ export function PushNotificationButton() {
       setIsSubscribed(true);
       setSuccess('✅ Notificaciones habilitadas');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setError('No se pudo activar notificaciones. Intenta de nuevo.');
+      logClientError(err, {
+        feature: 'push',
+        action: 'subscribe',
+        message,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +173,13 @@ export function PushNotificationButton() {
 
       setSuccess('✅ Notificación de prueba enviada');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setError('No se pudo enviar la notificación de prueba.');
+      logClientError(err, {
+        feature: 'push',
+        action: 'test',
+        message,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -162,7 +201,13 @@ export function PushNotificationButton() {
       setIsSubscribed(false);
       setSuccess('Notificaciones deshabilitadas');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      setError('No se pudo desactivar notificaciones.');
+      logClientError(err, {
+        feature: 'push',
+        action: 'unsubscribe',
+        message,
+      });
     } finally {
       setIsLoading(false);
     }

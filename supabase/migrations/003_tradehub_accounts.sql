@@ -33,16 +33,17 @@ comment on column public.account_categories.name_lower is 'Generado: lower(name)
 comment on column public.account_categories.sort_index is 'Ordenamiento flexible (0-basado)';
 
 -- Anti-duplicados: user_id + name_lower, ignorando soft-delete
-create unique index account_categories_user_name_uq 
+create unique index if not exists account_categories_user_name_uq 
   on public.account_categories(user_id, name_lower) 
   where deleted_at is null;
 
 -- Index para búsquedas rápidas
-create index account_categories_user_id_idx 
+create index if not exists account_categories_user_id_idx 
   on public.account_categories(user_id) 
   where deleted_at is null;
 
 -- Trigger para updated_at (reutiliza función de 002_logs_schema.sql)
+drop trigger if exists account_categories_updated_at on public.account_categories;
 create trigger account_categories_updated_at
   before update on public.account_categories
   for each row
@@ -51,19 +52,23 @@ create trigger account_categories_updated_at
 -- RLS
 alter table public.account_categories enable row level security;
 
+drop policy if exists "account_categories_owner_select" on public.account_categories;
 create policy "account_categories_owner_select"
   on public.account_categories for select
   using (auth.uid() = user_id and deleted_at is null);
 
+drop policy if exists "account_categories_owner_insert" on public.account_categories;
 create policy "account_categories_owner_insert"
   on public.account_categories for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "account_categories_owner_update" on public.account_categories;
 create policy "account_categories_owner_update"
   on public.account_categories for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "account_categories_owner_delete" on public.account_categories;
 create policy "account_categories_owner_delete"
   on public.account_categories for delete
   using (auth.uid() = user_id);
@@ -102,23 +107,24 @@ comment on column public.accounts.withdrawals_enabled is 'Si los retiros están 
 comment on column public.accounts.sort_index is 'Ordenamiento flexible (0-basado)';
 
 -- Índices para búsquedas y relaciones
-create index accounts_user_id_idx 
+create index if not exists accounts_user_id_idx 
   on public.accounts(user_id) 
   where deleted_at is null;
 
-create index accounts_user_sort_idx 
+create index if not exists accounts_user_sort_idx 
   on public.accounts(user_id, sort_index) 
   where deleted_at is null;
 
-create index accounts_user_created_idx 
+create index if not exists accounts_user_created_idx 
   on public.accounts(user_id, created_at desc) 
   where deleted_at is null;
 
-create index accounts_category_id_idx 
+create index if not exists accounts_category_id_idx 
   on public.accounts(category_id) 
   where deleted_at is null;
 
 -- Trigger para updated_at
+drop trigger if exists accounts_updated_at on public.accounts;
 create trigger accounts_updated_at
   before update on public.accounts
   for each row
@@ -127,19 +133,23 @@ create trigger accounts_updated_at
 -- RLS
 alter table public.accounts enable row level security;
 
+drop policy if exists "accounts_owner_select" on public.accounts;
 create policy "accounts_owner_select"
   on public.accounts for select
   using (auth.uid() = user_id and deleted_at is null);
 
+drop policy if exists "accounts_owner_insert" on public.accounts;
 create policy "accounts_owner_insert"
   on public.accounts for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "accounts_owner_update" on public.accounts;
 create policy "accounts_owner_update"
   on public.accounts for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "accounts_owner_delete" on public.accounts;
 create policy "accounts_owner_delete"
   on public.accounts for delete
   using (auth.uid() = user_id);

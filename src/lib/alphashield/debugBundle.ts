@@ -3,9 +3,8 @@
  * Creates sanitized JSON debug bundle for troubleshooting
  */
 
-import { sanitizeLogData } from './sanitize';
 import { isSafeModeActive } from './safeMode';
-import { getUnsentLogs, getAllLogs } from './queue';
+import { getUnsentLogs } from './queue';
 
 export interface DebugBundle {
   timestamp: string;

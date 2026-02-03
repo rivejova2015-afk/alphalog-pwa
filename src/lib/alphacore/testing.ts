@@ -8,7 +8,6 @@
  * - AlphaShield integration verification
  */
 
-import type { JournalEntry, Account } from '@/lib/alphacore/contracts';
 import type { BaseFields, MutationStatus } from '@/lib/alphacore/types';
 import type { MutationResponse } from '@/lib/alphacore/mutations';
 

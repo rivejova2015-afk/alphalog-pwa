@@ -1,4 +1,4 @@
--- 002_logs_schema.sql
+-- 021_logs_schema.sql
 -- Sprint 3.1: Logs with categories, tags, attachments, RLS, anti-duplicados
 -- Decisiones:
 -- - category_id NOT NULL (logs SIEMPRE tienen categoría)

@@ -164,7 +164,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/accounts/[id]
- * Soft-delete account (sets deleted_at = now())
+ * Hard-delete account (cascade trades + evidence)
  */
 export async function DELETE(
   request: NextRequest,
@@ -193,14 +193,93 @@ export async function DELETE(
       );
     }
 
-    // Soft-delete: set deleted_at = now()
+    const { data: trades, error: tradesError } = await supabase
+      .from("trades")
+      .select("id, screenshot_path")
+      .eq("account_id", params.id)
+      .eq("user_id", userData.user.id);
+
+    if (tradesError) {
+      console.error("Error fetching trades for account delete:", tradesError);
+      return NextResponse.json(
+        { error: "Failed to delete account trades" },
+        { status: 500 }
+      );
+    }
+
+    const tradeIds = (trades || []).map((trade) => trade.id);
+    const screenshotPaths = (trades || [])
+      .map((trade) => trade.screenshot_path)
+      .filter(Boolean) as string[];
+
+    let evidenceQuery = supabase
+      .from("tv_analysis_evidence")
+      .select("id, image_path")
+      .eq("user_id", userData.user.id);
+
+    if (tradeIds.length > 0) {
+      evidenceQuery = evidenceQuery.or(
+        `account_id.eq.${params.id},trade_id.in.(${tradeIds.join(",")})`
+      );
+    } else {
+      evidenceQuery = evidenceQuery.eq("account_id", params.id);
+    }
+
+    const { data: evidenceRows, error: evidenceError } = await evidenceQuery;
+
+    if (evidenceError) {
+      console.error("Error fetching evidence for account delete:", evidenceError);
+      return NextResponse.json(
+        { error: "Failed to delete account evidence" },
+        { status: 500 }
+      );
+    }
+
+    const evidencePaths = (evidenceRows || [])
+      .map((row: { image_path?: string | null }) => row.image_path)
+      .filter(Boolean) as string[];
+
+    if (evidencePaths.length > 0) {
+      try {
+        await supabase.storage.from("log_attachments").remove(evidencePaths);
+      } catch (storageErr) {
+        console.warn("Warning: Failed to delete evidence files:", storageErr);
+      }
+    }
+
+    if (evidenceRows && evidenceRows.length > 0) {
+      const evidenceIds = evidenceRows.map((row: { id: string }) => row.id);
+      await supabase
+        .from("tv_analysis_evidence")
+        .delete()
+        .in("id", evidenceIds)
+        .eq("user_id", userData.user.id);
+    }
+
+    if (screenshotPaths.length > 0) {
+      try {
+        await supabase.storage.from("log_attachments").remove(screenshotPaths);
+      } catch (storageErr) {
+        console.warn("Warning: Failed to delete trade screenshots:", storageErr);
+      }
+    }
+
+    if (tradeIds.length > 0) {
+      await supabase
+        .from("trades")
+        .delete()
+        .in("id", tradeIds)
+        .eq("user_id", userData.user.id);
+    }
+
     const { error: deleteError } = await supabase
       .from("accounts")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", params.id);
+      .delete()
+      .eq("id", params.id)
+      .eq("user_id", userData.user.id);
 
     if (deleteError) {
-      console.error("Error soft-deleting account:", deleteError);
+      console.error("Error deleting account:", deleteError);
       return NextResponse.json(
         { error: "Failed to delete account" },
         { status: 500 }

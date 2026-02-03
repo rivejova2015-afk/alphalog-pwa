@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from "@/lib/alphashield/logger";
 import QuarterEditor from "./QuarterEditor.client";
 import { formatMoney } from "./money";
 
@@ -75,7 +76,11 @@ export default function GoalCard({ goal, onRefresh, onError }: GoalCardProps) {
 
       await onRefresh();
     } catch (err: any) {
-      console.error("Error completing quarter:", err);
+      await logger.error(
+        "tradermap",
+        "Error completing quarter",
+        err instanceof Error ? err : undefined
+      );
       onError(err.message || "Error al completar trimestre");
     } finally {
       setCompletingQuarter(false);

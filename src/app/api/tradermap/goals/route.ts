@@ -1,6 +1,7 @@
 // src/app/api/tradermap/goals/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 
 /**
  * GET /api/tradermap/goals
@@ -34,7 +35,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || []);
+    const decrypted = (data || []).map((goal: any) => ({
+      ...goal,
+      title: decryptText(goal.title),
+    }));
+
+    return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradermap/goals:", err);
     return NextResponse.json(
@@ -90,7 +96,7 @@ export async function POST(request: NextRequest) {
         user_id: userData.user.id,
         account_id,
         year,
-        title,
+        title: encryptText(title),
         active_quarter: 1,
         sort_index: 0,
       })
@@ -177,7 +183,10 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if push fails
     });
 
-    return NextResponse.json(fullGoal);
+    return NextResponse.json({
+      ...fullGoal,
+      title: decryptText(fullGoal?.title),
+    });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradermap/goals:", err);
     return NextResponse.json(

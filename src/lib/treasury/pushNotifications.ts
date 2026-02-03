@@ -3,8 +3,20 @@
  * Handles threshold-based notifications for payout readiness
  */
 
-import { createServerClient } from '@supabase/ssr';
 import { sendPushToSubscriptions } from '../push/webpush.server';
+
+const logTreasuryError = async (message: string, error?: unknown) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const { logger } = await import('@/lib/alphashield/logger');
+      await logger.error('treasury', message, error instanceof Error ? error : undefined);
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+  console.error(message, error);
+};
 
 interface ThresholdPushPayload {
   accountId: string;
@@ -82,7 +94,10 @@ export async function sendThresholdPush(
         .eq('user_id', userId);
 
       if (updateError) {
-        console.error(`[sendThresholdPush] Failed to update cycle_start: ${updateError.message}`);
+        await logTreasuryError(
+          `[sendThresholdPush] Failed to update cycle_start: ${updateError.message}`,
+          updateError
+        );
       }
 
       console.log(`[sendThresholdPush] Sent to ${result.sent} subscriptions`);
@@ -91,7 +106,7 @@ export async function sendThresholdPush(
 
     return false;
   } catch (error) {
-    console.error('[sendThresholdPush] Error:', error);
+    await logTreasuryError('[sendThresholdPush] Error:', error);
     return false;
   }
 }

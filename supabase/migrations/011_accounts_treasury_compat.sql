@@ -15,23 +15,34 @@ ADD COLUMN IF NOT EXISTS phase_status TEXT NULL;  -- Phase tracking for multi-ph
 -- B) BACKFILL DATA (if needed)
 -- ============================================================================
 
--- Backfill current_balance from balance column (if it exists)
--- This ensures we have a non-null value for existing accounts
-UPDATE accounts
-SET current_balance = COALESCE(balance, 0)
-WHERE current_balance IS NULL;
+-- Backfill current_balance/account_size from balance column (if it exists)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'accounts'
+      AND column_name = 'balance'
+  ) THEN
+    -- This ensures we have a non-null value for existing accounts
+    UPDATE accounts
+    SET current_balance = COALESCE(balance, 0)
+    WHERE current_balance IS NULL;
 
--- Backfill account_size based on balance (optional categorization)
--- Micro: < 5k, Small: 5k-50k, Medium: 50k-500k, Large: 500k+
-UPDATE accounts
-SET account_size = 
-  CASE 
-    WHEN COALESCE(balance, 0) < 5000 THEN 1  -- Micro
-    WHEN COALESCE(balance, 0) < 50000 THEN 2  -- Small
-    WHEN COALESCE(balance, 0) < 500000 THEN 3  -- Medium
-    ELSE 4  -- Large
-  END
-WHERE account_size IS NULL AND balance IS NOT NULL;
+    -- Backfill account_size based on balance (optional categorization)
+    -- Micro: < 5k, Small: 5k-50k, Medium: 50k-500k, Large: 500k+
+    UPDATE accounts
+    SET account_size = 
+      CASE 
+        WHEN COALESCE(balance, 0) < 5000 THEN 1  -- Micro
+        WHEN COALESCE(balance, 0) < 50000 THEN 2  -- Small
+        WHEN COALESCE(balance, 0) < 500000 THEN 3  -- Medium
+        ELSE 4  -- Large
+      END
+    WHERE account_size IS NULL AND balance IS NOT NULL;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- C) COMMENTS - Documentation

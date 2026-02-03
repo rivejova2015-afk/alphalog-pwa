@@ -1,6 +1,7 @@
 // src/app/api/logs/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 
 const pageSize = 50;
 
@@ -16,19 +17,17 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * pageSize;
 
-    // Create server client
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll: () => request.cookies.getAll(),
-          setAll: () => {}, // No need to set cookies in GET
+          setAll: () => {},
         },
       }
     );
 
-    // Get current user
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,7 +35,6 @@ export async function GET(request: NextRequest) {
 
     const userId = authData.user.id;
 
-    // Build base query
     let baseQuery = supabase
       .from("logs")
       .select("*, categories(id, name), log_tags(tag_id, tags(id, name))", {
@@ -44,47 +42,51 @@ export async function GET(request: NextRequest) {
       })
       .eq("user_id", userId);
 
-    // Trash filter
     if (trash) {
       baseQuery = baseQuery.not("deleted_at", "is", null);
     } else {
       baseQuery = baseQuery.is("deleted_at", null);
     }
 
-    // Search query (title or notes)
-    if (query) {
-      baseQuery = baseQuery.or(`title.ilike.%${query}%,notes.ilike.%${query}%`);
-    }
-
-    // Category filter
     if (categoryId) {
       baseQuery = baseQuery.eq("category_id", categoryId);
     }
 
-    // Type filter
     if (type) {
       baseQuery = baseQuery.eq("type", type);
     }
 
-    // Ordering: sort_index asc, then created_at desc
     baseQuery = baseQuery.order("sort_index", { ascending: true }).order("created_at", { ascending: false });
 
-    // Execute count query
-    const countQuery = baseQuery;
-    const { count: totalCount } = await countQuery;
+    const searchLimit = 500;
+    let totalCount = 0;
+    let items: any[] = [];
 
-    // Apply pagination
-    const { data: items, error } = await baseQuery.range(offset, offset + pageSize - 1);
+    if (query) {
+      const { data: searchItems, error } = await baseQuery.range(0, searchLimit - 1);
+      if (error) {
+        console.error("[Logs API] Query error:", error);
+        return NextResponse.json(
+          { error: "Error fetching logs" },
+          { status: 500 }
+        );
+      }
+      items = searchItems || [];
+    } else {
+      const { count } = await baseQuery;
+      totalCount = count || 0;
 
-    if (error) {
-      console.error("[Logs API] Query error:", error);
-      return NextResponse.json(
-        { error: "Error fetching logs" },
-        { status: 500 }
-      );
+      const { data: pageItems, error } = await baseQuery.range(offset, offset + pageSize - 1);
+      if (error) {
+        console.error("[Logs API] Query error:", error);
+        return NextResponse.json(
+          { error: "Error fetching logs" },
+          { status: 500 }
+        );
+      }
+      items = pageItems || [];
     }
 
-    // Filter by tags if provided (client-side since Supabase join is complex)
     type TagJoin = { tags?: { name?: string } | null };
     type LogItem = {
       id: string;
@@ -95,7 +97,24 @@ export async function GET(request: NextRequest) {
       log_tags?: TagJoin[] | null;
     };
 
-    let filteredItems: LogItem[] = (items || []) as LogItem[];
+    let filteredItems: LogItem[] = (items || []).map((log: LogItem) => ({
+      ...log,
+      title: decryptText(log.title) || "",
+      notes: decryptText(log.notes) || "",
+    })) as LogItem[];
+
+    if (query) {
+      const queryLower = query.toLowerCase();
+      filteredItems = filteredItems.filter((log) =>
+        log.title.toLowerCase().includes(queryLower) ||
+        log.notes.toLowerCase().includes(queryLower)
+      );
+      totalCount = filteredItems.length;
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      filteredItems = filteredItems.slice(start, end);
+    }
+
     if (tagNames) {
       const tagsToFilter = tagNames.split(",").map((t) => t.trim().toLowerCase());
       filteredItems = filteredItems.filter((log) => {
@@ -162,8 +181,8 @@ export async function POST(request: NextRequest) {
       .from("logs")
       .insert({
         user_id: userId,
-        title: title.trim(),
-        notes: notes.trim(),
+        title: encryptText(title.trim()),
+        notes: encryptText(notes.trim()),
         type: type || null,
         category_id: categoryId,
       })
@@ -196,7 +215,6 @@ export async function POST(request: NextRequest) {
         const trimmedName = tagName.trim();
         if (!trimmedName) continue;
 
-        // Find or create tag
         const { data: existingTag } = await supabase
           .from("tags")
           .select("id")
@@ -215,19 +233,28 @@ export async function POST(request: NextRequest) {
           tagId = newTag?.id;
         }
 
-        // Create association
         if (tagId) {
-          await supabase.from("log_tags").insert({
-            log_id: logData.id,
-            tag_id: tagId,
-            user_id: userId,
-          }).select();
+          await supabase
+            .from("log_tags")
+            .insert({
+              log_id: logData.id,
+              tag_id: tagId,
+              user_id: userId,
+            })
+            .select();
         }
       }
     }
 
     return NextResponse.json(
-      { data: logData, message: "Log created successfully" },
+      {
+        data: {
+          ...logData,
+          title: decryptText(logData.title),
+          notes: decryptText(logData.notes),
+        },
+        message: "Log created successfully",
+      },
       { status: 201 }
     );
   } catch (err) {
@@ -273,8 +300,8 @@ export async function PATCH(request: NextRequest) {
     const { data: logData, error: logError } = await supabase
       .from("logs")
       .update({
-        ...(title !== undefined && { title: title.trim() }),
-        ...(notes !== undefined && { notes: notes.trim() }),
+        ...(title !== undefined && { title: encryptText(title.trim()) }),
+        ...(notes !== undefined && { notes: encryptText(notes.trim()) }),
         ...(categoryId !== undefined && { category_id: categoryId }),
         ...(type !== undefined && { type: type || null }),
       })
@@ -341,7 +368,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { data: logData, message: "Log updated successfully" },
+      {
+        data: {
+          ...logData,
+          title: decryptText(logData.title),
+          notes: decryptText(logData.notes),
+        },
+        message: "Log updated successfully",
+      },
       { status: 200 }
     );
   } catch (err) {

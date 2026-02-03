@@ -102,7 +102,6 @@ export default function Playbook() {
     setups.forEach((setup) => {
       void fetchSetupStats(setup.id);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setups, statsRefresh]);
 
   useEffect(() => {

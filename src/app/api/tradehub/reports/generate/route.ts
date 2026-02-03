@@ -1,6 +1,7 @@
 // src/app/api/tradehub/reports/generate/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 
 /**
  * POST /api/tradehub/reports/generate
@@ -47,7 +48,10 @@ export async function POST(request: NextRequest) {
     if (existingReport) {
       return NextResponse.json({
         existing: true,
-        report: existingReport,
+        report: {
+          ...existingReport,
+          content_md: decryptText(existingReport.content_md),
+        },
       });
     }
 
@@ -139,6 +143,8 @@ export async function POST(request: NextRequest) {
       trades || []
     );
 
+    const reportTitle = `AlphaBrief - Semana ${weekStartStr} a ${weekEndStr}`;
+
     // Insert report
     const { data: newReport, error: insertError } = await supabase
       .from("weekly_reports")
@@ -146,7 +152,8 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         week_start: weekStartStr,
         week_end: weekEndStr,
-        content_md: markdownContent,
+        title: reportTitle,
+        content_md: encryptText(markdownContent),
         total_trades: totalTrades,
         total_pnl: totalPnL,
         win_rate: parseFloat(winRate.toFixed(2)),
@@ -189,7 +196,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       existing: false,
-      report: newReport,
+      report: {
+        ...newReport,
+        content_md: decryptText(newReport.content_md),
+      },
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/reports/generate:", err);

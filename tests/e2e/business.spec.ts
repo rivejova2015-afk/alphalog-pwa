@@ -1,17 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { login } from './utils/auth';
 
 test.describe('Create Item Flows - Business', () => {
   // Setup: login before each test
   test.beforeEach(async ({ page }) => {
-    const email = process.env.E2E_EMAIL || 'test@alphalog.local';
-    const password = process.env.E2E_PASSWORD || 'Test@123456';
-
-    await page.goto('/auth/login');
-    await page.fill('input[type="email"], input[placeholder*="email" i]', email);
-    await page.fill('input[type="password"]', password);
-    const submitButton = page.locator('button[type="submit"]:has-text("Sign In"), button[type="submit"]:has-text("Login"), button[type="submit"]');
-    await submitButton.click();
-    await page.waitForURL(/\/(dashboard|home|[^\/]*)?$/, { timeout: 10000 });
+    await login(page);
   });
 
   test('should create a new business item', async ({ page }) => {

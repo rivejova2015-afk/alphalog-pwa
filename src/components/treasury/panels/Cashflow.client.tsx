@@ -35,7 +35,7 @@ export default function CashflowPanel({
   );
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [previewData, setPreviewData] = useState<any>(null);  // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [previewData, setPreviewData] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
@@ -369,7 +369,6 @@ export default function CashflowPanel({
 
             {/* Per-Account Preview */}
             <div className="space-y-3">
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {(previewData.perAccountPreview || []).map((account: any) => (
                 <Card key={account.accountId as string} className="bg-slate-800 border-slate-700">
                   <CardContent className="pt-4">

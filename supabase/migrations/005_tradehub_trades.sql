@@ -34,16 +34,17 @@ comment on column public.setups.name_lower is 'Generado: lower(name) para búsqu
 comment on column public.setups.sort_index is 'Ordenamiento flexible (0-basado)';
 
 -- Anti-duplicados: user_id + name_lower, ignorando soft-delete
-create unique index setups_user_name_uq 
+create unique index if not exists setups_user_name_uq 
   on public.setups(user_id, name_lower) 
   where deleted_at is null;
 
 -- Index para búsquedas rápidas
-create index setups_user_id_idx 
+create index if not exists setups_user_id_idx 
   on public.setups(user_id) 
   where deleted_at is null;
 
 -- Trigger para updated_at (reutiliza función de 002_logs_schema.sql)
+drop trigger if exists setups_updated_at on public.setups;
 create trigger setups_updated_at
   before update on public.setups
   for each row
@@ -108,23 +109,24 @@ comment on column public.trades.is_featured_in_report is 'Si esta operación deb
 comment on column public.trades.sort_index is 'Ordenamiento flexible (0-basado)';
 
 -- Índices para búsquedas y filtros
-create index trades_user_id_created_at_idx 
+create index if not exists trades_user_id_created_at_idx 
   on public.trades(user_id, created_at desc) 
   where deleted_at is null;
 
-create index trades_user_account_id_idx 
+create index if not exists trades_user_account_id_idx 
   on public.trades(user_id, account_id) 
   where deleted_at is null;
 
-create index trades_user_setup_id_idx 
+create index if not exists trades_user_setup_id_idx 
   on public.trades(user_id, setup_id) 
   where deleted_at is null;
 
-create index trades_user_status_idx 
+create index if not exists trades_user_status_idx 
   on public.trades(user_id, status) 
   where deleted_at is null;
 
 -- Trigger para updated_at
+drop trigger if exists trades_updated_at on public.trades;
 create trigger trades_updated_at
   before update on public.trades
   for each row
@@ -135,22 +137,26 @@ create trigger trades_updated_at
 -- ============================================================================
 
 -- SELECT: Solo ver propios setups
+drop policy if exists "users_can_select_own_setups" on public.setups;
 create policy "users_can_select_own_setups" on public.setups
   for select
   using (auth.uid() = user_id);
 
 -- INSERT: Solo crear propios setups
+drop policy if exists "users_can_insert_own_setups" on public.setups;
 create policy "users_can_insert_own_setups" on public.setups
   for insert
   with check (auth.uid() = user_id);
 
 -- UPDATE: Solo actualizar propios setups
+drop policy if exists "users_can_update_own_setups" on public.setups;
 create policy "users_can_update_own_setups" on public.setups
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- DELETE: Solo borrar propios setups
+drop policy if exists "users_can_delete_own_setups" on public.setups;
 create policy "users_can_delete_own_setups" on public.setups
   for delete
   using (auth.uid() = user_id);
@@ -163,22 +169,26 @@ alter table public.setups enable row level security;
 -- ============================================================================
 
 -- SELECT: Solo ver propias operaciones
+drop policy if exists "users_can_select_own_trades" on public.trades;
 create policy "users_can_select_own_trades" on public.trades
   for select
   using (auth.uid() = user_id);
 
 -- INSERT: Solo crear propias operaciones
+drop policy if exists "users_can_insert_own_trades" on public.trades;
 create policy "users_can_insert_own_trades" on public.trades
   for insert
   with check (auth.uid() = user_id);
 
 -- UPDATE: Solo actualizar propias operaciones
+drop policy if exists "users_can_update_own_trades" on public.trades;
 create policy "users_can_update_own_trades" on public.trades
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- DELETE: Solo borrar propias operaciones
+drop policy if exists "users_can_delete_own_trades" on public.trades;
 create policy "users_can_delete_own_trades" on public.trades
   for delete
   using (auth.uid() = user_id);

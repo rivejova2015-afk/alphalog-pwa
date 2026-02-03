@@ -33,72 +33,11 @@ const TABS: TabConfig[] = [
 function TradeHubOverview() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-4 shadow-[0_16px_40px_rgba(2,4,10,0.45)] backdrop-blur">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Active Accounts</span>
-            <span className="text-emerald-300">📊</span>
-          </div>
-          <div className="text-2xl font-semibold text-slate-100">3</div>
-          <div className="text-xs text-slate-400 mt-1">Operational</div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-4 shadow-[0_16px_40px_rgba(2,4,10,0.45)] backdrop-blur">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Win Rate</span>
-            <span className="text-emerald-300">📈</span>
-          </div>
-          <div className="text-2xl font-semibold text-slate-100">68%</div>
-          <div className="text-xs text-slate-400 mt-1">This month</div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-4 shadow-[0_16px_40px_rgba(2,4,10,0.45)] backdrop-blur">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Total P&L</span>
-            <span className="text-blue-300">💰</span>
-          </div>
-          <div className="text-2xl font-semibold text-emerald-300">+$12,450</div>
-          <div className="text-xs text-slate-400 mt-1">YTD</div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-4 shadow-[0_16px_40px_rgba(2,4,10,0.45)] backdrop-blur">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-slate-400">Trades Today</span>
-            <span className="text-blue-300">🎯</span>
-          </div>
-          <div className="text-2xl font-semibold text-slate-100">5</div>
-          <div className="text-xs text-slate-400 mt-1">Active</div>
-        </div>
-      </div>
-
       <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)] backdrop-blur">
-        <h3 className="display-font text-lg font-semibold text-slate-100 mb-4">Recent Activity</h3>
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-slate-900/70 rounded-xl border border-slate-700/60">
-            <span className="text-xl">📈</span>
-            <div className="flex-1">
-              <div className="font-medium text-slate-100">Trade Executed</div>
-              <div className="text-sm text-slate-400">EUR/USD Long - 1.0850</div>
-              <div className="text-xs text-slate-500 mt-1">15 minutes ago</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-3 bg-slate-900/70 rounded-xl border border-slate-700/60">
-            <span className="text-xl">✅</span>
-            <div className="flex-1">
-              <div className="font-medium text-slate-100">Trade Closed</div>
-              <div className="text-sm text-slate-400">GBP/USD Short - +120 pips</div>
-              <div className="text-xs text-slate-500 mt-1">1 hour ago</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 p-3 bg-slate-900/70 rounded-xl border border-slate-700/60">
-            <span className="text-xl">📊</span>
-            <div className="flex-1">
-              <div className="font-medium text-slate-100">Report Generated</div>
-              <div className="text-sm text-slate-400">Weekly performance analysis</div>
-              <div className="text-xs text-slate-500 mt-1">2 days ago</div>
-            </div>
-          </div>
-        </div>
+        <h3 className="display-font text-lg font-semibold text-slate-100 mb-2">Overview</h3>
+        <p className="text-sm text-slate-400">
+          Aún no hay datos suficientes para mostrar un resumen. Crea cuentas, trades y reportes para ver métricas aquí.
+        </p>
       </div>
     </div>
   );

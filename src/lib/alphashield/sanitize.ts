@@ -89,7 +89,8 @@ function isSensitiveKey(key: string): boolean {
 export function sanitize(
   value: SanitizableValue,
   depth = 0,
-  maxDepth = 10
+  maxDepth = 10,
+  seen: WeakSet<object> = new WeakSet()
 ): SanitizableValue {
   // Prevent stack overflow on circular references or deeply nested objects
   if (depth > maxDepth) {
@@ -111,9 +112,16 @@ export function sanitize(
     return value.toISOString();
   }
 
+  if (typeof value === 'object' && value !== null) {
+    if (seen.has(value)) {
+      return '[circular]';
+    }
+    seen.add(value);
+  }
+
   // Handle Arrays
   if (Array.isArray(value)) {
-    return value.map(item => sanitize(item, depth + 1, maxDepth));
+    return value.map(item => sanitize(item, depth + 1, maxDepth, seen));
   }
 
   // Handle Objects
@@ -126,7 +134,7 @@ export function sanitize(
         sanitized[key] = '[REDACTED]';
       } else {
         // Recursively sanitize nested values
-        sanitized[key] = sanitize(val, depth + 1, maxDepth);
+        sanitized[key] = sanitize(val, depth + 1, maxDepth, seen);
       }
     }
 
@@ -206,6 +214,30 @@ export function sanitizeLogData(data: Record<string, unknown>): Record<string, u
   return sanitized;
 }
 
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(value, (_key, val) => {
+      if (typeof val === 'bigint') {
+        return `[bigint:${val.toString()}]`;
+      }
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) {
+          return '[circular]';
+        }
+        seen.add(val);
+      }
+      return val;
+    });
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return '[unstringifiable]';
+    }
+  }
+}
+
 /**
  * Check if a value contains any sensitive patterns
  * (for detecting if sanitization was missed)
@@ -214,6 +246,6 @@ export function sanitizeLogData(data: Record<string, unknown>): Record<string, u
  * @returns True if value might contain sensitive data
  */
 export function mightContainSensitiveData(value: unknown): boolean {
-  const str = JSON.stringify(value).toLowerCase();
+  const str = safeStringify(value).toLowerCase();
   return SENSITIVE_KEYS.some(key => str.includes(key));
 }

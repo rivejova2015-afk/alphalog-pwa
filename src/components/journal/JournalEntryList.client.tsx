@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 import type { JournalEntry } from '@/lib/alphacore/contracts';
+import { logger } from '@/lib/alphashield/logger';
 
 interface JournalEntryListProps {
   userId: string;
@@ -34,7 +35,11 @@ export function JournalEntryList({ userId, onSelectEntry }: JournalEntryListProp
         if (error) throw error;
         setEntries(data || []);
       } catch (err) {
-        console.error('[JournalEntryList] Error fetching entries:', err);
+        await logger.error(
+          'journal',
+          'Error fetching entries',
+          err instanceof Error ? err : undefined
+        );
         setError(err instanceof Error ? err.message : 'Failed to load entries');
       } finally {
         setLoading(false);

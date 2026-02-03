@@ -104,113 +104,173 @@ EXECUTE FUNCTION auto_set_user_id();
 -- ============================================================================
 
 -- logs: auto-set user_id
-DROP TRIGGER IF EXISTS logs_auto_user_id ON logs;
-CREATE TRIGGER logs_auto_user_id
-BEFORE INSERT ON logs
-FOR EACH ROW
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.logs') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS logs_auto_user_id ON public.logs;
+    CREATE TRIGGER logs_auto_user_id
+    BEFORE INSERT ON public.logs
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- categories: auto-set user_id
-DROP TRIGGER IF EXISTS categories_auto_user_id ON categories;
-CREATE TRIGGER categories_auto_user_id
-BEFORE INSERT ON categories
-FOR EACH ROW
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.categories') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS categories_auto_user_id ON public.categories;
+    CREATE TRIGGER categories_auto_user_id
+    BEFORE INSERT ON public.categories
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- tags: auto-set user_id (if exists)
-DROP TRIGGER IF EXISTS tags_auto_user_id ON tags;
-CREATE TRIGGER tags_auto_user_id
-BEFORE INSERT ON tags
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)  -- Only if user_id column exists
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.tags') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS tags_auto_user_id ON public.tags;
+    CREATE TRIGGER tags_auto_user_id
+    BEFORE INSERT ON public.tags
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- log_attachments: auto-set user_id
-DROP TRIGGER IF EXISTS log_attachments_auto_user_id ON log_attachments;
-CREATE TRIGGER log_attachments_auto_user_id
-BEFORE INSERT ON log_attachments
-FOR EACH ROW
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.log_attachments') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS log_attachments_auto_user_id ON public.log_attachments;
+    CREATE TRIGGER log_attachments_auto_user_id
+    BEFORE INSERT ON public.log_attachments
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- ============================================================================
 -- Treasury Module Tables (if they support user_id)
 -- ============================================================================
 
 -- treasury_transactions: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS treasury_transactions_auto_user_id ON treasury_transactions;
-CREATE TRIGGER treasury_transactions_auto_user_id
-BEFORE INSERT ON treasury_transactions
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.treasury_transactions') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS treasury_transactions_auto_user_id ON public.treasury_transactions;
+    CREATE TRIGGER treasury_transactions_auto_user_id
+    BEFORE INSERT ON public.treasury_transactions
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- treasury_budgets: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS treasury_budgets_auto_user_id ON treasury_budgets;
-CREATE TRIGGER treasury_budgets_auto_user_id
-BEFORE INSERT ON treasury_budgets
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.treasury_budgets') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS treasury_budgets_auto_user_id ON public.treasury_budgets;
+    CREATE TRIGGER treasury_budgets_auto_user_id
+    BEFORE INSERT ON public.treasury_budgets
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- ============================================================================
 -- TradeHub Module Tables
 -- ============================================================================
 
--- tradehub_trades: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS tradehub_trades_auto_user_id ON tradehub_trades;
-CREATE TRIGGER tradehub_trades_auto_user_id
-BEFORE INSERT ON tradehub_trades
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+-- trades: auto-set user_id (if applicable)
+DO $$
+BEGIN
+  IF to_regclass('public.trades') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS trades_auto_user_id ON public.trades;
+    CREATE TRIGGER trades_auto_user_id
+    BEFORE INSERT ON public.trades
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
--- tradehub_evidence: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS tradehub_evidence_auto_user_id ON tradehub_evidence;
-CREATE TRIGGER tradehub_evidence_auto_user_id
-BEFORE INSERT ON tradehub_evidence
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+-- tradehub evidence: auto-set user_id (if applicable)
+DO $$
+BEGIN
+  IF to_regclass('public.tv_analysis_evidence') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS tv_analysis_evidence_auto_user_id ON public.tv_analysis_evidence;
+    CREATE TRIGGER tv_analysis_evidence_auto_user_id
+    BEFORE INSERT ON public.tv_analysis_evidence
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- ============================================================================
 -- Terminal Module Tables
 -- ============================================================================
 
 -- terminal_news: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS terminal_news_auto_user_id ON terminal_news;
-CREATE TRIGGER terminal_news_auto_user_id
-BEFORE INSERT ON terminal_news
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.terminal_news') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS terminal_news_auto_user_id ON public.terminal_news;
+    CREATE TRIGGER terminal_news_auto_user_id
+    BEFORE INSERT ON public.terminal_news
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- terminal_events: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS terminal_events_auto_user_id ON terminal_events;
-CREATE TRIGGER terminal_events_auto_user_id
-BEFORE INSERT ON terminal_events
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.terminal_events') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS terminal_events_auto_user_id ON public.terminal_events;
+    CREATE TRIGGER terminal_events_auto_user_id
+    BEFORE INSERT ON public.terminal_events
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- terminal_evidence_reports: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS terminal_evidence_reports_auto_user_id ON terminal_evidence_reports;
-CREATE TRIGGER terminal_evidence_reports_auto_user_id
-BEFORE INSERT ON terminal_evidence_reports
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.terminal_evidence_reports') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS terminal_evidence_reports_auto_user_id ON public.terminal_evidence_reports;
+    CREATE TRIGGER terminal_evidence_reports_auto_user_id
+    BEFORE INSERT ON public.terminal_evidence_reports
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- ============================================================================
 -- TraderMap Module Tables
 -- ============================================================================
 
 -- tradermap_goals: auto-set user_id (if applicable)
-DROP TRIGGER IF EXISTS tradermap_goals_auto_user_id ON tradermap_goals;
-CREATE TRIGGER tradermap_goals_auto_user_id
-BEFORE INSERT ON tradermap_goals
-FOR EACH ROW
-WHEN (NEW.user_id IS NOT NULL)
-EXECUTE FUNCTION auto_set_user_id();
+DO $$
+BEGIN
+  IF to_regclass('public.tradermap_goals') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS tradermap_goals_auto_user_id ON public.tradermap_goals;
+    CREATE TRIGGER tradermap_goals_auto_user_id
+    BEFORE INSERT ON public.tradermap_goals
+    FOR EACH ROW
+    WHEN (NEW.user_id IS NOT NULL)
+    EXECUTE FUNCTION auto_set_user_id();
+  END IF;
+END $$;
 
 -- ============================================================================
 -- Comment for Documentation

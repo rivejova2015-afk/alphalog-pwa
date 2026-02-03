@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from "@/lib/alphashield/logger";
 
 type Asset = "US500" | "XAUUSD" | "BOTH";
 
@@ -28,12 +29,63 @@ export default function TerminalReportsBot() {
   const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [isResettingSw, setIsResettingSw] = useState(false);
+
+  const parseJsonSafe = async (response: Response) => {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  };
+
+  const normalizeFetchError = (err: unknown) => {
+    if (err instanceof Error) {
+      if (err.message?.toLowerCase().includes("failed to fetch")) {
+        return "Sin conexión o bloqueo de red. Verifica tu conexión e inténtalo de nuevo.";
+      }
+      return err.message;
+    }
+    return "Error inesperado";
+  };
+
+  const fetchWithTimeout = async (input: RequestInfo, init?: RequestInit, timeoutMs = 20000) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  const handleResetPwa = async () => {
+    setIsResettingSw(true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } catch (err) {
+      console.warn("[Terminal] Failed to reset PWA cache:", err);
+    } finally {
+      setIsResettingSw(false);
+      window.location.reload();
+    }
+  };
 
   const fetchJobs = async () => {
     try {
-      const response = await fetch("/api/terminal/reports/schedule");
+      const response = await fetchWithTimeout("/api/terminal/reports/schedule", {
+        credentials: "include",
+        cache: "no-store",
+      });
       if (!response.ok) return;
-      const data = await response.json();
+      const data = await parseJsonSafe(response);
       setJobs(Array.isArray(data) ? data : []);
     } catch {
       // ignore
@@ -49,14 +101,20 @@ export default function TerminalReportsBot() {
       setLoading(true);
       setError("");
       setMessage("");
-      const response = await fetch("/api/terminal/reports/generate", {
+      const response = await fetchWithTimeout("/api/terminal/reports/generate", {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ asset }),
       });
-      const data = await response.json();
+      const data = await parseJsonSafe(response);
       if (!response.ok) {
-        throw new Error(data?.error || "No se pudo generar");
+        await logger.error("terminal_reports", "Failed to generate report", undefined, {
+          status: response.status,
+          error: data?.error,
+        });
+        throw new Error(data?.error || `No se pudo generar (${response.status})`);
       }
       const outcomes = Array.isArray(data?.assets)
         ? data.assets.map((assetResult: { outcome?: string }) => assetResult.outcome)
@@ -68,9 +126,12 @@ export default function TerminalReportsBot() {
           ? "No hay cambios relevantes. No se guardó nueva evidencia."
           : "Reporte generado. Revisa Evidence."
       );
+      await fetchJobs();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error al generar reporte";
+      const message = normalizeFetchError(err);
+      await logger.error("terminal_reports", "Generate report error", err instanceof Error ? err : undefined, {
+        message,
+      });
       setError(message);
     } finally {
       setLoading(false);
@@ -86,22 +147,47 @@ export default function TerminalReportsBot() {
       setScheduling(true);
       setError("");
       setMessage("");
-      const response = await fetch("/api/terminal/reports/schedule", {
+      const tempId = `temp-${Date.now()}`;
+      const scheduledDate = new Date(datetimePR);
+      const tempJob: Job = {
+        id: tempId,
+        asset: scheduleAsset,
+        scheduled_for: Number.isNaN(scheduledDate.getTime())
+          ? new Date().toISOString()
+          : scheduledDate.toISOString(),
+        status: "pending",
+      };
+      setJobs((prev) => [tempJob, ...prev]);
+
+      const response = await fetchWithTimeout("/api/terminal/reports/schedule", {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ asset: scheduleAsset, datetimePR, lookback: 7 }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "No se pudo agendar");
+      const data = await parseJsonSafe(response);
+      if (!response.ok || data?.ok === false) {
+        const details = data?.details?.body ? ` - ${data.details.body}` : "";
+        const status = data?.details?.status ? ` (${data.details.status})` : "";
+        await logger.error("terminal_reports", "Failed to schedule report", undefined, {
+          status: data?.details?.status || response.status,
+          body: data?.details?.body,
+        });
+        setError(`${data?.error || "No se pudo agendar"}${status}${details}`);
+        await fetchJobs();
+        return;
       }
       setMessage("Reporte agendado correctamente.");
       setDatetimePR("");
       await fetchJobs();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error al agendar reporte";
+      const message = normalizeFetchError(err);
+      await logger.error("terminal_reports", "Schedule report error", err instanceof Error ? err : undefined, {
+        message,
+      });
       setError(message);
+      await fetchJobs();
     } finally {
       setScheduling(false);
     }
@@ -109,16 +195,25 @@ export default function TerminalReportsBot() {
 
   const handleCancel = async (id: string) => {
     try {
-      const response = await fetch(`/api/terminal/reports/schedule?id=${id}`, {
+      const response = await fetchWithTimeout(`/api/terminal/reports/schedule?id=${id}`, {
         method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
       });
-      const data = await response.json();
+      const data = await parseJsonSafe(response);
       if (!response.ok) {
-        throw new Error(data?.error || "No se pudo cancelar");
+        await logger.error("terminal_reports", "Failed to cancel schedule", undefined, {
+          status: response.status,
+          error: data?.error,
+        });
+        throw new Error(data?.error || `No se pudo cancelar (${response.status})`);
       }
       await fetchJobs();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error al cancelar";
+      const message = normalizeFetchError(err);
+      await logger.error("terminal_reports", "Cancel schedule error", err instanceof Error ? err : undefined, {
+        message,
+      });
       setError(message);
     }
   };
@@ -133,8 +228,17 @@ export default function TerminalReportsBot() {
       </div>
 
       {error && (
-        <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
-          {error}
+        <div className="p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm space-y-2">
+          <p>{error}</p>
+          {error.toLowerCase().includes("sin conexión") && (
+            <button
+              onClick={handleResetPwa}
+              disabled={isResettingSw}
+              className="inline-flex items-center px-3 py-1.5 rounded-full bg-slate-800 text-slate-200 text-xs hover:bg-slate-700 disabled:bg-slate-700"
+            >
+              {isResettingSw ? "Restableciendo..." : "Restablecer caché PWA"}
+            </button>
+          )}
         </div>
       )}
       {message && (
@@ -247,6 +351,11 @@ export default function TerminalReportsBot() {
                     </button>
                   )}
                 </div>
+                {job.error && (
+                  <p className="text-xs text-rose-300 mt-2">
+                    {job.error}
+                  </p>
+                )}
               </div>
             ))}
           </div>

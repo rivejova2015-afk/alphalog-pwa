@@ -6,7 +6,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 
 interface SprintPlan {
   number: number;
@@ -30,15 +29,6 @@ interface AuditResult {
     details: string[];
   }>;
   timestamp: string;
-}
-
-// Helper: read file safely
-function readFileIfExists(filePath: string): string {
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return '';
-  }
 }
 
 // Helper: find all route files
@@ -66,7 +56,7 @@ function findRoutes(baseDir: string = 'src/app'): string[] {
           }
         }
       }
-    } catch (e) {
+    } catch {
       // Silently skip errors
     }
   }
@@ -101,7 +91,7 @@ function findEndpoints(apiDir: string = 'src/app/api'): string[] {
           endpoints.push(`/api${prefix}`);
         }
       }
-    } catch (e) {
+    } catch {
       // Silently skip errors
     }
   }
@@ -123,7 +113,7 @@ function findMigrations(migrationsDir: string = 'supabase/migrations'): string[]
         migrations.push(file);
       }
     }
-  } catch (e) {
+  } catch {
     // Silently skip if directory doesn't exist
   }
   
@@ -145,7 +135,7 @@ function findEdgeFunctions(functionsDir: string = 'supabase/functions'): string[
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Silently skip if directory doesn't exist
   }
   
@@ -154,8 +144,6 @@ function findEdgeFunctions(functionsDir: string = 'supabase/functions'): string[
 
 // Extract planned items from MIGRATION_PLAN.md
 function extractPlannedSprints(): Record<number, SprintPlan> {
-  const migrationPlan = readFileIfExists('MIGRATION_PLAN.md');
-  
   const sprints: Record<number, SprintPlan> = {
     1: {
       number: 1,

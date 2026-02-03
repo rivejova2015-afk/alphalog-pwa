@@ -38,8 +38,9 @@ CREATE INDEX IF NOT EXISTS idx_treasury_payouts_cycle ON treasury_payouts(user_i
 ALTER TABLE treasury_payouts
 DROP CONSTRAINT IF EXISTS treasury_payouts_unique_version;
 
-ALTER TABLE treasury_payouts
-ADD CONSTRAINT treasury_payouts_unique_version UNIQUE (user_id, account_id, cycle_start, version) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS treasury_payouts_unique_version_idx
+	ON treasury_payouts(user_id, account_id, cycle_start, version)
+	WHERE deleted_at IS NULL;
 
 COMMENT ON COLUMN treasury_payouts.cycle_start IS 'Start date of the cycle (e.g., withdrawal_day of that month)';
 COMMENT ON COLUMN treasury_payouts.cycle_expected_end IS 'Expected end date of the cycle (day before next cycle_start)';

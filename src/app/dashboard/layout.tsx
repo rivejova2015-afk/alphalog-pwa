@@ -15,6 +15,7 @@ const menuItems = [
   { label: "TraderMap", href: "/dashboard/tradermap", icon: "🗺️" },
   { label: "Treasury", href: "/dashboard/treasury", icon: "💰" },
   { label: "Business", href: "/dashboard/business", icon: "💼" },
+  { label: "Cuenta", href: "/auth/set-password", icon: "🔐" },
 ];
 
 export default function DashboardLayout({

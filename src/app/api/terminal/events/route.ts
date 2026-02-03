@@ -1,5 +1,6 @@
 // src/app/api/terminal/events/route.ts
 import { createClient } from "@/lib/supabase/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -39,7 +40,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || []);
+    const decrypted = (data || []).map((item) => ({
+      ...item,
+      name: decryptText(item.name),
+    }));
+
+    return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("Error in GET /api/terminal/events:", err);
     return NextResponse.json(
@@ -94,7 +100,7 @@ export async function POST(request: NextRequest) {
         {
           user_id: userData.user.id,
           instrument_id: instrumentId,
-          name,
+          name: encryptText(name),
           impact,
           timestamp_utc,
         },
@@ -110,7 +116,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      name: decryptText(data.name),
+    });
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/events:", err);
     return NextResponse.json(

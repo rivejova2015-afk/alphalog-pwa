@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import GoalCard from "./GoalCard.client";
 import { createClient } from "@/lib/supabase/browser";
+import { logger } from "@/lib/alphashield/logger";
 
 interface Account {
   id: string;
@@ -71,7 +72,11 @@ export default function GoalsPanel() {
         setAccounts(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error("[GoalsPanel] Error fetching accounts:", err);
+      await logger.error(
+        "tradermap",
+        "Error fetching accounts",
+        err instanceof Error ? err : undefined
+      );
     }
   }, []);
 
@@ -86,7 +91,10 @@ export default function GoalsPanel() {
           window.location.href = "/auth";
           return;
         }
-        console.error(`[GoalsPanel] GET /api/tradermap/goals returned ${response.status}`);
+        await logger.error("tradermap", "Fetch goals failed", undefined, {
+          endpoint: "/api/tradermap/goals",
+          status: response.status,
+        });
         setGoals([]);
         return;
       }
@@ -94,7 +102,11 @@ export default function GoalsPanel() {
       const data = await response.json();
       setGoals(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("[GoalsPanel] Error fetching goals:", err);
+      await logger.error(
+        "tradermap",
+        "Fetch goals error",
+        err instanceof Error ? err : undefined
+      );
       setGoals([]);
     } finally {
       setLoading(false);
@@ -173,7 +185,11 @@ export default function GoalsPanel() {
       });
       setShowForm(false);
     } catch (err: any) {
-      console.error("Error creating goal:", err);
+      await logger.error(
+        "tradermap",
+        "Error creating goal",
+        err instanceof Error ? err : undefined
+      );
       setError(err.message || "Error al crear meta");
     } finally {
       setCreating(false);

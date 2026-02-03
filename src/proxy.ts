@@ -11,6 +11,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next();
+  void request;
 
   try {
     // Lazy import to prevent build-time env evaluation

@@ -18,6 +18,15 @@ interface TraderMapTab {
   description: string;
 }
 
+interface UserLevelState {
+  user_id: string;
+  level: number;
+  xp_total: number;
+  streak_days: number;
+  last_activity_date: string | null;
+  updated_at: string;
+}
+
 const TABS: TraderMapTab[] = [
   { id: "overview", label: "Overview", icon: <Zap className="w-4 h-4" />, description: "Your trader profile" },
   { id: "goals", label: "Goals", icon: <Target className="w-4 h-4" />, description: "Trading goals" },
@@ -104,7 +113,7 @@ export default function TraderMapPage() {
   const [activeTab, setActiveTab] = useState<TraderMapTabType>("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  const [levelState, setLevelState] = useState<any>(null);
+  const [levelState, setLevelState] = useState<UserLevelState | null>(null);
 
   const fetchLevelState = useCallback(async () => {
     if (!userId) return;

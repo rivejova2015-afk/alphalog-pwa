@@ -18,15 +18,14 @@ const toUtcFromPR = (datetimePR: string) => {
 };
 
 const buildCronFromPR = (datetimePR: string) => {
-  const [datePart, timePart] = datetimePR.split("T");
-  if (!datePart || !timePart) return null;
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hour, minute] = timePart.split(":").map(Number);
-  if ([year, month, day, hour, minute].some((n) => Number.isNaN(n))) {
-    return null;
-  }
-  // Cron without year: runs yearly on that date; we'll cancel after first run.
-  return `CRON_TZ=America/Puerto_Rico ${minute} ${hour} ${day} ${month} *`;
+  const scheduledUtc = toUtcFromPR(datetimePR);
+  if (!scheduledUtc) return null;
+  const minute = scheduledUtc.getUTCMinutes();
+  const hour = scheduledUtc.getUTCHours();
+  const day = scheduledUtc.getUTCDate();
+  const month = scheduledUtc.getUTCMonth() + 1;
+  // Cron in UTC: runs yearly on that date; we'll cancel after first run.
+  return `${minute} ${hour} ${day} ${month} *`;
 };
 
 const getRunUrl = () => {
@@ -37,6 +36,8 @@ const getRunUrl = () => {
   if (!base) return null;
   return `${base.replace(/\/$/, "")}/api/terminal/reports/run-scheduled`;
 };
+
+const getQStashBaseUrl = () => process.env.QSTASH_BASE_URL || QSTASH_BASE_URL;
 
 export async function GET() {
   try {
@@ -119,55 +120,121 @@ export async function POST(request: NextRequest) {
     const token = process.env.QSTASH_TOKEN;
     const runUrl = getRunUrl();
     if (!token || !runUrl) {
+      await supabase
+        .from("terminal_report_jobs")
+        .update({ status: "failed", error: "QStash not configured" })
+        .eq("id", job.id);
       return NextResponse.json(
-        { error: "QStash not configured" },
-        { status: 500 }
+        { ok: false, job, status: "failed", error: "QStash not configured" },
+        { status: 200 }
       );
     }
 
-    const scheduleResponse = await fetch(
-      `${QSTASH_BASE_URL}/${encodeURIComponent(runUrl)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Upstash-Cron": cron,
-        },
-        body: JSON.stringify({
-          job_id: job.id,
-          user_id: user.id,
-          asset,
-        }),
-      }
-    );
+    const payload = {
+      job_id: job.id,
+      user_id: user.id,
+      asset,
+    };
 
-    if (!scheduleResponse.ok) {
+    const scheduleAttempts: Array<{
+      label: string;
+      response: Response | null;
+      errorBody?: string;
+    }> = [];
+
+    const trySchedule = async (label: string, response: Response) => {
+      if (!response.ok) {
+        const responseBody = await response.text();
+        scheduleAttempts.push({
+          label,
+          response,
+          errorBody: responseBody?.slice(0, 500) || "No response body",
+        });
+        return null;
+      }
+      const data = await response.json();
+      return data?.scheduleId || data?.id;
+    };
+
+    // Preferred: JSON payload to /v2/schedules
+    const qstashBase = getQStashBaseUrl();
+    const primaryResponse = await fetch(qstashBase, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        destination: runUrl,
+        cron,
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    });
+
+    let scheduleId = await trySchedule("primary", primaryResponse);
+
+    // Fallback: header-based scheduling to /v2/schedules/{url}
+    if (!scheduleId) {
+      const fallbackResponse = await fetch(
+        `${qstashBase}/${encodeURIComponent(runUrl)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Upstash-Cron": cron,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+      scheduleId = await trySchedule("fallback", fallbackResponse);
+    }
+
+    if (!scheduleId) {
+      const lastAttempt = scheduleAttempts[scheduleAttempts.length - 1];
+      const status = lastAttempt?.response?.status ?? 500;
+      const body = lastAttempt?.errorBody || "Unknown error";
+      console.error("QStash schedule failed:", status, body);
       await supabase
         .from("terminal_report_jobs")
         .update({
           status: "failed",
-          error: `QStash schedule failed: ${scheduleResponse.status}`,
+          error: `QStash schedule failed: ${status} ${body}`,
         })
         .eq("id", job.id);
       return NextResponse.json(
-        { error: "Failed to schedule job" },
-        { status: 500 }
+        {
+          ok: false,
+          job,
+          status: "failed",
+          error: "Failed to schedule job",
+          details: {
+            status,
+            body,
+            attempts: scheduleAttempts.map((attempt) => ({
+              label: attempt.label,
+              status: attempt.response?.status ?? null,
+              body: attempt.errorBody,
+            })),
+          },
+        },
+        { status: 200 }
       );
     }
 
-    const scheduleData = await scheduleResponse.json();
-    const scheduleId = scheduleData?.scheduleId || scheduleData?.id;
-
     await supabase
       .from("terminal_report_jobs")
-      .update({ qstash_schedule_id: scheduleId })
+      .update({ qstash_schedule_id: scheduleId, status: "scheduled" })
       .eq("id", job.id);
 
     return NextResponse.json({
       ok: true,
       schedule_id: scheduleId,
-      status: "pending",
+      status: "scheduled",
       job_id: job.id,
     });
   } catch (error) {
@@ -218,7 +285,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const deleteResponse = await fetch(
-      `${QSTASH_BASE_URL}/${job.qstash_schedule_id}`,
+      `${getQStashBaseUrl()}/${job.qstash_schedule_id}`,
       {
         method: "DELETE",
         headers: {

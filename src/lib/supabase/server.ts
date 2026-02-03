@@ -31,19 +31,21 @@ export async function createClient() {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch (error: any) {
+          } catch (error: unknown) {
             // If we get "Cookies can only be modified in a Server Action or Route Handler",
             // it means we're in a Server Component render - this is expected and safe to ignore
             // because middleware will handle cookie updates on the next request
+            const errorMessage = error instanceof Error ? error.message : undefined;
+            const errorDigest = (error as { digest?: string } | null)?.digest;
             if (
-              error?.message?.includes?.('Cookies can only be modified') ||
-              error?.digest?.includes?.('NEXT_DYNAMIC_ASYNC_CLIENT_COMPONENT')
+              errorMessage?.includes('Cookies can only be modified') ||
+              errorDigest?.includes('NEXT_DYNAMIC_ASYNC_CLIENT_COMPONENT')
             ) {
               console.debug('[Supabase] Cookie set deferred to middleware/route handler');
               // Silently continue - middleware or a Route Handler will update cookies
             } else {
               // For other errors, log but don't fail
-              console.error('[Supabase] Cookie set error:', error?.message || error);
+              console.error('[Supabase] Cookie set error:', errorMessage || error);
             }
           }
         },

@@ -30,6 +30,14 @@ export function logError(name: string, meta: LogMeta): void {
     error: meta.error,
   };
 
+  if (typeof window !== "undefined") {
+    import("@/lib/alphashield/logger")
+      .then(({ logger }) =>
+        logger.error(name, meta.message || "Error", undefined, context)
+      )
+      .catch(() => undefined);
+  }
+
   // En desarrollo, muestra en consola con color
   if (process.env.NODE_ENV === "development") {
     console.error(
@@ -46,6 +54,11 @@ export function logError(name: string, meta: LogMeta): void {
  * Loguea info general
  */
 export function logInfo(name: string, message: string, meta?: LogMeta): void {
+  if (typeof window !== "undefined") {
+    import("@/lib/alphashield/logger")
+      .then(({ logger }) => logger.info(name, message, meta || {}))
+      .catch(() => undefined);
+  }
   if (process.env.NODE_ENV === "development") {
     console.log(
       `%c[${name}] ${message}`,
@@ -61,6 +74,11 @@ export function logInfo(name: string, message: string, meta?: LogMeta): void {
  * Loguea warning
  */
 export function logWarn(name: string, message: string, meta?: LogMeta): void {
+  if (typeof window !== "undefined") {
+    import("@/lib/alphashield/logger")
+      .then(({ logger }) => logger.warn(name, message, meta || {}))
+      .catch(() => undefined);
+  }
   if (process.env.NODE_ENV === "development") {
     console.warn(
       `%c[${name}] ${message}`,

@@ -4,6 +4,7 @@ import Image from "next/image";
 // src/components/tradehub/EvidenceVault.client.tsx
 
 import { useState, useEffect, useCallback } from "react";
+import { logger } from "@/lib/alphashield/logger";
 
 interface Account {
   id: string;
@@ -18,21 +19,21 @@ interface Trade {
 
 interface Evidence {
   id: string;
-  title: string;
-  report_text: string;
+  user_notes: string | null;
   file_path: string | null;
   mime_type: string | null;
   validation_status: "needs_review" | "valid" | "invalid";
   trade_id: string | null;
   account_id: string | null;
+  captured_at: string;
   created_at: string;
   account?: Account;
   trade?: Trade;
 }
 
 interface EvidenceForm {
-  title: string;
-  reportText: string;
+  notes: string;
+  capturedAt: string;
   file: File | null;
   accountId: string;
   tradeId: string;
@@ -51,8 +52,8 @@ export default function EvidenceVault() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const [formData, setFormData] = useState<EvidenceForm>({
-    title: "",
-    reportText: "",
+    notes: "",
+    capturedAt: "",
     file: null,
     accountId: "",
     tradeId: "",
@@ -66,7 +67,11 @@ export default function EvidenceVault() {
         setAccounts(data || []);
       }
     } catch (err) {
-      console.error("Error fetching accounts:", err);
+      await logger.error(
+        "tradehub",
+        "Error fetching accounts",
+        err instanceof Error ? err : undefined
+      );
     }
   }, []);
 
@@ -78,7 +83,11 @@ export default function EvidenceVault() {
         setTrades(data || []);
       }
     } catch (err) {
-      console.error("Error fetching trades:", err);
+      await logger.error(
+        "tradehub",
+        "Error fetching trades",
+        err instanceof Error ? err : undefined
+      );
     }
   }, []);
 
@@ -94,7 +103,10 @@ export default function EvidenceVault() {
           window.location.href = "/auth";
           return;
         }
-        console.error(`[EvidenceVault] GET /api/tradehub/evidence returned ${statusCode}`);
+        await logger.error("tradehub", "Fetch evidence failed", undefined, {
+          endpoint: "/api/tradehub/evidence",
+          status: statusCode,
+        });
         setEvidence([]);
         return;
       }
@@ -102,7 +114,11 @@ export default function EvidenceVault() {
       const data = await response.json();
       setEvidence(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("[EvidenceVault] Error fetching evidence:", err);
+      await logger.error(
+        "tradehub",
+        "Fetch evidence error",
+        err instanceof Error ? err : undefined
+      );
       setEvidence([]);
     } finally {
       setLoading(false);
@@ -136,13 +152,13 @@ export default function EvidenceVault() {
 
   const handleUpload = async () => {
     try {
-      if (!formData.title.trim()) {
-        setError("Title es requerido");
+      if (!formData.file) {
+        setError("Archivo es requerido");
         return;
       }
 
-      if (!formData.reportText.trim()) {
-        setError("Report text es requerido");
+      if (!formData.capturedAt) {
+        setError("Fecha de captura es requerida");
         return;
       }
 
@@ -150,11 +166,9 @@ export default function EvidenceVault() {
       setUploading(true);
 
       const uploadFormData = new FormData();
-      uploadFormData.append("title", formData.title);
-      uploadFormData.append("report_text", formData.reportText);
-      if (formData.file) {
-        uploadFormData.append("file", formData.file);
-      }
+      uploadFormData.append("notes", formData.notes);
+      uploadFormData.append("captured_at", formData.capturedAt);
+      uploadFormData.append("file", formData.file);
       uploadFormData.append("account_id", formData.accountId);
       uploadFormData.append("trade_id", formData.tradeId);
 
@@ -169,15 +183,19 @@ export default function EvidenceVault() {
 
       await fetchEvidence();
       setFormData({
-        title: "",
-        reportText: "",
+        notes: "",
+        capturedAt: "",
         file: null,
         accountId: "",
         tradeId: "",
       });
       setShowUploadDialog(false);
     } catch (err: any) {
-      console.error("Error uploading evidence:", err);
+      await logger.error(
+        "tradehub",
+        "Error uploading evidence",
+        err instanceof Error ? err : undefined
+      );
       setError(`Error: ${err.message}`);
     } finally {
       setUploading(false);
@@ -202,7 +220,11 @@ export default function EvidenceVault() {
       await fetchEvidence();
       setSelectedEvidence(null);
     } catch (err: any) {
-      console.error("Error updating status:", err);
+      await logger.error(
+        "tradehub",
+        "Error updating evidence status",
+        err instanceof Error ? err : undefined
+      );
       setError("Error al actualizar status");
     } finally {
       setUpdatingStatus(false);
@@ -223,7 +245,11 @@ export default function EvidenceVault() {
       await fetchEvidence();
       setDeleteConfirm(null);
     } catch (err: any) {
-      console.error("Error deleting evidence:", err);
+      await logger.error(
+        "tradehub",
+        "Error deleting evidence",
+        err instanceof Error ? err : undefined
+      );
       setError("Error al eliminar evidencia");
     }
   };
@@ -254,16 +280,15 @@ export default function EvidenceVault() {
           <h3 className="text-lg font-semibold text-white mb-4">Subir Evidencia</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Title */}
+            {/* Captured At */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
-                Title *
+                Fecha de captura *
               </label>
               <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Evidence title..."
+                type="datetime-local"
+                value={formData.capturedAt}
+                onChange={(e) => setFormData({ ...formData, capturedAt: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white placeholder-slate-400"
               />
             </div>
@@ -323,15 +348,15 @@ export default function EvidenceVault() {
             </div>
           </div>
 
-          {/* Report Text */}
+          {/* Notes */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Report Text *
+              Notas (opcional)
             </label>
             <textarea
-              value={formData.reportText}
-              onChange={(e) => setFormData({ ...formData, reportText: e.target.value })}
-              placeholder="Detailed report text or notes..."
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Observaciones o contexto..."
               rows={4}
               className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white placeholder-slate-400"
             />
@@ -371,7 +396,7 @@ export default function EvidenceVault() {
                   }`}
                 >
                   <p className="text-sm font-semibold text-white truncate">
-                    {ev.title}
+                    {ev.user_notes?.trim() || "Evidencia sin notas"}
                   </p>
                   <p className="text-xs text-slate-400">
                     {new Date(ev.created_at).toLocaleDateString()}
@@ -421,12 +446,12 @@ export default function EvidenceVault() {
 
               <div>
                 <p className="text-xs text-slate-400">Título</p>
-                <p className="text-white">{selectedEvidence.title}</p>
+                <p className="text-white">{selectedEvidence.user_notes?.trim() || "Evidencia sin notas"}</p>
               </div>
 
               <div>
-                <p className="text-xs text-slate-400">Report Text</p>
-                <p className="text-white text-sm">{selectedEvidence.report_text}</p>
+                <p className="text-xs text-slate-400">Notas</p>
+                <p className="text-white text-sm">{selectedEvidence.user_notes || "—"}</p>
               </div>
 
               {selectedEvidence.account && (

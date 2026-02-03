@@ -71,7 +71,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/tradehub/evidence/{id}
- * Soft-delete evidence
+ * Hard-delete evidence (remove storage + row)
  */
 export async function DELETE(
   request: NextRequest,
@@ -90,7 +90,7 @@ export async function DELETE(
     // Verify ownership
     const { data: existingEvidence } = await supabase
       .from("tv_analysis_evidence")
-      .select("user_id")
+      .select("user_id, image_path")
       .eq("id", id)
       .eq("user_id", userData.user.id)
       .single();
@@ -102,10 +102,19 @@ export async function DELETE(
       );
     }
 
+    if (existingEvidence?.image_path) {
+      try {
+        await supabase.storage.from("log_attachments").remove([existingEvidence.image_path]);
+      } catch (storageErr) {
+        console.warn("Warning: Failed to delete evidence file:", storageErr);
+      }
+    }
+
     const { error } = await supabase
       .from("tv_analysis_evidence")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userData.user.id);
 
     if (error) {
       console.error("Error deleting evidence:", error);

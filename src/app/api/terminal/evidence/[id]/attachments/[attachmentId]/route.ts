@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * DELETE /api/terminal/evidence/{id}/attachments/{attachmentId}
- * Soft-delete attachment (soft-delete metadata, optionally delete from storage)
+ * Hard-delete attachment (delete metadata + storage)
  */
 export async function DELETE(
   request: NextRequest,
@@ -35,11 +35,11 @@ export async function DELETE(
       );
     }
 
-    // Soft-delete: update metadata
     const { error: dbError } = await supabase
       .from("terminal_evidence_attachments")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", attachmentId);
+      .delete()
+      .eq("id", attachmentId)
+      .eq("user_id", userData.user.id);
 
     if (dbError) {
       console.error("Error deleting attachment metadata:", dbError);
@@ -54,7 +54,6 @@ export async function DELETE(
       await supabase.storage.from("log_attachments").remove([attachment.path]);
     } catch (storageErr) {
       console.warn("Warning: Failed to delete file from storage:", storageErr);
-      // Continue - metadata is already soft-deleted
     }
 
     return NextResponse.json({ success: true });

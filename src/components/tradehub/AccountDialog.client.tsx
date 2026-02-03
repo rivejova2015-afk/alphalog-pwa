@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from "@/lib/alphashield/logger";
 import Link from "next/link";
 
 interface Account {
@@ -94,7 +95,11 @@ export default function AccountDialog({
         status,
       });
     } catch (err: unknown) {
-      console.error("Error saving account:", err);
+      await logger.error(
+        "tradehub",
+        "Error saving account",
+        err instanceof Error ? err : undefined
+      );
       const message = err instanceof Error ? err.message : "Error al guardar cuenta";
       setError(message);
     } finally {

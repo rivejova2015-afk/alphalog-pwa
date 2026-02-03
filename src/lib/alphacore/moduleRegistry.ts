@@ -245,8 +245,8 @@ export function getModuleTables(name: ModuleName): string[] {
  * Get subsection definition
  */
 export function getSubsection(moduleName: ModuleName, subsectionName: SubsectionName): SubsectionDefinition | undefined {
-  const module = MODULE_REGISTRY[moduleName];
-  return module.subsections?.find(s => s.name === subsectionName);
+  const moduleDefinition = MODULE_REGISTRY[moduleName];
+  return moduleDefinition.subsections?.find(s => s.name === subsectionName);
 }
 
 /**

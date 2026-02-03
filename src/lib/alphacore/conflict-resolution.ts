@@ -8,7 +8,7 @@
  * - Supports rollback on conflict
  */
 
-import type { BaseFields, EntityOperation } from '@/lib/alphacore/types';
+import type { EntityOperation } from '@/lib/alphacore/types';
 
 /**
  * Conflict detection result
@@ -185,6 +185,7 @@ export function resolveClientPreference(
   clientData: Record<string, any>,
   serverData: Record<string, any>
 ): ConflictResolution {
+  void serverData;
   return {
     resolved: true,
     strategy: 'client-preference',
@@ -251,6 +252,8 @@ export function resolveAbort(
   clientData: Record<string, any>,
   serverData: Record<string, any>
 ): ConflictResolution {
+  void clientData;
+  void serverData;
   return {
     resolved: false,
     strategy: 'abort',

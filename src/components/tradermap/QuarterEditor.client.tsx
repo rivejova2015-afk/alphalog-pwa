@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { logger } from "@/lib/alphashield/logger";
 import { formatMoney, parseMoneyInput } from "./money";
 
 interface GoalQuarter {
@@ -130,7 +131,11 @@ export default function QuarterEditor({
 
       await onSave();
     } catch (err: any) {
-      console.error("Error saving quarter:", err);
+      await logger.error(
+        "tradermap",
+        "Error saving quarter",
+        err instanceof Error ? err : undefined
+      );
       const message = err.message || "Error al guardar trimestre";
       setLocalError(message);
       onError(message);

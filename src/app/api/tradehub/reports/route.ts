@@ -1,6 +1,7 @@
 // src/app/api/tradehub/reports/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { decryptText } from "@/lib/security/encryption";
 
 /**
  * GET /api/tradehub/reports
@@ -30,7 +31,12 @@ export async function GET() {
       return NextResponse.json([]);
     }
 
-    return NextResponse.json(reports || []);
+    const decrypted = (reports || []).map((report: any) => ({
+      ...report,
+      content_md: decryptText(report.content_md),
+    }));
+
+    return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("[Reports GET] Error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

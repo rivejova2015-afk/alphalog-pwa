@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 
 /**
  * GET /api/tradehub/evidence
@@ -76,7 +77,12 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
-    return NextResponse.json(dedupedData);
+    const decrypted = dedupedData.map((item: any) => ({
+      ...item,
+      user_notes: decryptText(item.user_notes),
+    }));
+
+    return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/evidence:", err);
     return NextResponse.json(
@@ -199,7 +205,7 @@ export async function POST(request: NextRequest) {
         user_id: userData.user.id,
         image_path: safePath,
         captured_at: new Date(capturedAt).toISOString(),
-        user_notes: notes || null,
+        user_notes: encryptText(notes) || null,
         trade_id: tradeId || null,
         account_id: accountId || null,
         validation_status: "needs_review",
@@ -217,7 +223,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      user_notes: decryptText(data.user_notes),
+    });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/evidence:", err);
     return NextResponse.json(

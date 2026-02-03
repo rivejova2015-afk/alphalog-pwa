@@ -1,6 +1,7 @@
 // src/app/api/terminal/evidence/generate/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { encryptText } from "@/lib/security/encryption";
 
 /**
  * POST /api/terminal/evidence/generate
@@ -67,8 +68,8 @@ Descargo de responsabilidad: Este análisis es solo para propósitos educativos.
         {
           user_id: userData.user.id,
           instrument_id: instrumentId || null,
-          title,
-          content: stubContent,
+          title: encryptText(title),
+          content: encryptText(stubContent),
         },
       ])
       .select()
@@ -85,8 +86,8 @@ Descargo de responsabilidad: Este análisis es solo para propósitos educativos.
     return NextResponse.json({
       ok: true,
       reportId: data.id,
-      title: data.title,
-      content: data.content,
+      title,
+      content: stubContent,
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/evidence/generate:", err);

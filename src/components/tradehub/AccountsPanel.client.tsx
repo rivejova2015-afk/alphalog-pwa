@@ -127,7 +127,6 @@ export default function AccountsPanel() {
     accounts.forEach((acc) => {
       void fetchAccountStats(acc.id);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, statsRefresh]);
 
   useEffect(() => {
@@ -206,6 +205,9 @@ export default function AccountsPanel() {
       setShowAccountDialog(false);
       setEditingAccount(null);
       void fetchAccounts();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("accounts:updated"));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al guardar cuenta";
       setError(message);
@@ -213,7 +215,7 @@ export default function AccountsPanel() {
   };
 
   const handleDeleteAccount = async (accountId: string) => {
-    if (!confirm("¿Eliminar esta cuenta?")) return;
+    if (!confirm("Esto eliminará permanentemente la cuenta y todas sus operaciones/evidencias asociadas. ¿Continuar?")) return;
     try {
       const res = await fetch(`/api/accounts/${accountId}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
@@ -222,6 +224,9 @@ export default function AccountsPanel() {
       }
       setAccounts((prev) => prev.filter((a) => a.id !== accountId));
       void fetchAccounts();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("accounts:updated"));
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al eliminar";
       setError(message);

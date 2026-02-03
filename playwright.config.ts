@@ -1,10 +1,43 @@
 import { defineConfig, devices } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Read environment variables from file.
  * https://github.com/motdotla/dotenv
  */
-// require('dotenv').config();
+const envFiles = ['.env.local', '.env'];
+
+function loadEnvFile(fileName: string) {
+  try {
+    const filePath = path.resolve(process.cwd(), fileName);
+    if (!fs.existsSync(filePath)) return;
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    content.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+
+      const eqIndex = trimmed.indexOf('=');
+      if (eqIndex === -1) return;
+
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      if (!(key in process.env)) {
+        process.env[key] = value;
+      }
+    });
+  } catch {
+    // Fail open if env parsing fails
+  }
+}
+
+envFiles.forEach(loadEnvFile);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -29,6 +62,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    storageState: 'tests/e2e/.auth/state.json',
   },
 
   /* Configure projects for major browsers */

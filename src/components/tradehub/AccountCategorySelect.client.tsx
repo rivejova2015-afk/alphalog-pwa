@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from "@/lib/alphashield/logger";
 
 interface Category {
   id: string;
@@ -46,7 +47,11 @@ export default function AccountCategorySelect({
 
       onSeedSuccess?.();
     } catch (err: any) {
-      console.error("Error seeding categories:", err);
+      await logger.error(
+        "tradehub",
+        "Error seeding categories",
+        err instanceof Error ? err : undefined
+      );
     } finally {
       setSeedLoading(false);
     }

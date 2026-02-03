@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS business_costs (
   vendor TEXT NOT NULL,
   cost_date DATE NOT NULL,
   is_recurring_instance BOOLEAN NOT NULL DEFAULT false,
-  template_id UUID NULL REFERENCES business_cost_templates(id) ON DELETE SET NULL,
+  template_id UUID NULL,
   sort_index INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -34,7 +34,8 @@ CREATE INDEX idx_business_costs_category ON business_costs(user_id, category) WH
 CREATE INDEX idx_business_costs_template ON business_costs(template_id) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_costs_updated_at_trigger
+DROP TRIGGER IF EXISTS business_costs_updated_at_trigger ON business_costs;
+CREATE TRIGGER business_costs_updated_at_trigger
 BEFORE UPDATE ON business_costs
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -71,11 +72,24 @@ CREATE TABLE IF NOT EXISTS business_cost_templates (
   )
 );
 
+-- Add FK for business_costs.template_id once templates exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'business_costs_template_id_fkey'
+  ) THEN
+    ALTER TABLE business_costs
+      ADD CONSTRAINT business_costs_template_id_fkey
+      FOREIGN KEY (template_id) REFERENCES business_cost_templates(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
 CREATE INDEX idx_business_cost_templates_user ON business_cost_templates(user_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_business_cost_templates_active ON business_cost_templates(user_id, active) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_cost_templates_updated_at_trigger
+DROP TRIGGER IF EXISTS business_cost_templates_updated_at_trigger ON business_cost_templates;
+CREATE TRIGGER business_cost_templates_updated_at_trigger
 BEFORE UPDATE ON business_cost_templates
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -113,7 +127,8 @@ CREATE INDEX idx_business_milestones_status ON business_milestones(user_id, stat
 CREATE INDEX idx_business_milestones_goal ON business_milestones(goal_id) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_milestones_updated_at_trigger
+DROP TRIGGER IF EXISTS business_milestones_updated_at_trigger ON business_milestones;
+CREATE TRIGGER business_milestones_updated_at_trigger
 BEFORE UPDATE ON business_milestones
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -146,7 +161,8 @@ CREATE INDEX idx_business_sops_user ON business_sops(user_id) WHERE deleted_at I
 CREATE INDEX idx_business_sops_type ON business_sops(user_id, type) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_sops_updated_at_trigger
+DROP TRIGGER IF EXISTS business_sops_updated_at_trigger ON business_sops;
+CREATE TRIGGER business_sops_updated_at_trigger
 BEFORE UPDATE ON business_sops
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -173,7 +189,8 @@ CREATE INDEX idx_business_sop_items_sop ON business_sop_items(sop_id) WHERE dele
 CREATE INDEX idx_business_sop_items_user ON business_sop_items(user_id) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_sop_items_updated_at_trigger
+DROP TRIGGER IF EXISTS business_sop_items_updated_at_trigger ON business_sop_items;
+CREATE TRIGGER business_sop_items_updated_at_trigger
 BEFORE UPDATE ON business_sop_items
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -200,7 +217,8 @@ CREATE INDEX idx_business_sop_runs_sop ON business_sop_runs(sop_id) WHERE delete
 CREATE INDEX idx_business_sop_runs_date ON business_sop_runs(run_date DESC) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_sop_runs_updated_at_trigger
+DROP TRIGGER IF EXISTS business_sop_runs_updated_at_trigger ON business_sop_runs;
+CREATE TRIGGER business_sop_runs_updated_at_trigger
 BEFORE UPDATE ON business_sop_runs
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -221,18 +239,22 @@ CREATE TABLE IF NOT EXISTS business_sop_run_items (
   note TEXT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMP WITH TIME ZONE NULL,
-  
+  deleted_at TIMESTAMP WITH TIME ZONE NULL
+
   -- Constraints
-  CONSTRAINT business_sop_run_items_unique UNIQUE (run_id, item_id) WHERE deleted_at IS NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS business_sop_run_items_unique_idx
+  ON business_sop_run_items(run_id, item_id)
+  WHERE deleted_at IS NULL;
 
 CREATE INDEX idx_business_sop_run_items_run ON business_sop_run_items(run_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_business_sop_run_items_item ON business_sop_run_items(item_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_business_sop_run_items_user ON business_sop_run_items(user_id) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_sop_run_items_updated_at_trigger
+DROP TRIGGER IF EXISTS business_sop_run_items_updated_at_trigger ON business_sop_run_items;
+CREATE TRIGGER business_sop_run_items_updated_at_trigger
 BEFORE UPDATE ON business_sop_run_items
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -269,7 +291,8 @@ CREATE INDEX idx_business_decisions_priority ON business_decisions(user_id, prio
 CREATE INDEX idx_business_decisions_tags ON business_decisions USING GIN (tags) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_decisions_updated_at_trigger
+DROP TRIGGER IF EXISTS business_decisions_updated_at_trigger ON business_decisions;
+CREATE TRIGGER business_decisions_updated_at_trigger
 BEFORE UPDATE ON business_decisions
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -298,7 +321,8 @@ CREATE INDEX idx_business_decision_tasks_user ON business_decision_tasks(user_id
 CREATE INDEX idx_business_decision_tasks_done ON business_decision_tasks(user_id, done) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER business_decision_tasks_updated_at_trigger
+DROP TRIGGER IF EXISTS business_decision_tasks_updated_at_trigger ON business_decision_tasks;
+CREATE TRIGGER business_decision_tasks_updated_at_trigger
 BEFORE UPDATE ON business_decision_tasks
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -332,7 +356,8 @@ CREATE TABLE IF NOT EXISTS llc_info (
 CREATE INDEX idx_llc_info_user ON llc_info(user_id) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER llc_info_updated_at_trigger
+DROP TRIGGER IF EXISTS llc_info_updated_at_trigger ON llc_info;
+CREATE TRIGGER llc_info_updated_at_trigger
 BEFORE UPDATE ON llc_info
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -369,7 +394,8 @@ CREATE INDEX idx_llc_inbox_items_status ON llc_inbox_items(user_id, status) WHER
 CREATE INDEX idx_llc_inbox_items_received ON llc_inbox_items(received_on DESC) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER llc_inbox_items_updated_at_trigger
+DROP TRIGGER IF EXISTS llc_inbox_items_updated_at_trigger ON llc_inbox_items;
+CREATE TRIGGER llc_inbox_items_updated_at_trigger
 BEFORE UPDATE ON llc_inbox_items
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -607,9 +633,12 @@ CREATE TABLE IF NOT EXISTS business_alert_history (
   -- Constraints
   CONSTRAINT business_alert_history_alert_type_check CHECK (
     alert_type IN ('low_runway', 'annual_report')
-  ),
-  CONSTRAINT business_alert_history_unique_monthly UNIQUE (user_id, alert_type, alert_month) WHERE alert_month IS NOT NULL
+  )
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS business_alert_history_unique_monthly_idx
+  ON business_alert_history(user_id, alert_type, alert_month)
+  WHERE alert_month IS NOT NULL;
 
 CREATE INDEX idx_business_alert_history_user ON business_alert_history(user_id) WHERE alert_month IS NOT NULL;
 CREATE INDEX idx_business_alert_history_type ON business_alert_history(alert_type, alert_month) WHERE alert_month IS NOT NULL;

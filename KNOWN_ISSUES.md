@@ -86,9 +86,10 @@ Priorizadas por impacto en la migración.
 - **Sprint**: 1
 
 ### 12. Incomplete Service Worker Implementation
-- **Problema**: public/sw.js existe pero sin lógica offline/cache
-- **Impacto**: PWA no funciona offline
-- **Solución**: Implementar caching strategy + offline fallback
+- **Estado**: IMPLEMENTADO
+- **Problema**: public/sw.js ya está generado (Workbox) y ahora tiene fallback de documento a /offline; falta validar offline real en páginas críticas.
+- **Impacto**: Riesgo de offline parcial si rutas críticas no cachean como se espera.
+- **Solución**: Verificar navegación offline (Home/Dashboard/Logs/Terminal) y confirmar fallback estable.
 - **Sprint**: 6
 
 ### 13. Stripe Integration Incomplete

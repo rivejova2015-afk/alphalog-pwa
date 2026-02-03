@@ -121,16 +121,6 @@ export interface MutationErrorOptions {
  * Log mutation error with categorization and Safe Mode tracking
  */
 export async function logMutationError(options: MutationErrorOptions) {
-  const error: ErrorDetail = {
-    code: options.code,
-    message: options.message,
-    stack: options.stack,
-    area: options.table,
-    context: sanitizeContext(options.context || {}),
-    fingerprint: options.fingerprint,
-    timestamp: Date.now(),
-  };
-  
   // Add to Safe Mode tracking
   safeModeManager.addError({
     code: options.code || 'UNKNOWN',
@@ -191,28 +181,7 @@ function categorizeError(code: string): string {
 /**
  * Sanitize context for logging (remove PII)
  */
-function sanitizeContext(context: Record<string, unknown>): Record<string, unknown> {
-  const sanitized = { ...context };
-  const sensitiveFields = [
-    'password',
-    'token',
-    'secret',
-    'apiKey',
-    'api_key',
-    'email',
-    'phone',
-    'ssn',
-    'creditCard',
-  ];
-  
-  sensitiveFields.forEach((field) => {
-    if (sanitized[field]) {
-      sanitized[field] = '[REDACTED]';
-    }
-  });
-  
-  return sanitized;
-}
+
 
 // ============================================================================
 // DEBUG BUNDLE GENERATION
@@ -335,8 +304,7 @@ export interface DuplicateCheckResult {
  */
 export async function checkForDuplicate(
   table: string,
-  fingerprint: string,
-  excludeId?: string
+  fingerprint: string
 ): Promise<DuplicateCheckResult> {
   try {
     const supabase = await createClient();

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * DELETE /api/tradehub/reports/{id}
- * Soft-delete report
+ * Hard-delete report
  */
 export async function DELETE(
   request: NextRequest,
@@ -37,8 +37,9 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("weekly_reports")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userData.user.id);
 
     if (error) {
       console.error("Error deleting report:", error);

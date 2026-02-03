@@ -11,6 +11,19 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+const logBusinessError = async (message: string, error?: unknown) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const { logger } = await import('@/lib/alphashield/logger');
+      await logger.error('business', message, error instanceof Error ? error : undefined);
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+  console.error(message, error);
+};
+
 import type {
   BusinessCost,
   BusinessCostTemplate,
@@ -54,7 +67,7 @@ export async function getBusinessCosts(filterMonth?: string): Promise<BusinessCo
   const { data, error } = await query;
   
   if (error) {
-    console.error('Error fetching business costs:', error);
+    await logBusinessError('Error fetching business costs:', error);
     return [];
   }
   
@@ -72,7 +85,7 @@ export async function getBusinessCostTemplates(): Promise<BusinessCostTemplate[]
     .order('day_of_month', { ascending: true });
 
   if (error) {
-    console.error('Error fetching cost templates:', error);
+    await logBusinessError('Error fetching cost templates:', error);
     return [];
   }
 
@@ -90,7 +103,7 @@ export async function createBusinessCost(cost: Omit<BusinessCost, 'id' | 'create
     .single();
 
   if (error) {
-    console.error('Error creating business cost:', error);
+    await logBusinessError('Error creating business cost:', error);
     return null;
   }
 
@@ -107,7 +120,7 @@ export async function deleteBusinessCost(costId: string): Promise<boolean> {
     .eq('id', costId);
 
   if (error) {
-    console.error('Error deleting business cost:', error);
+    await logBusinessError('Error deleting business cost:', error);
     return false;
   }
 
@@ -129,7 +142,7 @@ export async function getBusinessMilestones(): Promise<BusinessMilestone[]> {
     .order('sort_index', { ascending: true });
 
   if (error) {
-    console.error('Error fetching milestones:', error);
+    await logBusinessError('Error fetching milestones:', error);
     return [];
   }
 
@@ -147,7 +160,7 @@ export async function createBusinessMilestone(milestone: Omit<BusinessMilestone,
     .single();
 
   if (error) {
-    console.error('Error creating milestone:', error);
+    await logBusinessError('Error creating milestone:', error);
     return null;
   }
 
@@ -164,7 +177,7 @@ export async function updateBusinessMilestoneStatus(milestoneId: string, status:
     .eq('id', milestoneId);
 
   if (error) {
-    console.error('Error updating milestone status:', error);
+    await logBusinessError('Error updating milestone status:', error);
     return false;
   }
 
@@ -181,7 +194,7 @@ export async function deleteBusinessMilestone(milestoneId: string): Promise<bool
     .eq('id', milestoneId);
 
   if (error) {
-    console.error('Error deleting milestone:', error);
+    await logBusinessError('Error deleting milestone:', error);
     return false;
   }
 
@@ -203,7 +216,7 @@ export async function getBusinessSOPs(): Promise<BusinessSOP[]> {
     .order('sort_index', { ascending: true });
 
   if (error) {
-    console.error('Error fetching SOPs:', error);
+    await logBusinessError('Error fetching SOPs:', error);
     return [];
   }
 
@@ -230,7 +243,7 @@ export async function getBusinessSOPWithItems(sopId: string): Promise<{ sop: Bus
   ]);
 
   if (sopResult.error || itemsResult.error) {
-    console.error('Error fetching SOP with items:', sopResult.error || itemsResult.error);
+    await logBusinessError('Error fetching SOP with items:', sopResult.error || itemsResult.error);
     return null;
   }
 
@@ -251,7 +264,7 @@ export async function createBusinessSOP(sop: Omit<BusinessSOP, 'id' | 'created_a
     .single();
 
   if (error) {
-    console.error('Error creating SOP:', error);
+    await logBusinessError('Error creating SOP:', error);
     return null;
   }
 
@@ -268,7 +281,7 @@ export async function deleteBusinessSOP(sopId: string): Promise<boolean> {
     .eq('id', sopId);
 
   if (error) {
-    console.error('Error deleting SOP:', error);
+    await logBusinessError('Error deleting SOP:', error);
     return false;
   }
 
@@ -291,7 +304,7 @@ export async function getBusinessSOPRuns(sopId: string): Promise<BusinessSOPRun[
     .order('run_date', { ascending: false });
 
   if (error) {
-    console.error('Error fetching SOP runs:', error);
+    await logBusinessError('Error fetching SOP runs:', error);
     return [];
   }
 
@@ -309,7 +322,7 @@ export async function createBusinessSOPRun(run: Omit<BusinessSOPRun, 'id' | 'cre
     .single();
 
   if (error) {
-    console.error('Error creating SOP run:', error);
+    await logBusinessError('Error creating SOP run:', error);
     return null;
   }
 
@@ -332,7 +345,7 @@ export async function getBusinessSOPRunItems(runId: string): Promise<BusinessSOP
     .order('created_at', { ascending: true });
 
   if (error) {
-    console.error('Error fetching SOP run items:', error);
+    await logBusinessError('Error fetching SOP run items:', error);
     return [];
   }
 
@@ -362,7 +375,7 @@ export async function updateBusinessSOPRunItem(itemId: string, checked: boolean,
     .eq('id', itemId);
 
   if (error) {
-    console.error('Error updating SOP run item:', error);
+    await logBusinessError('Error updating SOP run item:', error);
     return false;
   }
 
@@ -384,7 +397,7 @@ export async function getBusinessDecisions(): Promise<BusinessDecision[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching decisions:', error);
+    await logBusinessError('Error fetching decisions:', error);
     return [];
   }
 
@@ -411,7 +424,7 @@ export async function getBusinessDecisionWithTasks(decisionId: string): Promise<
   ]);
 
   if (decisionResult.error || tasksResult.error) {
-    console.error('Error fetching decision with tasks:', decisionResult.error || tasksResult.error);
+    await logBusinessError('Error fetching decision with tasks:', decisionResult.error || tasksResult.error);
     return null;
   }
 
@@ -432,7 +445,7 @@ export async function createBusinessDecision(decision: Omit<BusinessDecision, 'i
     .single();
 
   if (error) {
-    console.error('Error creating decision:', error);
+    await logBusinessError('Error creating decision:', error);
     return null;
   }
 
@@ -449,7 +462,7 @@ export async function deleteBusinessDecision(decisionId: string): Promise<boolea
     .eq('id', decisionId);
 
   if (error) {
-    console.error('Error deleting decision:', error);
+    await logBusinessError('Error deleting decision:', error);
     return false;
   }
 
@@ -471,7 +484,7 @@ export async function getLLCInfo(): Promise<LLCInfo | null> {
     .maybeSingle();
 
   if (error) {
-    console.error('Error fetching LLC info:', error);
+    await logBusinessError('Error fetching LLC info:', error);
     return null;
   }
 
@@ -497,7 +510,7 @@ export async function upsertLLCInfo(llcInfo: Omit<LLCInfo, 'id' | 'created_at' |
       .single();
 
     if (error) {
-      console.error('Error updating LLC info:', error);
+      await logBusinessError('Error updating LLC info:', error);
       return null;
     }
 
@@ -511,7 +524,7 @@ export async function upsertLLCInfo(llcInfo: Omit<LLCInfo, 'id' | 'created_at' |
       .single();
 
     if (error) {
-      console.error('Error creating LLC info:', error);
+      await logBusinessError('Error creating LLC info:', error);
       return null;
     }
 
@@ -540,7 +553,7 @@ export async function getLLCInboxItems(filterStatus?: string): Promise<LLCInboxI
   const { data, error } = await query.order('received_on', { ascending: false });
 
   if (error) {
-    console.error('Error fetching LLC inbox items:', error);
+    await logBusinessError('Error fetching LLC inbox items:', error);
     return [];
   }
 
@@ -558,7 +571,7 @@ export async function createLLCInboxItem(item: Omit<LLCInboxItem, 'id' | 'create
     .single();
 
   if (error) {
-    console.error('Error creating LLC inbox item:', error);
+    await logBusinessError('Error creating LLC inbox item:', error);
     return null;
   }
 
@@ -575,7 +588,7 @@ export async function updateLLCInboxItemStatus(itemId: string, status: 'new' | '
     .eq('id', itemId);
 
   if (error) {
-    console.error('Error updating LLC inbox item:', error);
+    await logBusinessError('Error updating LLC inbox item:', error);
     return false;
   }
 
@@ -592,7 +605,7 @@ export async function deleteLLCInboxItem(itemId: string): Promise<boolean> {
     .eq('id', itemId);
 
   if (error) {
-    console.error('Error deleting LLC inbox item:', error);
+    await logBusinessError('Error deleting LLC inbox item:', error);
     return false;
   }
 

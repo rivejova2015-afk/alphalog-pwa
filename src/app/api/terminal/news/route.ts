@@ -1,5 +1,6 @@
 // src/app/api/terminal/news/route.ts
 import { createClient } from "@/lib/supabase/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -39,7 +40,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || []);
+    const decrypted = (data || []).map((item) => ({
+      ...item,
+      title: decryptText(item.title),
+      url: decryptText(item.url),
+      source: decryptText(item.source),
+    }));
+
+    return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("Error in GET /api/terminal/news:", err);
     return NextResponse.json(
@@ -99,9 +107,9 @@ export async function POST(request: NextRequest) {
         {
           user_id: userData.user.id,
           instrument_id: instrumentId,
-          title,
-          url,
-          source,
+          title: encryptText(title),
+          url: encryptText(url),
+          source: encryptText(source),
           relevancy_score,
           impact_label,
         },
@@ -117,7 +125,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      title: decryptText(data.title),
+      url: decryptText(data.url),
+      source: decryptText(data.source),
+    });
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/news:", err);
     return NextResponse.json(

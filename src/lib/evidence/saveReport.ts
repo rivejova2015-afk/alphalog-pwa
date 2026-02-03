@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import type { ReportBuild } from "@/lib/reports/types";
 import { renderReportPdf } from "@/lib/reports/renderPdf";
+import { encryptText } from "@/lib/security/encryption";
 
 type SaveReportInput = {
   userId: string;
@@ -34,8 +35,8 @@ export const saveReportEvidence = async ({
     .insert({
       user_id: userId,
       instrument_id: instrumentId ?? null,
-      title: report.title,
-      content: report.markdown,
+      title: encryptText(report.title),
+      content: encryptText(report.markdown),
     })
     .select()
     .single();

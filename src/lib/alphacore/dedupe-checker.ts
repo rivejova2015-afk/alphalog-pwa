@@ -10,7 +10,6 @@
  * Integration point: Call preSubmitDedupeCheck() BEFORE enqueuing mutations
  */
 
-import type { BaseFields } from '@/lib/alphacore/types';
 import { DEDUPE_SCHEMAS } from '@/lib/alphacore/dedupe';
 import { getMetadata, storeMetadata } from '@/lib/alphacore/offline/idb';
 import { createClient } from '@/lib/supabase/browser';
@@ -157,8 +156,7 @@ async function checkUniqueConstraint(
       return await checkUniqueConstraintOffline(
         table,
         uniqueFields,
-        data,
-        userId
+        data
       );
     }
   } catch (error) {
@@ -240,8 +238,7 @@ async function checkUniqueConstraintOnline(
 async function checkUniqueConstraintOffline(
   table: string,
   uniqueFields: string[],
-  data: Record<string, any>,
-  userId?: string
+  data: Record<string, any>
 ): Promise<DedupeCheckResult> {
   try {
     // Create fingerprint from unique fields
@@ -309,8 +306,7 @@ async function checkDerivedFields(
       return await checkDerivedFieldsOffline(
         table,
         derivedFields,
-        data,
-        userId
+        data
       );
     }
   } catch (error) {
@@ -391,8 +387,7 @@ async function checkDerivedFieldsOnline(
 async function checkDerivedFieldsOffline(
   table: string,
   derivedFields: string[],
-  data: Record<string, any>,
-  userId?: string
+  data: Record<string, any>
 ): Promise<DedupeCheckResult> {
   try {
     // Create fingerprint from all fields

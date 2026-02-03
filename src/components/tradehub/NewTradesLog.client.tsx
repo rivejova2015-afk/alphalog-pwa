@@ -5,6 +5,8 @@ import Image from "next/image";
 
 import { useState, useEffect, useCallback } from "react";
 import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
+import { logger } from "@/lib/alphashield/logger";
+import { captureException } from "@/lib/sentry";
 
 interface Account {
   id: string;
@@ -77,6 +79,14 @@ export default function NewTradesLog() {
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
+  const logClientError = (err: unknown, context: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[TradeHub]", err, context);
+      return;
+    }
+    captureException(err, context);
+  };
+
   const [formData, setFormData] = useState<TradeForm>({
     accountId: "",
     symbol: "",
@@ -104,7 +114,11 @@ export default function NewTradesLog() {
         setAccounts(data || []);
       }
     } catch (err) {
-      console.error("Error fetching accounts:", err);
+      await logger.error(
+        "tradehub",
+        "Error fetching accounts",
+        err instanceof Error ? err : undefined
+      );
     }
   }, []);
 
@@ -116,7 +130,11 @@ export default function NewTradesLog() {
         setSetups(data || []);
       }
     } catch (err) {
-      console.error("Error fetching setups:", err);
+      await logger.error(
+        "tradehub",
+        "Error fetching setups",
+        err instanceof Error ? err : undefined
+      );
     }
   }, []);
 
@@ -140,7 +158,10 @@ export default function NewTradesLog() {
           window.location.href = "/auth";
           return;
         }
-        console.error(`[NewTradesLog] GET /api/tradehub/trades returned ${statusCode}`);
+        await logger.error("tradehub", "Fetch trades failed", undefined, {
+          endpoint: "/api/tradehub/trades",
+          status: statusCode,
+        });
         setTrades([]);
         return;
       }
@@ -148,7 +169,11 @@ export default function NewTradesLog() {
       const data = await response.json();
       setTrades(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("[NewTradesLog] Error fetching trades:", err);
+      await logger.error(
+        "tradehub",
+        "Fetch trades error",
+        err instanceof Error ? err : undefined
+      );
       setTrades([]);
     } finally {
       setLoading(false);
@@ -159,6 +184,27 @@ export default function NewTradesLog() {
     fetchAccounts();
     fetchSetups();
   }, [fetchAccounts, fetchSetups]);
+
+  useEffect(() => {
+    const handler = () => {
+      fetchAccounts();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("accounts:updated", handler as EventListener);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("accounts:updated", handler as EventListener);
+      }
+    };
+  }, [fetchAccounts]);
+
+  useEffect(() => {
+    if (selectedAccountId && !accounts.find((acc) => acc.id === selectedAccountId)) {
+      setSelectedAccountId("");
+      setFormData((prev) => ({ ...prev, accountId: "" }));
+    }
+  }, [accounts, selectedAccountId]);
 
   useEffect(() => {
     fetchTrades();
@@ -250,7 +296,11 @@ export default function NewTradesLog() {
       setScreenshotUrl(result.signedUrl || `/api/tradehub/trades/${editingTrade.id}/screenshot`);
       setError("");
     } catch (err: any) {
-      console.error("Error uploading screenshot:", err);
+      await logger.error(
+        "tradehub",
+        "Error uploading screenshot",
+        err instanceof Error ? err : undefined
+      );
       setError("Error al subir screenshot");
     } finally {
       setUploadingScreenshot(false);
@@ -350,8 +400,9 @@ export default function NewTradesLog() {
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || errData.message || await response.text());
+        const errData = await response.json().catch(() => ({}));
+        const message = errData?.error || errData?.message || "Error al guardar";
+        throw new Error(message);
       }
 
       // Get the created/updated trade from response
@@ -376,20 +427,38 @@ export default function NewTradesLog() {
       resetForm();
       await fetchTrades();
     } catch (err: any) {
-      console.error("[NewTradesLog] Error saving trade:", err);
-      setError(`Error: ${err.message}`);
+      await logger.error(
+        "tradehub",
+        "Error saving trade",
+        err instanceof Error ? err : undefined
+      );
+      logClientError(err, {
+        feature: "trades",
+        action: "save",
+        tradeId: editingTrade?.id,
+      });
+      const raw = err instanceof Error ? err.message : "";
+      if (raw.toLowerCase().includes("not found")) {
+        setError("Operación no encontrada.");
+      } else if (raw.toLowerCase().includes("forbidden")) {
+        setError("No tienes permisos para editar esta operación.");
+      } else {
+        setError("No se pudo guardar la operación. Intenta de nuevo.");
+      }
     }
   };
 
   const handleDelete = async (tradeId: string) => {
     try {
       setError("");
+      setTrades((prev) => prev.filter((t) => t.id !== tradeId));
       const response = await fetch(`/api/tradehub/trades/${tradeId}`, {
         method: "DELETE",
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete trade");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData?.error || "Failed to delete trade");
       }
 
       notifyTradeUpdate({
@@ -401,8 +470,18 @@ export default function NewTradesLog() {
       await fetchTrades();
       setDeleteConfirm(null);
     } catch (err: any) {
-      console.error("Error deleting trade:", err);
-      setError("Error al eliminar operación");
+      await logger.error(
+        "tradehub",
+        "Error deleting trade",
+        err instanceof Error ? err : undefined
+      );
+      logClientError(err, {
+        feature: "trades",
+        action: "delete",
+        tradeId,
+      });
+      setError("No se pudo eliminar la operación. Intenta de nuevo.");
+      await fetchTrades();
     }
   };
 
@@ -427,8 +506,17 @@ export default function NewTradesLog() {
 
       await fetchTrades();
     } catch (err: any) {
-      console.error("Error restoring trade:", err);
-      setError("Error al restaurar operación");
+      await logger.error(
+        "tradehub",
+        "Error restoring trade",
+        err instanceof Error ? err : undefined
+      );
+      logClientError(err, {
+        feature: "trades",
+        action: "restore",
+        tradeId,
+      });
+      setError("No se pudo restaurar la operación.");
     }
   };
 

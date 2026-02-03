@@ -8,15 +8,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// Helper: read file safely
-function readFileIfExists(filePath) {
-  try {
-    return fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return '';
-  }
-}
-
 // Helper: find all route files
 function findRoutes(baseDir = 'src/app') {
   const routes = [];
@@ -42,7 +33,7 @@ function findRoutes(baseDir = 'src/app') {
           }
         }
       }
-    } catch (e) {
+    } catch {
       // Silently skip errors
     }
   }
@@ -78,7 +69,7 @@ function findEndpoints(apiDir = 'src/app/api') {
           endpoints.push(`/api${prefix}`);
         }
       }
-    } catch (e) {
+    } catch {
       // Silently skip errors
     }
   }
@@ -100,7 +91,7 @@ function findMigrations(migrationsDir = 'supabase/migrations') {
         migrations.push(file);
       }
     }
-  } catch (e) {
+  } catch {
     // Silently skip if directory doesn't exist
   }
 
@@ -122,7 +113,7 @@ function findEdgeFunctions(functionsDir = 'supabase/functions') {
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Silently skip if directory doesn't exist
   }
 

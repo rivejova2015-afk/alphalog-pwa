@@ -1,12 +1,16 @@
 // src/lib/push/vapid.client.ts
 // Client-side VAPID helpers for push subscription
 
+export function getVapidPublicKey(): string | null {
+  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null;
+}
+
 export async function subscribeToPush(): Promise<PushSubscription> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     throw new Error('Push notifications not supported');
   }
 
-  const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const vapidPublicKey = getVapidPublicKey();
   if (!vapidPublicKey) {
     throw new Error('VAPID public key not configured');
   }

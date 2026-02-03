@@ -30,7 +30,7 @@ export function safeJsonParse<T = unknown>(
 ): T | undefined {
   try {
     return JSON.parse(json) as T;
-  } catch (err) {
+  } catch {
     return fallback;
   }
 }
@@ -116,7 +116,7 @@ export async function safeTry<T>(
 ): Promise<T | undefined> {
   try {
     return await fn();
-  } catch (err) {
+  } catch {
     return fallback;
   }
 }

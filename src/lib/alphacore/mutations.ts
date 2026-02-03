@@ -75,11 +75,10 @@ export async function createEntity<T extends Record<string, any>>(
   }
 ): Promise<MutationResponse<T>> {
   const mutationId = crypto.randomUUID();
-  const tempId = `temp_${mutationId.slice(0, 8)}`;
   
   try {
     // Determine module from table
-    const module = inferModuleFromTable(table);
+    const moduleName = inferModuleFromTable(table);
     
     // Build metadata
     const metadata: MutationMetadata = {
@@ -87,7 +86,7 @@ export async function createEntity<T extends Record<string, any>>(
       operation: 'create',
       table,
       entityName: tableToEntityName(table),
-      module: module as any,
+      module: moduleName as any,
       timestamp: Date.now(),
       status: 'pending',
       retryCount: 0,
@@ -216,14 +215,14 @@ export async function updateEntity<T extends Record<string, any>>(
   const mutationId = crypto.randomUUID();
   
   try {
-    const module = inferModuleFromTable(table);
+    const moduleName = inferModuleFromTable(table);
     
     const metadata: MutationMetadata = {
       id: mutationId,
       operation: 'update',
       table,
       entityName: tableToEntityName(table),
-      module: module as any,
+      module: moduleName as any,
       timestamp: Date.now(),
       status: 'pending',
       retryCount: 0,
@@ -328,14 +327,14 @@ export async function softDeleteEntity<T extends Record<string, any>>(
   const mutationId = crypto.randomUUID();
   
   try {
-    const module = inferModuleFromTable(table);
+    const moduleName = inferModuleFromTable(table);
     
     const metadata: MutationMetadata = {
       id: mutationId,
       operation: 'delete',
       table,
       entityName: tableToEntityName(table),
-      module: module as any,
+      module: moduleName as any,
       timestamp: Date.now(),
       status: 'pending',
       retryCount: 0,

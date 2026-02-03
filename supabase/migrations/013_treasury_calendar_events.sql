@@ -16,26 +16,23 @@ CREATE TABLE IF NOT EXISTS treasury_calendar_events (
   push_enabled BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMP WITH TIME ZONE NULL,
-  
-  -- Constraints
-  CONSTRAINT treasury_calendar_events_user_account_fk FOREIGN KEY (user_id, account_id) 
-    REFERENCES accounts(user_id, id) ON DELETE CASCADE
+  deleted_at TIMESTAMP WITH TIME ZONE NULL
 );
 
 -- Unique constraint: one event per user+account+date+kind (active only)
-CREATE UNIQUE INDEX idx_treasury_calendar_events_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_treasury_calendar_events_unique 
   ON treasury_calendar_events(user_id, account_id, event_date, kind) 
   WHERE deleted_at IS NULL;
 
 -- Indexes for queries
-CREATE INDEX idx_treasury_calendar_events_user ON treasury_calendar_events(user_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_treasury_calendar_events_account ON treasury_calendar_events(user_id, account_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_treasury_calendar_events_date ON treasury_calendar_events(event_date) WHERE deleted_at IS NULL;
-CREATE INDEX idx_treasury_calendar_events_kind ON treasury_calendar_events(kind) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_calendar_events_user ON treasury_calendar_events(user_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_calendar_events_account ON treasury_calendar_events(user_id, account_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_calendar_events_date ON treasury_calendar_events(event_date) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasury_calendar_events_kind ON treasury_calendar_events(kind) WHERE deleted_at IS NULL;
 
 -- Trigger: update updated_at on INSERT/UPDATE
-CREATE OR REPLACE TRIGGER treasury_calendar_events_updated_at_trigger
+DROP TRIGGER IF EXISTS treasury_calendar_events_updated_at_trigger ON treasury_calendar_events;
+CREATE TRIGGER treasury_calendar_events_updated_at_trigger
 BEFORE UPDATE ON treasury_calendar_events
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
@@ -69,6 +66,7 @@ COMMENT ON COLUMN treasury_configs.last_withdrawal_push_cycle_start IS 'Date of 
 ALTER TABLE treasury_calendar_events ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can only see/modify their own events
+DROP POLICY IF EXISTS "Users can manage own calendar events" ON treasury_calendar_events;
 CREATE POLICY "Users can manage own calendar events" ON treasury_calendar_events
   FOR ALL
   USING (auth.uid() = user_id)

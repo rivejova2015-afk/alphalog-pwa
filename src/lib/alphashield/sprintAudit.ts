@@ -7,7 +7,6 @@ import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import {
   SPRINT_DEFINITIONS,
-  type FileCheck,
   type EndpointCheck,
   type MigrationCheck,
   type SprintDefinition,

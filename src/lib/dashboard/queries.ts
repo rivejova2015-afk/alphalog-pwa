@@ -124,7 +124,6 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
     const drawdown = maxPnl > 0 ? Math.abs(minPnl / maxPnl) * 100 : 0;
 
     // Calculate returns by period (simplified)
-    const now = new Date();
     const totalPnl = tradesList.reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
     
     // For now, show total as all_time; in production, calculate by date range

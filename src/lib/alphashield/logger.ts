@@ -11,11 +11,10 @@
  * - Auto-flush when online
  */
 
-import { sanitize, sanitizeError, sanitizeLogData, sanitizeUrl } from './sanitize';
+import { sanitizeError, sanitizeLogData, sanitizeUrl } from './sanitize';
 import {
   createFingerprint,
   createErrorFingerprint,
-  createTimeBucketedFingerprint,
 } from './fingerprint';
 import {
   enqueueLog,

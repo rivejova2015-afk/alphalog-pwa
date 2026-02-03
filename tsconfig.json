@@ -26,7 +26,10 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "next-env.d.ts",
@@ -44,5 +47,11 @@
     "supabase/functions/**",
     "tests/**",
     "playwright.config.ts"
-  ]
+  ],
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "skipLibCheck": true
+    }
+  }
 }

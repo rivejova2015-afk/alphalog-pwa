@@ -1,5 +1,6 @@
 // src/app/api/terminal/events/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -39,7 +40,7 @@ export async function PATCH(
     const { data, error } = await supabase
       .from("terminal_events")
       .update({
-        name: name !== undefined ? name : existingEvent.name,
+        name: name !== undefined ? encryptText(name) : existingEvent.name,
         impact: impact !== undefined ? impact : existingEvent.impact,
         timestamp_utc: timestamp_utc !== undefined ? timestamp_utc : existingEvent.timestamp_utc,
       })
@@ -55,7 +56,10 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      name: decryptText(data.name),
+    });
   } catch (err: unknown) {
     console.error("Error in PATCH /api/terminal/events/[id]:", err);
     return NextResponse.json(
@@ -67,7 +71,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/terminal/events/{id}
- * Soft-delete calendar event
+ * Hard-delete calendar event
  */
 export async function DELETE(
   request: NextRequest,
@@ -99,8 +103,9 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("terminal_events")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userData.user.id);
 
     if (error) {
       console.error("Error deleting event:", error);

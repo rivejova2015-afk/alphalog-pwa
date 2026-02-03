@@ -1,5 +1,6 @@
 // src/app/api/terminal/evidence/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
+import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -39,8 +40,8 @@ export async function PATCH(
     const { data, error } = await supabase
       .from("terminal_evidence_reports")
       .update({
-        title,
-        content,
+        title: title !== undefined ? encryptText(title) : undefined,
+        content: content !== undefined ? encryptText(content) : undefined,
         instrument_id,
       })
       .eq("id", id)
@@ -55,7 +56,11 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      title: decryptText(data.title),
+      content: decryptText(data.content),
+    });
   } catch (err: any) {
     console.error("Error in PATCH /api/terminal/evidence/[id]:", err);
     return NextResponse.json(
@@ -67,7 +72,7 @@ export async function PATCH(
 
 /**
  * DELETE /api/terminal/evidence/{id}
- * Soft-delete evidence report (cascades to attachments)
+ * Hard-delete evidence report (cascades to attachments + storage)
  */
 export async function DELETE(
   request: NextRequest,
@@ -97,10 +102,46 @@ export async function DELETE(
       );
     }
 
+    const { data: attachments, error: attachmentsError } = await supabase
+      .from("terminal_evidence_attachments")
+      .select("id, path")
+      .eq("report_id", id)
+      .eq("user_id", userData.user.id);
+
+    if (attachmentsError) {
+      console.error("Error fetching attachments:", attachmentsError);
+      return NextResponse.json(
+        { error: "Failed to delete evidence" },
+        { status: 500 }
+      );
+    }
+
+    const attachmentPaths = (attachments || [])
+      .map((att) => att.path)
+      .filter(Boolean) as string[];
+
+    if (attachmentPaths.length > 0) {
+      try {
+        await supabase.storage.from("log_attachments").remove(attachmentPaths);
+      } catch (storageErr) {
+        console.warn("Warning: Failed to delete attachment files:", storageErr);
+      }
+    }
+
+    if (attachments && attachments.length > 0) {
+      const attachmentIds = attachments.map((att) => att.id);
+      await supabase
+        .from("terminal_evidence_attachments")
+        .delete()
+        .in("id", attachmentIds)
+        .eq("user_id", userData.user.id);
+    }
+
     const { error } = await supabase
       .from("terminal_evidence_reports")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userData.user.id);
 
     if (error) {
       console.error("Error deleting evidence:", error);
