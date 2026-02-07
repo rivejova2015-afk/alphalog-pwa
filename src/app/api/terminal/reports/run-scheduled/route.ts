@@ -6,6 +6,14 @@ import { runReportPipeline } from "@/lib/reports/runReport";
 
 const QSTASH_BASE_URL = "https://qstash.upstash.io/v2/schedules";
 
+const normalizeQStashBaseUrl = (value: string) => {
+  const trimmed = value.replace(/\/+$/, "");
+  return trimmed.endsWith("/schedules") ? trimmed : `${trimmed}/schedules`;
+};
+
+const getQStashBaseUrl = () =>
+  normalizeQStashBaseUrl(process.env.QSTASH_BASE_URL || QSTASH_BASE_URL);
+
 const base64UrlEncode = (buffer: Buffer) =>
   buffer
     .toString("base64")
@@ -146,7 +154,7 @@ export async function POST(request: NextRequest) {
     .eq("id", job.id);
 
   if (job.qstash_schedule_id && process.env.QSTASH_TOKEN) {
-    fetch(`${QSTASH_BASE_URL}/${job.qstash_schedule_id}`, {
+    fetch(`${getQStashBaseUrl()}/${job.qstash_schedule_id}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${process.env.QSTASH_TOKEN}`,

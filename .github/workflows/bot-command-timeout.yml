@@ -1,0 +1,23 @@
+name: Bot Command Timeout
+
+on:
+  schedule:
+    # GitHub Actions minimum granularity is typically 5 minutes
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  timeout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call bot-command-timeout
+        env:
+          SUPABASE_FUNCTIONS_BASE_URL: ${{ secrets.SUPABASE_FUNCTIONS_BASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_FUNCTIONS_BASE_URL" ]; then
+            echo "Missing SUPABASE_FUNCTIONS_BASE_URL secret" >&2
+            exit 1
+          fi
+          curl -sS -X POST "$SUPABASE_FUNCTIONS_BASE_URL/bot-command-timeout" \
+            -H "Content-Type: application/json" \
+            -d "{}"

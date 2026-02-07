@@ -1,0 +1,22 @@
+name: Bot Maintenance
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call bot-maintenance
+        env:
+          SUPABASE_FUNCTIONS_BASE_URL: ${{ secrets.SUPABASE_FUNCTIONS_BASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_FUNCTIONS_BASE_URL" ]; then
+            echo "Missing SUPABASE_FUNCTIONS_BASE_URL secret" >&2
+            exit 1
+          fi
+          curl -sS -X POST "$SUPABASE_FUNCTIONS_BASE_URL/bot-maintenance" \
+            -H "Content-Type: application/json" \
+            -d "{}"

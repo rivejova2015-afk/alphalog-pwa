@@ -178,12 +178,14 @@ export async function DELETE(
       return unauthorized();
     }
 
+    const userId = userData.user.id;
+
     // Verify account exists and belongs to user
     const { data: account, error: getError } = await supabase
       .from("accounts")
       .select("id")
       .eq("id", params.id)
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .single();
 
     if (getError || !account) {
@@ -197,7 +199,7 @@ export async function DELETE(
       .from("trades")
       .select("id, screenshot_path")
       .eq("account_id", params.id)
-      .eq("user_id", userData.user.id);
+      .eq("user_id", userId);
 
     if (tradesError) {
       console.error("Error fetching trades for account delete:", tradesError);
@@ -215,7 +217,7 @@ export async function DELETE(
     let evidenceQuery = supabase
       .from("tv_analysis_evidence")
       .select("id, image_path")
-      .eq("user_id", userData.user.id);
+      .eq("user_id", userId);
 
     if (tradeIds.length > 0) {
       evidenceQuery = evidenceQuery.or(
@@ -227,7 +229,11 @@ export async function DELETE(
 
     const { data: evidenceRows, error: evidenceError } = await evidenceQuery;
 
-    if (evidenceError) {
+    const isMissingTable = (error: any) =>
+      error?.code === "42P01" ||
+      (typeof error?.message === "string" && error.message.toLowerCase().includes("does not exist"));
+
+    if (evidenceError && !isMissingTable(evidenceError)) {
       console.error("Error fetching evidence for account delete:", evidenceError);
       return NextResponse.json(
         { error: "Failed to delete account evidence" },
@@ -253,7 +259,51 @@ export async function DELETE(
         .from("tv_analysis_evidence")
         .delete()
         .in("id", evidenceIds)
-        .eq("user_id", userData.user.id);
+        .eq("user_id", userId);
+    }
+
+    let tradeEvidenceQuery = supabase
+      .from("trade_evidence")
+      .select("id, file_path")
+      .eq("user_id", userId);
+
+    if (tradeIds.length > 0) {
+      tradeEvidenceQuery = tradeEvidenceQuery.or(
+        `account_id.eq.${params.id},trade_id.in.(${tradeIds.join(",")})`
+      );
+    } else {
+      tradeEvidenceQuery = tradeEvidenceQuery.eq("account_id", params.id);
+    }
+
+    const { data: tradeEvidenceRows, error: tradeEvidenceError } = await tradeEvidenceQuery;
+
+    if (tradeEvidenceError && !isMissingTable(tradeEvidenceError)) {
+      console.error("Error fetching trade_evidence for account delete:", tradeEvidenceError);
+      return NextResponse.json(
+        { error: "Failed to delete account evidence" },
+        { status: 500 }
+      );
+    }
+
+    const tradeEvidencePaths = (tradeEvidenceRows || [])
+      .map((row: { file_path?: string | null }) => row.file_path)
+      .filter(Boolean) as string[];
+
+    if (tradeEvidencePaths.length > 0) {
+      try {
+        await supabase.storage.from("log_attachments").remove(tradeEvidencePaths);
+      } catch (storageErr) {
+        console.warn("Warning: Failed to delete trade_evidence files:", storageErr);
+      }
+    }
+
+    if (tradeEvidenceRows && tradeEvidenceRows.length > 0) {
+      const tradeEvidenceIds = tradeEvidenceRows.map((row: { id: string }) => row.id);
+      await supabase
+        .from("trade_evidence")
+        .delete()
+        .in("id", tradeEvidenceIds)
+        .eq("user_id", userId);
     }
 
     if (screenshotPaths.length > 0) {
@@ -269,14 +319,14 @@ export async function DELETE(
         .from("trades")
         .delete()
         .in("id", tradeIds)
-        .eq("user_id", userData.user.id);
+        .eq("user_id", userId);
     }
 
     const { error: deleteError } = await supabase
       .from("accounts")
       .delete()
       .eq("id", params.id)
-      .eq("user_id", userData.user.id);
+      .eq("user_id", userId);
 
     if (deleteError) {
       console.error("Error deleting account:", deleteError);

@@ -29,6 +29,17 @@ export default function AuthPage() {
   }, [mode]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedMode = params.get("mode");
+    if (requestedMode === "signup") {
+      setMode("signup");
+    } else if (requestedMode === "login") {
+      setMode("login");
+    }
+  }, []);
+
+  useEffect(() => {
     if (!hcaptchaSiteKey || !captchaRef.current) return;
 
     const renderCaptcha = () => {

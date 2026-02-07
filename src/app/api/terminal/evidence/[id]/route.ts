@@ -3,6 +3,24 @@ import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
+const safeDecrypt = (value?: string | null) => {
+  try {
+    return decryptText(value);
+  } catch (err) {
+    console.warn("[Terminal] Failed to decrypt evidence:", err);
+    return value ?? "";
+  }
+};
+
+const safeEncrypt = (value: string) => {
+  try {
+    return encryptText(value);
+  } catch (err) {
+    console.error("[Terminal] Failed to encrypt evidence:", err);
+    return null;
+  }
+};
+
 /**
  * PATCH /api/terminal/evidence/{id}
  * Update evidence report
@@ -37,11 +55,21 @@ export async function PATCH(
       );
     }
 
+    const encryptedTitle = title !== undefined ? safeEncrypt(title) : undefined;
+    const encryptedContent = content !== undefined ? safeEncrypt(content) : undefined;
+
+    if ((title !== undefined && !encryptedTitle) || (content !== undefined && !encryptedContent)) {
+      return NextResponse.json(
+        { error: "Configuracion de seguridad pendiente" },
+        { status: 500 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("terminal_evidence_reports")
       .update({
-        title: title !== undefined ? encryptText(title) : undefined,
-        content: content !== undefined ? encryptText(content) : undefined,
+        title: encryptedTitle,
+        content: encryptedContent,
         instrument_id,
       })
       .eq("id", id)
@@ -58,8 +86,8 @@ export async function PATCH(
 
     return NextResponse.json({
       ...data,
-      title: decryptText(data.title),
-      content: decryptText(data.content),
+      title: safeDecrypt(data.title),
+      content: safeDecrypt(data.content),
     });
   } catch (err: any) {
     console.error("Error in PATCH /api/terminal/evidence/[id]:", err);

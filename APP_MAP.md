@@ -193,6 +193,18 @@ Fuente de verdad: pantallas, módulos, componentes y flujos principales.
 4. Futuros Real
 5. Opciones
 
+### TradeHub > Accounts > AAB (Sprint UPDATE_09)
+**Ruta**: `/dashboard/tradehub/accounts/aab`  
+**Descripción**: Accounts Architect Bot (AAB). Subpágina extra dentro de TradeHub/Accounts. No reemplaza la vista actual.
+
+**Funcionalidades**:
+- Toggle Lista/Árbol
+- Árbol multi-nivel con links SOLID/SHADOW
+- Edición de risk_pct por nodo
+- Versionado + snapshots + rollback por CopyGroup
+- Timeline de eventos
+- Experimental flags (scaffolding, no afecta replicación)
+
 ### TradeHub > New Trades Log (Sprint 4.3)
 **Ruta**: `/dashboard/tradehub` (tab: 📊 New Trades Log)  
 **Descripción**: Log de operaciones de trading (trades) con screenshot opcional y relación a setups/cuentas.

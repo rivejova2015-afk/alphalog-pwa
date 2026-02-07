@@ -36,8 +36,24 @@ export async function POST(request: NextRequest) {
       )
     );
 
+    const anyFailed = results.some((result) => result.outcome === "failed");
+    const anyDone = results.some((result) => result.outcome === "done");
+    const anyNoChanges = results.some((result) => result.outcome === "done_no_changes");
+
+    if (!anyDone && !anyNoChanges) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "No se pudo generar el reporte.",
+          assets: results,
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
+      status: anyFailed ? "partial" : "ok",
       assets: results,
     });
   } catch (error) {

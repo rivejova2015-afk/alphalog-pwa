@@ -12,7 +12,9 @@ export async function subscribeToPush(): Promise<PushSubscription> {
 
   const vapidPublicKey = getVapidPublicKey();
   if (!vapidPublicKey) {
-    throw new Error('VAPID public key not configured');
+    const error = new Error('Notificaciones no disponibles (configuración pendiente).');
+    (error as Error & { code?: string }).code = 'VAPID_MISSING';
+    throw error;
   }
 
   // Register or get existing service worker

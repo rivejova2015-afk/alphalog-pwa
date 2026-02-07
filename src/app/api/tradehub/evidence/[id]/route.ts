@@ -2,6 +2,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+const isMissingTable = (error: any) =>
+  error?.code === "42P01" ||
+  (typeof error?.message === "string" &&
+    error.message.toLowerCase().includes("does not exist"));
+
 /**
  * PATCH /api/tradehub/evidence/{id}
  * Update evidence validation status
@@ -29,12 +34,49 @@ export async function PATCH(
       );
     }
 
-    // Verify ownership
+    const userId = userData.user.id;
+
+    const { data: tradeEvidence, error: tradeError } = await supabase
+      .from("trade_evidence")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (tradeError && !isMissingTable(tradeError)) {
+      console.error("Error fetching trade_evidence:", tradeError);
+      return NextResponse.json(
+        { error: "Failed to update evidence" },
+        { status: 500 }
+      );
+    }
+
+    if (tradeEvidence) {
+      const { data, error } = await supabase
+        .from("trade_evidence")
+        .update({ validation_status })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating trade_evidence:", error);
+        return NextResponse.json(
+          { error: "Failed to update evidence" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(data);
+    }
+
+    // Fallback legacy evidence
     const { data: existingEvidence } = await supabase
       .from("tv_analysis_evidence")
       .select("user_id")
       .eq("id", id)
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .single();
 
     if (!existingEvidence) {
@@ -48,6 +90,7 @@ export async function PATCH(
       .from("tv_analysis_evidence")
       .update({ validation_status })
       .eq("id", id)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -86,13 +129,55 @@ export async function DELETE(
     }
 
     const { id } = params;
+    const userId = userData.user.id;
 
-    // Verify ownership
+    const { data: tradeEvidence, error: tradeError } = await supabase
+      .from("trade_evidence")
+      .select("id, file_path")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (tradeError && !isMissingTable(tradeError)) {
+      console.error("Error fetching trade_evidence:", tradeError);
+      return NextResponse.json(
+        { error: "Failed to delete evidence" },
+        { status: 500 }
+      );
+    }
+
+    if (tradeEvidence) {
+      if (tradeEvidence.file_path) {
+        try {
+          await supabase.storage.from("log_attachments").remove([tradeEvidence.file_path]);
+        } catch (storageErr) {
+          console.warn("Warning: Failed to delete evidence file:", storageErr);
+        }
+      }
+
+      const { error } = await supabase
+        .from("trade_evidence")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Error deleting trade_evidence:", error);
+        return NextResponse.json(
+          { error: "Failed to delete evidence" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Legacy evidence fallback
     const { data: existingEvidence } = await supabase
       .from("tv_analysis_evidence")
       .select("user_id, image_path")
       .eq("id", id)
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .single();
 
     if (!existingEvidence) {
@@ -114,7 +199,7 @@ export async function DELETE(
       .from("tv_analysis_evidence")
       .delete()
       .eq("id", id)
-      .eq("user_id", userData.user.id);
+      .eq("user_id", userId);
 
     if (error) {
       console.error("Error deleting evidence:", error);

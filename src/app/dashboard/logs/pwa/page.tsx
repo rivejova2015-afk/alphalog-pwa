@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { getPushSubscription, requestNotificationPermission, subscribeToPush } from "@/lib/push/vapid.client";
+import { getPushSubscription, requestNotificationPermission, subscribeToPush, getVapidPublicKey } from "@/lib/push/vapid.client";
 
 export default function PWADiagnosticsPage() {
   const [swReady, setSwReady] = useState<boolean>(false);
@@ -43,6 +43,10 @@ export default function PWADiagnosticsPage() {
   async function handleSubscribe() {
     try {
       setLoading(true);
+      if (!getVapidPublicKey()) {
+        setMessage("Notificaciones no disponibles (configuración pendiente).");
+        return;
+      }
       const sub = await subscribeToPush();
       setSubscription(sub);
       setMessage("Subscribed locally. Save via API if implemented.");

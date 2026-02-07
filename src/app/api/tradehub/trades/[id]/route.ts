@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
+import { mirrorTradeOnUpdate } from "@/lib/copygroups/mirroring";
 
 /**
  * PATCH /api/tradehub/trades/{id}
@@ -19,29 +20,56 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = userData.user.id;
     const { id } = params;
     const body = await request.json();
     const { restore, ...updateData } = body;
 
     // Verify ownership
-    const { data: existingTrade } = await supabase
+    const { data: existingTrade, error: tradeError } = await supabase
       .from("trades")
-      .select("user_id, symbol, direction, status, entry_date, exit_date, entry_price, exit_price, lots, stop_loss_price, take_profit_price, pnl, pnl_percent, notes, setup_id, is_featured_in_report")
+      .select("id, user_id, account_id, symbol, direction, status, entry_date, exit_date, entry_price, exit_price, lots, stop_loss_price, take_profit_price, pnl, pnl_percent, notes, setup_id, is_featured_in_report")
       .eq("id", id)
+      .eq("user_id", userId)
       .single();
 
-    if (!existingTrade) {
+    if (tradeError || !existingTrade) {
       return NextResponse.json(
         { error: "Trade not found" },
         { status: 404 }
       );
     }
 
-    if (existingTrade.user_id !== userData.user.id) {
-      return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
-      );
+    if (updateData.account_id) {
+      const { data: account, error: accountError } = await supabase
+        .from("accounts")
+        .select("id")
+        .eq("id", updateData.account_id)
+        .eq("user_id", userId)
+        .single();
+
+      if (accountError || !account) {
+        return NextResponse.json(
+          { error: "Account not found" },
+          { status: 404 }
+        );
+      }
+    }
+
+    if (updateData.setup_id) {
+      const { data: setup, error: setupError } = await supabase
+        .from("setups")
+        .select("id")
+        .eq("id", updateData.setup_id)
+        .eq("user_id", userId)
+        .single();
+
+      if (setupError || !setup) {
+        return NextResponse.json(
+          { error: "Setup not found" },
+          { status: 404 }
+        );
+      }
     }
 
     let updates: any = {};
@@ -52,6 +80,7 @@ export async function PATCH(
     } else {
       // Regular update
       updates = {
+        account_id: updateData.account_id !== undefined ? updateData.account_id : existingTrade.account_id,
         symbol: updateData.symbol !== undefined ? updateData.symbol : existingTrade.symbol,
         direction: updateData.direction !== undefined ? updateData.direction : existingTrade.direction,
         status: updateData.status !== undefined ? updateData.status : existingTrade.status,
@@ -74,7 +103,7 @@ export async function PATCH(
       .from("trades")
       .update(updates)
       .eq("id", id)
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -84,6 +113,18 @@ export async function PATCH(
         { error: "Failed to update trade" },
         { status: 500 }
       );
+    }
+
+    if (!restore) {
+      try {
+        await mirrorTradeOnUpdate({
+          supabase,
+          masterTrade: data,
+          userId,
+        });
+      } catch (mirrorError) {
+        console.warn("[TradeHub] Mirroring update failed:", mirrorError);
+      }
     }
 
     return NextResponse.json({
@@ -115,36 +156,35 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = userData.user.id;
     const { id } = params;
 
     // Verify ownership
-    const { data: existingTrade } = await supabase
+    const { data: existingTrade, error: tradeError } = await supabase
       .from("trades")
       .select("user_id, screenshot_path")
       .eq("id", id)
+      .eq("user_id", userId)
       .single();
 
-    if (!existingTrade) {
+    if (tradeError || !existingTrade) {
       return NextResponse.json(
         { error: "Trade not found" },
         { status: 404 }
       );
     }
 
-    if (existingTrade.user_id !== userData.user.id) {
-      return NextResponse.json(
-        { error: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    const isMissingTable = (error: any) =>
+      error?.code === "42P01" ||
+      (typeof error?.message === "string" && error.message.toLowerCase().includes("does not exist"));
 
     const { data: evidenceRows, error: evidenceError } = await supabase
       .from("tv_analysis_evidence")
       .select("id, image_path")
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .eq("trade_id", id);
 
-    if (evidenceError) {
+    if (evidenceError && !isMissingTable(evidenceError)) {
       console.error("Error fetching evidence for trade delete:", evidenceError);
       return NextResponse.json(
         { error: "Failed to delete trade evidence" },
@@ -170,7 +210,42 @@ export async function DELETE(
         .from("tv_analysis_evidence")
         .delete()
         .in("id", evidenceIds)
-        .eq("user_id", userData.user.id);
+        .eq("user_id", userId);
+    }
+
+    const { data: reportEvidenceRows, error: reportEvidenceError } = await supabase
+      .from("trade_evidence")
+      .select("id, file_path")
+      .eq("user_id", userId)
+      .eq("trade_id", id);
+
+    if (reportEvidenceError && !isMissingTable(reportEvidenceError)) {
+      console.error("Error fetching trade_evidence for trade delete:", reportEvidenceError);
+      return NextResponse.json(
+        { error: "Failed to delete trade evidence" },
+        { status: 500 }
+      );
+    }
+
+    const reportPaths = (reportEvidenceRows || [])
+      .map((row: { file_path?: string | null }) => row.file_path)
+      .filter(Boolean) as string[];
+
+    if (reportPaths.length > 0) {
+      try {
+        await supabase.storage.from("log_attachments").remove(reportPaths);
+      } catch (storageErr) {
+        console.warn("Warning: Failed to delete report evidence files:", storageErr);
+      }
+    }
+
+    if (reportEvidenceRows && reportEvidenceRows.length > 0) {
+      const reportIds = reportEvidenceRows.map((row: { id: string }) => row.id);
+      await supabase
+        .from("trade_evidence")
+        .delete()
+        .in("id", reportIds)
+        .eq("user_id", userId);
     }
 
     if (existingTrade?.screenshot_path) {
@@ -185,7 +260,7 @@ export async function DELETE(
       .from("trades")
       .delete()
       .eq("id", id)
-      .eq("user_id", userData.user.id);
+      .eq("user_id", userId);
 
     if (error) {
       console.error("Error deleting trade:", error);

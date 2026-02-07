@@ -4,6 +4,92 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 
+const isMissingTable = (error: any) =>
+  error?.code === "42P01" ||
+  (typeof error?.message === "string" &&
+    error.message.toLowerCase().includes("does not exist"));
+
+const safeDecrypt = (value?: string | null) => {
+  try {
+    return decryptText(value);
+  } catch (err) {
+    console.warn("[TradeHub] Failed to decrypt evidence text:", err);
+    return value ?? null;
+  }
+};
+
+type EvidenceRow = {
+  id: string;
+  user_notes?: string | null;
+  report_text?: string | null;
+  title?: string | null;
+  image_path?: string | null;
+  file_path?: string | null;
+  mime_type?: string | null;
+  validation_status: "needs_review" | "valid" | "invalid";
+  trade_id?: string | null;
+  account_id?: string | null;
+  captured_at?: string;
+  created_at?: string;
+  account?: { id: string; name: string } | null;
+  trade?: { id: string; symbol: string; direction: string; setup_id?: string | null } | null;
+};
+
+type EvidenceJoinRow = EvidenceRow & {
+  account?: { id: string; name: string } | { id: string; name: string }[] | null;
+  trade?: { id: string; symbol: string; direction: string; setup_id?: string | null } | {
+    id: string;
+    symbol: string;
+    direction: string;
+    setup_id?: string | null;
+  }[] | null;
+};
+
+const normalizeEvidenceRow = (row: EvidenceJoinRow): EvidenceRow => {
+  const account = Array.isArray(row.account) ? row.account[0] ?? null : row.account ?? null;
+  const trade = Array.isArray(row.trade) ? row.trade[0] ?? null : row.trade ?? null;
+
+  return {
+    ...row,
+    account,
+    trade,
+  };
+};
+
+const mapTradeEvidence = (row: EvidenceRow) => ({
+  id: row.id,
+  title: row.title || null,
+  user_notes: row.report_text || null,
+  image_path: row.file_path || null,
+  file_path: row.file_path || null,
+  mime_type: row.mime_type || null,
+  validation_status: row.validation_status,
+  trade_id: row.trade_id ?? null,
+  account_id: row.account_id ?? null,
+  captured_at: row.created_at || row.captured_at || null,
+  created_at: row.created_at || row.captured_at || null,
+  account: row.account ?? null,
+  trade: row.trade ?? null,
+  source: "trade_evidence",
+});
+
+const mapLegacyEvidence = (row: EvidenceRow) => ({
+  id: row.id,
+  title: safeDecrypt(row.user_notes) || null,
+  user_notes: safeDecrypt(row.user_notes),
+  image_path: row.image_path || null,
+  file_path: row.image_path || null,
+  mime_type: row.mime_type || null,
+  validation_status: row.validation_status,
+  trade_id: row.trade_id ?? null,
+  account_id: row.account_id ?? null,
+  captured_at: row.captured_at || row.created_at || null,
+  created_at: row.created_at || row.captured_at || null,
+  account: row.account ?? null,
+  trade: row.trade ?? null,
+  source: "tv_analysis_evidence",
+});
+
 /**
  * GET /api/tradehub/evidence
  * Returns evidence for authenticated user, optionally filtered by setup or range
@@ -42,47 +128,81 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    let query = supabase
+    const tradeEvidenceQuery = supabase
+      .from("trade_evidence")
+      .select("id, title, report_text, file_path, mime_type, validation_status, trade_id, account_id, created_at, account:accounts(id, name), trade:trades(id, symbol, direction, setup_id)")
+      .eq("user_id", userData.user.id)
+      .is("deleted_at", null);
+
+    if (setupId) {
+      tradeEvidenceQuery.or(`trade.setup_id.eq.${setupId}`);
+    }
+    if (dateFrom) {
+      tradeEvidenceQuery.gte("created_at", dateFrom);
+    }
+
+    let tradeEvidenceRows: EvidenceRow[] = [];
+    const { data: tradeEvidenceData, error: tradeEvidenceError } = await tradeEvidenceQuery.order(
+      "created_at",
+      { ascending: false }
+    );
+
+    if (tradeEvidenceError && !isMissingTable(tradeEvidenceError)) {
+      console.error("Error fetching trade_evidence:", tradeEvidenceError);
+      return NextResponse.json(
+        { error: "Failed to fetch evidence" },
+        { status: 500 }
+      );
+    }
+    if (!tradeEvidenceError && tradeEvidenceData) {
+      tradeEvidenceRows = tradeEvidenceData.map((row) => normalizeEvidenceRow(row as EvidenceJoinRow));
+    }
+
+    let legacyRows: EvidenceRow[] = [];
+    let legacyQuery = supabase
       .from("tv_analysis_evidence")
       .select("*, account:accounts(id, name), trade:trades(id, symbol, direction, setup_id)")
       .eq("user_id", userData.user.id)
       .is("deleted_at", null);
 
-    // Filter by setup if provided
     if (setupId) {
-      // Get evidence directly for this setup, OR evidence from trades of this setup
-      query = query.or(`setup_id.eq.${setupId},trade.setup_id.eq.${setupId}`);
+      legacyQuery = legacyQuery.or(`trade.setup_id.eq.${setupId}`);
     }
 
-    // Filter by date range if provided
     if (dateFrom) {
-      query = query.gte("captured_at", dateFrom);
+      legacyQuery = legacyQuery.gte("captured_at", dateFrom);
     }
 
-    const { data, error } = await query.order("captured_at", { ascending: false });
+    const { data: legacyData, error: legacyError } = await legacyQuery.order("captured_at", {
+      ascending: false,
+    });
 
-    if (error) {
-      console.error("Error fetching evidence:", error);
+    if (legacyError && !isMissingTable(legacyError)) {
+      console.error("Error fetching legacy evidence:", legacyError);
       return NextResponse.json(
         { error: "Failed to fetch evidence" },
         { status: 500 }
       );
     }
 
-    // Deduplicate by id
-    const seen = new Set<string>();
-    const dedupedData = (data || []).filter((ev: { id: string }) => {
-      if (seen.has(ev.id)) return false;
-      seen.add(ev.id);
-      return true;
+    if (!legacyError && legacyData) {
+      legacyRows = legacyData.map((row) => normalizeEvidenceRow(row as EvidenceJoinRow));
+    }
+
+    const combined = [
+      ...tradeEvidenceRows.map(mapTradeEvidence),
+      ...legacyRows.map(mapLegacyEvidence),
+    ];
+
+    const deduped = Array.from(
+      new Map(combined.map((item) => [item.id, item])).values()
+    ).sort((a, b) => {
+      const aDate = new Date(a.captured_at || a.created_at || 0).getTime();
+      const bDate = new Date(b.captured_at || b.created_at || 0).getTime();
+      return bDate - aDate;
     });
 
-    const decrypted = dedupedData.map((item: any) => ({
-      ...item,
-      user_notes: decryptText(item.user_notes),
-    }));
-
-    return NextResponse.json(decrypted);
+    return NextResponse.json(deduped);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/evidence:", err);
     return NextResponse.json(
@@ -107,7 +227,7 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
-    const notes = formData.get("notes") as string;
+    const notes = (formData.get("notes") as string) || "";
     const accountId = formData.get("account_id") as string;
     const tradeId = formData.get("trade_id") as string;
     const capturedAt = formData.get("captured_at") as string;
@@ -198,14 +318,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert evidence record
+    const reportTextRaw = notes?.trim() || "";
+    const reportText =
+      reportTextRaw || `Evidencia sin notas (${new Date(capturedAt).toLocaleDateString("es-ES")})`;
+    const title =
+      reportTextRaw?.slice(0, 120) || file.name || "Evidencia";
+
+    const tradeEvidenceInsert = await supabase
+      .from("trade_evidence")
+      .insert({
+        user_id: userData.user.id,
+        title,
+        report_text: reportText,
+        file_path: safePath,
+        mime_type: file.type || null,
+        size_bytes: file.size || null,
+        trade_id: tradeId || null,
+        account_id: accountId || null,
+        created_at: new Date(capturedAt).toISOString(),
+      })
+      .select("id, title, report_text, file_path, mime_type, validation_status, trade_id, account_id, created_at")
+      .single();
+
+    if (tradeEvidenceInsert.error && !isMissingTable(tradeEvidenceInsert.error)) {
+      console.error("Error inserting trade_evidence:", tradeEvidenceInsert.error);
+      await supabase.storage.from("log_attachments").remove([safePath]);
+      return NextResponse.json(
+        { error: "Failed to save evidence" },
+        { status: 500 }
+      );
+    }
+
+    if (!tradeEvidenceInsert.error && tradeEvidenceInsert.data) {
+      return NextResponse.json(mapTradeEvidence(tradeEvidenceInsert.data as EvidenceRow));
+    }
+
+    let encryptedNotes: string | null = null;
+    try {
+      encryptedNotes = encryptText(notes) || null;
+    } catch (err) {
+      console.error("Error encrypting notes:", err);
+      await supabase.storage.from("log_attachments").remove([safePath]);
+      return NextResponse.json(
+        { error: "Configuración de seguridad pendiente" },
+        { status: 500 }
+      );
+    }
+
+    // Insert legacy evidence record
     const { data, error: insertError } = await supabase
       .from("tv_analysis_evidence")
       .insert({
         user_id: userData.user.id,
         image_path: safePath,
         captured_at: new Date(capturedAt).toISOString(),
-        user_notes: encryptText(notes) || null,
+        user_notes: encryptedNotes,
         trade_id: tradeId || null,
         account_id: accountId || null,
         validation_status: "needs_review",
@@ -223,10 +390,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      ...data,
-      user_notes: decryptText(data.user_notes),
-    });
+    return NextResponse.json(mapLegacyEvidence(data as EvidenceRow));
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/evidence:", err);
     return NextResponse.json(

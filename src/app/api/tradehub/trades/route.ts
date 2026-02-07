@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
+import { mirrorTradeOnCreate } from "@/lib/copygroups/mirroring";
 
 /**
  * GET /api/tradehub/trades
@@ -224,6 +225,16 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create trade" },
         { status: 500 }
       );
+    }
+
+    try {
+      await mirrorTradeOnCreate({
+        supabase,
+        masterTrade: data,
+        userId: userData.user.id,
+      });
+    } catch (mirrorError) {
+      console.warn("[TradeHub] Mirroring failed:", mirrorError);
     }
 
     return NextResponse.json({

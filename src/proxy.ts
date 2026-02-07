@@ -9,9 +9,14 @@ import { NextResponse, type NextRequest } from "next/server";
  * IMPORTANT: Middleware IS allowed to modify cookies via NextResponse.
  * This is where we safely handle auth session updates.
  */
-export async function proxy(request: NextRequest) {
+type ProxyOptions = {
+  requireAuth?: boolean;
+  redirectTo?: string;
+};
+
+export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
   const response = NextResponse.next();
-  void request;
+  const pathname = request.nextUrl.pathname;
 
   try {
     // Lazy import to prevent build-time env evaluation
@@ -39,7 +44,14 @@ export async function proxy(request: NextRequest) {
     );
 
     // Validate/refresh session (this may update cookies)
-    await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getUser();
+
+    if (options.requireAuth && (error || !data?.user)) {
+      const redirectPath = options.redirectTo ?? "/auth";
+      const redirectUrl = new URL(redirectPath, request.url);
+      redirectUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(redirectUrl);
+    }
   } catch (error) {
     // Log but don't fail: auth is optional for public routes
     console.debug("[Proxy] Auth check failed (optional):", error instanceof Error ? error.message : error);

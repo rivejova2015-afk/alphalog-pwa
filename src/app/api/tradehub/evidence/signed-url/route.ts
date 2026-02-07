@@ -2,6 +2,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+const isMissingTable = (error: any) =>
+  error?.code === "42P01" ||
+  (typeof error?.message === "string" &&
+    error.message.toLowerCase().includes("does not exist"));
+
 /**
  * GET /api/tradehub/evidence/signed-url?id=<evidence_id>
  * Generate signed URL for evidence image preview (60s validity)
@@ -25,12 +30,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify ownership and get image_path
+    const userId = userData.user.id;
+
+    const { data: tradeEvidence, error: tradeError } = await supabase
+      .from("trade_evidence")
+      .select("user_id, file_path")
+      .eq("id", evidenceId)
+      .eq("user_id", userId)
+      .eq("deleted_at", null)
+      .single();
+
+    if (tradeError && !isMissingTable(tradeError)) {
+      console.error("Error fetching trade_evidence:", tradeError);
+      return NextResponse.json(
+        { error: "Failed to generate signed URL" },
+        { status: 500 }
+      );
+    }
+
+    if (tradeEvidence?.file_path) {
+      const { data: signedUrl, error: urlError } = await supabase.storage
+        .from("log_attachments")
+        .createSignedUrl(tradeEvidence.file_path, 60);
+
+      if (urlError) {
+        console.error("Error generating signed URL:", urlError);
+        return NextResponse.json(
+          { error: "Failed to generate signed URL" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ signedUrl: signedUrl.signedUrl });
+    }
+
+    // Verify ownership and get image_path (legacy)
     const { data: evidence, error: fetchError } = await supabase
       .from("tv_analysis_evidence")
       .select("user_id, image_path")
       .eq("id", evidenceId)
-      .eq("user_id", userData.user.id)
+      .eq("user_id", userId)
       .eq("deleted_at", null)
       .single();
 

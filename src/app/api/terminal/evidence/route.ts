@@ -3,6 +3,24 @@ import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 
+const safeDecrypt = (value?: string | null) => {
+  try {
+    return decryptText(value);
+  } catch (err) {
+    console.warn("[Terminal] Failed to decrypt evidence:", err);
+    return value ?? "";
+  }
+};
+
+const safeEncrypt = (value: string) => {
+  try {
+    return encryptText(value);
+  } catch (err) {
+    console.error("[Terminal] Failed to encrypt evidence:", err);
+    return null;
+  }
+};
+
 /**
  * GET /api/terminal/evidence
  * Returns all evidence reports for user
@@ -33,8 +51,8 @@ export async function GET(request: NextRequest) {
 
     const decrypted = (data || []).map((report) => ({
       ...report,
-      title: decryptText(report.title),
-      content: decryptText(report.content),
+      title: safeDecrypt(report.title),
+      content: safeDecrypt(report.content),
     }));
 
     return NextResponse.json(decrypted);
@@ -70,13 +88,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const encryptedTitle = safeEncrypt(title);
+    const encryptedContent = safeEncrypt(content);
+    if (!encryptedTitle || !encryptedContent) {
+      return NextResponse.json(
+        { error: "Configuracion de seguridad pendiente" },
+        { status: 500 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("terminal_evidence_reports")
       .insert([
         {
           user_id: userData.user.id,
-          title: encryptText(title),
-          content: encryptText(content),
+          title: encryptedTitle,
+          content: encryptedContent,
           instrument_id,
         },
       ])
@@ -93,8 +120,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ...data,
-      title: decryptText(data.title),
-      content: decryptText(data.content),
+      title: safeDecrypt(data.title),
+      content: safeDecrypt(data.content),
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/evidence:", err);

@@ -25,6 +25,8 @@ export type RunReportResult = {
   reportId?: string;
   relevantCount: number;
   newCount: number;
+  incomplete?: boolean;
+  incompleteReasons?: string[];
 };
 
 const buildReport = (asset: Asset, items: ScoredNewsItem[]): ReportBuild => {
@@ -111,10 +113,12 @@ export const runReportPipeline = async ({
         outcome: "done_no_changes",
         relevantCount: relevantIds.length,
         newCount: 0,
+        incomplete: false,
+        incompleteReasons: [],
       };
     }
 
-    const report = buildReport(asset, relevant);
+    const report = buildReport(asset, scored);
     const instrumentId = await getInstrumentId(supabase, asset);
     const { reportId } = await saveReportEvidence({
       userId,
@@ -144,6 +148,8 @@ export const runReportPipeline = async ({
       reportId,
       relevantCount: report.relevantItemIds.length,
       newCount: newItems.length,
+      incomplete: report.incomplete,
+      incompleteReasons: report.incompleteReasons,
     };
   } catch (error) {
     reportLog.failure(`Fallo reporte ${asset}`, error, { asset, userId });
@@ -152,6 +158,8 @@ export const runReportPipeline = async ({
       outcome: "failed",
       relevantCount: 0,
       newCount: 0,
+      incomplete: false,
+      incompleteReasons: [],
     };
   }
 };

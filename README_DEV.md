@@ -10,12 +10,19 @@ Funciones nuevas:
 - /bot-settings-effective (GET)
 - /bot-ack (POST)
 - /bot-command-timeout (POST cron)
+- /bot-maintenance (POST cron)
 
 Variables de entorno (configurar en Supabase):
 - SUPABASE_URL
 - SUPABASE_SERVICE_ROLE_KEY
 - ALPHALOG_PUSH_NOTIFY_URL (opcional, ej: https://YOUR-ALPHALOG-DOMAIN/api/push/notify-user)
 - ALPHALOG_PUSH_NOTIFY_TOKEN (opcional)
+
+## Supabase Hardening (recomendado)
+- Aplicar migración: supabase/migrations/023_bot_control_hardening.sql
+- Cron:
+	- /bot-command-timeout cada 1 min (modo estricto)
+	- /bot-maintenance cada 15 min (offline + limpieza)
 
 ## Bot Control UI
 Ruta: /dashboard/bot-control

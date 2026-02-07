@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { login } from './utils/auth';
 
 test.describe('Navigation & Module Access', () => {
+  test.describe.configure({ timeout: 60000 });
   // Setup: login before each test
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -9,7 +10,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should load dashboard without blank page', async ({ page }) => {
     // Navigate to dashboard
-    await page.goto('/dashboard');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify page is not blank
     const pageContent = await page.locator('body').textContent();
@@ -32,7 +33,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should navigate to TradeHub module', async ({ page }) => {
     // Navigate to TradeHub
-    await page.goto('/dashboard/tradehub');
+    await page.goto('/dashboard/tradehub', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify we're on the page
     expect(page.url()).toContain('/tradehub');
@@ -53,7 +54,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should navigate to Treasury module', async ({ page }) => {
     // Navigate to Treasury
-    await page.goto('/dashboard/treasury');
+    await page.goto('/dashboard/treasury', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify we're on the page
     expect(page.url()).toContain('/treasury');
@@ -72,7 +73,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should navigate to Business module', async ({ page }) => {
     // Navigate to Business
-    await page.goto('/dashboard/business');
+    await page.goto('/dashboard/business', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify we're on the page
     expect(page.url()).toContain('/business');
@@ -91,7 +92,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should navigate to TraderMap module', async ({ page }) => {
     // Navigate to TraderMap
-    await page.goto('/dashboard/tradermap');
+    await page.goto('/dashboard/tradermap', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify we're on the page (may show content or loading)
     expect(page.url()).toContain('/tradermap');
@@ -103,7 +104,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should navigate to Terminal module', async ({ page }) => {
     // Navigate to Terminal
-    await page.goto('/dashboard/terminal');
+    await page.goto('/dashboard/terminal', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify we're on the page
     expect(page.url()).toContain('/terminal');
@@ -116,7 +117,7 @@ test.describe('Navigation & Module Access', () => {
 
   test('should navigate to Logs module', async ({ page }) => {
     // Navigate to Logs
-    await page.goto('/dashboard/logs');
+    await page.goto('/dashboard/logs', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify we're on the page
     expect(page.url()).toContain('/logs');

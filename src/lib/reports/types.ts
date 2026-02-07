@@ -5,6 +5,8 @@ export type ReportSection = {
   bullets: string[];
 };
 
+export type SentimentLabel = "Buy" | "Sell" | "Neutral";
+
 export type ReportBuild = {
   asset: Asset;
   title: string;
@@ -14,4 +16,8 @@ export type ReportBuild = {
   sections: ReportSection[];
   relevantItemIds: string[];
   hash: string;
+  sentimentScore: number;
+  sentimentLabel: SentimentLabel;
+  incomplete: boolean;
+  incompleteReasons: string[];
 };

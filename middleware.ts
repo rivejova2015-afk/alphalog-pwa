@@ -22,7 +22,8 @@ export async function middleware(request: NextRequest) {
     // Fail open: do not block requests if redirect logic errors
   }
 
-  return proxy(request);
+  const isProtected = request.nextUrl.pathname.startsWith("/dashboard");
+  return proxy(request, { requireAuth: isProtected, redirectTo: "/auth" });
 }
 
 // Aplica middleware a todas las rutas excepto assets estáticos

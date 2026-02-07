@@ -3,6 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 
+const safeDecrypt = (value?: string | null) => {
+  try {
+    return decryptText(value);
+  } catch (err) {
+    console.warn("[TradeHub] Failed to decrypt report content:", err);
+    return value ?? null;
+  }
+};
+
 /**
  * POST /api/tradehub/reports/generate
  * Generate weekly AlphaBrief report or return existing
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
         existing: true,
         report: {
           ...existingReport,
-          content_md: decryptText(existingReport.content_md),
+          content_md: safeDecrypt(existingReport.content_md),
         },
       });
     }
@@ -146,6 +155,17 @@ export async function POST(request: NextRequest) {
     const reportTitle = `AlphaBrief - Semana ${weekStartStr} a ${weekEndStr}`;
 
     // Insert report
+    let encryptedContent: string | null = null;
+    try {
+      encryptedContent = encryptText(markdownContent);
+    } catch (err) {
+      console.error("Error encrypting AlphaBrief report:", err);
+      return NextResponse.json(
+        { error: "Configuración de seguridad pendiente" },
+        { status: 500 }
+      );
+    }
+
     const { data: newReport, error: insertError } = await supabase
       .from("weekly_reports")
       .insert({
@@ -153,7 +173,7 @@ export async function POST(request: NextRequest) {
         week_start: weekStartStr,
         week_end: weekEndStr,
         title: reportTitle,
-        content_md: encryptText(markdownContent),
+        content_md: encryptedContent,
         total_trades: totalTrades,
         total_pnl: totalPnL,
         win_rate: parseFloat(winRate.toFixed(2)),
@@ -198,7 +218,7 @@ export async function POST(request: NextRequest) {
       existing: false,
       report: {
         ...newReport,
-        content_md: decryptText(newReport.content_md),
+        content_md: safeDecrypt(newReport.content_md),
       },
     });
   } catch (err: unknown) {
@@ -331,7 +351,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(reports);
+    const decryptedReports = (reports || []).map((report: any) => ({
+      ...report,
+      content_md: safeDecrypt(report.content_md),
+    }));
+
+    return NextResponse.json(decryptedReports);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/reports:", err);
     return NextResponse.json(

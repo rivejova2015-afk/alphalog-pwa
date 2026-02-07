@@ -108,7 +108,10 @@ export default function NewTradesLog() {
 
   const fetchAccounts = useCallback(async () => {
     try {
-      const response = await fetch("/api/accounts");
+      const response = await fetch("/api/accounts", {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (response.ok) {
         const data: Account[] = await response.json();
         setAccounts(data || []);
@@ -151,7 +154,10 @@ export default function NewTradesLog() {
         params.append("accountId", selectedAccountId);
       }
 
-      const response = await fetch(`/api/tradehub/trades?${params}`);
+      const response = await fetch(`/api/tradehub/trades?${params}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!response.ok) {
         const statusCode = response.status;
         if (statusCode === 401) {

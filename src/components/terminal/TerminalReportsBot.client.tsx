@@ -94,6 +94,8 @@ export default function TerminalReportsBot() {
 
   useEffect(() => {
     fetchJobs();
+    const interval = window.setInterval(fetchJobs, 30000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const handleGenerate = async () => {
@@ -109,23 +111,48 @@ export default function TerminalReportsBot() {
         body: JSON.stringify({ asset }),
       });
       const data = await parseJsonSafe(response);
-      if (!response.ok) {
+      if (!response.ok || data?.ok === false) {
         await logger.error("terminal_reports", "Failed to generate report", undefined, {
           status: response.status,
           error: data?.error,
         });
         throw new Error(data?.error || `No se pudo generar (${response.status})`);
       }
-      const outcomes = Array.isArray(data?.assets)
-        ? data.assets.map((assetResult: { outcome?: string }) => assetResult.outcome)
-        : [];
-      const onlyNoChanges =
-        outcomes.length > 0 && outcomes.every((outcome: string) => outcome === "done_no_changes");
-      setMessage(
-        onlyNoChanges
-          ? "No hay cambios relevantes. No se guardó nueva evidencia."
-          : "Reporte generado. Revisa Evidence."
+
+      const assetResults = Array.isArray(data?.assets) ? data.assets : [];
+      if (assetResults.length === 0) {
+        setError("No se pudo generar el reporte. Intenta nuevamente.");
+        await fetchJobs();
+        return;
+      }
+      const outcomes = assetResults.map(
+        (assetResult: { outcome?: string }) => assetResult.outcome
       );
+      const onlyNoChanges =
+        outcomes.length > 0 &&
+        outcomes.every((outcome: string) => outcome === "done_no_changes");
+      const anyFailed = outcomes.some((outcome: string) => outcome === "failed");
+      const anyDone = outcomes.some((outcome: string) => outcome === "done");
+      const anyIncomplete = assetResults.some(
+        (assetResult: { incomplete?: boolean }) => assetResult.incomplete
+      );
+
+      if (anyFailed && !anyDone && !onlyNoChanges) {
+        setError("No se pudo generar el reporte. Intenta nuevamente.");
+      } else if (onlyNoChanges) {
+        setMessage("No hay cambios relevantes. No se guardo nueva evidencia.");
+      } else if (anyIncomplete) {
+        setMessage("Informe incompleto. Reintenta en unos minutos.");
+      } else if (anyFailed) {
+        setMessage("Reporte generado con advertencias. Revisa Evidence.");
+      } else {
+        setMessage("Reporte generado. Revisa Evidence.");
+      }
+
+      if (anyDone) {
+        window.dispatchEvent(new CustomEvent("terminal:reports:refresh"));
+      }
+
       await fetchJobs();
     } catch (err) {
       const message = normalizeFetchError(err);
@@ -177,6 +204,9 @@ export default function TerminalReportsBot() {
         setError(`${data?.error || "No se pudo agendar"}${status}${details}`);
         await fetchJobs();
         return;
+      }
+      if (data?.job) {
+        setJobs((prev) => prev.map((job) => (job.id === tempId ? (data.job as Job) : job)));
       }
       setMessage("Reporte agendado correctamente.");
       setDatetimePR("");

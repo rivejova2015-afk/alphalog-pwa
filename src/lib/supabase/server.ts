@@ -77,3 +77,21 @@ export function createClientForAPIRoute() {
   const { createClient: createSupabaseClient } = require("@supabase/supabase-js");
   return createSupabaseClient(supabaseUrl, supabaseKey);
 }
+
+/**
+ * Supabase service-role client (server-side only)
+ * Use for trusted server operations (replication, snapshots, admin tasks)
+ */
+export function createServiceClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error(
+      "Missing Supabase service role configuration. Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set."
+    );
+  }
+
+  const { createClient: createSupabaseClient } = require("@supabase/supabase-js");
+  return createSupabaseClient(supabaseUrl, serviceKey);
+}

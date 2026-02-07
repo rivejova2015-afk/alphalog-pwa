@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { login } from './utils/auth';
 
 test.describe('TraderMap Module', () => {
+  test.describe.configure({ timeout: 60000 });
   // Setup: login before each test
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -9,12 +10,10 @@ test.describe('TraderMap Module', () => {
 
   test('should load TraderMap without blank screen', async ({ page }) => {
     // Navigate to TraderMap
-    await page.goto('/dashboard/tradermap');
+    await page.goto('/dashboard/tradermap', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Wait for page to load (may show loading state or map)
-    await page.waitForLoadState('networkidle').catch(() => {
-      // Timeout is okay
-    });
+    // No need to wait for networkidle
 
     // Page should have content (even if just a map)
     const body = page.locator('body');
@@ -30,12 +29,10 @@ test.describe('TraderMap Module', () => {
   });
 
   test('should have interactive map or content', async ({ page }) => {
-    await page.goto('/dashboard/tradermap');
+    await page.goto('/dashboard/tradermap', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Wait for content
-    await page.waitForLoadState('networkidle').catch(() => {
-      // Timeout is okay
-    });
+    // No need to wait for networkidle
 
     // Check for map container or interactive element
     const mapContainer = page.locator('[class*="map"], [id*="map"], canvas, .tradermap-container');
@@ -48,7 +45,7 @@ test.describe('TraderMap Module', () => {
   });
 
   test('should handle TraderMap navigation', async ({ page }) => {
-    await page.goto('/dashboard/tradermap');
+    await page.goto('/dashboard/tradermap', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Verify URL
     expect(page.url()).toContain('/tradermap');

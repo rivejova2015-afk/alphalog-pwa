@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import AccountDialog from "./AccountDialog.client";
 import CategoryManagerModal, { Category as CategoryType } from "./CategoryManagerModal.client";
 import AccountDetailsModal from "./AccountDetailsModal.client";
@@ -254,6 +255,14 @@ export default function AccountsPanel() {
           <p className="text-sm text-slate-400">Categorías siempre visibles y KPIs por cuenta</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {process.env.NEXT_PUBLIC_ENABLE_AAB !== "false" && (
+            <Link
+              href="/dashboard/tradehub/accounts/aab"
+              className="px-3 py-2 rounded-lg border border-slate-700 text-slate-100 bg-slate-900 hover:bg-slate-800 text-sm"
+            >
+              Accounts Architect Bot (AAB)
+            </Link>
+          )}
           <button
             onClick={() => setShowCategoryManager(true)}
             className="px-3 py-2 rounded-lg border border-slate-700 text-slate-100 bg-slate-900 hover:bg-slate-800 text-sm"

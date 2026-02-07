@@ -3,6 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { decryptText } from "@/lib/security/encryption";
 
+const safeDecrypt = (value?: string | null) => {
+  try {
+    return decryptText(value);
+  } catch (err) {
+    console.warn("[TradeHub] Failed to decrypt weekly report:", err);
+    return value ?? "";
+  }
+};
+
 /**
  * GET /api/tradehub/reports
  * List all weekly reports for authenticated user
@@ -33,7 +42,7 @@ export async function GET() {
 
     const decrypted = (reports || []).map((report: any) => ({
       ...report,
-      content_md: decryptText(report.content_md),
+      content_md: safeDecrypt(report.content_md),
     }));
 
     return NextResponse.json(decrypted);

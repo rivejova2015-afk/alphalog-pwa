@@ -19,9 +19,11 @@ interface Trade {
 
 interface Evidence {
   id: string;
+  title?: string | null;
   user_notes: string | null;
-  file_path: string | null;
-  mime_type: string | null;
+  image_path?: string | null;
+  file_path?: string | null;
+  mime_type?: string | null;
   validation_status: "needs_review" | "valid" | "invalid";
   trade_id: string | null;
   account_id: string | null;
@@ -29,6 +31,7 @@ interface Evidence {
   created_at: string;
   account?: Account;
   trade?: Trade;
+  source?: string;
 }
 
 interface EvidenceForm {
@@ -396,7 +399,7 @@ export default function EvidenceVault() {
                   }`}
                 >
                   <p className="text-sm font-semibold text-white truncate">
-                    {ev.user_notes?.trim() || "Evidencia sin notas"}
+                    {ev.title?.trim() || ev.user_notes?.trim() || "Evidencia sin notas"}
                   </p>
                   <p className="text-xs text-slate-400">
                     {new Date(ev.created_at).toLocaleDateString()}
@@ -425,14 +428,20 @@ export default function EvidenceVault() {
 
             {/* Image Preview */}
             <div className="mb-4">
-              <Image
-                src={`/api/tradehub/evidence/${selectedEvidence.id}/signed-url`}
-                alt="Evidence preview"
-                width={800}
-                height={400}
-                className="max-w-full h-auto max-h-64 rounded border border-slate-500 object-cover"
-                unoptimized
-              />
+              {selectedEvidence.file_path || selectedEvidence.image_path ? (
+                <Image
+                  src={`/api/tradehub/evidence/signed-url?id=${selectedEvidence.id}`}
+                  alt="Evidence preview"
+                  width={800}
+                  height={400}
+                  className="max-w-full h-auto max-h-64 rounded border border-slate-500 object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="text-sm text-slate-400 border border-slate-600 rounded p-4">
+                  Sin archivo adjunto para previsualizar.
+                </div>
+              )}
             </div>
 
             {/* Metadata */}
@@ -446,7 +455,9 @@ export default function EvidenceVault() {
 
               <div>
                 <p className="text-xs text-slate-400">Título</p>
-                <p className="text-white">{selectedEvidence.user_notes?.trim() || "Evidencia sin notas"}</p>
+                <p className="text-white">
+                  {selectedEvidence.title?.trim() || selectedEvidence.user_notes?.trim() || "Evidencia sin título"}
+                </p>
               </div>
 
               <div>

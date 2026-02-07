@@ -33,6 +33,8 @@ export default function EvidenceReports() {
     instrument_id: "",
   });
   const [error, setError] = useState<string>("");
+  const [statusMessage, setStatusMessage] = useState<string>("");
+  const [statusTone, setStatusTone] = useState<"info" | "warn">("info");
 
   const parseJsonSafe = async (response: Response) => {
     try {
@@ -125,6 +127,20 @@ export default function EvidenceReports() {
 
   const reports = toArray<Report>(reportsRaw || []);
 
+  useEffect(() => {
+    const handler = () => {
+      refreshReports();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("terminal:reports:refresh", handler as EventListener);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("terminal:reports:refresh", handler as EventListener);
+      }
+    };
+  }, [refreshReports]);
+
   const handleGenerateWithAI = async () => {
     if (!formData.title.trim()) {
       setError("Por favor ingresa un título");
@@ -133,6 +149,8 @@ export default function EvidenceReports() {
 
     setGenerating(true);
     setError("");
+    setStatusMessage("");
+    setStatusTone("info");
 
     try {
       const response = await fetchWithTimeout("/api/terminal/evidence/generate", {
@@ -146,9 +164,9 @@ export default function EvidenceReports() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await parseJsonSafe(response);
-        const msg = errorData?.error || `HTTP ${response.status}`;
+      const data = await parseJsonSafe(response);
+      if (!response.ok || data?.ok === false) {
+        const msg = data?.error || `HTTP ${response.status}`;
         setError(msg);
         await logger.error("terminal_evidence", "Generate with AI failed", undefined, {
           component: "EvidenceReports",
@@ -159,18 +177,27 @@ export default function EvidenceReports() {
         return;
       }
 
-      const result = normalizeSingleResponse<{
-        reportId: string;
-        content: string;
-      }>(await parseJsonSafe(response));
+      const reportId = data?.reportId as string | undefined;
+      const content = typeof data?.content === "string" ? data.content : "";
 
-      if (result?.reportId && result?.content) {
+      if (reportId && content) {
         setFormData((prev) => ({
           ...prev,
-          content: result.content,
+          content,
         }));
-        setSelectedReportId(result.reportId);
+        setSelectedReportId(reportId);
         await refreshReports();
+      } else {
+        setError("No se pudo generar el reporte.");
+      }
+
+      const incomplete = data?.status === "incomplete" || data?.incomplete === true;
+      if (incomplete) {
+        setStatusTone("warn");
+        setStatusMessage("Informe incompleto. Reintenta en unos minutos.");
+      } else {
+        setStatusTone("info");
+        setStatusMessage("Reporte generado.");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -191,6 +218,7 @@ export default function EvidenceReports() {
       setError("Por favor completa los campos obligatorios");
       return;
     }
+    setStatusMessage("");
 
     const payload = {
       title: formData.title,
@@ -294,6 +322,7 @@ export default function EvidenceReports() {
     setEditingReport(null);
     setShowForm(false);
     setError("");
+    setStatusMessage("");
   };
 
   // FIJA: Usa toArray para garantizar que reports siempre es array
@@ -352,6 +381,17 @@ export default function EvidenceReports() {
                 {error}
               </div>
             )}
+            {statusMessage && (
+              <div
+                className={`p-2 rounded text-sm ${
+                  statusTone === "warn"
+                    ? "bg-amber-900/50 border border-amber-700 text-amber-200"
+                    : "bg-emerald-900/40 border border-emerald-700 text-emerald-100"
+                }`}
+              >
+                {statusMessage}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
                 Título (obligatorio)
@@ -395,7 +435,7 @@ export default function EvidenceReports() {
               disabled={generating}
               className="w-full px-3 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 rounded-full text-slate-50 font-medium text-sm transition"
             >
-              {generating ? "Generando..." : "🤖 Generar con IA (stub)"}
+              {generating ? "Generando..." : "🤖 Generar con IA"}
             </button>
             {formData.content && (
               <div>

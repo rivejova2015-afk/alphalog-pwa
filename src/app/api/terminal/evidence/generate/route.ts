@@ -1,14 +1,52 @@
-// src/app/api/terminal/evidence/generate/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { encryptText } from "@/lib/security/encryption";
+import type { Asset } from "@/lib/news/sources";
+import { ingestNewsForAsset } from "@/lib/news/ingest";
+import { dedupeNews } from "@/lib/news/dedupe";
+import { scoreImpact } from "@/lib/news/impactScore";
+import { buildReportBase } from "@/lib/reports/buildBase";
+import { reportLog } from "@/lib/logging/reportLogs";
+
+const allowedAssets: Asset[] = ["US500", "XAUUSD"];
+
+const safeEncrypt = (value: string) => {
+  try {
+    return encryptText(value);
+  } catch (err) {
+    console.error("[Terminal] Failed to encrypt evidence:", err);
+    return null;
+  }
+};
+
+const buildReportForAsset = async (asset: Asset, title: string) => {
+  const { items, failures } = await ingestNewsForAsset(asset);
+  if (failures.length > 0) {
+    reportLog.failure(
+      `Fuentes fallidas IA ${asset}`,
+      new Error("Sources failed"),
+      {
+        failures: failures.map((f) => `${f.source.name}: ${f.reason}`),
+      }
+    );
+  }
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+
+  const filtered = items.filter((item) => item.publishedAt >= cutoff);
+  const deduped = dedupeNews(filtered);
+  const scored = deduped.map((item) => ({
+    ...item,
+    impact: scoreImpact(asset, item).label,
+  }));
+
+  return buildReportBase(asset, scored, { titleOverride: title });
+};
 
 /**
  * POST /api/terminal/evidence/generate
- * STUB: Generate evidence report with IA (simulated)
- * 
- * In production, this would call an actual IA API.
- * For now, generates placeholder Spanish content.
+ * Generate evidence report using official news sources (informational only).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -29,53 +67,71 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // STUB: Generate placeholder content in Spanish
-    const stubContent = `ANÁLISIS DE EVIDENCIA - ${title.toUpperCase()}
-====================================================
+    let assetsToRun: Asset[] = allowedAssets;
+    let resolvedInstrumentId: string | null = null;
 
-Instrumento: ${instrumentId ? "Especificado" : "General"}
-Fecha de Generación: ${new Date().toLocaleString("es-ES")}
-Generado por: IA Stub (Simulación)
+    if (instrumentId) {
+      const { data: instrument, error: instrumentError } = await supabase
+        .from("instruments")
+        .select("id, symbol")
+        .eq("id", instrumentId)
+        .single();
 
-RESUMEN EJECUTIVO
------------------
-Este reporte ha sido generado como un stub de ejemplo.
-En producción, se utilizaría un modelo de IA real para análisis profundo.
+      if (instrumentError || !instrument) {
+        return NextResponse.json(
+          { error: "Instrumento no encontrado" },
+          { status: 404 }
+        );
+      }
 
-ANÁLISIS
---------
-• Análisis técnico: Pendiente de evaluación real
-• Análisis fundamental: Información de mercado disponible
-• Niveles clave: Support y Resistance a evaluar
-• Sentimiento de mercado: Neutral
+      if (!allowedAssets.includes(instrument.symbol as Asset)) {
+        return NextResponse.json(
+          { error: "Instrumento no soportado" },
+          { status: 400 }
+        );
+      }
 
-CONCLUSIONES
------------
-Se recomienda validar este análisis con fuentes adicionales
-antes de tomar decisiones de trading.
+      assetsToRun = [instrument.symbol as Asset];
+      resolvedInstrumentId = instrument.id as string;
+    }
 
-NOTAS
------
-Este es un contenido stub. Reemplazar con IA real en producción.
+    const reports = await Promise.all(
+      assetsToRun.map((asset) =>
+        buildReportForAsset(
+          asset,
+          assetsToRun.length > 1 ? `${title.trim()} - ${asset}` : title.trim()
+        )
+      )
+    );
 
----
-Descargo de responsabilidad: Este análisis es solo para propósitos educativos.`;
+    const combinedContent = reports
+      .map((report) => report.markdown)
+      .join("\n\n---\n\n");
 
-    // Insert report into database
+    const encryptedTitle = safeEncrypt(title.trim());
+    const encryptedContent = safeEncrypt(combinedContent);
+
+    if (!encryptedTitle || !encryptedContent) {
+      return NextResponse.json(
+        { error: "Configuracion de seguridad pendiente" },
+        { status: 500 }
+      );
+    }
+
     const { data, error } = await supabase
       .from("terminal_evidence_reports")
       .insert([
         {
           user_id: userData.user.id,
-          instrument_id: instrumentId || null,
-          title: encryptText(title),
-          content: encryptText(stubContent),
+          instrument_id: resolvedInstrumentId,
+          title: encryptedTitle,
+          content: encryptedContent,
         },
       ])
       .select()
       .single();
 
-    if (error) {
+    if (error || !data) {
       console.error("Error creating evidence:", error);
       return NextResponse.json(
         { error: "Failed to create evidence" },
@@ -83,11 +139,17 @@ Descargo de responsabilidad: Este análisis es solo para propósitos educativos.
       );
     }
 
+    const incompleteReasons = reports.flatMap((report) => report.incompleteReasons);
+    const incomplete = reports.some((report) => report.incomplete);
+
     return NextResponse.json({
       ok: true,
+      status: incomplete ? "incomplete" : "done",
       reportId: data.id,
-      title,
-      content: stubContent,
+      title: title.trim(),
+      content: combinedContent,
+      incomplete,
+      incompleteReasons,
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/evidence/generate:", err);

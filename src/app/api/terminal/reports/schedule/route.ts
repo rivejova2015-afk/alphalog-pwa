@@ -37,7 +37,13 @@ const getRunUrl = () => {
   return `${base.replace(/\/$/, "")}/api/terminal/reports/run-scheduled`;
 };
 
-const getQStashBaseUrl = () => process.env.QSTASH_BASE_URL || QSTASH_BASE_URL;
+const normalizeQStashBaseUrl = (value: string) => {
+  const trimmed = value.replace(/\/+$/, "");
+  return trimmed.endsWith("/schedules") ? trimmed : `${trimmed}/schedules`;
+};
+
+const getQStashBaseUrl = () =>
+  normalizeQStashBaseUrl(process.env.QSTASH_BASE_URL || QSTASH_BASE_URL);
 
 export async function GET() {
   try {
@@ -120,12 +126,19 @@ export async function POST(request: NextRequest) {
     const token = process.env.QSTASH_TOKEN;
     const runUrl = getRunUrl();
     if (!token || !runUrl) {
-      await supabase
+      const { data: updatedJob } = await supabase
         .from("terminal_report_jobs")
         .update({ status: "failed", error: "QStash not configured" })
-        .eq("id", job.id);
+        .eq("id", job.id)
+        .select()
+        .single();
       return NextResponse.json(
-        { ok: false, job, status: "failed", error: "QStash not configured" },
+        {
+          ok: false,
+          job: updatedJob || job,
+          status: "failed",
+          error: "QStash not configured",
+        },
         { status: 200 }
       );
     }
@@ -199,17 +212,19 @@ export async function POST(request: NextRequest) {
       const status = lastAttempt?.response?.status ?? 500;
       const body = lastAttempt?.errorBody || "Unknown error";
       console.error("QStash schedule failed:", status, body);
-      await supabase
+      const { data: updatedJob } = await supabase
         .from("terminal_report_jobs")
         .update({
           status: "failed",
           error: `QStash schedule failed: ${status} ${body}`,
         })
-        .eq("id", job.id);
+        .eq("id", job.id)
+        .select()
+        .single();
       return NextResponse.json(
         {
           ok: false,
-          job,
+          job: updatedJob || job,
           status: "failed",
           error: "Failed to schedule job",
           details: {
@@ -226,16 +241,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await supabase
+    const { data: updatedJob } = await supabase
       .from("terminal_report_jobs")
-      .update({ qstash_schedule_id: scheduleId, status: "scheduled" })
-      .eq("id", job.id);
+      .update({ qstash_schedule_id: scheduleId, error: null })
+      .eq("id", job.id)
+      .select()
+      .single();
 
     return NextResponse.json({
       ok: true,
       schedule_id: scheduleId,
-      status: "scheduled",
+      status: "pending",
       job_id: job.id,
+      job: updatedJob || job,
     });
   } catch (error) {
     console.error("Error in POST /api/terminal/reports/schedule:", error);
