@@ -51,6 +51,15 @@ export interface DashboardSnapshot {
     llc_info: unknown;
     llc_inbox: unknown[];
   };
+  botcontrol?: {
+    bots: unknown[];
+    accounts: unknown[];
+    telemetry: unknown[];
+    commands: unknown[];
+    command_status: unknown[];
+    settings_global?: unknown;
+    settings_override?: unknown[];
+  };
 }
 
 const DB_NAME = "alphalog";
@@ -94,6 +103,7 @@ export async function saveSnapshot(
       terminal: { instruments: [], news: [], events: [], evidenceReports: [] },
       treasury: { accounts: [], configs: [], wallets: [], transactions: [], budgets: [], payouts: [], trades: [], calendar_events: [] },
       business: { costs: [], templates: [], milestones: [], sops: [], sop_items: [], sop_runs: [], decisions: [], tasks: [], llc_info: null, llc_inbox: [] },
+      botcontrol: { bots: [], accounts: [], telemetry: [], commands: [], command_status: [], settings_global: null, settings_override: [] },
       ...existing,
       ...snapshot,
     };

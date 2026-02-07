@@ -122,6 +122,32 @@ export async function saveBusinessDataToSnapshot(data: {
   });
 }
 
+export async function saveBotControlSnapshot(data: {
+  bots?: unknown[];
+  accounts?: unknown[];
+  telemetry?: unknown[];
+  commands?: unknown[];
+  command_status?: unknown[];
+  settings_global?: unknown;
+  settings_override?: unknown[];
+}): Promise<void> {
+  const snapshot = await getSnapshot();
+  const botcontrolData = {
+    bots: data.bots ?? snapshot?.botcontrol?.bots ?? [],
+    accounts: data.accounts ?? snapshot?.botcontrol?.accounts ?? [],
+    telemetry: data.telemetry ?? snapshot?.botcontrol?.telemetry ?? [],
+    commands: data.commands ?? snapshot?.botcontrol?.commands ?? [],
+    command_status: data.command_status ?? snapshot?.botcontrol?.command_status ?? [],
+    settings_global: data.settings_global ?? snapshot?.botcontrol?.settings_global ?? null,
+    settings_override: data.settings_override ?? snapshot?.botcontrol?.settings_override ?? [],
+  };
+
+  await saveSnapshot({
+    ...(snapshot || {}),
+    botcontrol: botcontrolData,
+  });
+}
+
 /**
  * Get business snapshot data for offline read-only access
  */
@@ -136,6 +162,11 @@ export async function getBusinessOfflineData(): Promise<DashboardSnapshot['busin
 export async function getTreasuryOfflineData(): Promise<DashboardSnapshot['treasury'] | null> {
   const snapshot = await getOfflineSnapshot();
   return snapshot?.treasury || null;
+}
+
+export async function getBotControlOfflineData(): Promise<DashboardSnapshot['botcontrol'] | null> {
+  const snapshot = await getOfflineSnapshot();
+  return snapshot?.botcontrol || null;
 }
 
 export async function getOfflineSnapshot(): Promise<DashboardSnapshot | null> {

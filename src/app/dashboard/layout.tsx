@@ -11,6 +11,7 @@ const menuItems = [
   { label: "Dashboard", href: "/dashboard", icon: "📊" },
   { label: "TradeHub", href: "/dashboard/tradehub", icon: "🎯" },
   { label: "Terminal", href: "/dashboard/terminal", icon: "💹" },
+  { label: "Bot Control", href: "/dashboard/bot-control", icon: "🤖" },
   { label: "Journal PT", href: "/dashboard/logs", icon: "📓" },
   { label: "TraderMap", href: "/dashboard/tradermap", icon: "🗺️" },
   { label: "Treasury", href: "/dashboard/treasury", icon: "💰" },
