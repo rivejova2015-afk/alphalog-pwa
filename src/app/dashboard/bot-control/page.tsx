@@ -1,7 +1,7 @@
 // src/app/dashboard/bot-control/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import { PushNotificationButton } from "@/components/push/PushNotificationButton.client";
 import { createClient } from "@/lib/supabase/browser";
@@ -122,12 +122,24 @@ export default function BotControlPage() {
   const [commandStatus, setCommandStatus] = useState<BotCommandStatus[]>([]);
   const [settingsGlobal, setSettingsGlobal] = useState<Record<string, unknown>>(DEFAULT_SETTINGS);
   const [settingsOverride, setSettingsOverride] = useState<Record<string, Record<string, unknown>>>({});
+  const [dirtyGlobalSettings, setDirtyGlobalSettings] = useState(false);
+  const [dirtyOverrideSettings, setDirtyOverrideSettings] = useState<Record<string, boolean>>({});
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [offlineMode, setOfflineMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+  const dirtyGlobalRef = useRef(dirtyGlobalSettings);
+  const dirtyOverrideRef = useRef(dirtyOverrideSettings);
+
+  useEffect(() => {
+    dirtyGlobalRef.current = dirtyGlobalSettings;
+  }, [dirtyGlobalSettings]);
+
+  useEffect(() => {
+    dirtyOverrideRef.current = dirtyOverrideSettings;
+  }, [dirtyOverrideSettings]);
 
   const accountsForBot = useMemo(
     () => accounts.filter((account) => account.bot_id === selectedBotId),
@@ -156,6 +168,13 @@ export default function BotControlPage() {
       window.removeEventListener("offline", updateOffline);
     };
   }, []);
+
+  useEffect(() => {
+    setDirtyGlobalSettings(false);
+    setDirtyOverrideSettings({});
+    dirtyGlobalRef.current = false;
+    dirtyOverrideRef.current = {};
+  }, [selectedBotId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -225,13 +244,27 @@ export default function BotControlPage() {
         ...DEFAULT_SETTINGS,
         ...(globalSettingsResult.data?.settings || {}),
       };
-      setSettingsGlobal(settingsMerged);
+      if (!dirtyGlobalRef.current) {
+        setSettingsGlobal(settingsMerged);
+      }
 
       const overrideMap: Record<string, Record<string, unknown>> = {};
       (overridesResult.data || []).forEach((row: BotSettingsRow) => {
         overrideMap[row.bot_account_id as string] = row.settings || {};
       });
-      setSettingsOverride(overrideMap);
+      setSettingsOverride((prev) => {
+        const dirtyMap = dirtyOverrideRef.current;
+        if (!dirtyMap || Object.keys(dirtyMap).length === 0) {
+          return overrideMap;
+        }
+        const next: Record<string, Record<string, unknown>> = { ...overrideMap };
+        Object.keys(dirtyMap).forEach((accountId) => {
+          if (dirtyMap[accountId]) {
+            next[accountId] = prev[accountId] || next[accountId] || {};
+          }
+        });
+        return next;
+      });
 
       await saveBotControlSnapshot({
         bots: botsData || [],
@@ -341,6 +374,8 @@ export default function BotControlPage() {
 
       if (upsertError) throw upsertError;
 
+      setDirtyGlobalSettings(false);
+      dirtyGlobalRef.current = false;
       await createCommand(COMMANDS.APPLY_SETTINGS, undefined, { scope: "global" });
     } catch (err) {
       console.error("[BotControl] applyGlobalSettings error:", err);
@@ -367,6 +402,14 @@ export default function BotControlPage() {
 
       if (upsertError) throw upsertError;
 
+      setDirtyOverrideSettings((prev) => ({
+        ...prev,
+        [accountId]: false,
+      }));
+      dirtyOverrideRef.current = {
+        ...dirtyOverrideRef.current,
+        [accountId]: false,
+      };
       await createCommand(COMMANDS.APPLY_SETTINGS, [accountId], { scope: "override" });
     } catch (err) {
       console.error("[BotControl] applyOverrideSettings error:", err);
@@ -376,6 +419,8 @@ export default function BotControlPage() {
   };
 
   const updateSetting = (key: string, value: unknown) => {
+    setDirtyGlobalSettings(true);
+    dirtyGlobalRef.current = true;
     setSettingsGlobal((prev) => ({
       ...prev,
       [key]: value,
@@ -383,6 +428,14 @@ export default function BotControlPage() {
   };
 
   const updateOverrideSetting = (accountId: string, key: string, value: unknown) => {
+    setDirtyOverrideSettings((prev) => ({
+      ...prev,
+      [accountId]: true,
+    }));
+    dirtyOverrideRef.current = {
+      ...dirtyOverrideRef.current,
+      [accountId]: true,
+    };
     setSettingsOverride((prev) => ({
       ...prev,
       [accountId]: {
