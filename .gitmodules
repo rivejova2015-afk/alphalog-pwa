@@ -1,0 +1,4 @@
+[submodule "bots/GoldRangeBasketR"]
+	path = bots/GoldRangeBasketR
+	url = https://github.com/rivejova2015-afk/GoldRangeBasketR.git
+	branch = main
