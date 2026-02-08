@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { mirrorTradeOnUpdate } from "@/lib/copygroups/mirroring";
+import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
 
 /**
  * PATCH /api/tradehub/trades/{id}
@@ -127,9 +128,17 @@ export async function PATCH(
       }
     }
 
+    const progressUpdate = await onTradeClosedSaved(supabase, userId, {
+      id: data.id,
+      account_id: data.account_id,
+      status: data.status,
+      exit_date: data.exit_date,
+    });
+
     return NextResponse.json({
       ...data,
       notes: decryptText(data.notes),
+      progress_update: progressUpdate,
     });
   } catch (err: any) {
     console.error("Error in PATCH /api/tradehub/trades/[id]:", err);

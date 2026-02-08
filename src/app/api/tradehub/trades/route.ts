@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { mirrorTradeOnCreate } from "@/lib/copygroups/mirroring";
+import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
 
 /**
  * GET /api/tradehub/trades
@@ -237,9 +238,17 @@ export async function POST(request: NextRequest) {
       console.warn("[TradeHub] Mirroring failed:", mirrorError);
     }
 
+    const progressUpdate = await onTradeClosedSaved(supabase, userData.user.id, {
+      id: data.id,
+      account_id: data.account_id,
+      status: data.status,
+      exit_date: data.exit_date,
+    });
+
     return NextResponse.json({
       ...data,
       notes: decryptText(data.notes),
+      progress_update: progressUpdate,
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/trades:", err);
