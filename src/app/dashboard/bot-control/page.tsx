@@ -504,14 +504,18 @@ export default function BotControlPage() {
             </div>
           )}
 
-          {/* Selector de cuenta para el bot */}
+
+          {/* Agregar y seleccionar cuenta para el bot */}
           <div className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-4 text-blue-200 text-sm mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h2 className="display-font text-base font-semibold text-blue-100 mb-1">Cuenta seleccionada para operar</h2>
-                <p className="text-xs text-blue-300">Elige la cuenta de trading que el bot usará para ejecutar operaciones. El EA debe usar el mismo <b>account_id</b>.</p>
+                <h2 className="display-font text-base font-semibold text-blue-100 mb-1">Cuentas de trading del bot</h2>
+                <p className="text-xs text-blue-300 mb-2">Agrega una nueva cuenta (account_id) o selecciona una ya registrada para operar. El EA debe usar el mismo <b>account_id</b>.</p>
+                {/* Formulario para agregar cuenta */}
+                <AddAccountForm botId={selectedBotId} onAccountAdded={loadData} />
               </div>
               <div>
+                <label className="block mb-1 text-blue-200 font-semibold">Seleccionar cuenta</label>
                 <select
                   className="rounded-lg bg-slate-800/80 border border-blue-400 px-3 py-2 text-blue-100"
                   value={selectedAccountId || ''}
@@ -533,6 +537,73 @@ export default function BotControlPage() {
               </div>
             </div>
           </div>
+// ---
+// Componente para agregar cuenta
+function AddAccountForm({ botId, onAccountAdded }: { botId: string | null, onAccountAdded: () => void }) {
+  const [accountId, setAccountId] = useState("");
+  const [label, setLabel] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!botId || !accountId.trim()) {
+      setError("Debes ingresar un account_id y seleccionar un bot.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id || null;
+      const { error: insertError } = await supabase
+        .from("bot_accounts")
+        .insert({
+          bot_id: botId,
+          user_id: userId,
+          account_id: accountId.trim(),
+          label: label.trim() || null,
+        });
+      if (insertError) throw insertError;
+      setAccountId("");
+      setLabel("");
+      onAccountAdded();
+    } catch (err: any) {
+      setError(err.message || "Error al agregar cuenta");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form className="flex flex-col gap-2 mb-2" onSubmit={handleAdd}>
+      <input
+        type="text"
+        placeholder="account_id (ej: 12345678)"
+        value={accountId}
+        onChange={e => setAccountId(e.target.value)}
+        className="rounded-lg bg-slate-800/80 border border-blue-400 px-2 py-1 text-blue-100"
+        required
+      />
+      <input
+        type="text"
+        placeholder="Etiqueta (opcional)"
+        value={label}
+        onChange={e => setLabel(e.target.value)}
+        className="rounded-lg bg-slate-800/80 border border-blue-400 px-2 py-1 text-blue-100"
+      />
+      <button
+        type="submit"
+        disabled={loading}
+        className="rounded-lg bg-blue-500/80 px-3 py-1.5 text-blue-100 font-semibold hover:bg-blue-400"
+      >
+        {loading ? "Agregando..." : "Agregar cuenta"}
+      </button>
+      {error && <div className="text-xs text-rose-300 mt-1">{error}</div>}
+    </form>
+  );
+}
 
           <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)] backdrop-blur animate-fadeIn">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
