@@ -78,26 +78,20 @@ export default function InboxList() {
             : cached.filter((m) => m.direction === filter)
         );
       } else {
-        // Load from Supabase
-        const supabase = createClient();
-        let query = supabase
-          .from('secure_messages')
-          .select('*')
-          .eq('mailbox_id', mailboxId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false });
+        const params = new URLSearchParams({
+          mailboxId,
+          direction: filter,
+        });
 
-        if (filter !== 'all') {
-          query = query.eq('direction', filter);
+        const response = await fetch(`/api/secure-mail/messages?${params.toString()}`);
+
+        if (!response.ok) {
+          throw new Error('Failed to load messages');
         }
 
-        const { data, error: fetchError } = await query;
-
-        if (fetchError) throw fetchError;
-
+        const data = (await response.json()) as SecureMessage[];
         setMessages(data || []);
 
-        // Cache messages
         if (data) {
           for (const msg of data) {
             await cacheMessage(msg);

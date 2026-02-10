@@ -5,6 +5,10 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import crypto from 'crypto';
+import { retryAsync, isRetryableError } from '@/lib/security/retry';
+
+export const runtime = 'nodejs';
 
 interface MT5Payload {
   symbol: string;
@@ -14,9 +18,61 @@ interface MT5Payload {
   timestamp?: number;
 }
 
+const MAX_SKEW_MS = 5 * 60 * 1000;
+
+function validateMt5Signature(body: string, signature: string | null, timestamp: string | null) {
+  const secret = process.env.MT5_WEBHOOK_SECRET;
+
+  if (!secret) {
+    return { ok: false, status: 500, error: 'Missing MT5 webhook secret' };
+  }
+
+  if (!signature || !timestamp) {
+    return { ok: false, status: 401, error: 'Missing signature headers' };
+  }
+
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) {
+    return { ok: false, status: 401, error: 'Invalid timestamp' };
+  }
+
+  const now = Date.now();
+  if (Math.abs(now - ts) > MAX_SKEW_MS) {
+    return { ok: false, status: 401, error: 'Signature expired' };
+  }
+
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.${body}`)
+    .digest('hex');
+
+  const expectedBuffer = Buffer.from(expected);
+  const signatureBuffer = Buffer.from(signature);
+
+  if (expectedBuffer.length !== signatureBuffer.length) {
+    return { ok: false, status: 401, error: 'Invalid signature' };
+  }
+
+  const valid = crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+
+  return valid ? { ok: true } : { ok: false, status: 401, error: 'Invalid signature' };
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as MT5Payload;
+    const rawBody = await request.text();
+    const signature = request.headers.get('x-mt5-signature');
+    const timestamp = request.headers.get('x-mt5-timestamp');
+    const signatureResult = validateMt5Signature(rawBody, signature, timestamp);
+
+    if (!signatureResult.ok) {
+      return NextResponse.json(
+        { error: signatureResult.error || 'Unauthorized' },
+        { status: signatureResult.status || 401 }
+      );
+    }
+
+    const body = JSON.parse(rawBody) as MT5Payload;
 
     // Validate
     if (!body.symbol || typeof body.bid !== 'number' || typeof body.ask !== 'number' || typeof body.last !== 'number') {
@@ -34,16 +90,34 @@ export async function POST(request: NextRequest) {
     const edgeFunctionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/receive-mt5-data`;
 
     try {
-      const response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      const response = await retryAsync(async () => {
+        const res = await fetch(edgeFunctionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (res.status >= 500) {
+          const retryError = new Error(`Edge function failed: ${res.status}`) as Error & { status?: number };
+          retryError.status = res.status;
+          throw retryError;
+        }
+
+        return res;
+      }, {
+        retries: 2,
+        minDelayMs: 300,
+        maxDelayMs: 2000,
+        shouldRetry: isRetryableError,
+        onRetry: (error, attempt, delayMs) => {
+          console.warn(`[MT5 Webhook] Retry ${attempt} in ${delayMs}ms:`, error instanceof Error ? error.message : error);
         },
-        body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         console.error('[MT5 Webhook] Edge function error:', data);
@@ -88,6 +162,6 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     message: 'MT5 webhook endpoint ready',
-    usage: 'POST JSON: { symbol, bid, ask, last }',
+    usage: 'POST JSON: { symbol, bid, ask, last } with x-mt5-signature + x-mt5-timestamp',
   });
 }

@@ -32,6 +32,10 @@ export default function AuthPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const requestedMode = params.get("mode");
+    const stepup = params.get("stepup") === "1";
+    if (stepup) {
+      setInfo("Verificacion adicional requerida. Inicia sesion para continuar.");
+    }
     if (requestedMode === "signup") {
       setMode("signup");
     } else if (requestedMode === "login") {
@@ -82,7 +86,11 @@ export default function AuthPage() {
       setLoading(true);
       setError(null);
       const supabase = createClient();
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next") || "/dashboard";
+      const stepup = params.get("stepup") === "1";
+      const nextTarget = stepup ? `/auth/stepup?next=${encodeURIComponent(next)}` : next;
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextTarget)}`;
       console.log("[Auth] Redirecting to Google OAuth with redirectTo:", redirectTo);
 
       await supabase.auth.signInWithOAuth({
@@ -159,8 +167,15 @@ export default function AuthPage() {
         if (err) {
           setError(err.message);
         } else {
-          // Redirect to dashboard
-          window.location.href = "/dashboard";
+          const params = new URLSearchParams(window.location.search);
+          const next = params.get("next") || "/dashboard";
+          const stepup = params.get("stepup") === "1";
+
+          if (stepup) {
+            await fetch("/api/auth/device/verify", { method: "POST" });
+          }
+
+          window.location.href = next;
         }
       }
       if (window.hcaptcha && captchaWidgetId !== null) {

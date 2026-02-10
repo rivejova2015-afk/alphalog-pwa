@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react';
-import { createJournalEntry, validateJournalEntry } from '@/lib/alphacore/journal';
+import { validateJournalEntry } from '@/lib/alphacore/journal';
 import type { CreateJournalEntryInput } from '@/lib/alphacore/journal';
 
 interface JournalEntryFormProps {
@@ -51,20 +51,26 @@ export function JournalEntryForm({ userId, onSuccess, onCancel }: JournalEntryFo
     setIsSubmitting(true);
 
     try {
-      const result = await createJournalEntry(input, userId);
+      const response = await fetch('/api/journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
 
-      if (result.error) {
-        setErrorMessage(result.error.message);
-      } else {
-        // Clear form
-        setText('');
-        setMood(undefined);
-        setMoodScore(5);
-        setTags('');
-        setLessonsLearned('');
-        setActionItems('');
-        onSuccess?.();
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        setErrorMessage(error?.error || 'Failed to create entry');
+        return;
       }
+
+      // Clear form
+      setText('');
+      setMood(undefined);
+      setMoodScore(5);
+      setTags('');
+      setLessonsLearned('');
+      setActionItems('');
+      onSuccess?.();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unknown error');
     } finally {

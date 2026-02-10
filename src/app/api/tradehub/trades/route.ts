@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { mirrorTradeOnCreate } from "@/lib/copygroups/mirroring";
 import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { tradeCreateSchema, tradeResponseSchema, validatePayloadSafe, validationErrorResponse } from "@/lib/validation/schemas";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { asString } from "@/lib/validation/nullGuards";
+import { autoFixTradeCreate } from "@/lib/validation/autoFix";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
 
 /**
  * GET /api/tradehub/trades
@@ -90,20 +96,50 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("Error fetching trades:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch trades" },
-        { status: 500 }
-      );
+      await recordBugFromRequest(request, {
+        userId: userData.user.id,
+        status: 500,
+        error,
+        payload: { accountId, setupId, trash, status, closedOnly, range },
+      });
+      const baseData = (data ?? {}) as Record<string, unknown>;
+      const responsePayload = {
+        ...baseData,
+        notes: decryptText(asString((data as { notes?: unknown } | null)?.notes)),
+      };
+
+      const responseCheck = enforceResponseContract(tradeResponseSchema, responsePayload);
+
+      if (!responseCheck.ok) {
+        await recordBugFromRequest(request, {
+          userId: userData.user.id,
+          status: 500,
+          error: new Error("Response contract violation"),
+          payload: { errors: responseCheck.errors },
+        });
+
+        return NextResponse.json(
+          { error: "Internal server error" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(responseCheck.data);
     }
 
     const decrypted = (data || []).map((trade: any) => ({
       ...trade,
-      notes: decryptText(trade.notes),
+      notes: decryptText(asString(trade.notes)),
     }));
 
     return NextResponse.json(decrypted);
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/trades:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -125,6 +161,41 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const fixed = autoFixTradeCreate(body as Record<string, unknown>);
+
+    if (fixed.changed) {
+      logAuditFromRequest(
+        {
+          userId: userData.user.id,
+          action: "api_call",
+          resourceType: "trade",
+          status: "partial",
+          changes: { auto_fix: fixed.changes },
+        },
+        request
+      ).catch(e => console.warn("[Audit] Failed to log auto-fix:", e));
+    }
+
+    const validation = validatePayloadSafe(tradeCreateSchema, fixed.data);
+
+    if (!validation.success) {
+      logAuditFromRequest(
+        {
+          userId: userData.user.id,
+          action: "api_call",
+          resourceType: "trade",
+          status: "failure",
+          errorMessage: `Validation failed: ${Object.values(validation.errors).join("; ")}`,
+        },
+        request
+      ).catch(e => console.warn("[Audit] Failed to log validation error:", e));
+
+      return NextResponse.json(
+        validationErrorResponse(validation.errors),
+        { status: 400 }
+      );
+    }
+
     const {
       account_id,
       symbol,
@@ -142,27 +213,7 @@ export async function POST(request: NextRequest) {
       notes,
       setup_id,
       is_featured_in_report,
-    } = body;
-
-    // Validate required fields
-    if (
-      !account_id ||
-      !symbol ||
-      !direction ||
-      !status ||
-      !entry_date ||
-      entry_price == null ||
-      exit_price == null ||
-      !lots ||
-      !stop_loss_price ||
-      !take_profit_price ||
-      pnl_percent == null
-    ) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
+    } = validation.data;
 
     // Verify account exists and belongs to user
     const { data: account } = await supabase
@@ -222,6 +273,12 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error("Error creating trade:", error);
+      await recordBugFromRequest(request, {
+        userId: userData.user.id,
+        status: 500,
+        error,
+        payload: { account_id, symbol, direction, status },
+      });
       return NextResponse.json(
         { error: "Failed to create trade" },
         { status: 500 }
@@ -245,6 +302,21 @@ export async function POST(request: NextRequest) {
       exit_date: data.exit_date,
     });
 
+    logAuditFromRequest(
+      {
+        userId: userData.user.id,
+        action: "create",
+        resourceType: "trade",
+        resourceId: data.id,
+        changes: {
+          symbol,
+          direction,
+          account_id,
+        },
+      },
+      request
+    ).catch(e => console.warn("[Audit] Failed to log trade create:", e));
+
     return NextResponse.json({
       ...data,
       notes: decryptText(data.notes),
@@ -252,6 +324,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/trades:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

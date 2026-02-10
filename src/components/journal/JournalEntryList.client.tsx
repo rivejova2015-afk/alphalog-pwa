@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/browser';
 import type { JournalEntry } from '@/lib/alphacore/contracts';
 import { logger } from '@/lib/alphashield/logger';
 
@@ -23,16 +22,12 @@ export function JournalEntryList({ userId, onSelectEntry }: JournalEntryListProp
   useEffect(() => {
     const fetchEntries = async () => {
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('journal_entries')
-          .select('*')
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(20);
+        const response = await fetch('/api/journal');
+        if (!response.ok) {
+          throw new Error('Failed to load entries');
+        }
 
-        if (error) throw error;
+        const data = (await response.json()) as JournalEntry[];
         setEntries(data || []);
       } catch (err) {
         await logger.error(

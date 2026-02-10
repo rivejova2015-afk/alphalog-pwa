@@ -35,35 +35,29 @@ export default function MessageDetail() {
     try {
       const supabase = createClient();
 
-      const { data: msgData, error: msgError } = await supabase
-        .from('secure_messages')
-        .select('*')
-        .eq('id', messageId)
-        .single();
+      const response = await fetch(`/api/secure-mail/messages/${messageId}`);
+      if (!response.ok) throw new Error('Message not found');
 
-      if (msgError || !msgData) throw new Error('Message not found');
-      setMessage(msgData);
+      const payload = (await response.json()) as {
+        message: SecureMessage;
+        attachments: SecureAttachment[];
+      };
+
+      setMessage(payload.message);
+      setAttachments(payload.attachments || []);
 
       const { data: mbData, error: mbError } = await supabase
         .from('secure_mailboxes')
         .select('*')
-        .eq('id', msgData.mailbox_id)
+        .eq('id', payload.message.mailbox_id)
         .single();
 
       if (mbError || !mbData) throw new Error('Mailbox not found');
       setMailbox(mbData);
 
-      const { data: attData } = await supabase
-        .from('secure_attachments')
-        .select('*')
-        .eq('message_id', messageId)
-        .is('deleted_at', null);
-
-      if (attData) setAttachments(attData);
-
       // Log open event
       await supabase.from('secure_message_access_audit').insert({
-        user_id: msgData.user_id,
+        user_id: payload.message.user_id,
         message_id: messageId,
         event: 'open',
       });

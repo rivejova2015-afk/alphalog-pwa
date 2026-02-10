@@ -4,6 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { mirrorTradeOnUpdate } from "@/lib/copygroups/mirroring";
 import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { tradeUpdateResponseSchema, tradeUpdateSchema, validatePayloadSafe, validationErrorResponse } from "@/lib/validation/schemas";
+import { autoFixTradeUpdate } from "@/lib/validation/autoFix";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { asString } from "@/lib/validation/nullGuards";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
 
 /**
  * PATCH /api/tradehub/trades/{id}
@@ -24,7 +30,44 @@ export async function PATCH(
     const userId = userData.user.id;
     const { id } = params;
     const body = await request.json();
-    const { restore, ...updateData } = body;
+    const fixed = autoFixTradeUpdate(body as Record<string, unknown>);
+
+    if (fixed.changed) {
+      logAuditFromRequest(
+        {
+          userId,
+          action: "api_call",
+          resourceType: "trade",
+          resourceId: id,
+          status: "partial",
+          changes: { auto_fix: fixed.changes },
+        },
+        request
+      ).catch(e => console.warn("[Audit] Failed to log auto-fix:", e));
+    }
+
+    const validation = validatePayloadSafe(tradeUpdateSchema, fixed.data);
+
+    if (!validation.success) {
+      logAuditFromRequest(
+        {
+          userId,
+          action: "api_call",
+          resourceType: "trade",
+          resourceId: id,
+          status: "failure",
+          errorMessage: `Validation failed: ${Object.values(validation.errors).join("; ")}`,
+        },
+        request
+      ).catch(e => console.warn("[Audit] Failed to log validation error:", e));
+
+      return NextResponse.json(
+        validationErrorResponse(validation.errors),
+        { status: 400 }
+      );
+    }
+
+    const { restore, ...updateData } = validation.data;
 
     // Verify ownership
     const { data: existingTrade, error: tradeError } = await supabase
@@ -135,11 +178,61 @@ export async function PATCH(
       exit_date: data.exit_date,
     });
 
-    return NextResponse.json({
+    if (!restore) {
+      const changeKeys = Object.keys(updateData).filter(
+        k => updateData[k as keyof typeof updateData] !== (existingTrade as Record<string, unknown>)[k]
+      );
+      if (changeKeys.length > 0) {
+        logAuditFromRequest(
+          {
+            userId,
+            action: "update",
+            resourceType: "trade",
+            resourceId: id,
+            changes: changeKeys.reduce((acc, k) => {
+              acc[k] = { before: (existingTrade as Record<string, unknown>)[k], after: updateData[k as keyof typeof updateData] };
+              return acc;
+            }, {} as Record<string, unknown>),
+          },
+          request
+        ).catch(e => console.warn("[Audit] Failed to log trade update:", e));
+      }
+    } else {
+      logAuditFromRequest(
+        {
+          userId,
+          action: "update",
+          resourceType: "trade",
+          resourceId: id,
+          changes: { restored: true },
+        },
+        request
+      ).catch(e => console.warn("[Audit] Failed to log trade restore:", e));
+    }
+
+    const responsePayload = {
       ...data,
-      notes: decryptText(data.notes),
+      notes: decryptText(asString(data.notes)),
       progress_update: progressUpdate,
-    });
+    };
+
+    const responseCheck = enforceResponseContract(tradeUpdateResponseSchema, responsePayload);
+
+    if (!responseCheck.ok) {
+      await recordBugFromRequest(request, {
+        userId,
+        status: 500,
+        error: new Error("Response contract violation"),
+        payload: { errors: responseCheck.errors },
+      });
+
+      return NextResponse.json(
+        { error: "Internal server error" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(responseCheck.data);
   } catch (err: any) {
     console.error("Error in PATCH /api/tradehub/trades/[id]:", err);
     return NextResponse.json(
@@ -278,6 +371,16 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    logAuditFromRequest(
+      {
+        userId,
+        action: "delete",
+        resourceType: "trade",
+        resourceId: id,
+      },
+      request
+    ).catch(e => console.warn("[Audit] Failed to log trade delete:", e));
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { encryptText } from '@/lib/security/encryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Store message (already encrypted by sender, we just store ciphertext)
+    const subjectCiphertext = encryptText(inboundMessage.Subject);
+    const bodyCiphertext = encryptText(inboundMessage.TextBody || inboundMessage.HtmlBody);
+
+    if (!subjectCiphertext || !bodyCiphertext) {
+      return NextResponse.json({ error: 'Encryption key missing' }, { status: 500 });
+    }
+
     const { data: message, error: messageError } = await supabase
       .from('secure_messages')
       .insert({
@@ -116,8 +124,8 @@ export async function POST(request: NextRequest) {
         provider_message_id: inboundMessage.MessageID,
         from_email: fromEmail,
         to_email: toEmail,
-        subject_ciphertext: inboundMessage.Subject, // Assuming encrypted by sender
-        body_ciphertext: inboundMessage.TextBody || inboundMessage.HtmlBody, // Assuming encrypted
+        subject_ciphertext: subjectCiphertext,
+        body_ciphertext: bodyCiphertext,
         received_at: new Date(inboundMessage.Date).toISOString(),
         direction: 'inbound',
         status: 'received',
@@ -161,10 +169,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Store attachment metadata
+        const filenameCiphertext = encryptText(attachment.Name);
+        if (!filenameCiphertext) {
+          console.warn('Skipping attachment due to encryption error:', attachment.Name);
+          continue;
+        }
+
         await supabase.from('secure_attachments').insert({
           user_id: mailbox.user_id,
           message_id: message.id,
-          filename_ciphertext: attachment.Name, // Assuming encrypted filename
+          filename_ciphertext: filenameCiphertext,
           mime_type: attachment.ContentType,
           size_bytes: attachment.ContentLength,
           storage_path: storagePath,

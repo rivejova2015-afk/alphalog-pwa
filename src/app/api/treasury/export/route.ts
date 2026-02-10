@@ -1,5 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { getMonthDateRange, calculateExportSummary, generateTreasuryExportCsv, type ExportData } from '@/lib/treasury/exportCsv';
+import {
+  exportMonthSchema,
+  validateDateRange,
+  validateExportSize,
+  validateRecordCount,
+  generateExportFilename,
+  logExportEvent,
+  exportErrorResponse,
+  exportSuccessResponse,
+  EXPORT_CONFIG,
+} from '@/lib/security/exportHardening';
+import { logAuditEvent } from '@/lib/security/auditLog';
+import { recordBugFromRequest } from '@/lib/security/bugRecorder';
+import { asArray } from '@/lib/validation/nullGuards';
 
 /**
  * GET /api/treasury/export
@@ -14,16 +28,29 @@ import { getMonthDateRange, calculateExportSummary, generateTreasuryExportCsv, t
  */
 
 export async function GET(request: Request) {
+  const ipHint = request.headers.get('x-forwarded-for') || 'unknown';
+
   try {
     // Get month parameter
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
 
-    if (!month || !month.match(/^\d{4}-\d{2}$/)) {
-      return new Response(
-        'Invalid month format. Use YYYY-MM (e.g., 2026-01)',
-        { status: 400 }
+    // Validate month format with schema
+    const validation = exportMonthSchema.safeParse({ month });
+    if (!validation.success) {
+      await logExportEvent(
+        {
+          userId: "unknown",
+          resourceType: "treasury",
+          format: "csv",
+          status: "blocked",
+          reason: "Invalid month format",
+          ipHint,
+        },
+        logAuditEvent
       );
+
+      return exportErrorResponse('Invalid month format. Use YYYY-MM (e.g., 2026-01)', 400);
     }
 
     // Initialize Supabase client
@@ -35,10 +62,10 @@ export async function GET(request: Request) {
     // Get authenticated user
     const authHeader = request.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response('Unauthorized: No session', { status: 401 });
+      return exportErrorResponse('Unauthorized: No session', 401);
     }
 
-    // Verify session (get user from auth token via Supabase)
+    // Verify session
     const token = authHeader.substring(7);
     const {
       data: { user },
@@ -46,13 +73,32 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      return new Response('Unauthorized: Invalid session', { status: 401 });
+      return exportErrorResponse('Unauthorized: Invalid session', 401);
     }
 
     const userId = user.id;
+    const { month: monthStr } = validation.data;
 
     // Get date range for month
-    const { from, to } = getMonthDateRange(month);
+    const { from, to } = getMonthDateRange(monthStr);
+
+    // Validate date range
+    const rangeValidation = validateDateRange(from.toISOString(), to.toISOString());
+    if (!rangeValidation.valid) {
+      await logExportEvent(
+        {
+          userId,
+          resourceType: "treasury",
+          format: "csv",
+          status: "blocked",
+          reason: rangeValidation.error,
+          ipHint,
+        },
+        logAuditEvent
+      );
+
+      return exportErrorResponse(rangeValidation.error || "Invalid date range", 400);
+    }
 
     // ===== FETCH DATA =====
 
@@ -66,6 +112,12 @@ export async function GET(request: Request) {
 
     if (tradesError) {
       console.error('[Export] Error fetching trades:', tradesError);
+      await recordBugFromRequest(request, {
+        userId,
+        status: 500,
+        error: tradesError,
+        payload: { month: monthStr, scope: "trades" },
+      });
       return new Response('Error fetching trades', { status: 500 });
     }
 
@@ -96,11 +148,17 @@ export async function GET(request: Request) {
 
     if (payoutsError) {
       console.error('[Export] Error fetching payouts:', payoutsError);
+      await recordBugFromRequest(request, {
+        userId,
+        status: 500,
+        error: payoutsError,
+        payload: { month: monthStr, scope: "payouts" },
+      });
       return new Response('Error fetching payouts', { status: 500 });
     }
 
     // Flatten payout account names
-    const payoutsFormatted = payouts.map((p: any) => ({
+    const payoutsFormatted = asArray<any>(payouts).map((p) => ({
       ...p,
       account_name: p.treasury_accounts?.name || p.account_id,
       treasury_accounts: undefined, // Remove nested object
@@ -130,11 +188,17 @@ export async function GET(request: Request) {
 
     if (txError) {
       console.error('[Export] Error fetching transactions:', txError);
+      await recordBugFromRequest(request, {
+        userId,
+        status: 500,
+        error: txError,
+        payload: { month: monthStr, scope: "transactions" },
+      });
       return new Response('Error fetching transactions', { status: 500 });
     }
 
     // Flatten transaction account names
-    const transactionsFormatted = transactions.map((t: any) => ({
+    const transactionsFormatted = asArray<any>(transactions).map((t) => ({
       ...t,
       account_name: t.treasury_accounts?.name || t.account_id,
       treasury_accounts: undefined, // Remove nested object
@@ -142,12 +206,32 @@ export async function GET(request: Request) {
 
     // ===== CALCULATE SUMMARY =====
     const summary = calculateExportSummary(
-      trades || [],
-      payoutsFormatted || [],
+      asArray(trades),
+      payoutsFormatted,
       from,
       to,
-      month
+      monthStr
     );
+
+    // ===== VALIDATE RECORD COUNTS =====
+    const totalRecords = asArray(trades).length + payoutsFormatted.length + transactionsFormatted.length;
+    const recordValidation = validateRecordCount(Array(totalRecords).fill({}));
+    if (!recordValidation.valid) {
+      await logExportEvent(
+        {
+          userId,
+          resourceType: "treasury",
+          format: "csv",
+          recordCount: totalRecords,
+          status: "blocked",
+          reason: recordValidation.error,
+          ipHint,
+        },
+        logAuditEvent
+      );
+
+      return exportErrorResponse(recordValidation.error || "Export data too large", 400);
+    }
 
     // ===== GENERATE CSV =====
     const exportData: ExportData = {
@@ -158,19 +242,53 @@ export async function GET(request: Request) {
 
     const csvContent = generateTreasuryExportCsv(exportData);
 
-    // ===== RETURN RESPONSE =====
-    const filename = `treasury-export-${month}.csv`;
+    // ===== VALIDATE FILE SIZE =====
+    const sizeValidation = validateExportSize(csvContent);
+    if (!sizeValidation.valid) {
+      await logExportEvent(
+        {
+          userId,
+          resourceType: "treasury",
+          format: "csv",
+          recordCount: totalRecords,
+          fileSizeMB: sizeValidation.sizeMB,
+          status: "blocked",
+          reason: sizeValidation.error,
+          ipHint,
+        },
+        logAuditEvent
+      );
 
-    return new Response(csvContent, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/csv;charset=utf-8',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      return exportErrorResponse(sizeValidation.error || "Export file too large", 400);
+    }
+
+    // ===== RETURN RESPONSE =====
+    const filename = generateExportFilename("treasury", "csv", monthStr);
+
+    // Log successful export
+    await logExportEvent(
+      {
+        userId,
+        resourceType: "treasury",
+        format: "csv",
+        recordCount: totalRecords,
+        fileSizeMB: sizeValidation.sizeMB,
+        dateFrom: from.toISOString().slice(0, 10),
+        dateTo: to.toISOString().slice(0, 10),
+        status: "success",
+        ipHint,
       },
-    });
+      logAuditEvent
+    );
+
+    return exportSuccessResponse(csvContent, "csv", filename);
   } catch (error) {
     console.error('[Export] Unexpected error:', error);
-    return new Response('Internal server error', { status: 500 });
+    await recordBugFromRequest(request, {
+      userId: "unknown",
+      status: 500,
+      error,
+    });
+    return exportErrorResponse('Internal server error', 500);
   }
 }
