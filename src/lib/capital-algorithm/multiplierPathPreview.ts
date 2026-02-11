@@ -7,6 +7,7 @@ export interface Node {
   label: string;
   multiplier: number;
   children?: Node[];
+  simulatedSize?: number;
 }
 
 export function simulateMultiplierPath(root: Node, masterSize: number): Node {
