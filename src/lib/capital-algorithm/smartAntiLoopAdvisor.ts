@@ -24,7 +24,8 @@ export function suggestValidLink(currentId: string, targetId: string, allLinks: 
   if (!isCycle(currentId, targetId, allLinks)) return null;
   // Buscar un target alternativo que no cree ciclo
   for (const [from, to] of allLinks) {
-    if (from === currentId && !isCycle(from, to, allLinks.filter(l => l !== [from, to]))) {
+    // Fix: compare values, not array reference
+    if (from === currentId && !isCycle(from, to, allLinks.filter(l => !(l[0] === from && l[1] === to)))) {
       return to;
     }
   }
