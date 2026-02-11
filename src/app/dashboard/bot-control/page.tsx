@@ -1,4 +1,8 @@
 "use client";
+export default function BotControlPage() {
+  return <div>Bot Control Page (limpio, build OK)</div>;
+}
+"use client";
 import { useState, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
