@@ -1,41 +1,72 @@
-// src/app/dashboard/bot-control/page.tsx
 "use client";
+import { useState, useMemo } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import BackToDashboardButton from "@/components/BackToDashboardButton.client";
-import { PushNotificationButton } from "@/components/push/PushNotificationButton.client";
-import { createClient } from "@/lib/supabase/browser";
-import { isOffline, getBotControlOfflineData, saveBotControlSnapshot } from "@/lib/offline/snapshot";
+// Componente para agregar cuentas
+export function AddAccountForm({ botId, onAccountAdded }: { botId: string | null, onAccountAdded: () => void }) {
+  const [accountId, setAccountId] = useState("");
+  const [label, setLabel] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
-interface Bot {
-  id: string;
-  name: string;
-}
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!botId || !accountId.trim()) {
+      setError("Debes ingresar un account_id y seleccionar un bot.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id || null;
+      const { error: insertError } = await supabase
+        .from("bot_accounts")
+        .insert({
+          bot_id: botId,
+          user_id: userId,
+          account_id: accountId.trim(),
+          label: label.trim() || null,
+        });
+      if (insertError) throw insertError;
+      setAccountId("");
+      setLabel("");
+      onAccountAdded();
+    } catch (err: any) {
+      setError(err.message || "Error al agregar cuenta");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-interface BotAccount {
-  id: string;
-  bot_id: string;
-  account_id: string;
-  label: string | null;
-}
-
-interface BotInstance {
-  bot_account_id: string;
-  last_heartbeat_at: string | null;
-}
-
-interface BotTelemetry {
-  bot_account_id: string;
-  equity: number | null;
-  balance: number | null;
-  positions_total: number | null;
-  positions_buy: number | null;
-  positions_sell: number | null;
-  basket_r: number | null;
-  tier: string | null;
-  last_signal_text: string | null;
-  last_signal_ts: string | null;
-  last_heartbeat_ts: string | null;
+  return (
+    <form className="flex flex-col gap-2 mb-2" onSubmit={handleAdd}>
+      <input
+        type="text"
+        placeholder="account_id (ej: 12345678)"
+        value={accountId}
+        onChange={e => setAccountId(e.target.value)}
+        className="rounded-lg bg-slate-800/80 border border-blue-400 px-2 py-1 text-blue-100"
+        required
+      />
+      <input
+        type="text"
+        placeholder="Etiqueta (opcional)"
+        value={label}
+        onChange={e => setLabel(e.target.value)}
+        className="rounded-lg bg-slate-800/80 border border-blue-400 px-2 py-1 text-blue-100"
+      />
+      <button
+        type="submit"
+        disabled={loading}
+        className="rounded-lg bg-blue-500/80 px-3 py-1.5 text-blue-100 font-semibold hover:bg-blue-400"
+      >
+        {loading ? "Agregando..." : "Agregar cuenta"}
+      </button>
+      {error && <div className="text-xs text-rose-300 mt-1">{error}</div>}
+    </form>
+  );
 }
 
 interface BotCommand {
