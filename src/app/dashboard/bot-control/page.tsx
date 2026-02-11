@@ -511,7 +511,6 @@ export default function BotControlPage() {
               <div>
                 <h2 className="display-font text-base font-semibold text-blue-100 mb-1">Cuentas de trading del bot</h2>
                 <p className="text-xs text-blue-300 mb-2">Agrega una nueva cuenta (account_id) o selecciona una ya registrada para operar. El EA debe usar el mismo <b>account_id</b>.</p>
-                {/* Formulario para agregar cuenta */}
                 <AddAccountForm botId={selectedBotId} onAccountAdded={loadData} />
               </div>
               <div>
@@ -537,7 +536,7 @@ export default function BotControlPage() {
               </div>
             </div>
           </div>
-// ---
+
 // Componente para agregar cuenta
 function AddAccountForm({ botId, onAccountAdded }: { botId: string | null, onAccountAdded: () => void }) {
   const [accountId, setAccountId] = useState("");
