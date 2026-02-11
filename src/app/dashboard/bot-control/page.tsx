@@ -537,8 +537,12 @@ export default function BotControlPage() {
             </div>
           </div>
 
-// Componente para agregar cuenta
-function AddAccountForm({ botId, onAccountAdded }: { botId: string | null, onAccountAdded: () => void }) {
+
+// ---
+
+// Mover el componente AddAccountForm al final del archivo para evitar errores de sintaxis TSX
+
+export function AddAccountForm({ botId, onAccountAdded }: { botId: string | null, onAccountAdded: () => void }) {
   const [accountId, setAccountId] = useState("");
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
