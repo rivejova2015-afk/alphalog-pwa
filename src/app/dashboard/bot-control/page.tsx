@@ -1,6 +1,41 @@
+// src/app/dashboard/bot-control/page.tsx
 "use client";
-export default function BotControlPage() {
-  return <div>Bot Control Page</div>;
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import BackToDashboardButton from "@/components/BackToDashboardButton.client";
+import { PushNotificationButton } from "@/components/push/PushNotificationButton.client";
+import { createClient } from "@/lib/supabase/browser";
+import { isOffline, getBotControlOfflineData, saveBotControlSnapshot } from "@/lib/offline/snapshot";
+
+interface Bot {
+  id: string;
+  name: string;
+}
+
+interface BotAccount {
+  id: string;
+  bot_id: string;
+  account_id: string;
+  label: string | null;
+}
+
+interface BotInstance {
+  bot_account_id: string;
+  last_heartbeat_at: string | null;
+}
+
+interface BotTelemetry {
+  bot_account_id: string;
+  equity: number | null;
+  balance: number | null;
+  positions_total: number | null;
+  positions_buy: number | null;
+  positions_sell: number | null;
+  basket_r: number | null;
+  tier: string | null;
+  last_signal_text: string | null;
+  last_signal_ts: string | null;
+  last_heartbeat_ts: string | null;
 }
 
 interface BotCommand {
@@ -78,9 +113,6 @@ function formatTimestamp(value: string | null | undefined) {
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
 }
 
-// Estilos premium globales
-import "@/styles/bot-control-premium.css";
-
 export default function BotControlPage() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [accounts, setAccounts] = useState<BotAccount[]>([]);
@@ -93,7 +125,6 @@ export default function BotControlPage() {
   const [dirtyGlobalSettings, setDirtyGlobalSettings] = useState(false);
   const [dirtyOverrideSettings, setDirtyOverrideSettings] = useState<Record<string, boolean>>({});
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [offlineMode, setOfflineMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,12 +144,6 @@ export default function BotControlPage() {
   const accountsForBot = useMemo(
     () => accounts.filter((account) => account.bot_id === selectedBotId),
     [accounts, selectedBotId]
-  );
-
-  // Nueva: obtener la cuenta seleccionada (objeto)
-  const selectedAccount = useMemo(
-    () => accountsForBot.find((a) => a.id === selectedAccountId) || null,
-    [accountsForBot, selectedAccountId]
   );
 
   const telemetryMap = useMemo(() => {
@@ -149,11 +174,7 @@ export default function BotControlPage() {
     setDirtyOverrideSettings({});
     dirtyGlobalRef.current = false;
     dirtyOverrideRef.current = {};
-    // Si hay cuentas, seleccionar la primera por defecto
-    if (accountsForBot.length > 0 && !selectedAccountId) {
-      setSelectedAccountId(accountsForBot[0].id);
-    }
-  }, [selectedBotId, accountsForBot.length]);
+  }, [selectedBotId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -438,9 +459,8 @@ export default function BotControlPage() {
     return Date.now() - new Date(instance.last_heartbeat_at).getTime() <= ONLINE_THRESHOLD_MS;
   };
 
-
   return (
-    <div className="min-h-screen text-slate-200 animate-fadeIn">
+    <div className="min-h-screen text-slate-200">
       <header className="bg-slate-900/80 border-b border-slate-700/60 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -455,7 +475,7 @@ export default function BotControlPage() {
         </div>
       </header>
 
-      <div className="premium-panel animate-fadeIn p-6 mb-6">
+      <div className="p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {offlineMode && (
             <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200 text-sm">
@@ -469,82 +489,77 @@ export default function BotControlPage() {
             </div>
           )}
 
-
-          {/* Agregar y seleccionar cuenta para el bot */}
-          <div className="rounded-2xl border border-blue-500/40 bg-blue-500/10 p-4 text-blue-200 text-sm mb-6">
+          <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)] backdrop-blur">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
-                <h2 className="display-font text-base font-semibold text-blue-100 mb-1">Cuentas de trading del bot</h2>
-                <p className="text-xs text-blue-300 mb-2">Agrega una nueva cuenta (account_id) o selecciona una ya registrada para operar. El EA debe usar el mismo <b>account_id</b>.</p>
-                <AddAccountForm botId={selectedBotId} onAccountAdded={loadData} />
+                <h2 className="display-font text-lg font-semibold text-slate-100">Global Controls</h2>
+                <p className="text-sm text-slate-400">Aplica comandos a todas las cuentas del bot</p>
               </div>
-              <div>
-                <label className="block mb-1 text-blue-200 font-semibold">Seleccionar cuenta</label>
-                <select
-                  className="rounded-lg bg-slate-800/80 border border-blue-400 px-3 py-2 text-blue-100"
-                  value={selectedAccountId || ''}
-                  onChange={e => setSelectedAccountId(e.target.value)}
-                  disabled={accountsForBot.length === 0}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => createCommand(COMMANDS.START)}
+                  disabled={offlineMode || loading}
+                  className="px-4 py-2 rounded-xl bg-emerald-500/80 text-slate-900 text-sm font-semibold hover:bg-emerald-400 transition"
                 >
-                  {accountsForBot.length === 0 && <option value="">No hay cuentas registradas</option>}
-                  {accountsForBot.map(account => (
-                    <option key={account.id} value={account.id}>
-                      {account.label || account.account_id}
-                    </option>
-                  ))}
-                </select>
-                {selectedAccount && (
-                  <div className="mt-2 text-xs text-blue-300">
-                    <b>account_id:</b> <span className="font-mono">{selectedAccount.account_id}</span>
-                  </div>
-                )}
+                  Master START
+                </button>
+                <button
+                  onClick={() => createCommand(COMMANDS.STOP)}
+                  disabled={offlineMode || loading}
+                  className="px-4 py-2 rounded-xl bg-amber-500/80 text-slate-900 text-sm font-semibold hover:bg-amber-400 transition"
+                >
+                  Master STOP
+                </button>
+                <button
+                  onClick={() => createCommand(COMMANDS.RESTART)}
+                  disabled={offlineMode || loading}
+                  className="px-4 py-2 rounded-xl bg-slate-700 text-slate-100 text-sm font-semibold hover:bg-slate-600 transition"
+                >
+                  Restart Logic ALL
+                </button>
+                <button
+                  onClick={() => createCommand(COMMANDS.EMERGENCY_STOP)}
+                  disabled={offlineMode || loading}
+                  className="px-4 py-2 rounded-xl bg-rose-500/80 text-slate-100 text-sm font-semibold hover:bg-rose-400 transition"
+                >
+                  Kill Switch ALL
+                </button>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// ---
-
-// Mover el componente AddAccountForm al final del archivo para evitar errores de sintaxis TSX
-
-export function AddAccountForm({ botId, onAccountAdded }: { botId: string | null, onAccountAdded: () => void }) {
-  const [accountId, setAccountId] = useState("");
-  const [label, setLabel] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const supabase = useMemo(() => createClient(), []);
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!botId || !accountId.trim()) {
-      setError("Debes ingresar un account_id y seleccionar un bot.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id || null;
-      const { error: insertError } = await supabase
-        .from("bot_accounts")
-        .insert({
-          bot_id: botId,
-          user_id: userId,
-          account_id: accountId.trim(),
-          label: label.trim() || null,
-        });
-      if (insertError) throw insertError;
-      setAccountId("");
-      setLabel("");
-      onAccountAdded();
-    } catch (err: any) {
-      setError(err.message || "Error al agregar cuenta");
-    }
-  }
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
+                <h3 className="text-sm font-semibold text-slate-200 mb-3">Settings Global</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <label className="flex flex-col gap-1">
+                    LotsFixed
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max="1.0"
+                      value={Number(settingsGlobal.LotsFixed ?? 0.01)}
+                      onChange={(e) => updateSetting("LotsFixed", Number(e.target.value))}
+                      className="rounded-lg bg-slate-800/80 border border-slate-700 px-2 py-1"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    MaxPositionsTotal
+                    <input
+                      type="number"
+                      value={Number(settingsGlobal.MaxPositionsTotal ?? 50)}
+                      onChange={(e) => updateSetting("MaxPositionsTotal", Number(e.target.value))}
+                      className="rounded-lg bg-slate-800/80 border border-slate-700 px-2 py-1"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    MaxEntriesPerBar
+                    <input
+                      type="number"
+                      value={Number(settingsGlobal.MaxEntriesPerBar ?? 15)}
+                      onChange={(e) => updateSetting("MaxEntriesPerBar", Number(e.target.value))}
+                      className="rounded-lg bg-slate-800/80 border border-slate-700 px-2 py-1"
+                    />
                   </label>
                   <label className="flex flex-col gap-1">
                     ATRPeriod
