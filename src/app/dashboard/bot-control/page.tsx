@@ -579,57 +579,9 @@ export function AddAccountForm({ botId, onAccountAdded }: { botId: string | null
     } catch (err: any) {
       setError(err.message || "Error al agregar cuenta");
     } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form className="flex flex-col gap-2 mb-2" onSubmit={handleAdd}>
-      <input
-        type="text"
-        placeholder="account_id (ej: 12345678)"
-        value={accountId}
-        onChange={e => setAccountId(e.target.value)}
-        className="rounded-lg bg-slate-800/80 border border-blue-400 px-2 py-1 text-blue-100"
-        required
-      />
-      <input
-        type="text"
-        placeholder="Etiqueta (opcional)"
-        value={label}
-        onChange={e => setLabel(e.target.value)}
-        className="rounded-lg bg-slate-800/80 border border-blue-400 px-2 py-1 text-blue-100"
-      />
-      <button
-        type="submit"
-        disabled={loading}
-        className="rounded-lg bg-blue-500/80 px-3 py-1.5 text-blue-100 font-semibold hover:bg-blue-400"
-      >
-        {loading ? "Agregando..." : "Agregar cuenta"}
-      </button>
-      {error && <div className="text-xs text-rose-300 mt-1">{error}</div>}
-    </form>
-  );
-}
-                      step="0.01"
-                      min="0.01"
-                      max="1.0"
-                      value={Number(settingsGlobal.LotsFixed ?? 0.01)}
-                      onChange={(e) => updateSetting("LotsFixed", Number(e.target.value))}
-                      className="rounded-lg bg-slate-800/80 border border-slate-700 px-2 py-1"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    MaxPositionsTotal
-                    <input
-                      type="number"
-                      value={Number(settingsGlobal.MaxPositionsTotal ?? 50)}
-                      onChange={(e) => updateSetting("MaxPositionsTotal", Number(e.target.value))}
-                      className="rounded-lg bg-slate-800/80 border border-slate-700 px-2 py-1"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    MaxEntriesPerBar
+      </form>
+    );
+  }
                     <input
                       type="number"
                       value={Number(settingsGlobal.MaxEntriesPerBar ?? 15)}
