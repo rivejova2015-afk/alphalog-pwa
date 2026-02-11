@@ -578,16 +578,8 @@ export function AddAccountForm({ botId, onAccountAdded }: { botId: string | null
       onAccountAdded();
     } catch (err: any) {
       setError(err.message || "Error al agregar cuenta");
-    } finally {
-      </form>
-    );
+    }
   }
-                    <input
-                      type="number"
-                      value={Number(settingsGlobal.MaxEntriesPerBar ?? 15)}
-                      onChange={(e) => updateSetting("MaxEntriesPerBar", Number(e.target.value))}
-                      className="rounded-lg bg-slate-800/80 border border-slate-700 px-2 py-1"
-                    />
                   </label>
                   <label className="flex flex-col gap-1">
                     ATRPeriod
