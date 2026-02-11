@@ -611,53 +611,6 @@ export function AddAccountForm({ botId, onAccountAdded }: { botId: string | null
     </form>
   );
 }
-
-          <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)] backdrop-blur animate-fadeIn">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h2 className="display-font text-lg font-semibold text-slate-100">Global Controls</h2>
-                <p className="text-sm text-slate-400">Aplica comandos a todas las cuentas del bot</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => createCommand(COMMANDS.START, selectedAccountId ? [selectedAccountId] : undefined)}
-                  disabled={offlineMode || loading || !selectedAccountId}
-                  className="px-4 py-2 rounded-xl bg-emerald-500/80 text-slate-900 text-sm font-semibold hover:bg-emerald-400 transition-shadow shadow-lg hover:shadow-2xl animate-fadeIn"
-                >
-                  Master START
-                </button>
-                <button
-                  onClick={() => createCommand(COMMANDS.STOP, selectedAccountId ? [selectedAccountId] : undefined)}
-                  disabled={offlineMode || loading || !selectedAccountId}
-                  className="px-4 py-2 rounded-xl bg-amber-500/80 text-slate-900 text-sm font-semibold hover:bg-amber-400 transition-shadow shadow-lg hover:shadow-2xl animate-fadeIn"
-                >
-                  Master STOP
-                </button>
-                <button
-                  onClick={() => createCommand(COMMANDS.RESTART, selectedAccountId ? [selectedAccountId] : undefined)}
-                  disabled={offlineMode || loading || !selectedAccountId}
-                  className="px-4 py-2 rounded-xl bg-slate-700 text-slate-100 text-sm font-semibold hover:bg-slate-600 transition-shadow shadow-lg hover:shadow-2xl animate-fadeIn"
-                >
-                  Restart Logic
-                </button>
-                <button
-                  onClick={() => createCommand(COMMANDS.EMERGENCY_STOP, selectedAccountId ? [selectedAccountId] : undefined)}
-                  disabled={offlineMode || loading || !selectedAccountId}
-                  className="px-4 py-2 rounded-xl bg-rose-500/80 text-slate-100 text-sm font-semibold hover:bg-rose-400 transition-shadow shadow-lg hover:shadow-2xl animate-fadeIn"
-                >
-                  Kill Switch
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/60 p-4">
-                <h3 className="text-sm font-semibold text-slate-200 mb-3">Settings Global</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <label className="flex flex-col gap-1">
-                    LotsFixed
-                    <input
-                      type="number"
                       step="0.01"
                       min="0.01"
                       max="1.0"
