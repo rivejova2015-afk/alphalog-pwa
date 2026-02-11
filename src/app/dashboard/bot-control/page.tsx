@@ -536,7 +536,11 @@ export default function BotControlPage() {
               </div>
             </div>
           </div>
-
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ---
 
