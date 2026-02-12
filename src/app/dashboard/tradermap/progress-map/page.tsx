@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { getDailyMicroActions } from '@/lib/progress-map/questMicroPlanner';
+import { ThresholdVersioning, ThresholdPreset } from '@/lib/progress-map/thresholdPresets';
 import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 import { logger } from "@/lib/alphashield/logger";
 
@@ -74,6 +76,11 @@ const emptyMap = {
 
 export default function ProgressMapPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  // QuestMicroPlanner: daily micro-actions
+  const todayMicroActions = getDailyMicroActions(new Date());
+
+  // ThresholdPresets: versioning instance
+  const thresholdVersioning = new ThresholdVersioning();
   const [state, setState] = useState<ProgressMapResponse>(emptyMap);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -185,6 +192,29 @@ export default function ProgressMapPage() {
   };
 
   const handleSaveThresholds = async () => {
+        {/* Micro-Actions (QuestMicroPlanner) */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-white">Micro-Actions Diarias</h2>
+          <ul className="flex gap-4">
+            {todayMicroActions.map(action => (
+              <li key={action.id} className={`px-3 py-2 rounded ${action.completed ? 'bg-green-700' : 'bg-slate-700'}`}>{action.label}</li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Threshold Presets (versioning) */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-white">Threshold Presets</h2>
+          <div className="flex gap-2">
+            {(['conservador','balanceado','estricto'] as ThresholdPreset[]).map(preset => (
+              <button key={preset} className="px-4 py-2 bg-blue-700 rounded text-white" onClick={() => thresholdVersioning.addVersion(preset, { key1: 10, key2: 20 })}>{preset}</button>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-slate-400">
+            Última versión: {thresholdVersioning.getLatest()?.preset || 'N/A'}
+          </div>
+          <button className="mt-2 px-3 py-1 bg-red-700 rounded text-white" onClick={() => thresholdVersioning.rollback()}>Rollback</button>
+        </div>
     setError("");
     const items = Object.entries(thresholdInputs)
       .filter(([key]) => key)

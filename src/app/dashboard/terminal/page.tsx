@@ -3,6 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { Radio, Calendar, BarChart3, Search, Zap } from "lucide-react";
+import { clusterStories, NewsItem } from '@/lib/terminal-ia/storyClustering';
+import { buildImpactMatrix, ImpactMatrixRow } from '@/lib/terminal-ia/impactMatrix';
 import NewsPanel from "@/components/terminal/NewsPanel.client";
 import CalendarPanel from "@/components/terminal/CalendarPanel.client";
 import EvidenceReports from "@/components/terminal/EvidenceReports.client";
@@ -41,6 +43,17 @@ function TerminalOverview() {
 }
 
 export default function TerminalPage() {
+    // Demo: fake news items
+    const demoNews: NewsItem[] = [
+      { id: '1', title: 'Fed raises rates', content: '...', topic: 'Fed', date: new Date() },
+      { id: '2', title: 'ECB holds rates', content: '...', topic: 'ECB', date: new Date() },
+      { id: '3', title: 'Fed signals pause', content: '...', topic: 'Fed', date: new Date() },
+    ];
+    const clusters = clusterStories(demoNews);
+    const impactMatrix = buildImpactMatrix([
+      { topic: 'Fed', impact: 'High', bias: 'Hawkish', confidence: 0.9 },
+      { topic: 'ECB', impact: 'Medium', bias: 'Neutral', confidence: 0.7 },
+    ]);
   const [activeTab, setActiveTab] = useState<TerminalTabType>("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -135,6 +148,36 @@ export default function TerminalPage() {
           <div className="max-w-7xl mx-auto">
             {activeTab === "overview" && <TerminalOverview />}
             {activeTab === "news" && <NewsPanel />}
+                    {activeTab === "news" && (
+                      <div className="mb-8">
+                        <h3 className="text-lg font-semibold text-white mb-2">Story Clustering</h3>
+                        <ul className="mb-4">
+                          {clusters.map(cluster => (
+                            <li key={cluster.topic} className="mb-2">
+                              <span className="font-bold text-blue-300">{cluster.topic}</span>: {cluster.items.length} noticias
+                            </li>
+                          ))}
+                        </ul>
+                        <h3 className="text-lg font-semibold text-white mb-2">Impact Matrix</h3>
+                        <table className="w-full text-xs text-slate-200">
+                          <thead>
+                            <tr>
+                              <th>Tema</th><th>Impacto</th><th>Sesgo</th><th>Confianza</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {impactMatrix.map(row => (
+                              <tr key={row.topic}>
+                                <td>{row.topic}</td>
+                                <td>{row.impact}</td>
+                                <td>{row.bias}</td>
+                                <td>{(row.confidence*100).toFixed(0)}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
             {activeTab === "calendar" && <CalendarPanel />}
             {activeTab === "evidence" && (
               <div className="space-y-6">

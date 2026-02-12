@@ -1,9 +1,38 @@
+import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
+  // AtomicSavePipeline: log for debug (invisible)
+  const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
+import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
+// Singleton event ledger for this session
+const eventLedger = new EventQueueLedger();
+import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
+  // AutoReconciler: background sync for offline trades
+  const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
+  // Map OfflineQueue to PendingSyncItem[]
+  const getPendingSyncItems = () =>
+    offlineQueue.getPending().map((item) => ({
+      id: item.id,
+      type: item.type,
+      payload: item.payload,
+      retries: item.payload.retries || 0,
+      lastAttempt: item.payload.lastAttempt || 0,
+    }));
+
+  useAutoReconciler(getPendingSyncItems, (log) => {
+    setReconcileLog((prev) => [log, ...prev.slice(0, 20)]);
+    if (log.status === "success") {
+      offlineQueue.markSynced(log.id);
+      fetchTrades();
+    }
+  });
 "use client";
 
 import Image from "next/image";
 // src/components/tradehub/NewTradesLog.client.tsx
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { OfflineQueue, OfflineCreate } from "@/lib/offline-pwa/offlineQueueForCreates";
+// Singleton offline queue for this session
+const offlineQueue = new OfflineQueue();
 import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
 import { logger } from "@/lib/alphashield/logger";
 import { captureException } from "@/lib/sentry";
@@ -399,20 +428,60 @@ export default function NewTradesLog() {
         is_featured_in_report: formData.isFeatured,
       };
 
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const message = errData?.error || errData?.message || "Error al guardar";
-        throw new Error(message);
+      // EventQueueLedger: enqueue event for idempotency
+      const eventId = editingTrade?.id || `evt-${Date.now()}`;
+      const event: EventLedgerEntry = {
+        id: eventId,
+        type: "TradeClosedSaved",
+        payload: { ...payload, id: eventId },
+        timestamp: Date.now(),
+        processed: false,
+      };
+      eventLedger.enqueue(event);
+
+      // Prevent duplicate processing
+      if (eventLedger.length > 0 && eventLedger.unprocessed.find(e => e.id === eventId)) {
+        // Only process if not already processed
+        const response = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const message = errData?.error || errData?.message || "Error al guardar";
+          // Si offline o error, guardar en queue local
+          const offlineId = editingTrade?.id || `offline-${Date.now()}`;
+          offlineQueue.add({
+            id: offlineId,
+            type: "trade",
+            payload: { ...payload, id: offlineId },
+            synced: false,
+          });
+          setError("Guardado offline. Se sincronizará automáticamente.");
+          // Optimistic update
+          if (!editingTrade) {
+            setTrades(prev => [{ ...payload, id: offlineId, status: payload.status || "Open" }, ...prev]);
+          } else {
+            setTrades(prev => prev.map(t => t.id === editingTrade.id ? { ...t, ...payload } : t));
+          }
+          resetForm();
+          await fetchTrades();
+          return;
+        }
+        // Mark event as processed
+        eventLedger.markProcessed(eventId);
       }
 
       // Get the created/updated trade from response
       const savedTrade = await response.json();
+
+      // AtomicSavePipeline: run after save
+      await atomicSavePipeline(savedTrade, {
+        onStep: (result) => setPipelineLog((prev) => [result, ...prev.slice(0, 20)]),
+      });
 
       // Optimistic update: Add to list immediately
       if (!editingTrade) {
@@ -453,6 +522,32 @@ export default function NewTradesLog() {
       }
     }
   };
+  // On mount: try to sync any offline trades
+  useEffect(() => {
+    const syncOffline = async () => {
+      const pending = offlineQueue.getPending();
+      for (const item of pending) {
+        try {
+          const response = await fetch("/api/tradehub/trades", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(item.payload),
+          });
+          if (response.ok) {
+            offlineQueue.markSynced(item.id);
+            // Optionally update UI
+            await fetchTrades();
+          }
+        } catch (e) {
+          // Still offline, skip
+        }
+      }
+    };
+    syncOffline();
+    // Optionally, poll every 30s
+    const interval = setInterval(syncOffline, 30000);
+    return () => clearInterval(interval);
+  }, [fetchTrades]);
 
   const handleDelete = async (tradeId: string) => {
     try {

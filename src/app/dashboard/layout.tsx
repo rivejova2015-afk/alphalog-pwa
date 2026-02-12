@@ -8,15 +8,9 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 
 const menuItems = [
-  { label: "Dashboard", href: "/dashboard", icon: "📊" },
-  { label: "TradeHub", href: "/dashboard/tradehub", icon: "🎯" },
-  { label: "Terminal", href: "/dashboard/terminal", icon: "💹" },
-  { label: "Bot Control", href: "/dashboard/bot-control", icon: "🤖" },
-  { label: "Journal PT", href: "/dashboard/logs", icon: "📓" },
-  { label: "TraderMap", href: "/dashboard/tradermap", icon: "🗺️" },
-  { label: "Treasury", href: "/dashboard/treasury", icon: "💰" },
-  { label: "Business", href: "/dashboard/business", icon: "💼" },
-  { label: "Cuenta", href: "/auth/set-password", icon: "🔐" },
+  { label: "Trading", href: "/trading", icon: "🎯" },
+  { label: "Business", href: "/business", icon: "💼" },
+  { label: "Intelligence", href: "/intelligence", icon: "🧠" },
 ];
 
 export default function DashboardLayout({

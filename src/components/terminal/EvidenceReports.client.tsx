@@ -6,6 +6,7 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { toArray, normalizeListResponse, normalizeSingleResponse } from "@/lib/safe";
 import { logger } from "@/lib/alphashield/logger";
 import EvidenceAttachments from "./EvidenceAttachments.client";
+import { computeEvidenceQuality } from "@/lib/evidence-vault/evidenceQualityMeter";
 
 interface Instrument {
   id: string;
@@ -333,6 +334,41 @@ export default function EvidenceReports() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Evidence Auto-Linking */}
+      <div className="lg:col-span-3 mb-6">
+        <h3 className="text-lg font-semibold text-white">Auto-Linking</h3>
+        <div className="text-xs text-slate-400">
+          {(() => {
+            const demoEvidence = { id: 'ev1', date: new Date(), symbol: 'EURUSD', tags: ['trade'] };
+            const demoTargets = [
+              { id: 't1', type: 'trade', date: new Date(), symbol: 'EURUSD', tags: ['trade'] },
+              { id: 't2', type: 'setup', date: new Date(), symbol: 'AAPL', tags: ['setup'] },
+            ];
+            const autoLinked = suggestAutoLink(demoEvidence, demoTargets);
+            return autoLinked ? `Evidencia auto-linkeada a: ${autoLinked.type} (${autoLinked.symbol})` : 'Sin match para auto-link';
+          })()}
+        </div>
+      </div>
+
+      {/* Timeline Stitching */}
+      <div className="lg:col-span-3 mb-6">
+        <h3 className="text-lg font-semibold text-white">Timeline Stitching</h3>
+        <ul className="text-xs text-slate-400">
+          {(() => {
+            const timelineItems = [
+              { id: 'ev1', type: 'evidence', date: new Date() },
+              { id: 't1', type: 'trade', date: new Date() },
+              { id: 'r1', type: 'report', date: new Date() },
+            ];
+            const stitchedTimeline = stitchTimeline(timelineItems);
+            return stitchedTimeline.map((group, idx) => (
+              <li key={idx} className="mb-2">
+                Día {group[0]?.date.toISOString().slice(0,10)}: {group.map(item => item.type).join(', ')}
+              </li>
+            ));
+          })()}
+        </ul>
+      </div>
       {/* Missing Table Alert */}
       {instrumentsMissingTable && (
         <div className="lg:col-span-3 p-4 bg-amber-900/50 border border-amber-700 rounded-lg">
@@ -477,29 +513,46 @@ export default function EvidenceReports() {
           ) : reports.length === 0 ? (
             <div className="text-slate-400 text-sm">Sin reportes aún</div>
           ) : (
-            reports.map((report) => (
-              <div
-                key={report.id}
-                onClick={() => setSelectedReportId(report.id)}
-                className={`p-3 rounded-2xl border cursor-pointer transition text-sm ${
-                  selectedReportId === report.id
-                    ? "bg-slate-800/90 border-blue-600/60 shadow-[0_10px_22px_rgba(2,4,10,0.35)]"
-                    : "bg-slate-900/70 border-slate-700/60 hover:border-slate-600"
-                }`}
-              >
-                <p className="font-medium text-white truncate">
-                  {report.title}
-                </p>
-                {report.instrument_id && (
+            reports.map((report) => {
+              // Simulación: evidence quality
+              const quality = computeEvidenceQuality({
+                id: report.id,
+                complete: !!report.content,
+                wellTagged: !!report.instrument_id,
+                linked: true // Simulación: siempre vinculado
+              });
+              return (
+                <div
+                  key={report.id}
+                  onClick={() => setSelectedReportId(report.id)}
+                  className={`p-3 rounded-2xl border cursor-pointer transition text-sm ${
+                    selectedReportId === report.id
+                      ? "bg-slate-800/90 border-blue-600/60 shadow-[0_10px_22px_rgba(2,4,10,0.35)]"
+                      : "bg-slate-900/70 border-slate-700/60 hover:border-slate-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-white truncate">
+                      {report.title}
+                    </p>
+                    <span
+                      className="ml-2 px-2 py-1 rounded bg-emerald-900/60 text-emerald-200 text-xs font-semibold opacity-0 hover:opacity-100 transition"
+                      title={`Calidad: ${(quality * 100).toFixed(0)}%`}
+                    >
+                      Calidad {Math.round(quality * 100)}%
+                    </span>
+                  </div>
+                  {report.instrument_id && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      {instrumentMap.get(report.instrument_id) || "Instrumento"}
+                    </p>
+                  )}
                   <p className="text-xs text-slate-400 mt-1">
-                    {instrumentMap.get(report.instrument_id) || "Instrumento"}
+                    {new Date(report.created_at).toLocaleDateString("es-ES")}
                   </p>
-                )}
-                <p className="text-xs text-slate-400 mt-1">
-                  {new Date(report.created_at).toLocaleDateString("es-ES")}
-                </p>
-              </div>
-            ))
+                </div>
+              );
+            })
           )}
         </div>
       </div>
@@ -543,6 +596,28 @@ export default function EvidenceReports() {
               </div>
 
               <div className="prose prose-invert max-w-none">
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="px-2 py-1 rounded bg-emerald-900/60 text-emerald-200 text-xs font-semibold"
+                    title={`Calidad: ${(
+                      computeEvidenceQuality({
+                        id: selectedReport.id,
+                        complete: !!selectedReport.content,
+                        wellTagged: !!selectedReport.instrument_id,
+                        linked: true // Simulación
+                      }) * 100
+                    ).toFixed(0)}%`}
+                  >
+                    Calidad {Math.round(
+                      computeEvidenceQuality({
+                        id: selectedReport.id,
+                        complete: !!selectedReport.content,
+                        wellTagged: !!selectedReport.instrument_id,
+                        linked: true
+                      }) * 100
+                    )}%
+                  </span>
+                </div>
                 <pre className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/60 text-sm text-slate-200 whitespace-pre-wrap break-words">
                   {selectedReport.content}
                 </pre>
