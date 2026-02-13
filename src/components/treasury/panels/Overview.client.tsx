@@ -1,29 +1,5 @@
 import { useSelfHealingCache } from '@/lib/reconciler/selfHealingCache';
 import { useIntegrityWatchdog } from '@/lib/reconciler/integrityWatchdog';
-  // Self-Healing Cache: detect mismatch between UI and DB (accounts)
-  useSelfHealingCache(
-    async () => {
-      // Simulación: mismatch si alguna cuenta tiene balance negativo (puedes reemplazar por lógica real)
-      return accounts.some(acc => acc.current_balance < 0);
-    },
-    () => {
-      // Invalida caché: aquí podrías disparar un refetch o reset de cuentas
-      // Por ahora solo log
-      // window.location.reload(); // O usar SWR mutate, etc.
-    }
-  );
-
-  // Integrity Watchdog: detecta inconsistencias y repara índice
-  useIntegrityWatchdog(
-    async () => {
-      // Simulación: integridad ok si todas las cuentas tienen nombre
-      return accounts.every(acc => !!acc.name);
-    },
-    async () => {
-      // Reparar índice: aquí podrías disparar una reconstrucción o refetch
-      // Por ahora solo log
-    }
-  );
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +19,26 @@ export default function OverviewPanel({
   accounts,
   configs,
 }: OverviewPanelProps) {
+  // Self-Healing Cache: detect mismatch between UI and DB (accounts)
+  useSelfHealingCache(
+    async () => {
+      return accounts.some(acc => acc.current_balance < 0);
+    },
+    () => {
+      // Aquí podrías disparar un refetch o reset de cuentas
+    }
+  );
+
+  // Integrity Watchdog: detecta inconsistencias y repara índice
+  useIntegrityWatchdog(
+    async () => {
+      return accounts.every(acc => !!acc.name);
+    },
+    async () => {
+      // Aquí podrías disparar una reconstrucción o refetch
+    }
+  );
+
   // Get config lookup
   const configMap = new Map(configs.map((c) => [c.account_id, c]));
 

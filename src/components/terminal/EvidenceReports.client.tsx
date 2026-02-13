@@ -22,6 +22,20 @@ interface Report {
   created_at: string;
 }
 
+function suggestAutoLink(evidence: { symbol: string; tags: string[] }, targets: Array<{ type: string; symbol: string; tags: string[] }>) {
+  return targets.find(t => t.symbol === evidence.symbol && t.tags.some(tag => evidence.tags.includes(tag)));
+}
+
+function stitchTimeline(items: Array<{ date: Date }>) {
+  const groups: Record<string, any[]> = {};
+  for (const item of items) {
+    const day = item.date.toISOString().slice(0, 10);
+    if (!groups[day]) groups[day] = [];
+    groups[day].push(item);
+  }
+  return Object.values(groups);
+}
+
 export default function EvidenceReports() {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
