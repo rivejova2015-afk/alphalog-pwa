@@ -17,9 +17,7 @@
   --al-accent-cool: #3f8f98;
   --background: var(--al-bg);
   --foreground: var(--al-text);
-}
 
-@theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-manrope);
@@ -78,7 +76,6 @@
   --color-secondary-foreground: var(--al-text);
   --color-destructive: #c45b5b;
   --color-destructive-foreground: #140b0b;
-}
 
 *,
 *::before,
