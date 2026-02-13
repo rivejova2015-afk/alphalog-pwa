@@ -3,12 +3,12 @@
 
 export interface ConflictItem {
   id: string;
-  local: any;
-  remote: any;
+  local: unknown;
+  remote: unknown;
   status: "need_review" | "resolved";
 }
 
-export function resolveConflict(local: any, remote: any): ConflictItem {
+export function resolveConflict<T extends { id: string }>(local: T, remote: T): ConflictItem {
   return {
     id: local.id,
     local,

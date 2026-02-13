@@ -4,7 +4,7 @@
 export interface OfflineCreate {
   id: string;
   type: "trade" | "evidence" | "report";
-  payload: any;
+  payload: unknown;
   synced: boolean;
 }
 

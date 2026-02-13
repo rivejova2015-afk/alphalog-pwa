@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 export type PendingSyncItem = {
   id: string;
   type: "trade" | "evidence" | "progress" | "mirror" | "schedule";
-  payload: any;
+  payload: unknown;
   retries: number;
   lastAttempt: number;
 };
@@ -25,6 +25,7 @@ const BASE_DELAY = 2000; // ms
 
 // Simulación: función para intentar sincronizar un item (debería ser reemplazada por la real)
 async function syncItem(item: PendingSyncItem): Promise<boolean> {
+  void item;
   // Aquí iría la lógica real de sync (API, Supabase, etc)
   return Math.random() > 0.3; // 70% éxito simulado
 }

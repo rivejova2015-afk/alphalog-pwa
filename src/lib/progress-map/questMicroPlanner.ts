@@ -8,6 +8,7 @@ export interface MicroAction {
 }
 
 export function getDailyMicroActions(date: Date): MicroAction[] {
+  void date;
   // Ejemplo: registro, evidencia, control
   return [
     { id: "registro", label: "Registrar trade", completed: false },

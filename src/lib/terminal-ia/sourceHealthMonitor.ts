@@ -6,7 +6,7 @@ export interface SourceStatus {
   status: "ok" | "down" | "duplicate" | "empty";
 }
 
-export function monitorSources(sources: { source: string; data: any[] }[]): SourceStatus[] {
+export function monitorSources(sources: { source: string; data: unknown[] }[]): SourceStatus[] {
   return sources.map(s => {
     if (!s.data.length) return { source: s.source, status: "empty" };
     if (s.data.length > 1 && new Set(s.data.map(d => JSON.stringify(d))).size < s.data.length) return { source: s.source, status: "duplicate" };

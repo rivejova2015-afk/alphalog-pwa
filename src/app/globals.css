@@ -74,8 +74,9 @@
   --color-primary-foreground: #1a1410;
   --color-secondary: var(--al-surface-3);
   --color-secondary-foreground: var(--al-text);
-  --color-destructive: #c45b5b;
-  --color-destructive-foreground: #140b0b;
+    --color-destructive: #c45b5b;
+    --color-destructive-foreground: #140b0b;
+  }
 
 *,
 *::before,

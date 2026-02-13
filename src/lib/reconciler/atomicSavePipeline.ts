@@ -10,7 +10,14 @@ export interface PipelineResult {
   message?: string;
 }
 
-export async function atomicSavePipeline(tradeData: any, options: { onStep?: (result: PipelineResult) => void } = {}) {
+export type AtomicTradeData = {
+  mirroring?: boolean;
+} & Record<string, unknown>;
+
+export async function atomicSavePipeline(
+  tradeData: AtomicTradeData,
+  options: { onStep?: (result: PipelineResult) => void } = {}
+) {
   // Paso 1: Guardar trade
   try {
     // await saveTrade(tradeData)

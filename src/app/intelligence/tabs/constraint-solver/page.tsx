@@ -14,7 +14,7 @@ export default function ConstraintSolverTab() {
         </div>
         <div className="bg-slate-800/60 rounded-xl p-4">
           <h3 className="font-semibold text-gold mb-1">Capital Genome Lab</h3>
-          <p className="text-slate-400 text-sm">Analiza el "ADN" del capital.</p>
+          <p className="text-slate-400 text-sm">Analiza el &quot;ADN&quot; del capital.</p>
         </div>
         <div className="bg-slate-800/60 rounded-xl p-4">
           <h3 className="font-semibold text-gold mb-1">Cognitive Load Meter</h3>

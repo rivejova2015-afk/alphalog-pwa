@@ -7,7 +7,7 @@ export type EventType = "TradeClosedSaved" | "MasterTradeLogged" | "ReportGenera
 export interface EventLedgerEntry {
   id: string;
   type: EventType;
-  payload: any;
+  payload: unknown;
   timestamp: number;
   processed: boolean;
 }
