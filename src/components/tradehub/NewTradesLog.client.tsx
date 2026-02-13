@@ -5,7 +5,7 @@ interface Setup {
   description?: string | null;
   created_at?: string;
   updated_at?: string;
-}
+
 
 interface Trade {
   id: string;
