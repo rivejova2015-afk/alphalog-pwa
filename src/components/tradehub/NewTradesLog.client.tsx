@@ -20,7 +20,7 @@ interface Trade {
   r?: number | null;
   notes?: string | null;
   tags?: string[];
-}
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
