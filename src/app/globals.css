@@ -169,3 +169,72 @@ h3,
     animation-delay: 0.3s;
   }
 }
+
+/* Premium horizontal tabs */
+.hub-tabs {
+  scrollbar-width: thin;
+  scrollbar-color: var(--al-accent) var(--al-bg);
+  background: linear-gradient(90deg, rgba(21,26,35,0.98) 80%, rgba(200,163,106,0.04) 100%);
+}
+.hub-tabs::-webkit-scrollbar {
+  height: 6px;
+  background: var(--al-bg);
+}
+.hub-tabs::-webkit-scrollbar-thumb {
+  background: var(--al-accent);
+  border-radius: 3px;
+}
+.hub-tabs-premium a {
+  border-radius: 0.5rem 0.5rem 0 0;
+  margin-bottom: -2px;
+  transition: background 0.2s, color 0.2s;
+}
+.hub-tabs-premium a[aria-current], .hub-tabs-premium a.active {
+  box-shadow: 0 2px 0 0 var(--al-accent);
+  background: rgba(200,163,106,0.08);
+}
+
+/* Premium card for Intelligence Suite */
+.premium-card {
+  background: linear-gradient(120deg, rgba(21,26,35,0.98) 80%, rgba(200,163,106,0.04) 100%);
+  border: 1px solid var(--al-border);
+  border-radius: 1.2rem;
+  box-shadow: 0 2px 16px 0 rgba(200,163,106,0.04);
+  padding: 2.5rem 2rem 2rem 2rem;
+  margin-bottom: 2.5rem;
+  transition: box-shadow 0.2s;
+}
+.premium-card:hover {
+  box-shadow: 0 4px 32px 0 rgba(200,163,106,0.10);
+}
+
+.premium-frame {
+  padding: 2.5rem 1.5rem 2rem 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Consistent spacing for hub children */
+.premium-frame > .mt-8 {
+  margin-top: 2.5rem !important;
+}
+
+/* Typography hierarchy */
+h1, .h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--al-accent);
+  margin-bottom: 1.5rem;
+}
+h2, .h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--al-accent);
+  margin-bottom: 1rem;
+}
+h3, .h3 {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--al-text);
+  margin-bottom: 0.5rem;
+}

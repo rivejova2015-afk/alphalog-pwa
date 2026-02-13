@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 export default function IntelligencePage() {
-  redirect('/intelligence/capital-levels');
+  redirect('/intelligence/(tabs)/capital-levels');
   return null;
 }
