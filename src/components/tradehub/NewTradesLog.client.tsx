@@ -907,6 +907,5 @@ export default function NewTradesLog() {
           </div>
         </div>
       )}
-      );
-  );
+    	);
 
