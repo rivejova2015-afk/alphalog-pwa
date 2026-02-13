@@ -12,13 +12,14 @@ import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
 import { logger } from "@/lib/alphashield/logger";
 import { captureException } from "@/lib/sentry";
 
+
 interface Account {
   screenshot_path: string | null;
   is_featured_in_report: boolean;
   created_at: string;
   account?: Account;
   setup?: Setup;
-
+};
 
 interface TradeForm {
   accountId: string;
