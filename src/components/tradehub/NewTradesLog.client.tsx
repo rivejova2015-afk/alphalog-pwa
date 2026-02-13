@@ -7,6 +7,7 @@ interface Setup {
   updated_at?: string;
 };
 
+
 interface Trade {
   id: string;
   setup_id?: string | null;
@@ -20,6 +21,7 @@ interface Trade {
   r?: number | null;
   notes?: string | null;
   tags?: string[];
+};
 
 "use client";
 
