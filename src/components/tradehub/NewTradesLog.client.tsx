@@ -174,7 +174,7 @@ export default function NewTradesLog() {
         "tradehub",
         "Error uploading screenshot",
         err instanceof Error ? err : undefined
-      );
+  );
       setError("Error al subir screenshot");
     } finally {
       setUploadingScreenshot(false);
