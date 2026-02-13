@@ -140,30 +140,9 @@ export default function NewTradesLog() {
       const response = await fetch("/api/accounts", {
         cache: "no-store",
       });
-        const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
-        // AutoReconciler: background sync for offline trades
-        const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
-        // Map OfflineQueue to PendingSyncItem[]
-        const getPendingSyncItems = () =>
-          offlineQueue.getPending().map((item) => ({
-            id: item.id,
-            type: item.type,
-            payload: item.payload,
-            retries: item.payload.retries || 0,
-            lastAttempt: item.payload.lastAttempt || 0,
-          }));
-
-        useAutoReconciler(getPendingSyncItems, (log) => {
-          setReconcileLog((prev) => [log, ...prev.slice(0, 20)]);
-          if (log.status === "success") {
-            offlineQueue.markSynced(log.id);
-            fetchTrades();
-          }
-        });
-
-        // ...existing code...
-        err instanceof Error ? err : undefined
-      );
+      // ...existing code...
+    } catch (err) {
+      logClientError(err, { fn: "fetchAccounts" });
       setTrades([]);
     } finally {
       setLoading(false);
