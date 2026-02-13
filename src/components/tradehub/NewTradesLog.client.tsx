@@ -909,4 +909,4 @@ export default function NewTradesLog() {
       )}
     </div>
   );
-}
+
