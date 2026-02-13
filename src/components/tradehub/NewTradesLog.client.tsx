@@ -156,10 +156,6 @@ export default function NewTradesLog() {
 
   useEffect(() => {
 
-    // ...existing code...
-    setScreenshotUrl(trade.screenshot_path ? `/api/tradehub/trades/${trade.id}/screenshot` : null);
-    setShowForm(true);
-  };
 
   const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
