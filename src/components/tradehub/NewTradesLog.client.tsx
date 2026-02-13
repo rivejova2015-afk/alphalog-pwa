@@ -1,62 +1,10 @@
-import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
-  // AtomicSavePipeline: log for debug (invisible)
-  const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
-import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
-// Singleton event ledger for this session
-const eventLedger = new EventQueueLedger();
-import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
-  // AutoReconciler: background sync for offline trades
-  const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
-  // Map OfflineQueue to PendingSyncItem[]
-  const getPendingSyncItems = () =>
-    offlineQueue.getPending().map((item) => ({
-      id: item.id,
-      type: item.type,
-      payload: item.payload,
-      retries: item.payload.retries || 0,
-      lastAttempt: item.payload.lastAttempt || 0,
-    }));
-
-  useAutoReconciler(getPendingSyncItems, (log) => {
-    setReconcileLog((prev) => [log, ...prev.slice(0, 20)]);
-    if (log.status === "success") {
-      offlineQueue.markSynced(log.id);
-      fetchTrades();
-    }
-  });
-
 "use client";
-import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
-// AtomicSavePipeline: log for debug (invisible)
-const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
-import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
-// Singleton event ledger for this session
-const eventLedger = new EventQueueLedger();
-import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
-// AutoReconciler: background sync for offline trades
-const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
-// Map OfflineQueue to PendingSyncItem[]
-const getPendingSyncItems = () =>
-  offlineQueue.getPending().map((item) => ({
-    id: item.id,
-    type: item.type,
-    payload: item.payload,
-    retries: item.payload.retries || 0,
-    lastAttempt: item.payload.lastAttempt || 0,
-  }));
-
-useAutoReconciler(getPendingSyncItems, (log) => {
-  setReconcileLog((prev) => [log, ...prev.slice(0, 20)]);
-  if (log.status === "success") {
-    offlineQueue.markSynced(log.id);
-    fetchTrades();
-  }
-});
-
-import Image from "next/image";
-// src/components/tradehub/NewTradesLog.client.tsx
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Image from "next/image";
+import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
+import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
+import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
 import { OfflineQueue, OfflineCreate } from "@/lib/offline-pwa/offlineQueueForCreates";
 // Singleton offline queue for this session
 const offlineQueue = new OfflineQueue();
