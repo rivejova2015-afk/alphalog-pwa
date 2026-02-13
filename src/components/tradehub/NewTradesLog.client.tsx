@@ -1,123 +1,53 @@
-// Local fallback types for Setup and Trade (from Playbook.client.tsx)
+"use client";
+
+import { useState } from "react";
+
 interface Setup {
   id: string;
+  name: string;
+}
+interface Trade {
+  id: string;
+  symbol: string;
+  direction: string;
+  status: string;
+  entry_date: string;
+  exit_date?: string;
+  pnl?: number;
+  setup?: Setup;
+}
 
-  "use client";
-
-  import { useState } from "react";
-
-  // Tipos mínimos para la demo
-  interface Setup {
-    id: string;
-    name: string;
-  }
-  interface Trade {
-    id: string;
-    symbol: string;
-    direction: string;
-    status: string;
-    entry_date: string;
-    exit_date?: string;
-    pnl?: number;
-    setup?: Setup;
-  }
-
-  export default function NewTradesLog() {
-    // Estado mínimo para demo/placeholder
-    const [trades] = useState<Trade[]>([{
-      id: "1",
-      symbol: "EURUSD",
-      direction: "Long",
-      status: "Closed",
-      entry_date: "2026-02-12",
-      exit_date: "2026-02-13",
-      pnl: 120.5,
-      setup: { id: "s1", name: "Breakout" }
-    }]);
-    return (
-      <div className="p-4">
-        <h2 className="text-lg font-bold mb-4">Trades Log</h2>
-        <div className="space-y-2">
-          {trades.map(trade => (
-            <div key={trade.id} className="p-4 bg-slate-700/50 border border-slate-600 rounded">
-              <div className="font-semibold text-white">{trade.symbol} • {trade.direction} • {trade.status}</div>
-              <div className="text-sm text-slate-300">{trade.entry_date}{trade.exit_date && ` → ${trade.exit_date}`}</div>
-              {trade.setup?.name && <div className="text-xs text-slate-400">Setup: {trade.setup.name}</div>}
-              {typeof trade.pnl === "number" && (
-                <div className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                  P&L: {trade.pnl > 0 ? "+" : ""}{trade.pnl.toFixed(2)}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+export default function NewTradesLog() {
+  const [trades] = useState<Trade[]>([{
+    id: "1",
+    symbol: "EURUSD",
+    direction: "Long",
+    status: "Closed",
+    entry_date: "2026-02-12",
+    exit_date: "2026-02-13",
+    pnl: 120.5,
+    setup: { id: "s1", name: "Breakout" }
+  }]);
+  return (
+    <div className="p-4">
+      <h2 className="text-lg font-bold mb-4">Trades Log</h2>
+      <div className="space-y-2">
+        {trades.map(trade => (
+          <div key={trade.id} className="p-4 bg-slate-700/50 border border-slate-600 rounded">
+            <div className="font-semibold text-white">{trade.symbol} • {trade.direction} • {trade.status}</div>
+            <div className="text-sm text-slate-300">{trade.entry_date}{trade.exit_date && ` → ${trade.exit_date}`}</div>
+            {trade.setup?.name && <div className="text-xs text-slate-400">Setup: {trade.setup.name}</div>}
+            {typeof trade.pnl === "number" && (
+              <div className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                P&L: {trade.pnl > 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-    );
-  }
-      }
-
-      // Use selectedAccountId if formData.accountId is not set
-      const accountIdToUse = formData.accountId || selectedAccountId;
-
-      if (!formData.symbol.trim()) {
-        setError("Symbol es requerido");
-        return;
-      }
-
-      if (!formData.direction.trim()) {
-        setError("Direction es requerido");
-        return;
-      }
-
-      if (!formData.status.trim()) {
-        setError("Status es requerido");
-        return;
-      }
-
-      if (!formData.entryDate) {
-        setError("Entry date es requerido");
-        return;
-      }
-
-      if (!formData.entryPrice.trim()) {
-        setError("Entry price es requerido");
-        return;
-      }
-
-      if (!formData.exitPrice.trim()) {
-        setError("Exit price es requerido");
-        return;
-      }
-
-      if (!formData.lots.trim()) {
-        setError("Lots es requerido");
-        return;
-      }
-
-      if (!formData.stopLossPrice.trim()) {
-        setError("Stop loss price es requerido");
-        return;
-      }
-
-      if (!formData.takeProfitPrice.trim()) {
-        setError("Take profit price es requerido");
-        return;
-      }
-
-      if (!formData.pnlPercent.trim()) {
-        setError("PnL % es requerido");
-        return;
-      }
-
-      setError("");
-      const method = editingTrade ? "PATCH" : "POST";
-      const url = editingTrade
-        ? `/api/tradehub/trades/${editingTrade.id}`
-        : "/api/tradehub/trades";
-
-      const payload = {
-        account_id: accountIdToUse,
-        symbol: formData.symbol.trim(),
+    </div>
+  );
+}
         direction: formData.direction.trim(),
         status: formData.status.trim(),
         entry_date: formData.entryDate,
