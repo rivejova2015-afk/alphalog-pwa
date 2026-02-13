@@ -194,74 +194,25 @@ export default function NewTradesLog() {
   }, [fetchAccounts, fetchSetups]);
 
   useEffect(() => {
-    const handler = () => {
-      fetchAccounts();
-    };
-    if (typeof window !== "undefined") {
-      window.addEventListener("accounts:updated", handler as EventListener);
-    }
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("accounts:updated", handler as EventListener);
-      }
-    };
-  }, [fetchAccounts]);
 
-  useEffect(() => {
-    if (selectedAccountId && !accounts.find((acc) => acc.id === selectedAccountId)) {
-      setSelectedAccountId("");
-      setFormData((prev) => ({ ...prev, accountId: "" }));
-    }
-  }, [accounts, selectedAccountId]);
+    "use client";
+    import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
+    import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
+    import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
+    import Image from "next/image";
+    // src/components/tradehub/NewTradesLog.client.tsx
+    import { useState, useEffect, useCallback, useRef } from "react";
+    import { OfflineQueue, OfflineCreate } from "@/lib/offline-pwa/offlineQueueForCreates";
+    import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
+    import { logger } from "@/lib/alphashield/logger";
+    import { captureException } from "@/lib/sentry";
 
-  useEffect(() => {
-    fetchTrades();
-  }, [fetchTrades]);
+    // Singleton event ledger for this session
+    const eventLedger = new EventQueueLedger();
+    // Singleton offline queue for this session
+    const offlineQueue = new OfflineQueue();
 
-  const resetForm = () => {
-    setFormData({
-      accountId: selectedAccountId,
-      symbol: "",
-      direction: "",
-      status: "",
-      entryDate: "",
-      exitDate: "",
-      entryPrice: "",
-      exitPrice: "",
-      lots: "",
-      stopLossPrice: "",
-      takeProfitPrice: "",
-      pnl: "",
-      pnlPercent: "",
-      notes: "",
-      setupId: "",
-      isFeatured: false,
-    });
-    setEditingTrade(null);
-    setShowForm(false);
-    setScreenshotUrl(null);
-  };
-
-  const handleEdit = (trade: Trade) => {
-    setEditingTrade(trade);
-    setFormData({
-      accountId: trade.account_id,
-      symbol: trade.symbol,
-      direction: trade.direction,
-      status: trade.status,
-      entryDate: trade.entry_date,
-      exitDate: trade.exit_date || "",
-      entryPrice: trade.entry_price?.toString() || "",
-      exitPrice: trade.exit_price?.toString() || "",
-      lots: trade.lots?.toString() || "",
-      stopLossPrice: trade.stop_loss_price?.toString() || "",
-      takeProfitPrice: trade.take_profit_price?.toString() || "",
-      pnl: trade.pnl?.toString() || "",
-      pnlPercent: trade.pnl_percent?.toString() || "",
-      notes: trade.notes || "",
-      setupId: trade.setup_id || "",
-      isFeatured: trade.is_featured_in_report,
-    });
+    // ...existing code...
     setScreenshotUrl(trade.screenshot_path ? `/api/tradehub/trades/${trade.id}/screenshot` : null);
     setShowForm(true);
   };
