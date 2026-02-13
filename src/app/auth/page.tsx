@@ -3,6 +3,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import {
+  DEVICE_PROFILE_STORAGE_KEY,
+  isAppleMobileDevice,
+  resolveDeviceProfile,
+  type DeviceProfile,
+} from "@/lib/runtime/deviceProfile";
+
+const REMEMBER_ME_STORAGE_KEY = "alphalog.remember_me";
+const REMEMBER_EMAIL_STORAGE_KEY = "alphalog.remember_email";
 
 declare global {
   interface Window {
@@ -15,9 +24,14 @@ declare global {
 
 export default function AuthPage() {
   const [loading, setLoading] = useState(false);
+  const [faceIdLoading, setFaceIdLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [rememberMe, setRememberMe] = useState(true);
+  const [isIOS, setIsIOS] = useState(false);
+  const [canUseFaceId, setCanUseFaceId] = useState(false);
+  const [deviceProfile, setDeviceProfile] = useState<DeviceProfile>("desktop");
   const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -41,6 +55,45 @@ export default function AuthPage() {
     } else if (requestedMode === "login") {
       setMode("login");
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const savedRemember = window.localStorage.getItem(REMEMBER_ME_STORAGE_KEY);
+    const savedEmail = window.localStorage.getItem(REMEMBER_EMAIL_STORAGE_KEY);
+
+    if (savedRemember === "0") {
+      setRememberMe(false);
+    } else if (savedRemember === "1") {
+      setRememberMe(true);
+    }
+
+    if (savedEmail) {
+      setEmail(savedEmail);
+    }
+
+    const userAgent = window.navigator.userAgent;
+    const isAppleMobile = isAppleMobileDevice(
+      userAgent,
+      window.navigator.platform,
+      window.navigator.maxTouchPoints ?? 0,
+    );
+    const webAuthnSupported =
+      "PublicKeyCredential" in window &&
+      !!window.navigator.credentials &&
+      typeof window.navigator.credentials.get === "function";
+    const profile = resolveDeviceProfile({
+      userAgent,
+      maxTouchPoints: window.navigator.maxTouchPoints ?? 0,
+      viewportWidth: window.innerWidth,
+    });
+
+    setIsIOS(isAppleMobile);
+    setCanUseFaceId(isAppleMobile && webAuthnSupported);
+    setDeviceProfile(profile);
+    document.documentElement.dataset.deviceProfile = profile;
+    window.localStorage.setItem(DEVICE_PROFILE_STORAGE_KEY, profile);
   }, []);
 
   useEffect(() => {
@@ -80,6 +133,81 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const persistRememberPreference = (currentEmail: string) => {
+    if (typeof window === "undefined") return;
+    if (rememberMe) {
+      window.localStorage.setItem(REMEMBER_ME_STORAGE_KEY, "1");
+      window.localStorage.setItem(REMEMBER_EMAIL_STORAGE_KEY, currentEmail);
+      return;
+    }
+    window.localStorage.setItem(REMEMBER_ME_STORAGE_KEY, "0");
+    window.localStorage.removeItem(REMEMBER_EMAIL_STORAGE_KEY);
+  };
+
+  const getReadableAuthError = (value: unknown, fallback: string) => {
+    const message = value instanceof Error ? value.message : String(value ?? fallback);
+    if (message.includes("mfa_webauthn_enroll_not_enabled")) {
+      return "Face ID no esta habilitado en Supabase (MFA WebAuthn).";
+    }
+    if (message.includes("mfa_webauthn_verify_not_enabled")) {
+      return "Face ID no puede verificarse porque WebAuthn MFA no esta activo en Supabase.";
+    }
+    if (message.includes("NotAllowedError")) {
+      return "Face ID fue cancelado o no autorizado en este dispositivo.";
+    }
+    return message || fallback;
+  };
+
+  const redirectAfterLogin = async () => {
+    const profile = resolveDeviceProfile({
+      userAgent: window.navigator.userAgent,
+      maxTouchPoints: window.navigator.maxTouchPoints ?? 0,
+      viewportWidth: window.innerWidth,
+    });
+    document.documentElement.dataset.deviceProfile = profile;
+    window.localStorage.setItem(DEVICE_PROFILE_STORAGE_KEY, profile);
+
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("next") || "/dashboard";
+    const stepup = params.get("stepup") === "1";
+
+    if (stepup) {
+      await fetch("/api/auth/device/verify", { method: "POST" });
+    }
+
+    window.location.href = next;
+  };
+
+  const runIosFaceId = async (supabase: ReturnType<typeof createClient>) => {
+    const { data: factorsData, error: listError } = await supabase.auth.mfa.listFactors();
+    if (listError) {
+      throw listError;
+    }
+
+    const verifiedWebauthnFactor =
+      factorsData?.webauthn?.find((factor) => factor.status === "verified") ?? null;
+
+    if (verifiedWebauthnFactor) {
+      const { error: authenticateError } = await supabase.auth.mfa.webauthn.authenticate({
+        factorId: verifiedWebauthnFactor.id,
+      });
+      if (authenticateError) {
+        throw authenticateError;
+      }
+      return;
+    }
+
+    const { error: registerError } = await supabase.auth.mfa.webauthn.register({
+      friendlyName: "iOS Face ID",
+    });
+
+    if (registerError) {
+      throw registerError;
+    }
+
+    setInfo("Face ID activado para este usuario en iOS.");
+  };
 
   const signInGoogle = async () => {
     try {
@@ -167,15 +295,8 @@ export default function AuthPage() {
         if (err) {
           setError(err.message);
         } else {
-          const params = new URLSearchParams(window.location.search);
-          const next = params.get("next") || "/dashboard";
-          const stepup = params.get("stepup") === "1";
-
-          if (stepup) {
-            await fetch("/api/auth/device/verify", { method: "POST" });
-          }
-
-          window.location.href = next;
+          persistRememberPreference(email);
+          await redirectAfterLogin();
         }
       }
       if (window.hcaptcha && captchaWidgetId !== null) {
@@ -187,6 +308,55 @@ export default function AuthPage() {
       setError(err instanceof Error ? err.message : "Error al autenticarse");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFaceIdLogin = async () => {
+    if (!isIOS || !canUseFaceId) {
+      setError("Face ID solo esta disponible en iOS con WebAuthn.");
+      return;
+    }
+
+    if (!email || !password) {
+      setError("Ingresa email y contrasena para continuar con Face ID.");
+      return;
+    }
+
+    try {
+      setFaceIdLoading(true);
+      setError(null);
+      setInfo(null);
+
+      if (hcaptchaSiteKey && !captchaToken) {
+        setError("Completa el captcha para continuar");
+        return;
+      }
+
+      const supabase = createClient();
+      const { error: passwordError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: {
+          captchaToken: captchaToken ?? undefined,
+        },
+      });
+
+      if (passwordError) {
+        setError(passwordError.message);
+        return;
+      }
+
+      await runIosFaceId(supabase);
+      persistRememberPreference(email);
+      await redirectAfterLogin();
+    } catch (err) {
+      setError(getReadableAuthError(err, "No se pudo validar Face ID."));
+    } finally {
+      if (window.hcaptcha && captchaWidgetId !== null) {
+        window.hcaptcha.reset(captchaWidgetId);
+        setCaptchaToken(null);
+      }
+      setFaceIdLoading(false);
     }
   };
 
@@ -233,9 +403,13 @@ export default function AuthPage() {
   const queryError = searchParams.get("error");
 
   return (
-    <main className="relative min-h-screen overflow-hidden px-6 py-12 text-slate-200">
-      <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-600/10 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-64 w-64 translate-x-1/3 rounded-full bg-cyan-600/10 blur-3xl" />
+    <main className="relative min-h-screen overflow-hidden px-4 py-8 text-slate-200 sm:px-6 sm:py-12">
+      {deviceProfile === "desktop" && (
+        <>
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-600/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 right-0 h-64 w-64 translate-x-1/3 rounded-full bg-cyan-600/10 blur-3xl" />
+        </>
+      )}
 
       <div className="relative mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-6">
@@ -335,6 +509,19 @@ export default function AuthPage() {
               />
             </div>
 
+            {mode === "login" && (
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  disabled={loading || faceIdLoading}
+                  className="h-4 w-4 rounded border border-slate-700/70 bg-slate-900/60"
+                />
+                Recordarme en este dispositivo
+              </label>
+            )}
+
             {mode === "signup" && (
               <div>
                 <label className="block text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -381,6 +568,21 @@ export default function AuthPage() {
                   ? "Iniciar sesion"
                   : "Registrarse"}
             </button>
+            {mode === "login" && canUseFaceId && (
+              <button
+                type="button"
+                onClick={handleFaceIdLogin}
+                disabled={loading || faceIdLoading}
+                className="w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-800/80 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {faceIdLoading ? "Validando Face ID..." : "Iniciar con Face ID (iOS)"}
+              </button>
+            )}
+            {mode === "login" && isIOS && !canUseFaceId && (
+              <p className="text-xs text-slate-500">
+                Face ID no esta disponible en este navegador iOS.
+              </p>
+            )}
             {mode === "login" && (
               <button
                 type="button"

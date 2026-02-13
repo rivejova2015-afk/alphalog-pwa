@@ -37,7 +37,7 @@ export default function GlobalBackButton() {
     <button
       type="button"
       onClick={onGoBack}
-      className="fixed bottom-5 left-5 z-50 inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-100 shadow-[0_12px_30px_rgba(2,4,10,0.5)] transition hover:bg-slate-800/90"
+      className="app-floating-safe app-glass-surface fixed z-50 inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-100 shadow-[0_12px_30px_rgba(2,4,10,0.5)] transition hover:bg-slate-800/90"
       aria-label="Atras"
     >
       <ArrowLeft size={16} />
