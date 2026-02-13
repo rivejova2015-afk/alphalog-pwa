@@ -139,25 +139,7 @@ export default function NewTradesLog() {
     try {
       const response = await fetch("/api/accounts", {
         cache: "no-store",
-
-        "use client";
-        import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
-        import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
-        import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
-        import Image from "next/image";
-        // src/components/tradehub/NewTradesLog.client.tsx
-        import { useState, useEffect, useCallback, useRef } from "react";
-        import { OfflineQueue, OfflineCreate } from "@/lib/offline-pwa/offlineQueueForCreates";
-        import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
-        import { logger } from "@/lib/alphashield/logger";
-        import { captureException } from "@/lib/sentry";
-
-        // Singleton event ledger for this session
-        const eventLedger = new EventQueueLedger();
-        // Singleton offline queue for this session
-        const offlineQueue = new OfflineQueue();
-
-        // AtomicSavePipeline: log for debug (invisible)
+      });
         const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
         // AutoReconciler: background sync for offline trades
         const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
