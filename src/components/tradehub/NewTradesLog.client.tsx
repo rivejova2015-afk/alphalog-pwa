@@ -18,7 +18,7 @@ interface Account {
   created_at: string;
   account?: Account;
   setup?: Setup;
-}
+
 
 interface TradeForm {
   accountId: string;
