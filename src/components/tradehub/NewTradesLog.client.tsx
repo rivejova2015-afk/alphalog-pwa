@@ -24,7 +24,34 @@ import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconci
       fetchTrades();
     }
   });
+
 "use client";
+import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
+// AtomicSavePipeline: log for debug (invisible)
+const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
+import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
+// Singleton event ledger for this session
+const eventLedger = new EventQueueLedger();
+import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
+// AutoReconciler: background sync for offline trades
+const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
+// Map OfflineQueue to PendingSyncItem[]
+const getPendingSyncItems = () =>
+  offlineQueue.getPending().map((item) => ({
+    id: item.id,
+    type: item.type,
+    payload: item.payload,
+    retries: item.payload.retries || 0,
+    lastAttempt: item.payload.lastAttempt || 0,
+  }));
+
+useAutoReconciler(getPendingSyncItems, (log) => {
+  setReconcileLog((prev) => [log, ...prev.slice(0, 20)]);
+  if (log.status === "success") {
+    offlineQueue.markSynced(log.id);
+    fetchTrades();
+  }
+});
 
 import Image from "next/image";
 // src/components/tradehub/NewTradesLog.client.tsx
@@ -38,33 +65,6 @@ import { logger } from "@/lib/alphashield/logger";
 import { captureException } from "@/lib/sentry";
 
 interface Account {
-  id: string;
-  name: string;
-}
-
-interface Setup {
-  id: string;
-  name: string;
-}
-
-interface Trade {
-  id: string;
-  user_id: string;
-  account_id: string;
-  symbol: string;
-  direction: string;
-  status: string;
-  entry_date: string;
-  exit_date: string | null;
-  entry_price: number;
-  exit_price: number;
-  lots: number;
-  stop_loss_price: number;
-  take_profit_price: number;
-  pnl: number;
-  pnl_percent: number;
-  notes: string | null;
-  setup_id: string | null;
   screenshot_path: string | null;
   is_featured_in_report: boolean;
   created_at: string;
