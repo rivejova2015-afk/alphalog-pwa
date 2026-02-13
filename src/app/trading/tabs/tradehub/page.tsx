@@ -1,4 +1,7 @@
 "use client";
-export default function TradeHubTab() {
-  return <div className="p-8 text-center text-xl text-slate-400">TradeHub Premium próximamente</div>;
+
+import TradeHubPage from "@/app/dashboard/tradehub/page";
+
+export default function TradeHubTabPage() {
+  return <TradeHubPage />;
 }

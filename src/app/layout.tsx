@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, JetBrains_Mono, Manrope } from "next/font/google";
 import UpdateManager from "@/components/pwa/UpdateManager";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
+import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -49,6 +50,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${manrope.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}>
         {children}
+        <GlobalBackButton />
         <UpdateManager />
         <CsrfBridge />
       </body>
