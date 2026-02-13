@@ -139,74 +139,47 @@ export default function NewTradesLog() {
     try {
       const response = await fetch("/api/accounts", {
         cache: "no-store",
-        credentials: "include",
-      });
-      if (response.ok) {
-        const data: Account[] = await response.json();
-        setAccounts(data || []);
-      }
-    } catch (err) {
-      await logger.error(
-        "tradehub",
-        "Error fetching accounts",
-        err instanceof Error ? err : undefined
-      );
-    }
-  }, []);
 
-  const fetchSetups = useCallback(async () => {
-    try {
-      const response = await fetch("/api/tradehub/setups");
-      if (response.ok) {
-        const data: Setup[] = await response.json();
-        setSetups(data || []);
-      }
-    } catch (err) {
-      await logger.error(
-        "tradehub",
-        "Error fetching setups",
-        err instanceof Error ? err : undefined
-      );
-    }
-  }, []);
+        "use client";
+        import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
+        import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
+        import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
+        import Image from "next/image";
+        // src/components/tradehub/NewTradesLog.client.tsx
+        import { useState, useEffect, useCallback, useRef } from "react";
+        import { OfflineQueue, OfflineCreate } from "@/lib/offline-pwa/offlineQueueForCreates";
+        import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
+        import { logger } from "@/lib/alphashield/logger";
+        import { captureException } from "@/lib/sentry";
 
-  const fetchTrades = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
+        // Singleton event ledger for this session
+        const eventLedger = new EventQueueLedger();
+        // Singleton offline queue for this session
+        const offlineQueue = new OfflineQueue();
 
-      const params = new URLSearchParams({
-        trash: showTrash ? "true" : "false",
-      });
+        // AtomicSavePipeline: log for debug (invisible)
+        const [pipelineLog, setPipelineLog] = useState<PipelineResult[]>([]);
+        // AutoReconciler: background sync for offline trades
+        const [reconcileLog, setReconcileLog] = useState<ReconcilerLog[]>([]);
+        // Map OfflineQueue to PendingSyncItem[]
+        const getPendingSyncItems = () =>
+          offlineQueue.getPending().map((item) => ({
+            id: item.id,
+            type: item.type,
+            payload: item.payload,
+            retries: item.payload.retries || 0,
+            lastAttempt: item.payload.lastAttempt || 0,
+          }));
 
-      if (selectedAccountId) {
-        params.append("accountId", selectedAccountId);
-      }
-
-      const response = await fetch(`/api/tradehub/trades?${params}`, {
-        cache: "no-store",
-        credentials: "include",
-      });
-      if (!response.ok) {
-        const statusCode = response.status;
-        if (statusCode === 401) {
-          window.location.href = "/auth";
-          return;
-        }
-        await logger.error("tradehub", "Fetch trades failed", undefined, {
-          endpoint: "/api/tradehub/trades",
-          status: statusCode,
+        useAutoReconciler(getPendingSyncItems, (log) => {
+          setReconcileLog((prev) => [log, ...prev.slice(0, 20)]);
+          if (log.status === "success") {
+            offlineQueue.markSynced(log.id);
+            fetchTrades();
+          }
         });
-        setTrades([]);
-        return;
-      }
 
-      const data = await response.json();
-      setTrades(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      await logger.error(
-        "tradehub",
-        "Fetch trades error",
+        // ...existing code...
         err instanceof Error ? err : undefined
       );
       setTrades([]);
