@@ -1,3 +1,26 @@
+// Local fallback types for Setup and Trade (from Playbook.client.tsx)
+interface Setup {
+  id: string;
+  name: string;
+  description?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface Trade {
+  id: string;
+  setup_id?: string | null;
+  pnl?: number | null;
+  exit_date?: string | null;
+  direction?: string;
+  size?: number | null;
+  entry_price?: number | null;
+  exit_price?: number | null;
+  symbol?: string;
+  r?: number | null;
+  notes?: string | null;
+  tags?: string[];
+}
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
