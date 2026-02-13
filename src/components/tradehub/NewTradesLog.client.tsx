@@ -1,192 +1,59 @@
 // Local fallback types for Setup and Trade (from Playbook.client.tsx)
 interface Setup {
   id: string;
-  name: string;
-  description?: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
 
+  "use client";
 
-interface Trade {
-  id: string;
-  setup_id?: string | null;
-  pnl?: number | null;
-  exit_date?: string | null;
-  direction?: string;
-  size?: number | null;
-  entry_price?: number | null;
-  exit_price?: number | null;
-  symbol?: string;
-  r?: number | null;
-  notes?: string | null;
-  tags?: string[];
-};
+  import { useState } from "react";
 
-"use client";
+  // Tipos mínimos para la demo
+  interface Setup {
+    id: string;
+    name: string;
+  }
+  interface Trade {
+    id: string;
+    symbol: string;
+    direction: string;
+    status: string;
+    entry_date: string;
+    exit_date?: string;
+    pnl?: number;
+    setup?: Setup;
+  }
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import Image from "next/image";
-import { atomicSavePipeline, PipelineResult } from "@/lib/reconciler/atomicSavePipeline";
-import { EventQueueLedger, EventLedgerEntry } from "@/lib/reconciler/eventQueueLedger";
-import { useAutoReconciler, PendingSyncItem, ReconcilerLog } from "@/lib/reconciler/autoReconciler";
-import { OfflineQueue, OfflineCreate } from "@/lib/offline-pwa/offlineQueueForCreates";
-// Singleton offline queue for this session
-const offlineQueue = new OfflineQueue();
-import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
-import { logger } from "@/lib/alphashield/logger";
-import { captureException } from "@/lib/sentry";
-
-
-interface Account {
-  screenshot_path: string | null;
-  is_featured_in_report: boolean;
-  created_at: string;
-  account?: Account;
-  setup?: Setup;
-};
-
-
-interface TradeForm {
-  accountId: string;
-  symbol: string;
-  direction: string;
-  status: string;
-  entryDate: string;
-  exitDate: string;
-  entryPrice: string;
-  exitPrice: string;
-  lots: string;
-  stopLossPrice: string;
-  takeProfitPrice: string;
-  pnl: string;
-  pnlPercent: string;
-  notes: string;
-  setupId: string;
-  isFeatured: boolean;
-};
-
-const DIRECTION_SUGGESTIONS = ["Long", "Short", "Buy", "Sell"];
-const STATUS_SUGGESTIONS = ["Open", "Closed"];
-
-export default function NewTradesLog() {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [setups, setSetups] = useState<Setup[]>([]);
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [showTrash, setShowTrash] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
-
-  const logClientError = (err: unknown, context: Record<string, unknown>) => {
-    if (process.env.NODE_ENV !== "production") {
-      console.error("[TradeHub]", err, context);
-      return;
-    }
-    captureException(err, context);
-  };
-
-  const [formData, setFormData] = useState<TradeForm>({
-    accountId: "",
-    symbol: "",
-    direction: "",
-    status: "",
-    entryDate: "",
-    exitDate: "",
-    entryPrice: "",
-    exitPrice: "",
-    lots: "",
-    stopLossPrice: "",
-    takeProfitPrice: "",
-    pnl: "",
-    pnlPercent: "",
-    notes: "",
-    setupId: "",
-    isFeatured: false,
-  });
-
-  const fetchAccounts = useCallback(async () => {
-    try {
-      const response = await fetch("/api/accounts", {
-        cache: "no-store",
-      });
-      // ...existing code...
-    } catch (err) {
-      logClientError(err, { fn: "fetchAccounts" });
-      setTrades([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedAccountId, showTrash]);
-
-  useEffect(() => {
-    fetchAccounts();
-    fetchSetups();
-  }, [fetchAccounts, fetchSetups]);
-
-  useEffect(() => {
-
-
-  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingTrade) {
-      if (file) {
-        setError("Selecciona una operación antes de subir screenshot");
-      }
-      return;
-    }
-
-    if (file.size > 100 * 1024 * 1024) {
-      setError("Archivo exceeds 100MB limit");
-      return;
-    }
-
-    const ext = "." + file.name.split(".").pop()?.toLowerCase();
-    if ([".exe", ".bat"].includes(ext)) {
-      setError(`Extensión ${ext} no permitida`);
-      return;
-    }
-
-    try {
-      setUploadingScreenshot(true);
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", file);
-
-      const response = await fetch(`/api/tradehub/trades/${editingTrade.id}/screenshot`, {
-        method: "POST",
-        body: formDataUpload,
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
-      const result = await response.json();
-      setScreenshotUrl(result.signedUrl || `/api/tradehub/trades/${editingTrade.id}/screenshot`);
-      setError("");
-    } catch (err: any) {
-      await logger.error(
-        "tradehub",
-        "Error uploading screenshot",
-        err instanceof Error ? err : undefined
-  );
-      setError("Error al subir screenshot");
-    } finally {
-      setUploadingScreenshot(false);
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      // Validate account is selected
-      if (!formData.accountId && !selectedAccountId) {
-        setError("Debes seleccionar una cuenta antes de crear una operación");
-        return;
+  export default function NewTradesLog() {
+    // Estado mínimo para demo/placeholder
+    const [trades] = useState<Trade[]>([{
+      id: "1",
+      symbol: "EURUSD",
+      direction: "Long",
+      status: "Closed",
+      entry_date: "2026-02-12",
+      exit_date: "2026-02-13",
+      pnl: 120.5,
+      setup: { id: "s1", name: "Breakout" }
+    }]);
+    return (
+      <div className="p-4">
+        <h2 className="text-lg font-bold mb-4">Trades Log</h2>
+        <div className="space-y-2">
+          {trades.map(trade => (
+            <div key={trade.id} className="p-4 bg-slate-700/50 border border-slate-600 rounded">
+              <div className="font-semibold text-white">{trade.symbol} • {trade.direction} • {trade.status}</div>
+              <div className="text-sm text-slate-300">{trade.entry_date}{trade.exit_date && ` → ${trade.exit_date}`}</div>
+              {trade.setup?.name && <div className="text-xs text-slate-400">Setup: {trade.setup.name}</div>}
+              {typeof trade.pnl === "number" && (
+                <div className={`text-sm font-semibold ${trade.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                  P&L: {trade.pnl > 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
       }
 
       // Use selectedAccountId if formData.accountId is not set
