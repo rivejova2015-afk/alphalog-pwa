@@ -64,7 +64,6 @@ interface TradeForm {
   setupId: string;
   isFeatured: boolean;
 
-
 const DIRECTION_SUGGESTIONS = ["Long", "Short", "Buy", "Sell"];
 const STATUS_SUGGESTIONS = ["Open", "Closed"];
 
