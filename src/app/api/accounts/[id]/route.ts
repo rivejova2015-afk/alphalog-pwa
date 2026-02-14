@@ -1,6 +1,7 @@
 // src/app/api/accounts/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveRouteId } from "@/lib/api/routeParams";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -15,7 +16,7 @@ function unauthorized() {
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -23,6 +24,14 @@ export async function PATCH(
 
     if (userError || !userData?.user) {
       return unauthorized();
+    }
+
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
     }
 
     type PatchBody = {
@@ -45,7 +54,7 @@ export async function PATCH(
     const { data: account, error: getError } = await supabase
       .from("accounts")
       .select("id")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", userData.user.id)
       .single();
 
@@ -61,7 +70,7 @@ export async function PATCH(
       const { error: updateError } = await supabase
         .from("accounts")
         .update({ deleted_at: null })
-        .eq("id", params.id);
+        .eq("id", id);
 
       if (updateError) {
         console.error("Error restoring account:", updateError);
@@ -141,7 +150,7 @@ export async function PATCH(
       const { error: updateError } = await supabase
         .from("accounts")
         .update(preparedUpdate)
-        .eq("id", params.id);
+        .eq("id", id);
 
       if (updateError) {
         console.error("Error updating account:", updateError);
@@ -168,7 +177,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -179,12 +188,19 @@ export async function DELETE(
     }
 
     const userId = userData.user.id;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
 
     // Verify account exists and belongs to user
     const { data: account, error: getError } = await supabase
       .from("accounts")
       .select("id")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", userId)
       .single();
 
@@ -198,7 +214,7 @@ export async function DELETE(
     const { data: trades, error: tradesError } = await supabase
       .from("trades")
       .select("id, screenshot_path")
-      .eq("account_id", params.id)
+      .eq("account_id", id)
       .eq("user_id", userId);
 
     if (tradesError) {
@@ -221,10 +237,10 @@ export async function DELETE(
 
     if (tradeIds.length > 0) {
       evidenceQuery = evidenceQuery.or(
-        `account_id.eq.${params.id},trade_id.in.(${tradeIds.join(",")})`
+        `account_id.eq.${id},trade_id.in.(${tradeIds.join(",")})`
       );
     } else {
-      evidenceQuery = evidenceQuery.eq("account_id", params.id);
+      evidenceQuery = evidenceQuery.eq("account_id", id);
     }
 
     const { data: evidenceRows, error: evidenceError } = await evidenceQuery;
@@ -269,10 +285,10 @@ export async function DELETE(
 
     if (tradeIds.length > 0) {
       tradeEvidenceQuery = tradeEvidenceQuery.or(
-        `account_id.eq.${params.id},trade_id.in.(${tradeIds.join(",")})`
+        `account_id.eq.${id},trade_id.in.(${tradeIds.join(",")})`
       );
     } else {
-      tradeEvidenceQuery = tradeEvidenceQuery.eq("account_id", params.id);
+      tradeEvidenceQuery = tradeEvidenceQuery.eq("account_id", id);
     }
 
     const { data: tradeEvidenceRows, error: tradeEvidenceError } = await tradeEvidenceQuery;
@@ -325,7 +341,7 @@ export async function DELETE(
     const { error: deleteError } = await supabase
       .from("accounts")
       .delete()
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", userId);
 
     if (deleteError) {

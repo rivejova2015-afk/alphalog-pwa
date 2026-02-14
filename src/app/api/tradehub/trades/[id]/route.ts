@@ -10,6 +10,7 @@ import { autoFixTradeUpdate } from "@/lib/validation/autoFix";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { asString } from "@/lib/validation/nullGuards";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { resolveRouteId } from "@/lib/api/routeParams";
 
 /**
  * PATCH /api/tradehub/trades/{id}
@@ -17,7 +18,7 @@ import { enforceResponseContract } from "@/lib/validation/contractGuard";
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -28,7 +29,14 @@ export async function PATCH(
     }
 
     const userId = userData.user.id;
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
     const fixed = autoFixTradeUpdate(body as Record<string, unknown>);
 
@@ -248,7 +256,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -259,7 +267,13 @@ export async function DELETE(
     }
 
     const userId = userData.user.id;
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
 
     // Verify ownership
     const { data: existingTrade, error: tradeError } = await supabase

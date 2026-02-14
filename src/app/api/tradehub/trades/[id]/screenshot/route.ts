@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { resolveRouteId } from "@/lib/api/routeParams";
 
 /**
  * POST /api/tradehub/trades/{id}/screenshot
@@ -9,7 +10,7 @@ import { randomUUID } from "crypto";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -19,7 +20,13 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
 
     // Verify trade exists and belongs to user
     const { data: trade } = await supabase
@@ -126,7 +133,7 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -136,7 +143,13 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
 
     // Verify trade exists and belongs to user
     const { data: trade } = await supabase

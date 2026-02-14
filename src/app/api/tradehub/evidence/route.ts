@@ -18,6 +18,28 @@ const safeDecrypt = (value?: string | null) => {
   }
 };
 
+const getStorageUploadMessage = (error: { message?: string; code?: string } | null) => {
+  const message = (error?.message || "").toLowerCase();
+  if (message.includes("bucket") && message.includes("not found")) {
+    return "Storage bucket no configurado (log_attachments)";
+  }
+  if (message.includes("row-level security") || message.includes("policy")) {
+    return "Permisos de storage insuficientes para subir evidencia";
+  }
+  if (message.includes("duplicate")) {
+    return "El archivo ya existe, intenta con otro nombre";
+  }
+  return "No se pudo subir el archivo de evidencia";
+};
+
+const getDbInsertMessage = (error: { message?: string; code?: string } | null) => {
+  const code = error?.code || "";
+  if (code === "23503") return "La cuenta o el trade seleccionado no existe";
+  if (code === "23514") return "Los datos de evidencia no cumplen validaciones";
+  if (code === "23502") return "Faltan campos obligatorios para guardar la evidencia";
+  return "No se pudo guardar la evidencia en base de datos";
+};
+
 type EvidenceRow = {
   id: string;
   user_notes?: string | null;
@@ -246,6 +268,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const capturedAtDate = new Date(capturedAt);
+    if (Number.isNaN(capturedAtDate.getTime())) {
+      return NextResponse.json(
+        { error: "Captured at date is invalid" },
+        { status: 400 }
+      );
+    }
+
     // Validate file size (100MB)
     const MAX_SIZE = 100 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
@@ -313,7 +343,10 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       console.error("Error uploading file:", uploadError);
       return NextResponse.json(
-        { error: "Failed to upload file" },
+        {
+          error: getStorageUploadMessage(uploadError),
+          details: uploadError.message,
+        },
         { status: 500 }
       );
     }
@@ -335,7 +368,7 @@ export async function POST(request: NextRequest) {
         size_bytes: file.size || null,
         trade_id: tradeId || null,
         account_id: accountId || null,
-        created_at: new Date(capturedAt).toISOString(),
+        created_at: capturedAtDate.toISOString(),
       })
       .select("id, title, report_text, file_path, mime_type, validation_status, trade_id, account_id, created_at")
       .single();
@@ -344,7 +377,10 @@ export async function POST(request: NextRequest) {
       console.error("Error inserting trade_evidence:", tradeEvidenceInsert.error);
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(
-        { error: "Failed to save evidence" },
+        {
+          error: getDbInsertMessage(tradeEvidenceInsert.error),
+          details: tradeEvidenceInsert.error.message,
+        },
         { status: 500 }
       );
     }
@@ -371,7 +407,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: userData.user.id,
         image_path: safePath,
-        captured_at: new Date(capturedAt).toISOString(),
+        captured_at: capturedAtDate.toISOString(),
         user_notes: encryptedNotes,
         trade_id: tradeId || null,
         account_id: accountId || null,
@@ -385,7 +421,10 @@ export async function POST(request: NextRequest) {
       // Attempt cleanup
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(
-        { error: "Failed to save evidence" },
+        {
+          error: getDbInsertMessage(insertError),
+          details: insertError.message,
+        },
         { status: 500 }
       );
     }

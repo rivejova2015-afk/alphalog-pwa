@@ -2,6 +2,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
   (typeof error?.message === "string" &&
@@ -26,6 +29,13 @@ export async function GET(request: NextRequest) {
     if (!evidenceId) {
       return NextResponse.json(
         { error: "Missing evidence ID" },
+        { status: 400 }
+      );
+    }
+
+    if (!UUID_REGEX.test(evidenceId)) {
+      return NextResponse.json(
+        { error: "Invalid evidence ID" },
         { status: 400 }
       );
     }
@@ -56,7 +66,7 @@ export async function GET(request: NextRequest) {
       if (urlError) {
         console.error("Error generating signed URL:", urlError);
         return NextResponse.json(
-          { error: "Failed to generate signed URL" },
+          { error: "Failed to generate signed URL", details: urlError.message },
           { status: 500 }
         );
       }
@@ -88,7 +98,7 @@ export async function GET(request: NextRequest) {
     if (urlError) {
       console.error("Error generating signed URL:", urlError);
       return NextResponse.json(
-        { error: "Failed to generate signed URL" },
+        { error: "Failed to generate signed URL", details: urlError.message },
         { status: 500 }
       );
     }

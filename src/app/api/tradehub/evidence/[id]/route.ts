@@ -1,6 +1,7 @@
 // src/app/api/tradehub/evidence/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveRouteId } from "@/lib/api/routeParams";
 
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
@@ -13,7 +14,7 @@ const isMissingTable = (error: any) =>
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -23,7 +24,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
     const body = await request.json();
     const { validation_status } = body;
 
@@ -118,7 +125,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -128,7 +135,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
     const userId = userData.user.id;
 
     const { data: tradeEvidence, error: tradeError } = await supabase
