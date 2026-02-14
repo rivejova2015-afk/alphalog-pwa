@@ -115,6 +115,19 @@ test.describe('Navigation & Module Access', () => {
     expect(pageContent?.trim().length).toBeGreaterThan(0);
   });
 
+  test('should show global nav buttons and return to dashboard', async ({ page }) => {
+    await page.goto('/dashboard/terminal', { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    const backButton = page.getByRole('button', { name: 'Atras' });
+    const dashboardButton = page.getByRole('link', { name: 'Vuelta al dashboard' });
+
+    await expect(backButton).toBeVisible();
+    await expect(dashboardButton).toBeVisible();
+
+    await dashboardButton.click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+
   test('should navigate to Logs module', async ({ page }) => {
     // Navigate to Logs
     await page.goto('/dashboard/logs', { waitUntil: 'domcontentloaded', timeout: 60000 });

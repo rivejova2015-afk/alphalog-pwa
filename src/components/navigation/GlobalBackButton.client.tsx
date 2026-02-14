@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, LayoutDashboard } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
 function resolveFallback(pathname: string): string {
@@ -33,15 +34,28 @@ export default function GlobalBackButton() {
     router.push(fallback);
   };
 
+  const buttonClassName =
+    "inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-100 shadow-[0_12px_30px_rgba(2,4,10,0.5)] transition hover:bg-slate-800/90";
+
   return (
-    <button
-      type="button"
-      onClick={onGoBack}
-      className="app-floating-safe app-glass-surface fixed z-50 inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-100 shadow-[0_12px_30px_rgba(2,4,10,0.5)] transition hover:bg-slate-800/90"
-      aria-label="Atras"
-    >
-      <ArrowLeft size={16} />
-      Atras
-    </button>
+    <div className="app-floating-safe app-glass-surface fixed z-50 inline-flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={onGoBack}
+        className={buttonClassName}
+        aria-label="Atras"
+      >
+        <ArrowLeft size={16} />
+        Atras
+      </button>
+      <Link
+        href="/dashboard"
+        className={buttonClassName}
+        aria-label="Vuelta al dashboard"
+      >
+        <LayoutDashboard size={16} />
+        Vuelta al dashboard
+      </Link>
+    </div>
   );
 }
