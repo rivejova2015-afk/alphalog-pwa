@@ -10,6 +10,7 @@ import CalendarPanel from "@/components/terminal/CalendarPanel.client";
 import EvidenceReports from "@/components/terminal/EvidenceReports.client";
 import TerminalReportsBot from "@/components/terminal/TerminalReportsBot.client";
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
+import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
 import { createClient } from "@/lib/supabase/browser";
 
 type TerminalTabType = "news" | "calendar" | "evidence" | "search" | "overview";
@@ -76,9 +77,9 @@ export default function TerminalPage() {
   const currentTab = TABS.find(t => t.id === activeTab);
 
   return (
-    <div className="flex min-h-screen text-slate-200">
+    <div className="min-h-screen text-slate-200 md:flex">
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 flex flex-col`}>
+      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} hidden bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 md:flex md:flex-col`}>
         {/* Header */}
         <div className="p-4 border-b border-slate-700/60 flex items-center justify-between">
           {isSidebarOpen && <h2 className="display-font font-semibold text-slate-100">Terminal</h2>}
@@ -130,9 +131,9 @@ export default function TerminalPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {/* Header */}
-        <header className="bg-slate-900/80 border-b border-slate-700/60 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
+        <header className="bg-slate-900/80 border-b border-slate-700/60 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">📡</span>
@@ -143,8 +144,17 @@ export default function TerminalPage() {
           <BackToDashboardButton />
         </header>
 
+        <div className="sticky top-0 z-20 border-b border-slate-700/60 bg-slate-900/90 px-4 py-3 md:hidden">
+          <MobileModuleTabSelect
+            tabs={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
+            activeTab={activeTab}
+            onChange={(id) => setActiveTab(id as TerminalTabType)}
+            ariaLabel="Selector de modulo Terminal"
+          />
+        </div>
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
             {activeTab === "overview" && <TerminalOverview />}
             {activeTab === "news" && <NewsPanel />}
@@ -159,7 +169,7 @@ export default function TerminalPage() {
                           ))}
                         </ul>
                         <h3 className="text-lg font-semibold text-white mb-2">Impact Matrix</h3>
-                        <table className="w-full text-xs text-slate-200">
+                        <table className="table-mobile-cards w-full text-xs text-slate-200">
                           <thead>
                             <tr>
                               <th>Tema</th><th>Impacto</th><th>Sesgo</th><th>Confianza</th>
@@ -168,10 +178,10 @@ export default function TerminalPage() {
                           <tbody>
                             {impactMatrix.map(row => (
                               <tr key={row.topic}>
-                                <td>{row.topic}</td>
-                                <td>{row.impact}</td>
-                                <td>{row.bias}</td>
-                                <td>{(row.confidence*100).toFixed(0)}%</td>
+                                <td data-label="Tema">{row.topic}</td>
+                                <td data-label="Impacto">{row.impact}</td>
+                                <td data-label="Sesgo">{row.bias}</td>
+                                <td data-label="Confianza">{(row.confidence*100).toFixed(0)}%</td>
                               </tr>
                             ))}
                           </tbody>

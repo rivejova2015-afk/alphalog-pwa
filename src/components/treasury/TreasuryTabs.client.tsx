@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import type { Account, TreasuryConfig, Trade } from '@/lib/treasury/calculations';
 import type { TreasuryTransaction, TreasuryPayout, TreasuryBudget } from '@/lib/treasury/queries';
+import MobileModuleTabSelect from '@/components/navigation/MobileModuleTabSelect.client';
 import OverviewPanel from './panels/Overview.client';
 import SplitsPanel from './panels/Splits.client';
 import UmbralPanel from './panels/Umbral.client';
@@ -45,7 +46,14 @@ export default function TreasuryTabs({
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-slate-800 overflow-x-auto pb-2">
+      <MobileModuleTabSelect
+        tabs={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Selector de pestaña de Treasury"
+      />
+
+      <div className="hidden md:flex gap-2 border-b border-slate-800 overflow-x-auto pb-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}

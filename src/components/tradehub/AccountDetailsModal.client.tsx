@@ -260,8 +260,8 @@ export default function AccountDetailsModal({
               {loading && <div className="text-sm text-slate-400">Cargando trades...</div>}
               {!loading && trades.length === 0 && <div className="text-sm text-slate-400">Sin trades cerrados en este rango.</div>}
               {!loading && trades.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm text-slate-200">
+                <div className="max-w-full overflow-x-auto">
+                  <table className="table-mobile-cards min-w-full text-sm text-slate-200">
                     <thead className="bg-slate-900 text-slate-400">
                       <tr>
                         <th className="px-3 py-2 text-left">Symbol</th>
@@ -280,19 +280,19 @@ export default function AccountDetailsModal({
                     <tbody>
                       {trades.map((t) => (
                         <tr key={t.id} className="border-b border-slate-800/60">
-                          <td className="px-3 py-2">{t.symbol}</td>
-                          <td className="px-3 py-2">{t.setup?.name || "—"}</td>
-                          <td className={`px-3 py-2 text-right ${t.pnl && t.pnl > 0 ? "text-green-400" : t.pnl && t.pnl < 0 ? "text-red-400" : "text-slate-200"}`}>
+                          <td data-label="Symbol" className="px-3 py-2">{t.symbol}</td>
+                          <td data-label="Setup" className="px-3 py-2">{t.setup?.name || "—"}</td>
+                          <td data-label="PNL" className={`px-3 py-2 text-right ${t.pnl && t.pnl > 0 ? "text-green-400" : t.pnl && t.pnl < 0 ? "text-red-400" : "text-slate-200"}`}>
                             {formatCurrency(t.pnl ?? null, currency)}
                           </td>
-                          <td className="px-3 py-2 text-right">—</td>
-                          <td className="px-3 py-2">{t.direction || "—"}</td>
-                          <td className="px-3 py-2 text-right">{formatNumber(t.lots ?? null)}</td>
-                          <td className="px-3 py-2">{t.exit_date ? new Date(t.exit_date).toLocaleDateString("es-ES") : "—"}</td>
-                          <td className="px-3 py-2 text-right">{formatNumber(t.entry_price)}</td>
-                          <td className="px-3 py-2 text-right">{formatNumber(t.exit_price)}</td>
-                          <td className="px-3 py-2 max-w-[160px] truncate" title={t.notes || undefined}>{t.notes || ""}</td>
-                          <td className="px-3 py-2 text-xs text-slate-400">{t.tags?.length ? t.tags.join(", ") : ""}</td>
+                          <td data-label="R" className="px-3 py-2 text-right">—</td>
+                          <td data-label="Dir" className="px-3 py-2">{t.direction || "—"}</td>
+                          <td data-label="Size" className="px-3 py-2 text-right">{formatNumber(t.lots ?? null)}</td>
+                          <td data-label="Exit" className="px-3 py-2">{t.exit_date ? new Date(t.exit_date).toLocaleDateString("es-ES") : "—"}</td>
+                          <td data-label="Entry Px" className="px-3 py-2 text-right">{formatNumber(t.entry_price)}</td>
+                          <td data-label="Exit Px" className="px-3 py-2 text-right">{formatNumber(t.exit_price)}</td>
+                          <td data-label="Notes" className="px-3 py-2 max-w-[160px] truncate" title={t.notes || undefined}>{t.notes || ""}</td>
+                          <td data-label="Tags" className="px-3 py-2 text-xs text-slate-400">{t.tags?.length ? t.tags.join(", ") : ""}</td>
                         </tr>
                       ))}
                     </tbody>

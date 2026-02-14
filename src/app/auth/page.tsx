@@ -3,12 +3,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import {
-  DEVICE_PROFILE_STORAGE_KEY,
-  isAppleMobileDevice,
-  resolveDeviceProfile,
-  type DeviceProfile,
-} from "@/lib/runtime/deviceProfile";
 
 const REMEMBER_ME_STORAGE_KEY = "alphalog.remember_me";
 const REMEMBER_EMAIL_STORAGE_KEY = "alphalog.remember_email";
@@ -31,7 +25,6 @@ export default function AuthPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [isIOS, setIsIOS] = useState(false);
   const [canUseFaceId, setCanUseFaceId] = useState(false);
-  const [deviceProfile, setDeviceProfile] = useState<DeviceProfile>("desktop");
   const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -74,26 +67,16 @@ export default function AuthPage() {
     }
 
     const userAgent = window.navigator.userAgent;
-    const isAppleMobile = isAppleMobileDevice(
-      userAgent,
-      window.navigator.platform,
-      window.navigator.maxTouchPoints ?? 0,
-    );
+    const isAppleMobile =
+      /iPhone|iPad|iPod/i.test(userAgent) ||
+      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
     const webAuthnSupported =
       "PublicKeyCredential" in window &&
       !!window.navigator.credentials &&
       typeof window.navigator.credentials.get === "function";
-    const profile = resolveDeviceProfile({
-      userAgent,
-      maxTouchPoints: window.navigator.maxTouchPoints ?? 0,
-      viewportWidth: window.innerWidth,
-    });
 
     setIsIOS(isAppleMobile);
     setCanUseFaceId(isAppleMobile && webAuthnSupported);
-    setDeviceProfile(profile);
-    document.documentElement.dataset.deviceProfile = profile;
-    window.localStorage.setItem(DEVICE_PROFILE_STORAGE_KEY, profile);
   }, []);
 
   useEffect(() => {
@@ -160,14 +143,6 @@ export default function AuthPage() {
   };
 
   const redirectAfterLogin = async () => {
-    const profile = resolveDeviceProfile({
-      userAgent: window.navigator.userAgent,
-      maxTouchPoints: window.navigator.maxTouchPoints ?? 0,
-      viewportWidth: window.innerWidth,
-    });
-    document.documentElement.dataset.deviceProfile = profile;
-    window.localStorage.setItem(DEVICE_PROFILE_STORAGE_KEY, profile);
-
     const params = new URLSearchParams(window.location.search);
     const next = params.get("next") || "/dashboard";
     const stepup = params.get("stepup") === "1";
@@ -404,12 +379,8 @@ export default function AuthPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden px-4 py-8 text-slate-200 sm:px-6 sm:py-12">
-      {deviceProfile === "desktop" && (
-        <>
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-600/10 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-0 right-0 h-64 w-64 translate-x-1/3 rounded-full bg-cyan-600/10 blur-3xl" />
-        </>
-      )}
+      <div className="pointer-events-none absolute -top-24 left-1/2 hidden h-72 w-72 -translate-x-1/2 rounded-full bg-blue-600/10 blur-3xl sm:block" />
+      <div className="pointer-events-none absolute bottom-0 right-0 hidden h-64 w-64 translate-x-1/3 rounded-full bg-cyan-600/10 blur-3xl sm:block" />
 
       <div className="relative mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-6">

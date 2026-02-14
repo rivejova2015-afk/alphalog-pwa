@@ -7,6 +7,7 @@ import { Zap, Target, TrendingUp, Award, Calendar } from "lucide-react";
 import GoalsPanel from "@/components/tradermap/GoalsPanel.client";
 import ProgressCard from "@/components/tradermap/ProgressCard.client";
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
+import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
 import { createClient } from "@/lib/supabase/browser";
 import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 
@@ -159,9 +160,9 @@ export default function TraderMapPage() {
   const currentTab = TABS.find(t => t.id === activeTab);
 
   return (
-    <div className="flex min-h-screen text-slate-200">
+    <div className="min-h-screen text-slate-200 md:flex">
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 flex flex-col`}>
+      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} hidden bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 md:flex md:flex-col`}>
         {/* Header */}
         <div className="p-4 border-b border-slate-700/60 flex items-center justify-between">
           {isSidebarOpen && <h2 className="display-font font-semibold text-slate-100">TraderMap</h2>}
@@ -221,9 +222,9 @@ export default function TraderMapPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {/* Header */}
-        <header className="bg-slate-900/80 border-b border-slate-700/60 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
+        <header className="bg-slate-900/80 border-b border-slate-700/60 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">🗺️</span>
@@ -234,8 +235,24 @@ export default function TraderMapPage() {
           <BackToDashboardButton />
         </header>
 
+        <div className="sticky top-0 z-20 border-b border-slate-700/60 bg-slate-900/90 px-4 py-3 md:hidden space-y-3">
+          <MobileModuleTabSelect
+            tabs={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
+            activeTab={activeTab}
+            onChange={(id) => setActiveTab(id as TraderMapTabType)}
+            ariaLabel="Selector de modulo TraderMap"
+          />
+          <Link
+            href="/dashboard/tradermap/progress-map"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-sm text-slate-200"
+          >
+            <span className="text-base">🧭</span>
+            Progress Map
+          </Link>
+        </div>
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
             {activeTab === "overview" && <TraderMapOverview />}
             {activeTab === "goals" && <GoalsPanel />}

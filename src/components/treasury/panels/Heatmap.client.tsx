@@ -106,8 +106,8 @@ export default function HeatmapPanel({ accounts, configs, trades }: HeatmapPanel
       </div>
 
       {/* Heatmap Table */}
-      <div className="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="bg-slate-900 border border-slate-700 rounded-lg max-w-full overflow-x-auto">
+        <table className="table-mobile-cards w-full">
           <thead>
             <tr className="bg-slate-800 border-b border-slate-700">
               <th className="px-4 py-3 text-left text-slate-300 text-sm font-medium">Account</th>
@@ -125,20 +125,20 @@ export default function HeatmapPanel({ accounts, configs, trades }: HeatmapPanel
                   className={`border-b border-slate-700 hover:bg-slate-800/50 transition-colors ${getScoreBgColor(hs.score)}`}
                 >
                   {/* Account Name */}
-                  <td className="px-4 py-3">
+                  <td data-label="Account" className="px-4 py-3">
                     <div className="font-medium text-white">{hs.name}</div>
                     <div className="text-slate-500 text-xs">{hs.id.slice(0, 8)}...</div>
                   </td>
 
                   {/* Health Score */}
-                  <td className="px-4 py-3 text-center">
+                  <td data-label="Health Score" className="px-4 py-3 text-center">
                     <div className={`text-2xl font-bold ${getScoreColor(hs.score)}`}>
                       {hs.score}
                     </div>
                   </td>
 
                   {/* Drawdown */}
-                  <td className="px-4 py-3 text-center">
+                  <td data-label="Drawdown" className="px-4 py-3 text-center">
                     <div className="text-slate-300 font-medium">
                       {hs.drawdown.toFixed(2)}%
                     </div>
@@ -148,7 +148,7 @@ export default function HeatmapPanel({ accounts, configs, trades }: HeatmapPanel
                   </td>
 
                   {/* Status */}
-                  <td className="px-4 py-3">
+                  <td data-label="Status" className="px-4 py-3">
                     <div className="flex flex-col gap-1">
                       {hs.score >= 75 && <span className="text-green-400 text-sm">✓ Healthy</span>}
                       {hs.score >= 50 && hs.score < 75 && <span className="text-yellow-400 text-sm">⚠️ Warning</span>}
@@ -157,7 +157,7 @@ export default function HeatmapPanel({ accounts, configs, trades }: HeatmapPanel
                   </td>
 
                   {/* Flags */}
-                  <td className="px-4 py-3">
+                  <td data-label="Flags" className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {!hs.account.withdrawals_enabled && (
                         <span className="px-2 py-1 bg-red-900/40 border border-red-500/50 rounded text-red-400 text-xs font-medium">

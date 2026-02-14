@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Wallet, TrendingUp, DollarSign, Target, Calendar, AlertCircle, Grid, Zap } from 'lucide-react';
 import TreasuryTabs from '@/components/treasury/TreasuryTabs.client';
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
+import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
 import { createClient } from '@/lib/supabase/browser';
 
 type TreasuryTabType = 'overview' | 'milestone' | 'cashflow' | 'calendario' | 'splits' | 'umbral' | 'anti-dd' | 'heatmap';
@@ -64,9 +65,9 @@ export default function TreasuryPage() {
   }
 
   return (
-    <div className="flex min-h-screen text-slate-200">
+    <div className="min-h-screen text-slate-200 md:flex">
       {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 flex flex-col`}>
+      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} hidden bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 md:flex md:flex-col`}>
         {/* Header */}
         <div className="p-4 border-b border-slate-700/60 flex items-center justify-between">
           {isSidebarOpen && <h2 className="display-font font-semibold text-slate-100">Treasury</h2>}
@@ -118,9 +119,9 @@ export default function TreasuryPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {/* Header */}
-        <header className="bg-slate-900/80 border-b border-slate-700/60 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
+        <header className="bg-slate-900/80 border-b border-slate-700/60 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <span className="text-3xl">💰</span>
@@ -128,17 +129,26 @@ export default function TreasuryPage() {
             </div>
             <p className="text-sm text-slate-400">{currentTab?.description}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <BackToDashboardButton />
-            <div className="flex items-center gap-3 px-4 py-2 bg-slate-900/70 border border-slate-700/60 rounded-xl text-slate-200 shadow-sm">
+            <div className="flex w-full items-center gap-3 px-4 py-2 bg-slate-900/70 border border-slate-700/60 rounded-xl text-slate-200 shadow-sm sm:w-auto">
               <Wallet className="w-4 h-4 text-emerald-300" />
               <span className="text-sm">Treasury Operations</span>
             </div>
           </div>
         </header>
 
+        <div className="sticky top-0 z-20 border-b border-slate-700/60 bg-slate-900/90 px-4 py-3 md:hidden">
+          <MobileModuleTabSelect
+            tabs={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
+            activeTab={activeTab}
+            onChange={(id) => setActiveTab(id as TreasuryTabType)}
+            ariaLabel="Selector de modulo Treasury"
+          />
+        </div>
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
             <TreasuryTabs
               accounts={[]}

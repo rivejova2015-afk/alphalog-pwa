@@ -409,29 +409,29 @@ export default function CashflowPanel({
                       </div>
 
                       {/* Breakdown Table */}
-                      <table className="w-full text-xs">
+                      <table className="table-mobile-cards w-full text-xs">
                         <tbody className="divide-y divide-slate-700">
                           <tr className="divide-x divide-slate-700">
-                            <td className="px-2 py-1 text-slate-400">Retirable</td>
-                            <td className="px-2 py-1 text-white font-bold text-right">
+                            <td data-label="Concepto" className="px-2 py-1 text-slate-400">Retirable</td>
+                            <td data-label="Monto" className="px-2 py-1 text-white font-bold text-right">
                               {formatCurrency(account.retirable)}
                             </td>
                           </tr>
                           <tr className="divide-x divide-slate-700">
-                            <td className="px-2 py-1 text-slate-400">Tax Reserve</td>
-                            <td className="px-2 py-1 text-white font-bold text-right">
+                            <td data-label="Concepto" className="px-2 py-1 text-slate-400">Tax Reserve</td>
+                            <td data-label="Monto" className="px-2 py-1 text-white font-bold text-right">
                               {formatCurrency(account.taxReserveAmount)}
                             </td>
                           </tr>
                           <tr className="divide-x divide-slate-700">
-                            <td className="px-2 py-1 text-slate-400">Bonus Vault</td>
-                            <td className="px-2 py-1 text-white font-bold text-right">
+                            <td data-label="Concepto" className="px-2 py-1 text-slate-400">Bonus Vault</td>
+                            <td data-label="Monto" className="px-2 py-1 text-white font-bold text-right">
                               {formatCurrency(account.bonusVaultAmount)}
                             </td>
                           </tr>
                           <tr className="divide-x divide-slate-700 bg-blue-900/20">
-                            <td className="px-2 py-1 text-blue-400 font-bold">Cash Payout</td>
-                            <td className="px-2 py-1 text-blue-400 font-bold text-right">
+                            <td data-label="Concepto" className="px-2 py-1 text-blue-400 font-bold">Cash Payout</td>
+                            <td data-label="Monto" className="px-2 py-1 text-blue-400 font-bold text-right">
                               {formatCurrency(account.cashPayoutAmount)}
                             </td>
                           </tr>

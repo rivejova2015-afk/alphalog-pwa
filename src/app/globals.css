@@ -76,13 +76,9 @@
   --color-secondary-foreground: var(--al-text);
   --color-destructive: #c45b5b;
   --color-destructive-foreground: #140b0b;
-  --runtime-glass-blur: 20px;
+  --runtime-glass-blur: 16px;
   --runtime-floating-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
   --runtime-floating-left: calc(1.25rem + env(safe-area-inset-left, 0px));
-}
-
-html[data-device-profile="mobile"] {
-  --runtime-glass-blur: 10px;
 }
 
 *,
@@ -102,6 +98,21 @@ body {
   color: var(--al-text);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
   letter-spacing: -0.015em;
+}
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
 }
 
 ::selection {
@@ -170,14 +181,9 @@ h3,
     animation-delay: 0.25s;
   }
 
-.stagger-fade > *:nth-child(6) {
+  .stagger-fade > *:nth-child(6) {
     animation-delay: 0.3s;
   }
-}
-
-html[data-device-profile="mobile"] .animate-fade-rise,
-html[data-device-profile="mobile"] .stagger-fade > * {
-  animation-duration: 0.35s;
 }
 
 .app-glass-surface {
@@ -188,6 +194,58 @@ html[data-device-profile="mobile"] .stagger-fade > * {
 .app-floating-safe {
   bottom: var(--runtime-floating-bottom);
   left: var(--runtime-floating-left);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --runtime-glass-blur: 10px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .table-mobile-cards {
+    width: 100%;
+  }
+
+  .table-mobile-cards thead {
+    display: none;
+  }
+
+  .table-mobile-cards tbody,
+  .table-mobile-cards tr,
+  .table-mobile-cards td {
+    display: block;
+    width: 100%;
+  }
+
+  .table-mobile-cards tr {
+    border: 1px solid var(--al-border);
+    border-radius: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding: 0.25rem 0;
+    background: rgba(15, 17, 21, 0.75);
+  }
+
+  .table-mobile-cards td {
+    padding: 0.5rem 0.75rem !important;
+    text-align: left !important;
+    border: 0 !important;
+    min-height: 2rem;
+  }
+
+  .table-mobile-cards td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--al-text-subtle);
+    margin-bottom: 0.25rem;
+  }
 }
 
 /* Premium horizontal tabs */

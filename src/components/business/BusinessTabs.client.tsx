@@ -13,6 +13,7 @@ import {
   BookText,
   DollarSign,
 } from "lucide-react";
+import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
 import HealthPanel from "./panels/HealthPanel.client";
 import KPIPanel from "./panels/KPIPanel.client";
 import PLPanel from "./panels/PLPanel.client";
@@ -148,7 +149,14 @@ export default function BusinessTabs({
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 mb-6 flex-wrap bg-slate-900 p-2 rounded-lg border border-slate-800">
+      <MobileModuleTabSelect
+        tabs={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}
+        activeTab={activeTab}
+        onChange={(id) => setActiveTab(id as TabId)}
+        ariaLabel="Selector de pestaña de Business"
+      />
+
+      <div className="hidden md:flex gap-2 mb-6 flex-wrap bg-slate-900 p-2 rounded-lg border border-slate-800">
         {tabs.map((tab) => (
           <button
             key={tab.id}

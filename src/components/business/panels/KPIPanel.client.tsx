@@ -154,8 +154,8 @@ export default function KPIPanel({ offlineData }: KPIPanelProps) {
                   <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
                     <h3 className="text-white font-semibold mb-4">Per-Account Metrics</h3>
                     {accountSorted.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                      <div className="max-w-full overflow-x-auto">
+                        <table className="table-mobile-cards w-full text-sm">
                           <thead>
                             <tr className="border-b border-slate-700">
                               <th className="text-left text-xs text-slate-400 pb-2">
@@ -181,11 +181,12 @@ export default function KPIPanel({ offlineData }: KPIPanelProps) {
                                 key={accountId}
                                 className="border-b border-slate-700 hover:bg-slate-700/50"
                               >
-                                <td className="py-2 text-slate-200">{accountId}</td>
-                                <td className="text-right text-slate-200">
+                                <td data-label="Account" className="py-2 text-slate-200">{accountId}</td>
+                                <td data-label="Trades" className="text-right text-slate-200">
                                   {metrics.tradeCount}
                                 </td>
                                 <td
+                                  data-label="Net Profit"
                                   className={`text-right font-semibold ${
                                     (metrics.netProfit ?? 0) >= 0
                                       ? "text-green-400"
@@ -194,10 +195,11 @@ export default function KPIPanel({ offlineData }: KPIPanelProps) {
                                 >
                                   ${formatNumber(Math.abs(metrics.netProfit ?? 0))}
                                 </td>
-                                <td className="text-right text-slate-200">
+                                <td data-label="Cost/Trade" className="text-right text-slate-200">
                                   ${formatNumber(metrics.costPerTrade)}
                                 </td>
                                 <td
+                                  data-label="Profit/Hour"
                                   className={`text-right ${
                                     (metrics.profitPerHour ?? 0) >= 0
                                       ? "text-green-400"
