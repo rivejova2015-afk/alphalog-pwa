@@ -15,7 +15,7 @@ function resolveFallback(pathname: string): string {
 }
 
 function shouldHide(pathname: string): boolean {
-  return pathname === "/" || pathname === "/dashboard" || pathname === "/auth/callback";
+  return pathname === "/" || pathname === "/dashboard" || pathname.startsWith("/auth");
 }
 
 export default function GlobalBackButton() {

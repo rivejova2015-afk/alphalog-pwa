@@ -54,6 +54,7 @@ export interface DashboardSnapshot {
   botcontrol?: {
     bots: unknown[];
     accounts: unknown[];
+    app_accounts?: unknown[];
     telemetry: unknown[];
     commands: unknown[];
     command_status: unknown[];
@@ -103,7 +104,16 @@ export async function saveSnapshot(
       terminal: { instruments: [], news: [], events: [], evidenceReports: [] },
       treasury: { accounts: [], configs: [], wallets: [], transactions: [], budgets: [], payouts: [], trades: [], calendar_events: [] },
       business: { costs: [], templates: [], milestones: [], sops: [], sop_items: [], sop_runs: [], decisions: [], tasks: [], llc_info: null, llc_inbox: [] },
-      botcontrol: { bots: [], accounts: [], telemetry: [], commands: [], command_status: [], settings_global: null, settings_override: [] },
+      botcontrol: {
+        bots: [],
+        accounts: [],
+        app_accounts: [],
+        telemetry: [],
+        commands: [],
+        command_status: [],
+        settings_global: null,
+        settings_override: [],
+      },
       ...existing,
       ...snapshot,
     };

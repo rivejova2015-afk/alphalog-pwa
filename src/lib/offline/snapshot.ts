@@ -125,6 +125,7 @@ export async function saveBusinessDataToSnapshot(data: {
 export async function saveBotControlSnapshot(data: {
   bots?: unknown[];
   accounts?: unknown[];
+  app_accounts?: unknown[];
   telemetry?: unknown[];
   commands?: unknown[];
   command_status?: unknown[];
@@ -135,6 +136,7 @@ export async function saveBotControlSnapshot(data: {
   const botcontrolData = {
     bots: data.bots ?? snapshot?.botcontrol?.bots ?? [],
     accounts: data.accounts ?? snapshot?.botcontrol?.accounts ?? [],
+    app_accounts: data.app_accounts ?? snapshot?.botcontrol?.app_accounts ?? [],
     telemetry: data.telemetry ?? snapshot?.botcontrol?.telemetry ?? [],
     commands: data.commands ?? snapshot?.botcontrol?.commands ?? [],
     command_status: data.command_status ?? snapshot?.botcontrol?.command_status ?? [],

@@ -17,6 +17,12 @@ interface BotAccount {
   bot_id: string;
   account_id: string;
   label: string | null;
+  app_account_id: string | null;
+}
+
+interface AppAccount {
+  id: string;
+  name: string;
 }
 
 interface BotInstance {
@@ -116,6 +122,7 @@ function formatTimestamp(value: string | null | undefined) {
 export default function BotControlPage() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [accounts, setAccounts] = useState<BotAccount[]>([]);
+  const [appAccounts, setAppAccounts] = useState<AppAccount[]>([]);
   const [instances, setInstances] = useState<BotInstance[]>([]);
   const [telemetry, setTelemetry] = useState<BotTelemetry[]>([]);
   const [commands, setCommands] = useState<BotCommand[]>([]);
@@ -128,6 +135,14 @@ export default function BotControlPage() {
   const [loading, setLoading] = useState(false);
   const [offlineMode, setOfflineMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  const [showSelectAccountModal, setShowSelectAccountModal] = useState(false);
+  const [newMt5AccountId, setNewMt5AccountId] = useState("");
+  const [newMt5AccountLabel, setNewMt5AccountLabel] = useState("");
+  const [newAppAccountId, setNewAppAccountId] = useState("");
+  const [selectedBotAccountId, setSelectedBotAccountId] = useState("");
+  const [selectedAppAccountId, setSelectedAppAccountId] = useState("");
 
   const supabase = useMemo(() => createClient(), []);
   const dirtyGlobalRef = useRef(dirtyGlobalSettings);
@@ -145,6 +160,12 @@ export default function BotControlPage() {
     () => accounts.filter((account) => account.bot_id === selectedBotId),
     [accounts, selectedBotId]
   );
+
+  const appAccountsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    appAccounts.forEach((account) => map.set(account.id, account.name));
+    return map;
+  }, [appAccounts]);
 
   const telemetryMap = useMemo(() => {
     const map = new Map<string, BotTelemetry>();
@@ -174,7 +195,23 @@ export default function BotControlPage() {
     setDirtyOverrideSettings({});
     dirtyGlobalRef.current = false;
     dirtyOverrideRef.current = {};
+    setSelectedBotAccountId("");
   }, [selectedBotId]);
+
+  useEffect(() => {
+    if (!newAppAccountId && appAccounts.length > 0) {
+      setNewAppAccountId(appAccounts[0].id);
+    }
+    if (!selectedAppAccountId && appAccounts.length > 0) {
+      setSelectedAppAccountId(appAccounts[0].id);
+    }
+  }, [appAccounts, newAppAccountId, selectedAppAccountId]);
+
+  useEffect(() => {
+    if (!selectedBotAccountId && accountsForBot.length > 0) {
+      setSelectedBotAccountId(accountsForBot[0].id);
+    }
+  }, [accountsForBot, selectedBotAccountId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -192,14 +229,16 @@ export default function BotControlPage() {
         setSelectedBotId(botId);
       }
 
-      const [accountsResult, instancesResult, telemetryResult, commandsResult] = await Promise.all([
-        supabase.from("bot_accounts").select("id, bot_id, account_id, label").order("created_at", { ascending: true }),
+      const [accountsResult, appAccountsResult, instancesResult, telemetryResult, commandsResult] = await Promise.all([
+        supabase.from("bot_accounts").select("id, bot_id, account_id, label, app_account_id").order("created_at", { ascending: true }),
+        supabase.from("accounts").select("id, name").order("created_at", { ascending: true }),
         supabase.from("bot_instances").select("bot_account_id, last_heartbeat_at"),
         supabase.from("bot_telemetry").select("bot_account_id, equity, balance, positions_total, positions_buy, positions_sell, basket_r, tier, last_signal_text, last_signal_ts, last_heartbeat_ts"),
         supabase.from("bot_commands").select("id, command_type, status, created_at").order("created_at", { ascending: false }).limit(10),
       ]);
 
       if (accountsResult.error) throw accountsResult.error;
+      if (appAccountsResult.error) throw appAccountsResult.error;
       if (instancesResult.error) throw instancesResult.error;
       if (telemetryResult.error) throw telemetryResult.error;
       if (commandsResult.error) throw commandsResult.error;
@@ -235,6 +274,7 @@ export default function BotControlPage() {
 
       setBots(botsData || []);
       setAccounts(accountsResult.data || []);
+      setAppAccounts(appAccountsResult.data || []);
       setInstances(instancesResult.data || []);
       setTelemetry(telemetryResult.data || []);
       setCommands(commandsResult.data || []);
@@ -269,6 +309,7 @@ export default function BotControlPage() {
       await saveBotControlSnapshot({
         bots: botsData || [],
         accounts: accountsResult.data || [],
+        app_accounts: appAccountsResult.data || [],
         telemetry: telemetryResult.data || [],
         commands: commandsResult.data || [],
         command_status: commandStatusResult.data || [],
@@ -288,6 +329,7 @@ export default function BotControlPage() {
     if (!snapshot) return;
     setBots((snapshot.bots || []) as Bot[]);
     setAccounts((snapshot.accounts || []) as BotAccount[]);
+    setAppAccounts((snapshot.app_accounts || []) as AppAccount[]);
     setTelemetry((snapshot.telemetry || []) as BotTelemetry[]);
     setCommands((snapshot.commands || []) as BotCommand[]);
     setCommandStatus((snapshot.command_status || []) as BotCommandStatus[]);
@@ -459,6 +501,135 @@ export default function BotControlPage() {
     return Date.now() - new Date(instance.last_heartbeat_at).getTime() <= ONLINE_THRESHOLD_MS;
   };
 
+  const normalizeError = (err: unknown, fallback: string) => {
+    if (typeof err !== "object" || err === null) return fallback;
+    const maybeCode = "code" in err ? String((err as { code?: unknown }).code || "") : "";
+    const maybeMessage = "message" in err ? String((err as { message?: unknown }).message || "") : "";
+    if (maybeCode === "23505") return "La cuenta MT5 ya existe en Bot Control.";
+    if (maybeCode === "42501") return "No tienes permisos para vincular esta cuenta.";
+    if (maybeMessage) return maybeMessage;
+    return fallback;
+  };
+
+  const resetAddAccountForm = () => {
+    setNewMt5AccountId("");
+    setNewMt5AccountLabel("");
+    setNewAppAccountId(appAccounts[0]?.id || "");
+  };
+
+  const resetSelectAccountForm = () => {
+    setSelectedBotAccountId(accountsForBot[0]?.id || "");
+    setSelectedAppAccountId(appAccounts[0]?.id || "");
+  };
+
+  const openAddAccountModal = () => {
+    if (!selectedBotId) {
+      setError("Selecciona un bot antes de agregar una cuenta.");
+      return;
+    }
+    if (appAccounts.length === 0) {
+      setError("No tienes cuentas registradas en TradeHub. Crea una primero.");
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    resetAddAccountForm();
+    setShowAddAccountModal(true);
+  };
+
+  const openSelectAccountModal = () => {
+    if (accountsForBot.length === 0) {
+      setError("No hay cuentas MT5 registradas para este bot.");
+      return;
+    }
+    if (appAccounts.length === 0) {
+      setError("No tienes cuentas registradas en TradeHub para vincular.");
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    resetSelectAccountForm();
+    setShowSelectAccountModal(true);
+  };
+
+  const handleAddBotAccount = async () => {
+    const accountId = newMt5AccountId.trim();
+    if (!selectedBotId) {
+      setError("Selecciona un bot antes de guardar.");
+      return;
+    }
+    if (!accountId) {
+      setError("El account id de MT5 es obligatorio.");
+      return;
+    }
+    if (!newAppAccountId) {
+      setError("Debes seleccionar una cuenta de la app.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      const userId = authData.user?.id;
+      if (!userId) throw new Error("Sesion expirada. Inicia sesion de nuevo.");
+
+      const { error: insertError } = await supabase.from("bot_accounts").insert({
+        user_id: userId,
+        bot_id: selectedBotId,
+        account_id: accountId,
+        label: newMt5AccountLabel.trim() || null,
+        app_account_id: newAppAccountId,
+      });
+
+      if (insertError) throw insertError;
+
+      setShowAddAccountModal(false);
+      resetAddAccountForm();
+      setNotice("Cuenta MT5 agregada y vinculada correctamente.");
+      await loadData();
+    } catch (err) {
+      console.error("[BotControl] add bot account error:", err);
+      setError(normalizeError(err, "No se pudo agregar la cuenta MT5."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRelinkBotAccount = async () => {
+    if (!selectedBotAccountId) {
+      setError("Selecciona una cuenta MT5 para vincular.");
+      return;
+    }
+    if (!selectedAppAccountId) {
+      setError("Selecciona una cuenta de la app.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { error: updateError } = await supabase
+        .from("bot_accounts")
+        .update({ app_account_id: selectedAppAccountId })
+        .eq("id", selectedBotAccountId);
+
+      if (updateError) throw updateError;
+
+      setShowSelectAccountModal(false);
+      setNotice("Cuenta vinculada correctamente.");
+      await loadData();
+    } catch (err) {
+      console.error("[BotControl] relink bot account error:", err);
+      setError(normalizeError(err, "No se pudo vincular la cuenta seleccionada."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen text-slate-200">
       <header className="bg-slate-900/80 border-b border-slate-700/60 px-6 py-4 flex items-center justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
@@ -469,7 +640,21 @@ export default function BotControlPage() {
           </div>
           <p className="text-sm text-slate-400">Control panel AlphaLog → EA GoldRangeBasketR</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <button
+            onClick={openAddAccountModal}
+            disabled={offlineMode || loading}
+            className="px-3 py-2 rounded-xl border border-slate-600 bg-slate-800/80 text-sm font-semibold text-slate-100 hover:bg-slate-700/80 transition disabled:opacity-60"
+          >
+            Agregar cuenta
+          </button>
+          <button
+            onClick={openSelectAccountModal}
+            disabled={offlineMode || loading}
+            className="px-3 py-2 rounded-xl border border-blue-500/50 bg-blue-500/20 text-sm font-semibold text-blue-100 hover:bg-blue-500/30 transition disabled:opacity-60"
+          >
+            Seleccionar cuenta
+          </button>
           <PushNotificationButton />
           <BackToDashboardButton />
         </div>
@@ -486,6 +671,12 @@ export default function BotControlPage() {
           {error && (
             <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-rose-200 text-sm">
               {error}
+            </div>
+          )}
+
+          {notice && (
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-emerald-200 text-sm">
+              {notice}
             </div>
           )}
 
@@ -858,6 +1049,9 @@ export default function BotControlPage() {
                       <div>
                         <div className="text-sm font-semibold text-slate-100">{account.label || account.account_id}</div>
                         <div className="text-xs text-slate-400">{account.account_id}</div>
+                        <div className="text-xs text-slate-500">
+                          Cuenta app vinculada: {account.app_account_id ? (appAccountsMap.get(account.app_account_id) || "No disponible") : "Sin vincular"}
+                        </div>
                       </div>
                       <div className={`text-xs px-2 py-1 rounded-full ${online ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700/40 text-slate-400"}`}>
                         {online ? "ONLINE" : "OFFLINE"}
@@ -1121,6 +1315,130 @@ export default function BotControlPage() {
           </div>
         </div>
       </div>
+
+      {showAddAccountModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-100">Agregar cuenta MT5</h3>
+            <p className="mt-1 text-sm text-slate-400">Registra el account id donde el bot operara y vincula la cuenta de la app.</p>
+
+            <div className="mt-4 space-y-3">
+              <label className="flex flex-col gap-1 text-sm">
+                Account ID MT5 *
+                <input
+                  type="text"
+                  value={newMt5AccountId}
+                  onChange={(e) => setNewMt5AccountId(e.target.value)}
+                  placeholder="Ej: 12345678"
+                  className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1 text-sm">
+                Etiqueta (opcional)
+                <input
+                  type="text"
+                  value={newMt5AccountLabel}
+                  onChange={(e) => setNewMt5AccountLabel(e.target.value)}
+                  placeholder="Ej: Cuenta principal"
+                  className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1 text-sm">
+                Cuenta de la app *
+                <select
+                  value={newAppAccountId}
+                  onChange={(e) => setNewAppAccountId(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2"
+                >
+                  <option value="">Selecciona una cuenta</option>
+                  {appAccounts.map((appAccount) => (
+                    <option key={appAccount.id} value={appAccount.id}>
+                      {appAccount.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => setShowAddAccountModal(false)}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddBotAccount}
+                disabled={loading}
+                className="rounded-lg bg-emerald-500/80 px-3 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
+              >
+                Guardar cuenta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSelectAccountModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-100">Seleccionar cuenta</h3>
+            <p className="mt-1 text-sm text-slate-400">Vincula una cuenta MT5 existente con una cuenta registrada en la app.</p>
+
+            <div className="mt-4 space-y-3">
+              <label className="flex flex-col gap-1 text-sm">
+                Cuenta MT5
+                <select
+                  value={selectedBotAccountId}
+                  onChange={(e) => setSelectedBotAccountId(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2"
+                >
+                  <option value="">Selecciona una cuenta MT5</option>
+                  {accountsForBot.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.label || account.account_id} ({account.account_id})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-sm">
+                Cuenta de la app
+                <select
+                  value={selectedAppAccountId}
+                  onChange={(e) => setSelectedAppAccountId(e.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2"
+                >
+                  <option value="">Selecciona una cuenta</option>
+                  {appAccounts.map((appAccount) => (
+                    <option key={appAccount.id} value={appAccount.id}>
+                      {appAccount.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                onClick={() => setShowSelectAccountModal(false)}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRelinkBotAccount}
+                disabled={loading}
+                className="rounded-lg bg-blue-500/80 px-3 py-2 text-sm font-semibold text-slate-100 disabled:opacity-60"
+              >
+                Guardar vinculacion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

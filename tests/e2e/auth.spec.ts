@@ -2,6 +2,13 @@ import { test, expect } from '@playwright/test';
 import { login } from './utils/auth';
 
 test.describe('Authentication', () => {
+  test('should hide global nav buttons on auth routes', async ({ page }) => {
+    await page.goto('/auth');
+
+    await expect(page.getByRole('button', { name: 'Atras' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Vuelta al dashboard' })).toHaveCount(0);
+  });
+
   test('should login with email and password', async ({ page }) => {
     await login(page);
 
