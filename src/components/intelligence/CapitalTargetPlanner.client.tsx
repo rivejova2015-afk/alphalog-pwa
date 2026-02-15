@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ScenarioKey = "conservative" | "base" | "aggressive";
 
@@ -16,6 +16,25 @@ type SeriesPoint = {
   capital: number;
 };
 
+type CapitalType = "real" | "propfirm";
+
+type CapitalTypeMetrics = {
+  totalAccounts: number;
+  totalCapital: number;
+  totalBalance: number;
+  closedTrades30d: number;
+  netPnl30d: number;
+  winRate30d: number;
+};
+
+type CapitalTargetRecord = {
+  id: string;
+  account_type: CapitalType;
+  target_name: string;
+  target_capital: number | string;
+  created_at: string;
+};
+
 type SimulationSummary = {
   sampleSize: number;
   medianMonths: number | null;
@@ -28,6 +47,10 @@ interface CapitalTargetPlannerProps {
   currentCapital: number;
   netPnl30d: number;
   closedTrades30d: number;
+  capitalByType?: {
+    real: CapitalTypeMetrics;
+    propfirm: CapitalTypeMetrics;
+  };
 }
 
 const CHART_MONTHS = 24;
@@ -59,6 +82,48 @@ const parseNumber = (value: string) => {
 };
 
 const clampRate = (value: number) => Math.max(-0.25, Math.min(0.4, value));
+
+const EMPTY_METRICS: CapitalTypeMetrics = {
+  totalAccounts: 0,
+  totalCapital: 0,
+  totalBalance: 0,
+  closedTrades30d: 0,
+  netPnl30d: 0,
+  winRate30d: 0,
+};
+
+const TYPE_LABEL: Record<CapitalType, string> = {
+  real: "Capital real",
+  propfirm: "Capital propfirm",
+};
+
+const defaultTypeFromMetrics = (
+  metrics?: {
+    real: CapitalTypeMetrics;
+    propfirm: CapitalTypeMetrics;
+  }
+) => {
+  if (!metrics) return "real" as const;
+  if (metrics.real.totalAccounts === 0 && metrics.propfirm.totalAccounts > 0) {
+    return "propfirm" as const;
+  }
+  return "real" as const;
+};
+
+const buildDefaultTarget = (current: number) =>
+  Math.max(current * 1.25, current + 1000, 1000).toFixed(2);
+
+const formatDateTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("es-PR", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
 
 const monthsToTarget = (start: number, target: number, monthlyRate: number, maxMonths = 240) => {
   if (target <= 0 || start <= 0) return null;
@@ -266,26 +331,185 @@ export default function CapitalTargetPlanner({
   currentCapital,
   netPnl30d,
   closedTrades30d,
+  capitalByType,
 }: CapitalTargetPlannerProps) {
-  const defaultTarget = Math.max(currentCapital * 1.25, currentCapital + 1000, 1000);
-  const [targetInput, setTargetInput] = useState(defaultTarget.toFixed(2));
+  const initialType = defaultTypeFromMetrics(capitalByType);
+  const fallbackMetrics = useMemo<CapitalTypeMetrics>(
+    () => ({
+      totalAccounts: 0,
+      totalCapital: currentCapital,
+      totalBalance: currentCapital,
+      closedTrades30d,
+      netPnl30d,
+      winRate30d: 0,
+    }),
+    [closedTrades30d, currentCapital, netPnl30d]
+  );
+
+  const metricsByType = useMemo(
+    () => ({
+      real: capitalByType?.real ?? fallbackMetrics,
+      propfirm: capitalByType?.propfirm ?? EMPTY_METRICS,
+    }),
+    [capitalByType, fallbackMetrics]
+  );
+
+  const [selectedType, setSelectedType] = useState<CapitalType>(initialType);
+  const [targetName, setTargetName] = useState(`Objetivo ${TYPE_LABEL[initialType]}`);
+  const [targetInput, setTargetInput] = useState(
+    buildDefaultTarget(metricsByType[initialType].totalBalance)
+  );
   const [showDetails, setShowDetails] = useState(false);
+  const [savedTargets, setSavedTargets] = useState<CapitalTargetRecord[]>([]);
+  const [loadingTargets, setLoadingTargets] = useState(true);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const activeMetrics = metricsByType[selectedType];
+  const activeCurrentCapital = activeMetrics.totalBalance;
+  const activeNetPnl30d = activeMetrics.netPnl30d;
+  const activeClosedTrades30d = activeMetrics.closedTrades30d;
+
+  const applyTargetPreset = useCallback(
+    (type: CapitalType, targets: CapitalTargetRecord[]) => {
+      const latest = targets.find((target) => target.account_type === type);
+      if (latest) {
+        setTargetName(latest.target_name);
+        setTargetInput(Number(latest.target_capital).toFixed(2));
+        return;
+      }
+
+      setTargetName(`Objetivo ${TYPE_LABEL[type]}`);
+      setTargetInput(buildDefaultTarget(metricsByType[type].totalBalance));
+    },
+    [metricsByType]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTargets = async () => {
+      setLoadingTargets(true);
+      setTargetsError(null);
+      try {
+        const response = await fetch("/api/intelligence/capital-targets", {
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => []);
+        if (!response.ok) {
+          throw new Error(payload?.error || "No se pudieron cargar los objetivos guardados.");
+        }
+        if (!cancelled) {
+          const records = Array.isArray(payload) ? (payload as CapitalTargetRecord[]) : [];
+          setSavedTargets(records);
+          applyTargetPreset(initialType, records);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTargetsError(
+            error instanceof Error ? error.message : "No se pudieron cargar los objetivos guardados."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingTargets(false);
+        }
+      }
+    };
+
+    void loadTargets();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyTargetPreset, initialType]);
+
+  const handleTypeChange = (type: CapitalType) => {
+    setSelectedType(type);
+    setShowDetails(false);
+    setSaveError(null);
+    setSaveSuccess(null);
+    applyTargetPreset(type, savedTargets);
+  };
+
+  const handleLoadSavedTarget = (target: CapitalTargetRecord) => {
+    setTargetName(target.target_name);
+    setTargetInput(Number(target.target_capital).toFixed(2));
+    setShowDetails(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+  };
+
+  const handleSaveTarget = async () => {
+    setSaveError(null);
+    setSaveSuccess(null);
+
+    if (!showDetails) {
+      setSaveError("Abre Detalles para guardar el objetivo.");
+      return;
+    }
+
+    const parsedTarget = parseNumber(targetInput);
+    if (parsedTarget === null || parsedTarget <= 0) {
+      setSaveError("Ingresa un capital objetivo valido y mayor a 0.");
+      return;
+    }
+
+    if (!targetName.trim()) {
+      setSaveError("Asigna un nombre para guardar el objetivo.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/intelligence/capital-targets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          account_type: selectedType,
+          target_name: targetName.trim(),
+          target_capital: parsedTarget,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo guardar el objetivo.");
+      }
+
+      const created = payload as CapitalTargetRecord;
+      setSavedTargets((prev) => [created, ...prev]);
+      setSaveSuccess("Objetivo guardado correctamente.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "No se pudo guardar el objetivo.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const targetCapital = useMemo(() => parseNumber(targetInput), [targetInput]);
   const invalidTarget = targetCapital === null || targetCapital <= 0;
+  const currentTypeTargets = useMemo(
+    () => savedTargets.filter((target) => target.account_type === selectedType),
+    [savedTargets, selectedType]
+  );
 
   const progress = useMemo(() => {
     if (!targetCapital || targetCapital <= 0) return 0;
-    return Math.min(100, (currentCapital / targetCapital) * 100);
-  }, [currentCapital, targetCapital]);
+    return Math.max(0, Math.min(100, (activeCurrentCapital / targetCapital) * 100));
+  }, [activeCurrentCapital, targetCapital]);
 
   const remaining = useMemo(() => {
     if (!targetCapital) return null;
-    return targetCapital - currentCapital;
-  }, [currentCapital, targetCapital]);
+    return targetCapital - activeCurrentCapital;
+  }, [activeCurrentCapital, targetCapital]);
 
   const scenarioConfigs = useMemo(() => {
-    const observedRate = currentCapital > 0 ? netPnl30d / currentCapital : 0;
+    const observedRate = activeCurrentCapital > 0 ? activeNetPnl30d / activeCurrentCapital : 0;
     const baseRate = clampRate(observedRate > 0 ? observedRate : 0.01);
     const conservativeRate = clampRate(Math.max(0.004, baseRate * 0.6));
     const aggressiveRate = clampRate(Math.max(baseRate + 0.01, baseRate * 1.4));
@@ -310,21 +534,21 @@ export default function CapitalTargetPlanner({
         color: "#22c55e",
       },
     ] as ScenarioConfig[];
-  }, [currentCapital, netPnl30d]);
+  }, [activeCurrentCapital, activeNetPnl30d]);
 
   const scenarioRows = useMemo(() => {
     if (!showDetails || !targetCapital || targetCapital <= 0) return [];
 
     return scenarioConfigs.map((config) => {
-      const points = buildSeries(currentCapital, config.monthlyRate, CHART_MONTHS);
-      const months = monthsToTarget(currentCapital, targetCapital, config.monthlyRate);
+      const points = buildSeries(activeCurrentCapital, config.monthlyRate, CHART_MONTHS);
+      const months = monthsToTarget(activeCurrentCapital, targetCapital, config.monthlyRate);
       const peak = Math.max(...points.map((point) => point.capital));
       const low = Math.min(...points.map((point) => point.capital));
-      const final = points[points.length - 1]?.capital ?? currentCapital;
+      const final = points[points.length - 1]?.capital ?? activeCurrentCapital;
 
       return { config, points, months, peak, low, final };
     });
-  }, [currentCapital, scenarioConfigs, showDetails, targetCapital]);
+  }, [activeCurrentCapital, scenarioConfigs, showDetails, targetCapital]);
 
   const baseRate = scenarioConfigs.find((scenario) => scenario.key === "base")?.monthlyRate ?? 0.01;
   const simulation = useMemo(() => {
@@ -337,26 +561,32 @@ export default function CapitalTargetPlanner({
         successByHorizon: [6, 12, 24, 36].map((months) => ({ months, probability: 0 })),
       };
     }
-    return runSimulation(currentCapital, targetCapital, baseRate, SIMULATION_SAMPLES, SIMULATION_MAX_MONTHS);
-  }, [baseRate, currentCapital, showDetails, targetCapital]);
+    return runSimulation(
+      activeCurrentCapital,
+      targetCapital,
+      baseRate,
+      SIMULATION_SAMPLES,
+      SIMULATION_MAX_MONTHS
+    );
+  }, [activeCurrentCapital, baseRate, showDetails, targetCapital]);
 
   const requiredRates = useMemo(() => {
-    if (!targetCapital || targetCapital <= currentCapital || currentCapital <= 0) {
+    if (!targetCapital || targetCapital <= activeCurrentCapital || activeCurrentCapital <= 0) {
       return {
         in6: 0,
         in12: 0,
         in24: 0,
       };
     }
-    const ratio = targetCapital / currentCapital;
+    const ratio = targetCapital / activeCurrentCapital;
     return {
       in6: Math.pow(ratio, 1 / 6) - 1,
       in12: Math.pow(ratio, 1 / 12) - 1,
       in24: Math.pow(ratio, 1 / 24) - 1,
     };
-  }, [currentCapital, targetCapital]);
+  }, [activeCurrentCapital, targetCapital]);
 
-  const avgTradePnl = closedTrades30d > 0 ? netPnl30d / closedTrades30d : null;
+  const avgTradePnl = activeClosedTrades30d > 0 ? activeNetPnl30d / activeClosedTrades30d : null;
   const requiredMonthlyProfit = remaining !== null ? remaining / 12 : null;
   const tradesNeededPerMonth =
     avgTradePnl && avgTradePnl > 0 && requiredMonthlyProfit !== null && requiredMonthlyProfit > 0
@@ -365,17 +595,53 @@ export default function CapitalTargetPlanner({
 
   return (
     <div className="premium-card">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {(["real", "propfirm"] as CapitalType[]).map((type) => {
+          const metrics = metricsByType[type];
+          const active = selectedType === type;
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => handleTypeChange(type)}
+              className={`rounded border p-3 text-left transition ${
+                active
+                  ? "border-sky-500/70 bg-sky-900/20"
+                  : "border-slate-700/70 bg-slate-900/40 hover:border-slate-500/70"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-wide text-slate-400">{TYPE_LABEL[type]}</p>
+              <p className="mt-1 text-lg font-semibold text-white">{formatMoney(metrics.totalBalance)}</p>
+              <p className="text-xs text-slate-400">
+                {metrics.totalAccounts} cuentas | Win rate 30d: {metrics.winRate30d.toFixed(1)}%
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-white">Capital objetivo</h3>
           <p className="text-sm text-slate-400">
-            Define el capital que quieres alcanzar y abre detalles para ver progreso, escenarios y pronosticos.
+            Selecciona tipo de capital (real o propfirm), crea multiples objetivos y abre detalles para ver pronosticos.
           </p>
         </div>
         <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-2 sm:items-end">
+          <label className="flex-1 sm:min-w-56">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
+              Nombre del objetivo
+            </span>
+            <input
+              type="text"
+              value={targetName}
+              onChange={(event) => setTargetName(event.target.value)}
+              className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
           <label className="flex-1 sm:min-w-64">
             <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
-              Capital objetivo a alcanzar
+              Capital objetivo ({TYPE_LABEL[selectedType]})
             </span>
             <input
               type="text"
@@ -385,13 +651,23 @@ export default function CapitalTargetPlanner({
               className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
             />
           </label>
-          <button
-            type="button"
-            onClick={() => setShowDetails((prev) => !prev)}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            Detalles
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDetails((prev) => !prev)}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Detalles
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveTarget}
+              disabled={isSaving}
+              className="rounded border border-sky-500/60 bg-sky-900/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-900/60 disabled:opacity-60"
+            >
+              {isSaving ? "Guardando..." : "Guardar objetivo"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -400,13 +676,63 @@ export default function CapitalTargetPlanner({
           Ingresa un capital objetivo valido y mayor a 0.
         </div>
       )}
+      {targetsError && (
+        <div className="mt-3 rounded border border-amber-700/70 bg-amber-950/25 px-3 py-2 text-sm text-amber-200">
+          {targetsError}
+        </div>
+      )}
+      {saveError && (
+        <div className="mt-3 rounded border border-red-800/70 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+          {saveError}
+        </div>
+      )}
+      {saveSuccess && (
+        <div className="mt-3 rounded border border-emerald-800/70 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+          {saveSuccess}
+        </div>
+      )}
+
+      <div className="mt-4 rounded border border-slate-700/70 bg-slate-900/40 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-slate-100">
+            Objetivos guardados ({TYPE_LABEL[selectedType]})
+          </h4>
+          {loadingTargets && <span className="text-xs text-slate-400">Cargando...</span>}
+        </div>
+        {currentTypeTargets.length === 0 ? (
+          <p className="text-sm text-slate-400">No hay objetivos guardados para este tipo de capital.</p>
+        ) : (
+          <div className="space-y-2">
+            {currentTypeTargets.slice(0, 6).map((target) => (
+              <div
+                key={target.id}
+                className="flex flex-col gap-2 rounded border border-slate-700/60 bg-slate-950/50 p-2 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-100">{target.target_name}</p>
+                  <p className="text-xs text-slate-400">
+                    {formatMoney(Number(target.target_capital))} | {formatDateTime(target.created_at)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleLoadSavedTarget(target)}
+                  className="rounded border border-slate-600/70 px-3 py-1 text-xs text-slate-200 hover:border-slate-400"
+                >
+                  Cargar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {showDetails && !invalidTarget && targetCapital !== null && (
         <div className="mt-5 space-y-5">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded border border-slate-700/70 bg-slate-900/60 p-3">
               <p className="text-xs text-slate-400">Capital actual</p>
-              <p className="text-lg font-semibold text-white">{formatMoney(currentCapital)}</p>
+              <p className="text-lg font-semibold text-white">{formatMoney(activeCurrentCapital)}</p>
             </div>
             <div className="rounded border border-slate-700/70 bg-slate-900/60 p-3">
               <p className="text-xs text-slate-400">Capital objetivo</p>
@@ -511,7 +837,7 @@ export default function CapitalTargetPlanner({
             <ProjectionChart
               scenarios={scenarioRows.map((row) => ({ config: row.config, points: row.points }))}
               target={targetCapital}
-              current={currentCapital}
+              current={activeCurrentCapital}
             />
 
             <div className="mt-3 max-w-full overflow-x-auto">

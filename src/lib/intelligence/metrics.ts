@@ -8,9 +8,16 @@ type MaybeNumber = number | string | null | undefined;
 type AccountRow = {
   id: string;
   name: string;
+  category_id: string | null;
+  role: string | null;
   account_size: MaybeNumber;
   current_balance: MaybeNumber;
   currency: string | null;
+};
+
+type CategoryRow = {
+  id: string;
+  name: string | null;
 };
 
 type TradeRow = {
@@ -80,6 +87,24 @@ export type CapitalLevelsData = {
   winRate30d: number;
   reports30d: number;
   evidence30d: number;
+  capitalByType: {
+    real: {
+      totalAccounts: number;
+      totalCapital: number;
+      totalBalance: number;
+      closedTrades30d: number;
+      netPnl30d: number;
+      winRate30d: number;
+    };
+    propfirm: {
+      totalAccounts: number;
+      totalCapital: number;
+      totalBalance: number;
+      closedTrades30d: number;
+      netPnl30d: number;
+      winRate30d: number;
+    };
+  };
   topAccounts: Array<{
     id: string;
     name: string;
@@ -137,6 +162,26 @@ const asNumber = (value: MaybeNumber): number => {
 const normalizeStatus = (value: string | null | undefined): "open" | "closed" => {
   const text = (value || "").trim().toLowerCase();
   return text === "open" ? "open" : "closed";
+};
+
+const normalizeText = (value: string | null | undefined) =>
+  (value || "").trim().toLowerCase();
+
+const classifyAccountType = (account: AccountRow, categoryName?: string | null): "real" | "propfirm" => {
+  const role = normalizeText(account.role);
+  const category = normalizeText(categoryName);
+  const source = `${role} ${category}`;
+
+  if (
+    source.includes("propfirm") ||
+    source.includes("prop firm") ||
+    source.includes("funded") ||
+    source.includes("challenge")
+  ) {
+    return "propfirm";
+  }
+
+  return "real";
 };
 
 const isWithinLastDays = (value: string | null | undefined, days: number) => {
@@ -233,14 +278,22 @@ async function getBaseRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string
 ) {
-  const [accounts, trades, journalEntries] = await Promise.all([
+  const [accounts, categories, trades, journalEntries] = await Promise.all([
     withFallback(
       supabase
         .from("accounts")
-        .select("id, name, account_size, current_balance, currency")
+        .select("id, name, category_id, role, account_size, current_balance, currency")
         .eq("user_id", userId)
         .is("deleted_at", null),
       [] as AccountRow[]
+    ),
+    withFallback(
+      supabase
+        .from("account_categories")
+        .select("id, name")
+        .eq("user_id", userId)
+        .is("deleted_at", null),
+      [] as CategoryRow[]
     ),
     withFallback(
       supabase
@@ -264,7 +317,7 @@ async function getBaseRows(
     ),
   ]);
 
-  return { supabase, accounts, trades, journalEntries };
+  return { supabase, accounts, categories, trades, journalEntries };
 }
 
 export async function getCapitalLevelsData(): Promise<CapitalLevelsData> {
@@ -280,11 +333,44 @@ export async function getCapitalLevelsData(): Promise<CapitalLevelsData> {
       winRate30d: 0,
       reports30d: 0,
       evidence30d: 0,
+      capitalByType: {
+        real: {
+          totalAccounts: 0,
+          totalCapital: 0,
+          totalBalance: 0,
+          closedTrades30d: 0,
+          netPnl30d: 0,
+          winRate30d: 0,
+        },
+        propfirm: {
+          totalAccounts: 0,
+          totalCapital: 0,
+          totalBalance: 0,
+          closedTrades30d: 0,
+          netPnl30d: 0,
+          winRate30d: 0,
+        },
+      },
       topAccounts: [],
     };
   }
 
-  const { accounts, trades } = await getBaseRows(supabase, userId);
+  const { accounts, categories, trades } = await getBaseRows(supabase, userId);
+  const categoryById = new Map<string, string>();
+  categories.forEach((category) => {
+    if (category.name) {
+      categoryById.set(category.id, category.name);
+    }
+  });
+
+  const accountTypeById = new Map<string, "real" | "propfirm">();
+  accounts.forEach((account) => {
+    accountTypeById.set(
+      account.id,
+      classifyAccountType(account, account.category_id ? categoryById.get(account.category_id) : null)
+    );
+  });
+
   const trades30d = trades.filter(
     (trade) =>
       normalizeStatus(trade.status) === "closed" &&
@@ -304,6 +390,28 @@ export async function getCapitalLevelsData(): Promise<CapitalLevelsData> {
 
   const totalCapital = accounts.reduce((sum, account) => sum + asNumber(account.account_size), 0);
   const totalBalance = accounts.reduce((sum, account) => sum + asNumber(account.current_balance), 0);
+
+  const calculateByType = (type: "real" | "propfirm") => {
+    const filteredAccounts = accounts.filter((account) => accountTypeById.get(account.id) === type);
+    const accountIds = new Set(filteredAccounts.map((account) => account.id));
+    const filteredTrades = trades30d.filter((trade) => accountIds.has(trade.account_id));
+    const winsByType = filteredTrades.filter((trade) => asNumber(trade.pnl) > 0).length;
+    const netPnlByType = filteredTrades.reduce((sum, trade) => sum + asNumber(trade.pnl), 0);
+
+    return {
+      totalAccounts: filteredAccounts.length,
+      totalCapital: filteredAccounts.reduce((sum, account) => sum + asNumber(account.account_size), 0),
+      totalBalance: filteredAccounts.reduce((sum, account) => sum + asNumber(account.current_balance), 0),
+      closedTrades30d: filteredTrades.length,
+      netPnl30d: netPnlByType,
+      winRate30d: filteredTrades.length > 0 ? (winsByType / filteredTrades.length) * 100 : 0,
+    };
+  };
+
+  const capitalByType = {
+    real: calculateByType("real"),
+    propfirm: calculateByType("propfirm"),
+  };
 
   const topAccounts = accounts
     .map((account) => ({
@@ -352,6 +460,7 @@ export async function getCapitalLevelsData(): Promise<CapitalLevelsData> {
     winRate30d,
     reports30d: weeklyReportsCount,
     evidence30d: tradeEvidenceCount,
+    capitalByType,
     topAccounts,
   };
 }

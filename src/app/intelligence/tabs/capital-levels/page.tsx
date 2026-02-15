@@ -61,6 +61,7 @@ export default async function CapitalLevelsTab() {
         currentCapital={data.totalBalance}
         netPnl30d={data.netPnl30d}
         closedTrades30d={data.closedTrades30d}
+        capitalByType={data.capitalByType}
       />
 
       <div className="premium-card">

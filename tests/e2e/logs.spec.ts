@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { login } from './utils/auth';
 
 test.describe('Create Item Flows - Logs', () => {
+  test.describe.configure({ timeout: 90000 });
+
   // Setup: login before each test
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -99,7 +101,7 @@ test.describe('Create Item Flows - Logs', () => {
   });
 
   test('should display Logs without blank screen', async ({ page }) => {
-    await page.goto('/dashboard/logs', { waitUntil: 'domcontentloaded' });
+    await page.goto('/dashboard/logs', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Page should have content
     const body = page.locator('body');

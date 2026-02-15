@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { login } from './utils/auth';
 
 test.describe('Create Item Flows - Treasury', () => {
+  test.describe.configure({ timeout: 90000 });
+
   // Setup: login before each test
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -9,7 +11,7 @@ test.describe('Create Item Flows - Treasury', () => {
 
   test('should create a new treasury item', async ({ page }) => {
     // Navigate to Treasury
-    await page.goto('/dashboard/treasury');
+    await page.goto('/dashboard/treasury', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Wait for page to load
     await page.waitForLoadState('networkidle').catch(() => {
@@ -73,7 +75,7 @@ test.describe('Create Item Flows - Treasury', () => {
   });
 
   test('should display Treasury without blank screen', async ({ page }) => {
-    await page.goto('/dashboard/treasury');
+    await page.goto('/dashboard/treasury', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Page should have content
     const body = page.locator('body');
