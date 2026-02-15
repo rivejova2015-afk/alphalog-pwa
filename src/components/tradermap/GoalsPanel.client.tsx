@@ -1,10 +1,21 @@
-// src/components/tradermap/GoalsPanel.client.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import GoalCard from "./GoalCard.client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { logger } from "@/lib/alphashield/logger";
+import GoalCard from "./GoalCard.client";
+import { formatMoney, parseMoneyInput } from "./money";
+
+type QuarterKey = "Q1" | "Q2" | "Q3" | "Q4";
+
+const QUARTERS: QuarterKey[] = ["Q1", "Q2", "Q3", "Q4"];
+
+const QUARTER_MONTHS: Record<QuarterKey, [number, number]> = {
+  Q1: [0, 2],
+  Q2: [3, 5],
+  Q3: [6, 8],
+  Q4: [9, 11],
+};
 
 interface Account {
   id: string;
@@ -15,7 +26,7 @@ interface Account {
 interface GoalQuarter {
   id: string;
   goal_id: string;
-  quarter: number; // 1-4
+  quarter: QuarterKey | number | string;
   start_date: string;
   end_date: string;
   start_balance: number;
@@ -33,7 +44,7 @@ interface Goal {
   account_id: string;
   year: number;
   title: string;
-  active_quarter: number;
+  active_quarter: QuarterKey | number | string;
   sort_index: number;
   quarters: GoalQuarter[];
   account?: Account;
@@ -42,10 +53,82 @@ interface Goal {
   deleted_at: string | null;
 }
 
+type QuarterForm = {
+  start_date: string;
+  end_date: string;
+  start_balance: string;
+  target_balance: string;
+  current_balance: string;
+};
+
 interface GoalForm {
   title: string;
   accountId: string;
   year: number;
+  active_quarter: QuarterKey;
+  quarters: Record<QuarterKey, QuarterForm>;
+}
+
+const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const normalizeQuarterKey = (value: unknown): QuarterKey => {
+  if (typeof value === "string") {
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "Q1" || normalized === "Q2" || normalized === "Q3" || normalized === "Q4") {
+      return normalized;
+    }
+    if (normalized === "1") return "Q1";
+    if (normalized === "2") return "Q2";
+    if (normalized === "3") return "Q3";
+    if (normalized === "4") return "Q4";
+  }
+  if (typeof value === "number" && value >= 1 && value <= 4) {
+    return `Q${value}` as QuarterKey;
+  }
+  return "Q1";
+};
+
+const createInitialForm = (year: number): GoalForm => {
+  const quarters = QUARTERS.reduce((acc, quarter) => {
+    const [startMonth, endMonth] = QUARTER_MONTHS[quarter];
+    const startDate = new Date(year, startMonth, 1);
+    const endDate = new Date(year, endMonth + 1, 0);
+    acc[quarter] = {
+      start_date: toIsoDate(startDate),
+      end_date: toIsoDate(endDate),
+      start_balance: "0",
+      target_balance: "1",
+      current_balance: "",
+    };
+    return acc;
+  }, {} as Record<QuarterKey, QuarterForm>);
+
+  return {
+    title: "",
+    accountId: "",
+    year,
+    active_quarter: "Q1",
+    quarters,
+  };
+};
+
+async function parseApiError(response: Response, fallback: string) {
+  try {
+    const data = (await response.json()) as { error?: string; details?: string | Record<string, string> };
+    if (data.details && typeof data.details === "object") {
+      const details = Object.entries(data.details)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("; ");
+      return data.error ? `${data.error}. ${details}` : details;
+    }
+    if (typeof data.details === "string" && data.details.trim().length > 0) {
+      return data.error ? `${data.error}. ${data.details}` : data.details;
+    }
+    if (data.error) return data.error;
+  } catch {
+    // ignore
+  }
+  return fallback;
 }
 
 export default function GoalsPanel() {
@@ -55,14 +138,10 @@ export default function GoalsPanel() {
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const realtimeLock = useRef(false);
 
-  const [formData, setFormData] = useState<GoalForm>({
-    title: "",
-    accountId: "",
-    year: new Date().getFullYear(),
-  });
+  const currentYear = new Date().getFullYear();
+  const [formData, setFormData] = useState<GoalForm>(createInitialForm(currentYear));
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -84,8 +163,8 @@ export default function GoalsPanel() {
     try {
       setLoading(true);
       setError("");
-
       const response = await fetch("/api/tradermap/goals");
+
       if (!response.ok) {
         if (response.status === 401) {
           window.location.href = "/auth";
@@ -101,7 +180,7 @@ export default function GoalsPanel() {
 
       const data = await response.json();
       setGoals(Array.isArray(data) ? data : []);
-    } catch (err: any) {
+    } catch (err) {
       await logger.error(
         "tradermap",
         "Fetch goals error",
@@ -114,8 +193,8 @@ export default function GoalsPanel() {
   }, []);
 
   useEffect(() => {
-    fetchAccounts();
-    fetchGoals();
+    void fetchAccounts();
+    void fetchGoals();
   }, [fetchAccounts, fetchGoals]);
 
   useEffect(() => {
@@ -140,23 +219,115 @@ export default function GoalsPanel() {
     );
 
     return () => {
-      channels.forEach((ch) => {
+      channels.forEach((channel) => {
         try {
-          supabase.removeChannel(ch);
-        } catch {}
+          supabase.removeChannel(channel);
+        } catch {
+          // no-op
+        }
       });
     };
   }, [fetchGoals]);
 
+  const selectedAccountCurrency = useMemo(() => {
+    return accounts.find((account) => account.id === formData.accountId)?.currency || "USD";
+  }, [accounts, formData.accountId]);
+
+  const validateQuarterPayload = useCallback(() => {
+    const quarterPayload: Array<{
+      quarter: QuarterKey;
+      start_date: string;
+      end_date: string;
+      start_balance: number;
+      target_balance: number;
+      current_balance: number | null;
+    }> = [];
+
+    for (const quarter of QUARTERS) {
+      const quarterData = formData.quarters[quarter];
+      if (!quarterData.start_date || !quarterData.end_date) {
+        return { ok: false, message: `Fechas requeridas en ${quarter}` } as const;
+      }
+
+      const startBalance = parseMoneyInput(quarterData.start_balance);
+      const targetBalance = parseMoneyInput(quarterData.target_balance);
+      const hasCurrent = quarterData.current_balance.trim().length > 0;
+      const currentBalance = hasCurrent ? parseMoneyInput(quarterData.current_balance) : null;
+
+      if (startBalance === null) {
+        return { ok: false, message: `Monto inicial requerido en ${quarter}` } as const;
+      }
+      if (targetBalance === null) {
+        return { ok: false, message: `Monto objetivo requerido en ${quarter}` } as const;
+      }
+      if (startBalance < 0 || targetBalance < 0) {
+        return { ok: false, message: `Montos negativos no permitidos en ${quarter}` } as const;
+      }
+      if (targetBalance <= startBalance) {
+        return { ok: false, message: `Objetivo debe ser mayor que inicial en ${quarter}` } as const;
+      }
+
+      if (hasCurrent && currentBalance === null) {
+        return { ok: false, message: `Monto actual invalido en ${quarter}` } as const;
+      }
+      if (currentBalance !== null && currentBalance < 0) {
+        return { ok: false, message: `Monto actual no puede ser negativo en ${quarter}` } as const;
+      }
+
+      const startDate = new Date(quarterData.start_date);
+      const endDate = new Date(quarterData.end_date);
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+        return { ok: false, message: `Rango de fechas invalido en ${quarter}` } as const;
+      }
+
+      quarterPayload.push({
+        quarter,
+        start_date: quarterData.start_date,
+        end_date: quarterData.end_date,
+        start_balance: startBalance,
+        target_balance: targetBalance,
+        current_balance: currentBalance,
+      });
+    }
+
+    const ranges = quarterPayload.map((item) => ({
+      quarter: item.quarter,
+      start: new Date(item.start_date).getTime(),
+      end: new Date(item.end_date).getTime(),
+    }));
+
+    for (let i = 0; i < ranges.length; i += 1) {
+      for (let j = i + 1; j < ranges.length; j += 1) {
+        const left = ranges[i];
+        const right = ranges[j];
+        const overlaps = left.start <= right.end && right.start <= left.end;
+        if (overlaps) {
+          return {
+            ok: false,
+            message: `Fechas solapadas entre ${left.quarter} y ${right.quarter}`,
+          } as const;
+        }
+      }
+    }
+
+    return { ok: true, quarterPayload } as const;
+  }, [formData.quarters]);
+
   const handleCreateGoal = async () => {
     try {
       if (!formData.title.trim()) {
-        setError("Título es requerido");
+        setError("Titulo es requerido");
         return;
       }
 
       if (!formData.accountId) {
         setError("Selecciona una cuenta");
+        return;
+      }
+
+      const validation = validateQuarterPayload();
+      if (!validation.ok) {
+        setError(validation.message);
         return;
       }
 
@@ -170,41 +341,58 @@ export default function GoalsPanel() {
           title: formData.title.trim(),
           account_id: formData.accountId,
           year: formData.year,
+          active_quarter: formData.active_quarter,
+          quarters: validation.quarterPayload,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create goal");
+        throw new Error(await parseApiError(response, "No se pudo crear la meta"));
       }
 
       await fetchGoals();
-      setFormData({
-        title: "",
-        accountId: "",
-        year: new Date().getFullYear(),
-      });
+      setFormData(createInitialForm(currentYear));
       setShowForm(false);
-    } catch (err: any) {
+    } catch (err) {
       await logger.error(
         "tradermap",
         "Error creating goal",
         err instanceof Error ? err : undefined
       );
-      setError(err.message || "Error al crear meta");
+      setError(err instanceof Error ? err.message : "Error al crear meta");
     } finally {
       setCreating(false);
     }
   };
 
+  const updateQuarterField = (quarter: QuarterKey, field: keyof QuarterForm, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      quarters: {
+        ...prev.quarters,
+        [quarter]: {
+          ...prev.quarters[quarter],
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const resetForm = () => {
+    setFormData(createInitialForm(currentYear));
+    setError("");
+  };
+
   return (
     <div className="w-full">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-white">🎯 Metas Anuales</h2>
+        <h2 className="text-2xl font-bold text-white">Metas Anuales</h2>
         <button
           onClick={() => {
-            setShowForm(!showForm);
-            setEditingGoal(null);
+            if (showForm) {
+              resetForm();
+            }
+            setShowForm((prev) => !prev);
           }}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold"
         >
@@ -212,83 +400,196 @@ export default function GoalsPanel() {
         </button>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="mb-4 p-4 bg-red-900/20 border border-red-700 text-red-200 rounded">
           {error}
         </div>
       )}
 
-      {/* Create Form */}
       {showForm && (
-        <div className="mb-6 p-6 bg-slate-700/50 border border-slate-600 rounded-lg">
-          <h3 className="text-lg font-semibold text-white mb-4">Nueva Meta</h3>
+        <div className="mb-6 rounded-lg border border-slate-600 bg-slate-700/50 p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-white">Nueva Meta</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Título *
-              </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-slate-300 mb-2">Titulo *</label>
               <input
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Ej: Alcanzar $10k con ruta SAFE"
-                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white placeholder-slate-400"
+                onChange={(event) => setFormData((prev) => ({ ...prev, title: event.target.value }))}
+                placeholder="Ej: Ruta de crecimiento 2026"
+                className="w-full rounded border border-slate-500 bg-slate-600 px-3 py-2 text-white placeholder-slate-400"
               />
             </div>
 
-            {/* Account */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Cuenta *
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Cuenta *</label>
               <select
                 value={formData.accountId}
-                onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white"
+                onChange={(event) => setFormData((prev) => ({ ...prev, accountId: event.target.value }))}
+                className="w-full rounded border border-slate-500 bg-slate-600 px-3 py-2 text-white"
               >
                 <option value="">Selecciona una cuenta...</option>
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Year */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Año
-              </label>
-              <select
+              <label className="block text-sm font-medium text-slate-300 mb-2">Anio</label>
+              <input
+                type="number"
+                min={2020}
+                max={2100}
                 value={formData.year}
-                onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white"
-              >
-                {[2024, 2025, 2026].map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                onChange={(event) => {
+                  const nextYear = Number(event.target.value) || currentYear;
+                  const nextForm = createInitialForm(nextYear);
+                  setFormData((prev) => ({
+                    ...nextForm,
+                    title: prev.title,
+                    accountId: prev.accountId,
+                    active_quarter: prev.active_quarter,
+                  }));
+                }}
+                className="w-full rounded border border-slate-500 bg-slate-600 px-3 py-2 text-white"
+              />
             </div>
           </div>
 
-          {/* Create Button */}
+          <div className="max-w-sm">
+            <label className="block text-sm font-medium text-slate-300 mb-2">Trimestre activo</label>
+            <select
+              value={formData.active_quarter}
+              onChange={(event) =>
+                setFormData((prev) => ({ ...prev, active_quarter: normalizeQuarterKey(event.target.value) }))
+              }
+              className="w-full rounded border border-slate-500 bg-slate-600 px-3 py-2 text-white"
+            >
+              {QUARTERS.map((quarter) => (
+                <option key={quarter} value={quarter}>
+                  {quarter}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {QUARTERS.map((quarter) => {
+              const quarterData = formData.quarters[quarter];
+              const startBalance = parseMoneyInput(quarterData.start_balance);
+              const targetBalance = parseMoneyInput(quarterData.target_balance);
+              const currentBalance =
+                quarterData.current_balance.trim().length > 0
+                  ? parseMoneyInput(quarterData.current_balance)
+                  : null;
+              const missing =
+                startBalance !== null && targetBalance !== null ? targetBalance - startBalance : null;
+              const progress =
+                currentBalance !== null && targetBalance && targetBalance > 0
+                  ? (currentBalance / targetBalance) * 100
+                  : null;
+
+              return (
+                <div key={quarter} className="rounded border border-slate-600 bg-slate-800/60 p-4 space-y-3">
+                  <h4 className="text-sm font-semibold text-white">{quarter}</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fecha inicio *</label>
+                      <input
+                        type="date"
+                        value={quarterData.start_date}
+                        onChange={(event) =>
+                          updateQuarterField(quarter, "start_date", event.target.value)
+                        }
+                        className="w-full rounded border border-slate-500 bg-slate-700 px-2 py-2 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fecha fin *</label>
+                      <input
+                        type="date"
+                        value={quarterData.end_date}
+                        onChange={(event) => updateQuarterField(quarter, "end_date", event.target.value)}
+                        className="w-full rounded border border-slate-500 bg-slate-700 px-2 py-2 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Monto inicial *</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={quarterData.start_balance}
+                        onChange={(event) =>
+                          updateQuarterField(quarter, "start_balance", event.target.value)
+                        }
+                        className="w-full rounded border border-slate-500 bg-slate-700 px-2 py-2 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Monto objetivo *</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={quarterData.target_balance}
+                        onChange={(event) =>
+                          updateQuarterField(quarter, "target_balance", event.target.value)
+                        }
+                        className="w-full rounded border border-slate-500 bg-slate-700 px-2 py-2 text-white"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs text-slate-400 mb-1">Monto actual (opcional)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={quarterData.current_balance}
+                        onChange={(event) =>
+                          updateQuarterField(quarter, "current_balance", event.target.value)
+                        }
+                        className="w-full rounded border border-slate-500 bg-slate-700 px-2 py-2 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-400 space-y-1">
+                    <p>
+                      Faltan:{" "}
+                      <span className="text-white font-semibold">
+                        {missing === null ? "--" : formatMoney(missing, selectedAccountCurrency)}
+                      </span>
+                    </p>
+                    {currentBalance !== null && targetBalance !== null && (
+                      <p>
+                        Progreso real:{" "}
+                        <span className="text-white font-semibold">
+                          {formatMoney(currentBalance, selectedAccountCurrency)}
+                        </span>{" "}
+                        / {formatMoney(targetBalance, selectedAccountCurrency)}
+                        {progress !== null && (
+                          <span className="text-slate-300"> ({progress.toFixed(1)}%)</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
           <button
             onClick={handleCreateGoal}
             disabled={creating}
-            className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white rounded font-semibold"
+            className="w-full rounded bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-700 disabled:bg-slate-600"
           >
             {creating ? "Creando..." : "Crear Meta"}
           </button>
         </div>
       )}
 
-      {/* Goals List */}
       {loading ? (
         <div className="text-slate-400 text-center py-8">Cargando metas...</div>
       ) : goals.length === 0 ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   computePnlTotals,
   type PnlFilterOptions,
@@ -46,15 +46,23 @@ export function usePnlMetrics(options: UsePnlMetricsOptions = {}): UsePnlMetrics
   const [trades, setTrades] = useState<PnlTradeLike[]>([]);
   const [loading, setLoading] = useState<boolean>(enabled);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const fetcherRef = useRef(fetcher);
+
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  }, [fetcher]);
 
   const loadTrades = useCallback(async () => {
     if (!enabled) return;
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       setError(null);
 
-      if (fetcher) {
-        const data = await fetcher();
+      if (fetcherRef.current) {
+        const data = await fetcherRef.current();
+        if (requestId !== requestIdRef.current) return;
         setTrades(Array.isArray(data) ? data : []);
         return;
       }
@@ -75,15 +83,18 @@ export function usePnlMetrics(options: UsePnlMetricsOptions = {}): UsePnlMetrics
       }
 
       const data = await response.json();
+      if (requestId !== requestIdRef.current) return;
       setTrades(Array.isArray(data) ? data : []);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       const message = err instanceof Error ? err.message : "Error loading trades";
       setError(message);
       setTrades([]);
     } finally {
+      if (requestId !== requestIdRef.current) return;
       setLoading(false);
     }
-  }, [accountId, closedOnly, enabled, fetcher, limit, range, setupId, status]);
+  }, [accountId, closedOnly, enabled, limit, range, setupId, status]);
 
   useEffect(() => {
     void loadTrades();

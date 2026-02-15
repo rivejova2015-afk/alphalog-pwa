@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
+import { normalizeTradeDirection } from "@/lib/trade/normalize";
 
 interface Account {
   id: string;
@@ -136,6 +137,12 @@ function formatCurrency(value: number | null | undefined, currency = "USD") {
   }
 }
 
+function normalizeTradeStatus(input: unknown): "open" | "closed" {
+  if (typeof input !== "string") return "closed";
+  const value = input.trim().toLowerCase();
+  return value === "open" ? "open" : "closed";
+}
+
 export default function NewTradesLog() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -179,7 +186,14 @@ export default function NewTradesLog() {
     }
 
     const data = (await response.json()) as Trade[];
-    setTrades(Array.isArray(data) ? data : []);
+    const normalized = Array.isArray(data)
+      ? data.map((trade) => ({
+          ...trade,
+          direction: normalizeTradeDirection(trade.direction) || "BUY",
+          status: normalizeTradeStatus(trade.status),
+        }))
+      : [];
+    setTrades(normalized);
   }, []);
 
   const refreshAll = useCallback(async () => {
@@ -226,8 +240,8 @@ export default function NewTradesLog() {
     setForm({
       account_id: trade.account_id,
       symbol: trade.symbol,
-      direction: trade.direction,
-      status: trade.status,
+      direction: normalizeTradeDirection(trade.direction) || "BUY",
+      status: normalizeTradeStatus(trade.status),
       entry_date: trade.entry_date,
       exit_date: trade.exit_date || "",
       entry_price: String(trade.entry_price ?? ""),

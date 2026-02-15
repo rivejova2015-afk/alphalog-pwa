@@ -15,7 +15,7 @@ interface Account {
 interface GoalQuarter {
   id: string;
   goal_id: string;
-  quarter: number;
+  quarter: string | number;
   start_date: string;
   end_date: string;
   start_balance: number;
@@ -33,7 +33,7 @@ interface Goal {
   account_id: string;
   year: number;
   title: string;
-  active_quarter: number;
+  active_quarter: string | number;
   sort_index: number;
   quarters: GoalQuarter[];
   account?: Account;
@@ -54,8 +54,27 @@ export default function GoalCard({ goal, onRefresh, onError }: GoalCardProps) {
 
   const currency = goal.account?.currency || "USD";
 
-  // Sort quarters by quarter number
-  const sortedQuarters = [...(goal.quarters || [])].sort((a, b) => a.quarter - b.quarter);
+  const quarterOrder = (value: string | number) => {
+    if (typeof value === "number") return value;
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "Q1") return 1;
+    if (normalized === "Q2") return 2;
+    if (normalized === "Q3") return 3;
+    if (normalized === "Q4") return 4;
+    const numeric = Number(normalized.replace("Q", ""));
+    return Number.isFinite(numeric) ? numeric : 99;
+  };
+
+  const quarterLabel = (value: string | number) => {
+    if (typeof value === "number") return `Q${value}`;
+    const normalized = value.trim().toUpperCase();
+    return normalized.startsWith("Q") ? normalized : `Q${normalized}`;
+  };
+
+  // Sort quarters by quarter order
+  const sortedQuarters = [...(goal.quarters || [])].sort(
+    (a, b) => quarterOrder(a.quarter) - quarterOrder(b.quarter)
+  );
 
   const handleCompleteQuarter = async (quarter: GoalQuarter) => {
     try {
@@ -142,7 +161,7 @@ export default function GoalCard({ goal, onRefresh, onError }: GoalCardProps) {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-700 border border-slate-500">
-                      <span className="text-sm font-bold text-slate-300">Q{quarter.quarter}</span>
+                      <span className="text-sm font-bold text-slate-300">{quarterLabel(quarter.quarter)}</span>
                     </span>
                     <span className="text-sm text-slate-400">
                       {new Date(quarter.start_date).toLocaleDateString("es-ES", {

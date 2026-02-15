@@ -24,10 +24,6 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
   const [showForm, setShowForm] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(getMonthStr());
   const { trades, loading: tradesLoading } = usePnlMetrics({
-    fetcher: async () => {
-      const { getAllTrades } = await import("@/lib/treasury/queries");
-      return (await getAllTrades()) as Trade[];
-    },
     closedOnly: true,
     requireExitDate: true,
     ignoreZero: false,

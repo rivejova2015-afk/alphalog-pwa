@@ -25,10 +25,6 @@ export default function RunwayPanel({ offlineData }: RunwayPanelProps) {
   const [costs, setCosts] = useState<BusinessCost[]>([]);
   const [costsLoading, setCostsLoading] = useState(true);
   const { trades, loading: tradesLoading } = usePnlMetrics({
-    fetcher: async () => {
-      const { getAllTrades } = await import("@/lib/treasury/queries");
-      return (await getAllTrades()) as Trade[];
-    },
     closedOnly: true,
     requireExitDate: true,
     ignoreZero: false,

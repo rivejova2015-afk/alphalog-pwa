@@ -8,7 +8,7 @@ import { formatMoney, parseMoneyInput } from "./money";
 interface GoalQuarter {
   id: string;
   goal_id: string;
-  quarter: number;
+  quarter: string | number;
   start_date: string;
   end_date: string;
   start_balance: number;

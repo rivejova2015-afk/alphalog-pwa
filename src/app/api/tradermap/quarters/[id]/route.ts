@@ -1,6 +1,7 @@
 // src/app/api/tradermap/quarters/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveRouteId } from "@/lib/api/routeParams";
 
 /**
  * PATCH /api/tradermap/quarters/[id]
@@ -8,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id?: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -18,7 +19,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json(
+        { error: "Invalid resource id" },
+        { status: 400 }
+      );
+    }
     const body = await request.json();
 
     // Verify ownership

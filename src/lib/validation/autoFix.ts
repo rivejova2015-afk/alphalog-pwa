@@ -1,5 +1,7 @@
 // src/lib/validation/autoFix.ts
 
+import { normalizeTradeDirection } from "@/lib/trade/normalize";
+
 export interface AutoFixResult<T> {
   data: T;
   changed: boolean;
@@ -86,9 +88,10 @@ export const autoFixTradeCreate = (input: Record<string, unknown>): AutoFixResul
     output.symbol = symbol;
   }
 
-  const direction = normalizeString(input.direction, { trim: true, uppercase: true });
-  if (direction === "BUY" || direction === "SELL") {
-    trackChange(changes, "direction", input.direction, direction);
+  const createDirectionSource = input.direction ?? input.dirction;
+  const direction = normalizeTradeDirection(createDirectionSource);
+  if (direction) {
+    trackChange(changes, "direction", createDirectionSource, direction);
     output.direction = direction;
   }
 
@@ -161,10 +164,11 @@ export const autoFixTradeUpdate = (input: Record<string, unknown>): AutoFixResul
     }
   }
 
-  if ("direction" in input) {
-    const direction = normalizeString(input.direction, { trim: true, uppercase: true });
-    if (direction === "BUY" || direction === "SELL") {
-      trackChange(changes, "direction", input.direction, direction);
+  if ("direction" in input || "dirction" in input) {
+    const updateDirectionSource = input.direction ?? input.dirction;
+    const direction = normalizeTradeDirection(updateDirectionSource);
+    if (direction) {
+      trackChange(changes, "direction", updateDirectionSource, direction);
       output.direction = direction;
     }
   }

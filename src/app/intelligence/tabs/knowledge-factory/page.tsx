@@ -1,41 +1,75 @@
-export default function KnowledgeFactoryTab() {
+import { getKnowledgeFactoryData } from "@/lib/intelligence/metrics";
+
+const sourceLabel: Record<string, string> = {
+  weekly_report: "Weekly report",
+  trade_evidence: "Trade evidence",
+  terminal_report: "Terminal report",
+  journal: "Journal",
+};
+
+export default async function KnowledgeFactoryTab() {
+  const data = await getKnowledgeFactoryData();
+
+  if (!data.authenticated) {
+    return (
+      <div className="premium-card">
+        <h2 className="text-2xl font-bold text-gold mb-2">Knowledge Factory</h2>
+        <p className="text-slate-300">Inicia sesion para ver sintesis accionables.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="premium-card">
-      <h2 className="text-2xl font-bold text-gold mb-2">Knowledge Factory (SECI)</h2>
-      <p className="text-slate-300 mb-4">Transforma conocimiento en valor con herramientas SECI y procesos de innovación.</p>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Turn Notes into Memos</h3>
-          <p className="text-slate-400 text-sm">Convierte notas en documentos útiles.</p>
+    <div className="space-y-5">
+      <div className="premium-card">
+        <h2 className="text-2xl font-bold text-gold mb-2">Knowledge Factory (SECI)</h2>
+        <p className="text-slate-300">
+          Sintesis operativa construida con reportes, evidencia y lecciones de journal.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="premium-card">
+          <p className="text-xs uppercase text-slate-400">Reportes 30d</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{data.reports30d}</p>
+          <p className="mt-1 text-xs text-slate-500">TradeHub + Terminal</p>
         </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Metaphor-to-Mechanism</h3>
-          <p className="text-slate-400 text-sm">De metáforas a mecanismos prácticos.</p>
+        <div className="premium-card">
+          <p className="text-xs uppercase text-slate-400">Evidence 30d</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{data.evidence30d}</p>
+          <p className="mt-1 text-xs text-slate-500">Registros en Evidence Vault</p>
         </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Playbook Forge</h3>
-          <p className="text-slate-400 text-sm">Crea playbooks personalizados.</p>
+        <div className="premium-card">
+          <p className="text-xs uppercase text-slate-400">Lessons 30d</p>
+          <p className="mt-2 text-2xl font-semibold text-white">{data.journalLessons30d}</p>
+          <p className="mt-1 text-xs text-slate-500">Lecciones extraidas de journal</p>
         </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Knowledge Graph Light</h3>
-          <p className="text-slate-400 text-sm">Visualiza relaciones clave.</p>
-        </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Progressive Disclosure</h3>
-          <p className="text-slate-400 text-sm">Revela información gradualmente.</p>
-        </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Knowledge ROI</h3>
-          <p className="text-slate-400 text-sm">Mide el retorno del conocimiento.</p>
-        </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Weekly Release Notes</h3>
-          <p className="text-slate-400 text-sm">Notas de lanzamiento semanales.</p>
-        </div>
-        <div className="bg-slate-800/60 rounded-xl p-4">
-          <h3 className="font-semibold text-gold mb-1">Obsolescence Scanner</h3>
-          <p className="text-slate-400 text-sm">Detecta conocimiento obsoleto.</p>
-        </div>
+      </div>
+
+      <div className="premium-card">
+        <h3 className="text-lg font-semibold text-white mb-3">Resumen accionable</h3>
+        {data.insights.length === 0 ? (
+          <p className="text-slate-400">
+            Aun no hay suficiente contexto para sintetizar conocimiento. Agrega reportes y entradas.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {data.insights.map((item) => (
+              <li key={`${item.source}-${item.id}`} className="rounded border border-slate-700/70 bg-slate-900/50 p-3">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs uppercase tracking-wide text-slate-400">
+                    {sourceLabel[item.source]}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {item.createdAt ? new Date(item.createdAt).toLocaleString() : "Sin fecha"}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-slate-100">{item.title}</p>
+                <p className="mt-1 text-sm text-slate-300">{item.summary}</p>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

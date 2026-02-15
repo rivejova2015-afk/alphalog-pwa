@@ -2,11 +2,11 @@ import HubTabs from '@/components/navigation/HubTabs';
 import React from 'react';
 
 const tradingTabs = [
-  { label: 'TradeHub', href: '/trading/tradehub' },
-  { label: 'Terminal', href: '/trading/terminal' },
-  { label: 'Bot Control', href: '/trading/bot-control' },
-  { label: 'Journal PT', href: '/trading/journal-pt' },
-  { label: 'TraderMap', href: '/trading/tradermap' },
+  { label: 'TradeHub', href: '/trading/tabs/tradehub' },
+  { label: 'Terminal', href: '/trading/tabs/terminal' },
+  { label: 'Bot Control', href: '/trading/tabs/bot-control' },
+  { label: 'Journal PT', href: '/trading/tabs/journal-pt' },
+  { label: 'TraderMap', href: '/trading/tabs/tradermap' },
 ];
 
 export default function TradingLayout({ children }: { children: React.ReactNode }) {

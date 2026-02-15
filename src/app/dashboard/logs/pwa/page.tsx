@@ -43,15 +43,23 @@ export default function PWADiagnosticsPage() {
   async function handleSubscribe() {
     try {
       setLoading(true);
+      const requestedPermission = await requestNotificationPermission();
+      setPermission(requestedPermission);
+
+      if (requestedPermission !== "granted") {
+        setMessage("Permiso de notificaciones denegado.");
+        return;
+      }
+
       if (!getVapidPublicKey()) {
-        setMessage("Notificaciones no disponibles (configuración pendiente).");
+        setMessage("Permiso concedido. Falta configuracion VAPID para suscribirse.");
         return;
       }
       const sub = await subscribeToPush();
       setSubscription(sub);
-      setMessage("Subscribed locally. Save via API if implemented.");
+      setMessage("Suscripcion local completada.");
     } catch (err) {
-      setMessage("Failed to subscribe. Check VAPID key.");
+      setMessage("No se pudo suscribir. Revisa configuracion de push.");
     } finally {
       setLoading(false);
     }

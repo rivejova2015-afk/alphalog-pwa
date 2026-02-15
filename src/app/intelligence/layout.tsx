@@ -2,10 +2,10 @@ import HubTabs from '@/components/navigation/HubTabs';
 import React from 'react';
 
 const intelligenceTabs = [
-  { label: 'Capital Levels', href: '/intelligence/capital-levels' },
-  { label: 'Constraint Solver', href: '/intelligence/constraint-solver' },
-  { label: 'MindOps', href: '/intelligence/mindops' },
-  { label: 'Knowledge Factory', href: '/intelligence/knowledge-factory' },
+  { label: 'Capital Levels', href: '/intelligence/tabs/capital-levels' },
+  { label: 'Constraint Solver', href: '/intelligence/tabs/constraint-solver' },
+  { label: 'MindOps', href: '/intelligence/tabs/mindops' },
+  { label: 'Knowledge Factory', href: '/intelligence/tabs/knowledge-factory' },
 ];
 
 export default function IntelligenceLayout({ children }: { children: React.ReactNode }) {
