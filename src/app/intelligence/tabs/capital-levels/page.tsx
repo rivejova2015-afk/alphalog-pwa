@@ -1,4 +1,5 @@
 import { getCapitalLevelsData } from "@/lib/intelligence/metrics";
+import CapitalTargetPlanner from "@/components/intelligence/CapitalTargetPlanner.client";
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -55,6 +56,12 @@ export default async function CapitalLevelsTab() {
           <p className="mt-1 text-xs text-slate-500">Solo operaciones cerradas</p>
         </div>
       </div>
+
+      <CapitalTargetPlanner
+        currentCapital={data.totalBalance}
+        netPnl30d={data.netPnl30d}
+        closedTrades30d={data.closedTrades30d}
+      />
 
       <div className="premium-card">
         <div className="flex items-center justify-between mb-3">
