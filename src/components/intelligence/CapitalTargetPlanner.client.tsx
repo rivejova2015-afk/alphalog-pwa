@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -32,15 +32,38 @@ type CapitalTargetRecord = {
   account_type: CapitalType;
   target_name: string;
   target_capital: number | string;
+  manual_monthly_pct: number | string | null;
+  manual_quarterly_pct: number | string | null;
+  manual_semiannual_pct: number | string | null;
+  manual_annual_pct: number | string | null;
+  manual_updated_at: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 type SimulationSummary = {
   sampleSize: number;
-  medianMonths: number | null;
+  p50Months: number | null;
   p10Months: number | null;
   p90Months: number | null;
   successByHorizon: Array<{ months: number; probability: number }>;
+  residualProbability: number;
+};
+
+type ManualInputState = {
+  monthly: string;
+  quarterly: string;
+  semiannual: string;
+  annual: string;
+};
+
+type ManualScenarioResult = {
+  id: "monthly" | "quarterly" | "semiannual" | "annual";
+  label: string;
+  enteredPercent: number;
+  monthlyEquivalent: number;
+  monthsToTarget: number | null;
+  simulation: SimulationSummary;
 };
 
 interface CapitalTargetPlannerProps {
@@ -53,9 +76,18 @@ interface CapitalTargetPlannerProps {
   };
 }
 
-const CHART_MONTHS = 24;
-const SIMULATION_SAMPLES = 2500;
+const CHART_MONTHS = 36;
+const SIMULATION_SAMPLES = 3000;
 const SIMULATION_MAX_MONTHS = 120;
+const HORIZON_MONTHS = [6, 12, 24, 36] as const;
+const BASE_HORIZONS = [1, 3, 6, 12, 24, 36] as const;
+
+const EMPTY_MANUAL_INPUTS: ManualInputState = {
+  monthly: "",
+  quarterly: "",
+  semiannual: "",
+  annual: "",
+};
 
 const toPercent = (value: number) => `${(value * 100).toFixed(2)}%`;
 
@@ -81,7 +113,29 @@ const parseNumber = (value: string) => {
   return parsed;
 };
 
-const clampRate = (value: number) => Math.max(-0.25, Math.min(0.4, value));
+const parsePercentInput = (value: string): { value: number | null; error?: string } => {
+  const normalized = value.replace(/%/g, "").replace(/,/g, "").trim();
+  if (!normalized) return { value: null };
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return { value: null, error: "Debe ser un numero valido." };
+  }
+  if (parsed <= -100 || parsed >= 10000) {
+    return { value: null, error: "Debe ser > -100 y < 10000." };
+  }
+  return { value: parsed };
+};
+
+const asPercentInputValue = (value: number | string | null | undefined) => {
+  if (value === null || value === undefined) return "";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return "";
+  return parsed.toFixed(2);
+};
+
+const toRate = (percent: number) => percent / 100;
+
+const clampRate = (value: number) => Math.max(-0.95, Math.min(5, value));
 
 const EMPTY_METRICS: CapitalTypeMetrics = {
   totalAccounts: 0,
@@ -113,7 +167,8 @@ const defaultTypeFromMetrics = (
 const buildDefaultTarget = (current: number) =>
   Math.max(current * 1.25, current + 1000, 1000).toFixed(2);
 
-const formatDateTime = (value: string) => {
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("es-PR", {
@@ -125,9 +180,10 @@ const formatDateTime = (value: string) => {
   }).format(date);
 };
 
-const monthsToTarget = (start: number, target: number, monthlyRate: number, maxMonths = 240) => {
+const monthsToTarget = (start: number, target: number, monthlyRate: number, maxMonths = 120) => {
   if (target <= 0 || start <= 0) return null;
   if (start >= target) return 0;
+  if (monthlyRate <= 0) return null;
 
   let capital = start;
   for (let month = 1; month <= maxMonths; month += 1) {
@@ -145,6 +201,24 @@ const buildSeries = (start: number, monthlyRate: number, totalMonths: number) =>
     points.push({ month, capital });
   }
   return points;
+};
+
+const requiredMonthlyRate = (current: number, target: number, months: number) => {
+  if (current <= 0 || target <= 0 || months <= 0) return 0;
+  if (current >= target) return 0;
+  return Math.pow(target / current, 1 / months) - 1;
+};
+
+const monthlyFromPeriodPercent = (
+  period: "monthly" | "quarterly" | "semiannual" | "annual",
+  enteredPercent: number
+) => {
+  const periodRate = toRate(enteredPercent);
+  if (periodRate <= -1) return null;
+  if (period === "monthly") return periodRate;
+  if (period === "quarterly") return Math.pow(1 + periodRate, 1 / 3) - 1;
+  if (period === "semiannual") return Math.pow(1 + periodRate, 1 / 6) - 1;
+  return Math.pow(1 + periodRate, 1 / 12) - 1;
 };
 
 const quantile = (values: number[], q: number) => {
@@ -176,20 +250,22 @@ const runSimulation = (
   if (start <= 0 || target <= 0) {
     return {
       sampleSize: samples,
-      medianMonths: null,
+      p50Months: null,
       p10Months: null,
       p90Months: null,
-      successByHorizon: [6, 12, 24, 36].map((months) => ({ months, probability: 0 })),
+      successByHorizon: HORIZON_MONTHS.map((months) => ({ months, probability: 0 })),
+      residualProbability: 1,
     };
   }
 
   if (start >= target) {
     return {
       sampleSize: samples,
-      medianMonths: 0,
+      p50Months: 0,
       p10Months: 0,
       p90Months: 0,
-      successByHorizon: [6, 12, 24, 36].map((months) => ({ months, probability: 1 })),
+      successByHorizon: HORIZON_MONTHS.map((months) => ({ months, probability: 1 })),
+      residualProbability: 0,
     };
   }
 
@@ -215,16 +291,18 @@ const runSimulation = (
   }
 
   const validHits = results.filter((value): value is number => value !== null);
+  const success36 = results.filter((value) => value !== null && value <= 36).length;
 
   return {
     sampleSize: samples,
-    medianMonths: quantile(validHits, 0.5),
+    p50Months: quantile(validHits, 0.5),
     p10Months: quantile(validHits, 0.1),
     p90Months: quantile(validHits, 0.9),
-    successByHorizon: [6, 12, 24, 36].map((months) => {
+    successByHorizon: HORIZON_MONTHS.map((months) => {
       const success = results.filter((value) => value !== null && value <= months).length;
       return { months, probability: success / samples };
     }),
+    residualProbability: Math.max(0, 1 - success36 / samples),
   };
 };
 
@@ -261,7 +339,7 @@ function ProjectionChart({
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" role="img" aria-label="Linear performance chart">
         <rect x={0} y={0} width={width} height={height} fill="transparent" />
 
-        {[0, 6, 12, 18, 24].map((month) => (
+        {[0, 6, 12, 18, 24, 30, 36].map((month) => (
           <line
             key={`v-${month}`}
             x1={xForMonth(month)}
@@ -355,36 +433,72 @@ export default function CapitalTargetPlanner({
   );
 
   const [selectedType, setSelectedType] = useState<CapitalType>(initialType);
+  const [activeTargetId, setActiveTargetId] = useState<string | null>(null);
   const [targetName, setTargetName] = useState(`Objetivo ${TYPE_LABEL[initialType]}`);
   const [targetInput, setTargetInput] = useState(
     buildDefaultTarget(metricsByType[initialType].totalBalance)
   );
+  const [manualInputs, setManualInputs] = useState<ManualInputState>(EMPTY_MANUAL_INPUTS);
   const [showDetails, setShowDetails] = useState(false);
   const [savedTargets, setSavedTargets] = useState<CapitalTargetRecord[]>([]);
   const [loadingTargets, setLoadingTargets] = useState(true);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [manualError, setManualError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingTarget, setIsSavingTarget] = useState(false);
+  const [isSavingManual, setIsSavingManual] = useState(false);
+  const [isDeletingManual, setIsDeletingManual] = useState(false);
 
   const activeMetrics = metricsByType[selectedType];
   const activeCurrentCapital = activeMetrics.totalBalance;
   const activeNetPnl30d = activeMetrics.netPnl30d;
-  const activeClosedTrades30d = activeMetrics.closedTrades30d;
+  const targetCapital = useMemo(() => parseNumber(targetInput), [targetInput]);
+  const invalidTarget = targetCapital === null || targetCapital <= 0;
+  const currentTypeTargets = useMemo(
+    () => savedTargets.filter((target) => target.account_type === selectedType),
+    [savedTargets, selectedType]
+  );
+
+  const clearMessages = useCallback(() => {
+    setSaveError(null);
+    setManualError(null);
+    setSaveSuccess(null);
+  }, []);
+
+  const applyTargetToForm = useCallback((target: CapitalTargetRecord) => {
+    setActiveTargetId(target.id);
+    setTargetName(target.target_name);
+    setTargetInput(Number(target.target_capital).toFixed(2));
+    setManualInputs({
+      monthly: asPercentInputValue(target.manual_monthly_pct),
+      quarterly: asPercentInputValue(target.manual_quarterly_pct),
+      semiannual: asPercentInputValue(target.manual_semiannual_pct),
+      annual: asPercentInputValue(target.manual_annual_pct),
+    });
+  }, []);
+
+  const resetToNewTarget = useCallback(
+    (type: CapitalType) => {
+      setActiveTargetId(null);
+      setTargetName(`Objetivo ${TYPE_LABEL[type]}`);
+      setTargetInput(buildDefaultTarget(metricsByType[type].totalBalance));
+      setManualInputs(EMPTY_MANUAL_INPUTS);
+    },
+    [metricsByType]
+  );
 
   const applyTargetPreset = useCallback(
     (type: CapitalType, targets: CapitalTargetRecord[]) => {
       const latest = targets.find((target) => target.account_type === type);
       if (latest) {
-        setTargetName(latest.target_name);
-        setTargetInput(Number(latest.target_capital).toFixed(2));
+        applyTargetToForm(latest);
         return;
       }
 
-      setTargetName(`Objetivo ${TYPE_LABEL[type]}`);
-      setTargetInput(buildDefaultTarget(metricsByType[type].totalBalance));
+      resetToNewTarget(type);
     },
-    [metricsByType]
+    [applyTargetToForm, resetToNewTarget]
   );
 
   useEffect(() => {
@@ -429,28 +543,28 @@ export default function CapitalTargetPlanner({
   const handleTypeChange = (type: CapitalType) => {
     setSelectedType(type);
     setShowDetails(false);
-    setSaveError(null);
-    setSaveSuccess(null);
+    clearMessages();
     applyTargetPreset(type, savedTargets);
   };
 
   const handleLoadSavedTarget = (target: CapitalTargetRecord) => {
-    setTargetName(target.target_name);
-    setTargetInput(Number(target.target_capital).toFixed(2));
+    applyTargetToForm(target);
     setShowDetails(true);
-    setSaveError(null);
-    setSaveSuccess(null);
+    clearMessages();
   };
 
+  const upsertTarget = useCallback((record: CapitalTargetRecord) => {
+    setSavedTargets((prev) => {
+      const exists = prev.some((target) => target.id === record.id);
+      if (!exists) {
+        return [record, ...prev];
+      }
+      return prev.map((target) => (target.id === record.id ? record : target));
+    });
+  }, []);
+
   const handleSaveTarget = async () => {
-    setSaveError(null);
-    setSaveSuccess(null);
-
-    if (!showDetails) {
-      setSaveError("Abre Detalles para guardar el objetivo.");
-      return;
-    }
-
+    clearMessages();
     const parsedTarget = parseNumber(targetInput);
     if (parsedTarget === null || parsedTarget <= 0) {
       setSaveError("Ingresa un capital objetivo valido y mayor a 0.");
@@ -462,10 +576,15 @@ export default function CapitalTargetPlanner({
       return;
     }
 
-    setIsSaving(true);
+    setIsSavingTarget(true);
     try {
-      const response = await fetch("/api/intelligence/capital-targets", {
-        method: "POST",
+      const endpoint = activeTargetId
+        ? `/api/intelligence/capital-targets/${activeTargetId}`
+        : "/api/intelligence/capital-targets";
+      const method = activeTargetId ? "PATCH" : "POST";
+
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
@@ -482,21 +601,113 @@ export default function CapitalTargetPlanner({
       }
 
       const created = payload as CapitalTargetRecord;
-      setSavedTargets((prev) => [created, ...prev]);
-      setSaveSuccess("Objetivo guardado correctamente.");
+      upsertTarget(created);
+      applyTargetToForm(created);
+      setSaveSuccess(activeTargetId ? "Objetivo actualizado correctamente." : "Objetivo guardado correctamente.");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "No se pudo guardar el objetivo.");
     } finally {
-      setIsSaving(false);
+      setIsSavingTarget(false);
     }
   };
 
-  const targetCapital = useMemo(() => parseNumber(targetInput), [targetInput]);
-  const invalidTarget = targetCapital === null || targetCapital <= 0;
-  const currentTypeTargets = useMemo(
-    () => savedTargets.filter((target) => target.account_type === selectedType),
-    [savedTargets, selectedType]
-  );
+  const handleSaveManualSimulation = async () => {
+    clearMessages();
+    if (!activeTargetId) {
+      setManualError("Guarda o carga un objetivo antes de guardar la simulacion manual.");
+      return;
+    }
+
+    const parsedValues = {
+      monthly: parsePercentInput(manualInputs.monthly),
+      quarterly: parsePercentInput(manualInputs.quarterly),
+      semiannual: parsePercentInput(manualInputs.semiannual),
+      annual: parsePercentInput(manualInputs.annual),
+    };
+
+    if (parsedValues.monthly.error) {
+      setManualError(`Mensual: ${parsedValues.monthly.error}`);
+      return;
+    }
+    if (parsedValues.quarterly.error) {
+      setManualError(`Trimestral: ${parsedValues.quarterly.error}`);
+      return;
+    }
+    if (parsedValues.semiannual.error) {
+      setManualError(`Semestral: ${parsedValues.semiannual.error}`);
+      return;
+    }
+    if (parsedValues.annual.error) {
+      setManualError(`Anual: ${parsedValues.annual.error}`);
+      return;
+    }
+
+    if (!manualInputs.monthly && !manualInputs.quarterly && !manualInputs.semiannual && !manualInputs.annual) {
+      setManualError("Ingresa al menos un porcentaje o usa Eliminar simulacion manual.");
+      return;
+    }
+
+    setIsSavingManual(true);
+    try {
+      const response = await fetch(`/api/intelligence/capital-targets/${activeTargetId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          manual_monthly_pct: parsedValues.monthly.value,
+          manual_quarterly_pct: parsedValues.quarterly.value,
+          manual_semiannual_pct: parsedValues.semiannual.value,
+          manual_annual_pct: parsedValues.annual.value,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo guardar la simulacion manual.");
+      }
+
+      const updated = payload as CapitalTargetRecord;
+      upsertTarget(updated);
+      applyTargetToForm(updated);
+      setSaveSuccess("Simulacion manual guardada.");
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : "No se pudo guardar la simulacion manual.");
+    } finally {
+      setIsSavingManual(false);
+    }
+  };
+
+  const handleDeleteManualSimulation = async () => {
+    clearMessages();
+    if (!activeTargetId) {
+      setManualError("No hay objetivo activo para eliminar simulacion manual.");
+      return;
+    }
+
+    setIsDeletingManual(true);
+    try {
+      const response = await fetch(
+        `/api/intelligence/capital-targets/${activeTargetId}/manual-simulation`,
+        {
+          method: "DELETE",
+        }
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo eliminar la simulacion manual.");
+      }
+
+      const updated = payload as CapitalTargetRecord;
+      upsertTarget(updated);
+      applyTargetToForm(updated);
+      setSaveSuccess("Simulacion manual eliminada.");
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : "No se pudo eliminar la simulacion manual.");
+    } finally {
+      setIsDeletingManual(false);
+    }
+  };
 
   const progress = useMemo(() => {
     if (!targetCapital || targetCapital <= 0) return 0;
@@ -508,11 +719,16 @@ export default function CapitalTargetPlanner({
     return targetCapital - activeCurrentCapital;
   }, [activeCurrentCapital, targetCapital]);
 
+  const autoRate = useMemo(() => {
+    if (activeCurrentCapital <= 0) return 0.01;
+    const observed = activeNetPnl30d / activeCurrentCapital;
+    return observed > 0 ? observed : 0.01;
+  }, [activeCurrentCapital, activeNetPnl30d]);
+
   const scenarioConfigs = useMemo(() => {
-    const observedRate = activeCurrentCapital > 0 ? activeNetPnl30d / activeCurrentCapital : 0;
-    const baseRate = clampRate(observedRate > 0 ? observedRate : 0.01);
-    const conservativeRate = clampRate(Math.max(0.004, baseRate * 0.6));
-    const aggressiveRate = clampRate(Math.max(baseRate + 0.01, baseRate * 1.4));
+    const base = clampRate(autoRate);
+    const conservativeRate = clampRate(Math.max(base * 0.65, 0.004));
+    const aggressiveRate = clampRate(Math.max(base + 0.006, base * 1.35));
 
     return [
       {
@@ -524,7 +740,7 @@ export default function CapitalTargetPlanner({
       {
         key: "base",
         label: "Base",
-        monthlyRate: baseRate,
+        monthlyRate: base,
         color: "#38bdf8",
       },
       {
@@ -534,64 +750,128 @@ export default function CapitalTargetPlanner({
         color: "#22c55e",
       },
     ] as ScenarioConfig[];
-  }, [activeCurrentCapital, activeNetPnl30d]);
+  }, [autoRate]);
 
   const scenarioRows = useMemo(() => {
     if (!showDetails || !targetCapital || targetCapital <= 0) return [];
 
     return scenarioConfigs.map((config) => {
       const points = buildSeries(activeCurrentCapital, config.monthlyRate, CHART_MONTHS);
-      const months = monthsToTarget(activeCurrentCapital, targetCapital, config.monthlyRate);
+      const months = monthsToTarget(
+        activeCurrentCapital,
+        targetCapital,
+        config.monthlyRate,
+        SIMULATION_MAX_MONTHS
+      );
       const peak = Math.max(...points.map((point) => point.capital));
       const low = Math.min(...points.map((point) => point.capital));
-      const final = points[points.length - 1]?.capital ?? activeCurrentCapital;
 
-      return { config, points, months, peak, low, final };
+      return { config, points, months, peak, low };
     });
   }, [activeCurrentCapital, scenarioConfigs, showDetails, targetCapital]);
 
-  const baseRate = scenarioConfigs.find((scenario) => scenario.key === "base")?.monthlyRate ?? 0.01;
   const simulation = useMemo(() => {
     if (!showDetails || !targetCapital || targetCapital <= 0) {
       return {
         sampleSize: SIMULATION_SAMPLES,
-        medianMonths: null,
+        p50Months: null,
         p10Months: null,
         p90Months: null,
-        successByHorizon: [6, 12, 24, 36].map((months) => ({ months, probability: 0 })),
+        successByHorizon: HORIZON_MONTHS.map((months) => ({ months, probability: 0 })),
+        residualProbability: 1,
       };
     }
     return runSimulation(
       activeCurrentCapital,
       targetCapital,
-      baseRate,
+      autoRate,
       SIMULATION_SAMPLES,
       SIMULATION_MAX_MONTHS
     );
-  }, [activeCurrentCapital, baseRate, showDetails, targetCapital]);
+  }, [activeCurrentCapital, autoRate, showDetails, targetCapital]);
 
-  const requiredRates = useMemo(() => {
-    if (!targetCapital || targetCapital <= activeCurrentCapital || activeCurrentCapital <= 0) {
+  const milestoneRows = useMemo(() => {
+    if (!showDetails || !targetCapital || targetCapital <= 0 || activeCurrentCapital <= 0) return [];
+    const months = Array.from(new Set([
+      ...BASE_HORIZONS,
+      ...Array.from(
+        {
+          length: Math.max(
+            0,
+            Math.floor(
+              (Math.min(
+                SIMULATION_MAX_MONTHS,
+                Math.max(36, Math.ceil((simulation.p50Months ?? SIMULATION_MAX_MONTHS) / 12) * 12)
+              ) - 36) / 12
+            )
+          ),
+        },
+        (_, index) => 48 + index * 12
+      ),
+    ]))
+      .filter((value) => value <= SIMULATION_MAX_MONTHS)
+      .sort((a, b) => a - b);
+
+    return months.map((monthCount) => {
+      const monthly = requiredMonthlyRate(activeCurrentCapital, targetCapital, monthCount);
       return {
-        in6: 0,
-        in12: 0,
-        in24: 0,
+        months: monthCount,
+        monthly,
+        quarterly: Math.pow(1 + monthly, 3) - 1,
+        semiannual: Math.pow(1 + monthly, 6) - 1,
+        annual: Math.pow(1 + monthly, 12) - 1,
       };
-    }
-    const ratio = targetCapital / activeCurrentCapital;
-    return {
-      in6: Math.pow(ratio, 1 / 6) - 1,
-      in12: Math.pow(ratio, 1 / 12) - 1,
-      in24: Math.pow(ratio, 1 / 24) - 1,
-    };
-  }, [activeCurrentCapital, targetCapital]);
+    });
+  }, [activeCurrentCapital, showDetails, simulation.p50Months, targetCapital]);
 
-  const avgTradePnl = activeClosedTrades30d > 0 ? activeNetPnl30d / activeClosedTrades30d : null;
-  const requiredMonthlyProfit = remaining !== null ? remaining / 12 : null;
-  const tradesNeededPerMonth =
-    avgTradePnl && avgTradePnl > 0 && requiredMonthlyProfit !== null && requiredMonthlyProfit > 0
-      ? Math.ceil(requiredMonthlyProfit / avgTradePnl)
-      : null;
+  const manualScenarioResults = useMemo<ManualScenarioResult[]>(() => {
+    if (!showDetails || !targetCapital || targetCapital <= 0 || activeCurrentCapital <= 0) return [];
+
+    const definitions: Array<{ id: ManualScenarioResult["id"]; label: string; input: string }> = [
+      { id: "monthly", label: "% mensual", input: manualInputs.monthly },
+      { id: "quarterly", label: "% trimestral", input: manualInputs.quarterly },
+      { id: "semiannual", label: "% semestral", input: manualInputs.semiannual },
+      { id: "annual", label: "% anual", input: manualInputs.annual },
+    ];
+
+    const rows: ManualScenarioResult[] = [];
+    for (const definition of definitions) {
+      const parsed = parsePercentInput(definition.input);
+      if (parsed.error || parsed.value === null) continue;
+      const monthlyEquivalent = monthlyFromPeriodPercent(definition.id, parsed.value);
+      if (monthlyEquivalent === null) continue;
+
+      rows.push({
+        id: definition.id,
+        label: definition.label,
+        enteredPercent: parsed.value,
+        monthlyEquivalent,
+        monthsToTarget: monthsToTarget(
+          activeCurrentCapital,
+          targetCapital,
+          monthlyEquivalent,
+          SIMULATION_MAX_MONTHS
+        ),
+        simulation: runSimulation(
+          activeCurrentCapital,
+          targetCapital,
+          monthlyEquivalent,
+          SIMULATION_SAMPLES,
+          SIMULATION_MAX_MONTHS
+        ),
+      });
+    }
+
+    return rows;
+  }, [
+    activeCurrentCapital,
+    manualInputs.annual,
+    manualInputs.monthly,
+    manualInputs.quarterly,
+    manualInputs.semiannual,
+    showDetails,
+    targetCapital,
+  ]);
 
   return (
     <div className="premium-card">
@@ -624,7 +904,8 @@ export default function CapitalTargetPlanner({
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-white">Capital objetivo</h3>
           <p className="text-sm text-slate-400">
-            Selecciona tipo de capital (real o propfirm), crea multiples objetivos y abre detalles para ver pronosticos.
+            Selecciona tipo de capital (real o propfirm), crea multiples objetivos y abre detalles
+            para ver pronosticos.
           </p>
         </div>
         <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-2 sm:items-end">
@@ -651,7 +932,7 @@ export default function CapitalTargetPlanner({
               className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
             />
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setShowDetails((prev) => !prev)}
@@ -662,10 +943,17 @@ export default function CapitalTargetPlanner({
             <button
               type="button"
               onClick={handleSaveTarget}
-              disabled={isSaving}
+              disabled={isSavingTarget}
               className="rounded border border-sky-500/60 bg-sky-900/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-900/60 disabled:opacity-60"
             >
-              {isSaving ? "Guardando..." : "Guardar objetivo"}
+              {isSavingTarget ? "Guardando..." : activeTargetId ? "Actualizar objetivo" : "Guardar objetivo"}
+            </button>
+            <button
+              type="button"
+              onClick={() => resetToNewTarget(selectedType)}
+              className="rounded border border-slate-600/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-400"
+            >
+              Nuevo objetivo
             </button>
           </div>
         </div>
@@ -684,6 +972,11 @@ export default function CapitalTargetPlanner({
       {saveError && (
         <div className="mt-3 rounded border border-red-800/70 bg-red-950/30 px-3 py-2 text-sm text-red-200">
           {saveError}
+        </div>
+      )}
+      {manualError && (
+        <div className="mt-3 rounded border border-red-800/70 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+          {manualError}
         </div>
       )}
       {saveSuccess && (
@@ -706,12 +999,19 @@ export default function CapitalTargetPlanner({
             {currentTypeTargets.slice(0, 6).map((target) => (
               <div
                 key={target.id}
-                className="flex flex-col gap-2 rounded border border-slate-700/60 bg-slate-950/50 p-2 sm:flex-row sm:items-center sm:justify-between"
+                className={`flex flex-col gap-2 rounded border p-2 sm:flex-row sm:items-center sm:justify-between ${
+                  target.id === activeTargetId
+                    ? "border-sky-500/60 bg-sky-950/30"
+                    : "border-slate-700/60 bg-slate-950/50"
+                }`}
               >
                 <div>
                   <p className="text-sm font-medium text-slate-100">{target.target_name}</p>
                   <p className="text-xs text-slate-400">
                     {formatMoney(Number(target.target_capital))} | {formatDateTime(target.created_at)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Simulacion manual: {target.manual_updated_at ? formatDateTime(target.manual_updated_at) : "Sin guardar"}
                   </p>
                 </div>
                 <button
@@ -739,7 +1039,7 @@ export default function CapitalTargetPlanner({
               <p className="text-lg font-semibold text-white">{formatMoney(targetCapital)}</p>
             </div>
             <div className="rounded border border-slate-700/70 bg-slate-900/60 p-3">
-              <p className="text-xs text-slate-400">Falta por cubrir</p>
+              <p className="text-xs text-slate-400">Faltante planificado</p>
               <p className={`text-lg font-semibold ${remaining !== null && remaining < 0 ? "text-green-400" : "text-white"}`}>
                 {formatMoney(remaining ?? 0)}
               </p>
@@ -767,23 +1067,49 @@ export default function CapitalTargetPlanner({
             <h4 className="text-sm font-semibold text-slate-100">Guia para lograr el objetivo</h4>
             <ul className="mt-2 space-y-2 text-sm text-slate-300">
               <li>
-                Manteniendo ritmo base ({toPercent(baseRate)} mensual), la mediana proyectada llega en{" "}
-                {simulation.medianMonths === null ? "mas de 120 meses" : `${simulation.medianMonths.toFixed(1)} meses`}.
+                Ritmo automatico base: {toPercent(autoRate)} mensual compuesto (fallback 1% mensual).
               </li>
               <li>
-                Retorno requerido: 6m {toPercent(requiredRates.in6)}, 12m {toPercent(requiredRates.in12)}, 24m{" "}
-                {toPercent(requiredRates.in24)}.
+                Tiempo estimado: {simulation.p50Months === null ? `>${SIMULATION_MAX_MONTHS} meses` : `${simulation.p50Months.toFixed(1)} meses`} (mediana 3k).
               </li>
               <li>
-                Objetivo mensual sugerido (12 meses):{" "}
-                {requiredMonthlyProfit === null ? "-" : formatMoney(Math.max(requiredMonthlyProfit, 0))}.
+                Pronostico rapido/mediana/lento:{" "}
+                {simulation.p10Months === null ? "N/A" : `${simulation.p10Months.toFixed(1)}m`} /{" "}
+                {simulation.p50Months === null ? "N/A" : `${simulation.p50Months.toFixed(1)}m`} /{" "}
+                {simulation.p90Months === null ? "N/A" : `${simulation.p90Months.toFixed(1)}m`}.
               </li>
               <li>
-                {tradesNeededPerMonth
-                  ? `Con tu promedio reciente por trade (${formatMoney(avgTradePnl || 0)}), necesitas ~${tradesNeededPerMonth} trades ganadores/mes.`
-                  : "Primero estabiliza un promedio positivo por trade para convertir este plan en ejecucion predecible."}
+                Probabilidad residual (&gt;36m): {(simulation.residualProbability * 100).toFixed(1)}%.
               </li>
             </ul>
+          </div>
+
+          <div className="rounded border border-slate-700/70 bg-slate-900/60 p-4">
+            <h4 className="text-sm font-semibold text-slate-100">Tabla de hitos (% requeridos)</h4>
+            <div className="mt-3 max-w-full overflow-x-auto">
+              <table className="table-mobile-cards w-full text-sm text-slate-200">
+                <thead>
+                  <tr>
+                    <th className="py-2 text-left">Horizonte</th>
+                    <th className="py-2 text-right">% mensual requerido</th>
+                    <th className="py-2 text-right">% trimestral requerido</th>
+                    <th className="py-2 text-right">% semestral requerido</th>
+                    <th className="py-2 text-right">% anual requerido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {milestoneRows.map((row) => (
+                    <tr key={row.months} className="border-t border-slate-800/70">
+                      <td data-label="Horizonte" className="py-2">{row.months} meses</td>
+                      <td data-label="% mensual" className="py-2 text-right">{toPercent(row.monthly)}</td>
+                      <td data-label="% trimestral" className="py-2 text-right">{toPercent(row.quarterly)}</td>
+                      <td data-label="% semestral" className="py-2 text-right">{toPercent(row.semiannual)}</td>
+                      <td data-label="% anual" className="py-2 text-right">{toPercent(row.annual)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="rounded border border-slate-700/70 bg-slate-900/60 p-4">
@@ -800,7 +1126,7 @@ export default function CapitalTargetPlanner({
               <div className="rounded border border-slate-700/70 bg-slate-950/40 p-3">
                 <p className="text-xs text-slate-400">Mediana</p>
                 <p className="text-base font-semibold text-white">
-                  {simulation.medianMonths === null ? "No estimable" : `${simulation.medianMonths.toFixed(1)} meses`}
+                  {simulation.p50Months === null ? "No estimable" : `${simulation.p50Months.toFixed(1)} meses`}
                 </p>
               </div>
               <div className="rounded border border-slate-700/70 bg-slate-950/40 p-3">
@@ -825,6 +1151,12 @@ export default function CapitalTargetPlanner({
                       <td data-label="Probabilidad" className="py-2 text-right">{(row.probability * 100).toFixed(1)}%</td>
                     </tr>
                   ))}
+                  <tr className="border-t border-slate-800/70">
+                    <td data-label="Horizonte" className="py-2">Residual (&gt;36 meses)</td>
+                    <td data-label="Probabilidad" className="py-2 text-right">
+                      {(simulation.residualProbability * 100).toFixed(1)}%
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -847,8 +1179,8 @@ export default function CapitalTargetPlanner({
                     <th className="py-2 text-left">Escenario</th>
                     <th className="py-2 text-right">Ritmo mensual</th>
                     <th className="py-2 text-right">Tiempo estimado</th>
-                    <th className="py-2 text-right">Pico alto 24m</th>
-                    <th className="py-2 text-right">Pico bajo 24m</th>
+                    <th className="py-2 text-right">Pico alto 36m</th>
+                    <th className="py-2 text-right">Pico bajo 36m</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -861,12 +1193,12 @@ export default function CapitalTargetPlanner({
                         {toPercent(row.config.monthlyRate)}
                       </td>
                       <td data-label="Tiempo estimado" className="py-2 text-right">
-                        {row.months === null ? "No alcanzable" : `${row.months} meses`}
+                        {row.months === null ? `>${SIMULATION_MAX_MONTHS}m` : `${row.months} meses`}
                       </td>
-                      <td data-label="Pico alto 24m" className="py-2 text-right">
+                      <td data-label="Pico alto 36m" className="py-2 text-right">
                         {formatMoney(row.peak)}
                       </td>
-                      <td data-label="Pico bajo 24m" className="py-2 text-right">
+                      <td data-label="Pico bajo 36m" className="py-2 text-right">
                         {formatMoney(row.low)}
                       </td>
                     </tr>
@@ -874,6 +1206,137 @@ export default function CapitalTargetPlanner({
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div className="rounded border border-slate-700/70 bg-slate-900/60 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h4 className="text-sm font-semibold text-slate-100">Simulacion manual editable</h4>
+                <p className="text-xs text-slate-400">
+                  Personaliza porcentajes por periodo y guarda en el mismo objetivo.
+                </p>
+              </div>
+              {!activeTargetId && (
+                <span className="text-xs text-amber-300">
+                  Guarda o carga un objetivo para persistir la simulacion manual.
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label>
+                <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">% mensual</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={manualInputs.monthly}
+                  onChange={(event) =>
+                    setManualInputs((current) => ({ ...current, monthly: event.target.value }))
+                  }
+                  className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">% trimestral</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={manualInputs.quarterly}
+                  onChange={(event) =>
+                    setManualInputs((current) => ({ ...current, quarterly: event.target.value }))
+                  }
+                  className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">% semestral</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={manualInputs.semiannual}
+                  onChange={(event) =>
+                    setManualInputs((current) => ({ ...current, semiannual: event.target.value }))
+                  }
+                  className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">% anual</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={manualInputs.annual}
+                  onChange={(event) =>
+                    setManualInputs((current) => ({ ...current, annual: event.target.value }))
+                  }
+                  className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleSaveManualSimulation}
+                disabled={isSavingManual}
+                className="rounded border border-sky-500/60 bg-sky-900/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-900/60 disabled:opacity-60"
+              >
+                {isSavingManual ? "Guardando..." : "Guardar simulacion manual"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteManualSimulation}
+                disabled={isDeletingManual}
+                className="rounded border border-red-700/70 bg-red-950/35 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-950/50 disabled:opacity-60"
+              >
+                {isDeletingManual ? "Eliminando..." : "Eliminar simulacion manual"}
+              </button>
+            </div>
+
+            {manualScenarioResults.length > 0 && (
+              <div className="mt-3 max-w-full overflow-x-auto">
+                <table className="table-mobile-cards w-full text-sm text-slate-200">
+                  <thead>
+                    <tr>
+                      <th className="py-2 text-left">Escenario manual</th>
+                      <th className="py-2 text-right">% ingresado</th>
+                      <th className="py-2 text-right">% mensual equivalente</th>
+                      <th className="py-2 text-right">Tiempo estimado</th>
+                      <th className="py-2 text-right">Rapido / Mediana / Lento</th>
+                      <th className="py-2 text-right">Prob. &lt;=36m</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualScenarioResults.map((row) => {
+                      const hit36 = row.simulation.successByHorizon.find((item) => item.months === 36);
+                      return (
+                        <tr key={row.id} className="border-t border-slate-800/70">
+                          <td data-label="Escenario" className="py-2">{row.label}</td>
+                          <td data-label="% ingresado" className="py-2 text-right">
+                            {row.enteredPercent.toFixed(2)}%
+                          </td>
+                          <td data-label="% mensual eq" className="py-2 text-right">
+                            {toPercent(row.monthlyEquivalent)}
+                          </td>
+                          <td data-label="Tiempo estimado" className="py-2 text-right">
+                            {row.monthsToTarget === null ? `>${SIMULATION_MAX_MONTHS}m` : `${row.monthsToTarget} meses`}
+                          </td>
+                          <td data-label="Forecast" className="py-2 text-right">
+                            {row.simulation.p10Months === null ? "N/A" : row.simulation.p10Months.toFixed(1)} /{" "}
+                            {row.simulation.p50Months === null ? "N/A" : row.simulation.p50Months.toFixed(1)} /{" "}
+                            {row.simulation.p90Months === null ? "N/A" : row.simulation.p90Months.toFixed(1)}
+                          </td>
+                          <td data-label="Prob <=36m" className="py-2 text-right">
+                            {((hit36?.probability ?? 0) * 100).toFixed(1)}% (residual{" "}
+                            {(row.simulation.residualProbability * 100).toFixed(1)}%)
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

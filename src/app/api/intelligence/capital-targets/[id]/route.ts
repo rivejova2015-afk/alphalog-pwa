@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveRouteId } from "@/lib/api/routeParams";
 
 type CapitalTargetType = "real" | "propfirm";
 type ManualFieldKey =
@@ -8,7 +9,7 @@ type ManualFieldKey =
   | "manual_semiannual_pct"
   | "manual_annual_pct";
 
-type CapitalTargetRequestBody = {
+type CapitalTargetPatchBody = {
   account_type?: string;
   target_name?: string;
   target_capital?: number | string;
@@ -32,6 +33,13 @@ const TARGET_COLUMNS = [
   "updated_at",
 ].join(", ");
 
+const MANUAL_FIELDS: ManualFieldKey[] = [
+  "manual_monthly_pct",
+  "manual_quarterly_pct",
+  "manual_semiannual_pct",
+  "manual_annual_pct",
+];
+
 const isMissingTableError = (error: unknown) => {
   const maybe = error as { code?: string; message?: string } | null;
   return (
@@ -43,13 +51,6 @@ const isMissingTableError = (error: unknown) => {
 
 const isValidTargetType = (value: unknown): value is CapitalTargetType =>
   value === "real" || value === "propfirm";
-
-const MANUAL_FIELDS: ManualFieldKey[] = [
-  "manual_monthly_pct",
-  "manual_quarterly_pct",
-  "manual_semiannual_pct",
-  "manual_annual_pct",
-];
 
 const parseManualPercent = (value: unknown) => {
   if (value === undefined) {
@@ -84,71 +85,61 @@ const parseManualPercent = (value: unknown) => {
   return { provided: true as const, error: "must be a valid number" };
 };
 
-export async function GET() {
-  try {
-    const supabase = await createClient();
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !userData?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data, error } = await supabase
-      .from("intelligence_capital_targets")
-      .select(TARGET_COLUMNS)
-      .eq("user_id", userData.user.id)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      if (isMissingTableError(error)) {
-        return NextResponse.json([]);
-      }
-      console.error("Error fetching intelligence capital targets:", error);
-      return NextResponse.json({ error: "Failed to fetch targets" }, { status: 500 });
-    }
-
-    return NextResponse.json(data || []);
-  } catch (error) {
-    console.error("Error in GET /api/intelligence/capital-targets:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
+function unauthorized() {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
-export async function POST(request: NextRequest) {
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id?: string }> }
+) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return unauthorized();
     }
 
-    const body = (await request.json()) as CapitalTargetRequestBody;
-
-    const accountType = body.account_type?.trim().toLowerCase();
-    if (!isValidTargetType(accountType)) {
-      return NextResponse.json(
-        { error: "account_type must be real or propfirm" },
-        { status: 400 }
-      );
+    const id = await resolveRouteId(context);
+    if (!id) {
+      return NextResponse.json({ error: "Invalid resource id" }, { status: 400 });
     }
 
-    const targetName = body.target_name?.trim();
-    if (!targetName) {
-      return NextResponse.json({ error: "target_name is required" }, { status: 400 });
-    }
-
-    const targetCapital = Number(body.target_capital);
-    if (!Number.isFinite(targetCapital) || targetCapital <= 0) {
-      return NextResponse.json(
-        { error: "target_capital must be a valid number greater than 0" },
-        { status: 400 }
-      );
-    }
-
-    const manualPayload: Partial<Record<ManualFieldKey, number | null>> = {};
+    const body = (await request.json()) as CapitalTargetPatchBody;
+    const updatePayload: Record<string, unknown> = {};
     let hasManualField = false;
+
+    if (body.account_type !== undefined) {
+      const accountType = body.account_type?.trim().toLowerCase();
+      if (!isValidTargetType(accountType)) {
+        return NextResponse.json(
+          { error: "account_type must be real or propfirm" },
+          { status: 400 }
+        );
+      }
+      updatePayload.account_type = accountType;
+    }
+
+    if (body.target_name !== undefined) {
+      const targetName = body.target_name.trim();
+      if (!targetName) {
+        return NextResponse.json({ error: "target_name is required" }, { status: 400 });
+      }
+      updatePayload.target_name = targetName;
+    }
+
+    if (body.target_capital !== undefined) {
+      const targetCapital = Number(body.target_capital);
+      if (!Number.isFinite(targetCapital) || targetCapital <= 0) {
+        return NextResponse.json(
+          { error: "target_capital must be a valid number greater than 0" },
+          { status: 400 }
+        );
+      }
+      updatePayload.target_capital = targetCapital;
+    }
+
     for (const field of MANUAL_FIELDS) {
       const parsed = parseManualPercent(body[field]);
       if (parsed.provided) {
@@ -159,20 +150,38 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        manualPayload[field] = parsed.value;
+        updatePayload[field] = parsed.value;
       }
+    }
+
+    if (hasManualField) {
+      updatePayload.manual_updated_at = new Date().toISOString();
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json(
+        { error: "No valid fields provided for update" },
+        { status: 400 }
+      );
+    }
+
+    const { data: existingTarget, error: existingError } = await supabase
+      .from("intelligence_capital_targets")
+      .select("id")
+      .eq("id", id)
+      .eq("user_id", userData.user.id)
+      .is("deleted_at", null)
+      .single();
+
+    if (existingError || !existingTarget) {
+      return NextResponse.json({ error: "Target not found" }, { status: 404 });
     }
 
     const { data, error } = await supabase
       .from("intelligence_capital_targets")
-      .insert({
-        user_id: userData.user.id,
-        account_type: accountType,
-        target_name: targetName,
-        target_capital: targetCapital,
-        ...manualPayload,
-        manual_updated_at: hasManualField ? new Date().toISOString() : null,
-      })
+      .update(updatePayload)
+      .eq("id", id)
+      .eq("user_id", userData.user.id)
       .select(TARGET_COLUMNS)
       .single();
 
@@ -183,13 +192,13 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      console.error("Error creating intelligence capital target:", error);
-      return NextResponse.json({ error: "Failed to save target" }, { status: 500 });
+      console.error("Error updating intelligence capital target:", error);
+      return NextResponse.json({ error: "Failed to update target" }, { status: 500 });
     }
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Error in POST /api/intelligence/capital-targets:", error);
+    console.error("Error in PATCH /api/intelligence/capital-targets/[id]:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
