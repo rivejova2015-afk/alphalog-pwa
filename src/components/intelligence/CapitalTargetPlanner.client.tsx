@@ -32,6 +32,8 @@ type CapitalTargetRecord = {
   account_type: CapitalType;
   target_name: string;
   target_capital: number | string;
+  custom_current_capital: number | string | null;
+  custom_current_updated_at: string | null;
   manual_monthly_pct: number | string | null;
   manual_quarterly_pct: number | string | null;
   manual_semiannual_pct: number | string | null;
@@ -55,6 +57,10 @@ type ManualInputState = {
   quarterly: string;
   semiannual: string;
   annual: string;
+};
+
+type CustomCurrentCapitalState = {
+  amount: string;
 };
 
 type ManualScenarioResult = {
@@ -87,6 +93,10 @@ const EMPTY_MANUAL_INPUTS: ManualInputState = {
   quarterly: "",
   semiannual: "",
   annual: "",
+};
+
+const EMPTY_CUSTOM_CURRENT: CustomCurrentCapitalState = {
+  amount: "",
 };
 
 const toPercent = (value: number) => `${(value * 100).toFixed(2)}%`;
@@ -438,6 +448,7 @@ export default function CapitalTargetPlanner({
   const [targetInput, setTargetInput] = useState(
     buildDefaultTarget(metricsByType[initialType].totalBalance)
   );
+  const [customCurrentInput, setCustomCurrentInput] = useState<CustomCurrentCapitalState>(EMPTY_CUSTOM_CURRENT);
   const [manualInputs, setManualInputs] = useState<ManualInputState>(EMPTY_MANUAL_INPUTS);
   const [showDetails, setShowDetails] = useState(false);
   const [savedTargets, setSavedTargets] = useState<CapitalTargetRecord[]>([]);
@@ -445,13 +456,21 @@ export default function CapitalTargetPlanner({
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
+  const [customCurrentError, setCustomCurrentError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [isSavingTarget, setIsSavingTarget] = useState(false);
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [isDeletingManual, setIsDeletingManual] = useState(false);
+  const [isSavingCustomCurrent, setIsSavingCustomCurrent] = useState(false);
+  const [isDeletingCustomCurrent, setIsDeletingCustomCurrent] = useState(false);
 
   const activeMetrics = metricsByType[selectedType];
-  const activeCurrentCapital = activeMetrics.totalBalance;
+  const customCurrentCapital = useMemo(() => parseNumber(customCurrentInput.amount), [customCurrentInput.amount]);
+  const activeCurrentCapital =
+    customCurrentCapital !== null && customCurrentCapital > 0
+      ? customCurrentCapital
+      : activeMetrics.totalBalance;
+  const usingCustomCurrentCapital = customCurrentCapital !== null && customCurrentCapital > 0;
   const activeNetPnl30d = activeMetrics.netPnl30d;
   const targetCapital = useMemo(() => parseNumber(targetInput), [targetInput]);
   const invalidTarget = targetCapital === null || targetCapital <= 0;
@@ -459,10 +478,15 @@ export default function CapitalTargetPlanner({
     () => savedTargets.filter((target) => target.account_type === selectedType),
     [savedTargets, selectedType]
   );
+  const activeTargetRecord = useMemo(
+    () => (activeTargetId ? savedTargets.find((target) => target.id === activeTargetId) ?? null : null),
+    [activeTargetId, savedTargets]
+  );
 
   const clearMessages = useCallback(() => {
     setSaveError(null);
     setManualError(null);
+    setCustomCurrentError(null);
     setSaveSuccess(null);
   }, []);
 
@@ -470,6 +494,10 @@ export default function CapitalTargetPlanner({
     setActiveTargetId(target.id);
     setTargetName(target.target_name);
     setTargetInput(Number(target.target_capital).toFixed(2));
+    const parsedCustomCurrent = Number(target.custom_current_capital);
+    setCustomCurrentInput({
+      amount: Number.isFinite(parsedCustomCurrent) && parsedCustomCurrent > 0 ? parsedCustomCurrent.toFixed(2) : "",
+    });
     setManualInputs({
       monthly: asPercentInputValue(target.manual_monthly_pct),
       quarterly: asPercentInputValue(target.manual_quarterly_pct),
@@ -483,6 +511,7 @@ export default function CapitalTargetPlanner({
       setActiveTargetId(null);
       setTargetName(`Objetivo ${TYPE_LABEL[type]}`);
       setTargetInput(buildDefaultTarget(metricsByType[type].totalBalance));
+      setCustomCurrentInput(EMPTY_CUSTOM_CURRENT);
       setManualInputs(EMPTY_MANUAL_INPUTS);
     },
     [metricsByType]
@@ -566,8 +595,14 @@ export default function CapitalTargetPlanner({
   const handleSaveTarget = async () => {
     clearMessages();
     const parsedTarget = parseNumber(targetInput);
+    const parsedCustomCurrent = parseNumber(customCurrentInput.amount);
     if (parsedTarget === null || parsedTarget <= 0) {
       setSaveError("Ingresa un capital objetivo valido y mayor a 0.");
+      return;
+    }
+
+    if (customCurrentInput.amount.trim().length > 0 && (parsedCustomCurrent === null || parsedCustomCurrent <= 0)) {
+      setSaveError("El capital actual custom debe ser un numero valido y mayor a 0.");
       return;
     }
 
@@ -592,6 +627,7 @@ export default function CapitalTargetPlanner({
           account_type: selectedType,
           target_name: targetName.trim(),
           target_capital: parsedTarget,
+          custom_current_capital: parsedCustomCurrent,
         }),
       });
 
@@ -706,6 +742,82 @@ export default function CapitalTargetPlanner({
       setManualError(error instanceof Error ? error.message : "No se pudo eliminar la simulacion manual.");
     } finally {
       setIsDeletingManual(false);
+    }
+  };
+
+  const handleSaveCustomCurrent = async () => {
+    clearMessages();
+    if (!activeTargetId) {
+      setCustomCurrentError("Guarda o carga un objetivo antes de crear capital actual custom.");
+      return;
+    }
+
+    const parsedAmount = parseNumber(customCurrentInput.amount);
+    if (parsedAmount === null || parsedAmount <= 0) {
+      setCustomCurrentError("Ingresa un capital actual custom valido y mayor a 0.");
+      return;
+    }
+
+    setIsSavingCustomCurrent(true);
+    try {
+      const response = await fetch(`/api/intelligence/capital-targets/${activeTargetId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          custom_current_capital: parsedAmount,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo guardar el capital actual custom.");
+      }
+
+      const updated = payload as CapitalTargetRecord;
+      upsertTarget(updated);
+      applyTargetToForm(updated);
+      setSaveSuccess("Capital actual custom guardado.");
+    } catch (error) {
+      setCustomCurrentError(error instanceof Error ? error.message : "No se pudo guardar el capital actual custom.");
+    } finally {
+      setIsSavingCustomCurrent(false);
+    }
+  };
+
+  const handleDeleteCustomCurrent = async () => {
+    clearMessages();
+    if (!activeTargetId) {
+      setCustomCurrentError("No hay objetivo activo para eliminar capital actual custom.");
+      return;
+    }
+
+    setIsDeletingCustomCurrent(true);
+    try {
+      const response = await fetch(`/api/intelligence/capital-targets/${activeTargetId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          custom_current_capital: null,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo eliminar el capital actual custom.");
+      }
+
+      const updated = payload as CapitalTargetRecord;
+      upsertTarget(updated);
+      applyTargetToForm(updated);
+      setSaveSuccess("Capital actual custom eliminado.");
+    } catch (error) {
+      setCustomCurrentError(error instanceof Error ? error.message : "No se pudo eliminar el capital actual custom.");
+    } finally {
+      setIsDeletingCustomCurrent(false);
     }
   };
 
@@ -979,6 +1091,11 @@ export default function CapitalTargetPlanner({
           {manualError}
         </div>
       )}
+      {customCurrentError && (
+        <div className="mt-3 rounded border border-red-800/70 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+          {customCurrentError}
+        </div>
+      )}
       {saveSuccess && (
         <div className="mt-3 rounded border border-emerald-800/70 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
           {saveSuccess}
@@ -1013,6 +1130,12 @@ export default function CapitalTargetPlanner({
                   <p className="text-xs text-slate-500">
                     Simulacion manual: {target.manual_updated_at ? formatDateTime(target.manual_updated_at) : "Sin guardar"}
                   </p>
+                  <p className="text-xs text-slate-500">
+                    Capital actual custom:{" "}
+                    {target.custom_current_capital === null || target.custom_current_capital === undefined
+                      ? "Sin guardar"
+                      : `${formatMoney(Number(target.custom_current_capital))} (${formatDateTime(target.custom_current_updated_at)})`}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -1033,6 +1156,9 @@ export default function CapitalTargetPlanner({
             <div className="rounded border border-slate-700/70 bg-slate-900/60 p-3">
               <p className="text-xs text-slate-400">Capital actual</p>
               <p className="text-lg font-semibold text-white">{formatMoney(activeCurrentCapital)}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {usingCustomCurrentCapital ? "Fuente: custom vinculado al objetivo" : "Fuente: balance consolidado"}
+              </p>
             </div>
             <div className="rounded border border-slate-700/70 bg-slate-900/60 p-3">
               <p className="text-xs text-slate-400">Capital objetivo</p>
@@ -1061,6 +1187,62 @@ export default function CapitalTargetPlanner({
                 style={{ width: `${progress}%` }}
               />
             </div>
+          </div>
+
+          <div className="rounded border border-slate-700/70 bg-slate-900/60 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h4 className="text-sm font-semibold text-slate-100">Capital actual custom vinculado</h4>
+                <p className="text-xs text-slate-400">
+                  Crea/edita un capital actual custom para este objetivo. Se usa en simulaciones automaticas y manuales.
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Base actual por tipo: {formatMoney(activeMetrics.totalBalance)}
+                </p>
+              </div>
+              {!activeTargetId && (
+                <span className="text-xs text-amber-300">
+                  Guarda o carga un objetivo para persistir capital actual custom.
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_auto]">
+              <label className="block">
+                <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Capital actual custom</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={customCurrentInput.amount}
+                  onChange={(event) => setCustomCurrentInput({ amount: event.target.value })}
+                  placeholder="Ej. 12500"
+                  className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleSaveCustomCurrent}
+                disabled={isSavingCustomCurrent}
+                className="rounded border border-sky-500/60 bg-sky-900/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-900/60 disabled:opacity-60"
+              >
+                {isSavingCustomCurrent ? "Guardando..." : "Guardar capital actual"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCustomCurrent}
+                disabled={isDeletingCustomCurrent}
+                className="rounded border border-red-700/70 bg-red-950/35 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-950/50 disabled:opacity-60"
+              >
+                {isDeletingCustomCurrent ? "Eliminando..." : "Eliminar capital custom"}
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-500">
+              Estado actual:{" "}
+              {activeTargetRecord?.custom_current_capital === null || activeTargetRecord?.custom_current_capital === undefined
+                ? "Sin capital custom guardado"
+                : `${formatMoney(Number(activeTargetRecord.custom_current_capital))} (${formatDateTime(activeTargetRecord.custom_current_updated_at)})`}
+            </p>
           </div>
 
           <div className="rounded border border-slate-700/70 bg-slate-900/60 p-4">

@@ -57,6 +57,8 @@ export async function DELETE(
           "manual_semiannual_pct",
           "manual_annual_pct",
           "manual_updated_at",
+          "custom_current_capital",
+          "custom_current_updated_at",
           "created_at",
           "updated_at",
         ].join(", ")

@@ -16,6 +16,7 @@ type CapitalTargetRequestBody = {
   manual_quarterly_pct?: number | string | null;
   manual_semiannual_pct?: number | string | null;
   manual_annual_pct?: number | string | null;
+  custom_current_capital?: number | string | null;
 };
 
 const TARGET_COLUMNS = [
@@ -28,6 +29,8 @@ const TARGET_COLUMNS = [
   "manual_semiannual_pct",
   "manual_annual_pct",
   "manual_updated_at",
+  "custom_current_capital",
+  "custom_current_updated_at",
   "created_at",
   "updated_at",
 ].join(", ");
@@ -82,6 +85,37 @@ const parseManualPercent = (value: unknown) => {
   }
 
   return { provided: true as const, error: "must be a valid number" };
+};
+
+const parseCustomCurrentCapital = (value: unknown) => {
+  if (value === undefined) {
+    return { provided: false as const, value: null as number | null };
+  }
+
+  if (value === null || value === "") {
+    return { provided: true as const, value: null as number | null };
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) {
+      return { provided: true as const, error: "custom_current_capital must be a valid number greater than 0" };
+    }
+    return { provided: true as const, value };
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/,/g, "").trim();
+    if (!normalized) {
+      return { provided: true as const, value: null as number | null };
+    }
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return { provided: true as const, error: "custom_current_capital must be a valid number greater than 0" };
+    }
+    return { provided: true as const, value: parsed };
+  }
+
+  return { provided: true as const, error: "custom_current_capital must be a valid number greater than 0" };
 };
 
 export async function GET() {
@@ -163,6 +197,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const customCurrent = parseCustomCurrentCapital(body.custom_current_capital);
+    if ("error" in customCurrent) {
+      return NextResponse.json({ error: customCurrent.error }, { status: 400 });
+    }
+
     const { data, error } = await supabase
       .from("intelligence_capital_targets")
       .insert({
@@ -172,6 +211,9 @@ export async function POST(request: NextRequest) {
         target_capital: targetCapital,
         ...manualPayload,
         manual_updated_at: hasManualField ? new Date().toISOString() : null,
+        custom_current_capital: customCurrent.value,
+        custom_current_updated_at:
+          customCurrent.provided && customCurrent.value !== null ? new Date().toISOString() : null,
       })
       .select(TARGET_COLUMNS)
       .single();
