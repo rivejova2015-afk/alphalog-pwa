@@ -32,6 +32,7 @@ type CapitalTargetRecord = {
   account_type: CapitalType;
   target_name: string;
   target_capital: number | string;
+  capital_account_id: string | null;
   custom_current_capital: number | string | null;
   custom_current_updated_at: string | null;
   manual_monthly_pct: number | string | null;
@@ -39,6 +40,15 @@ type CapitalTargetRecord = {
   manual_semiannual_pct: number | string | null;
   manual_annual_pct: number | string | null;
   manual_updated_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CapitalAccountRecord = {
+  id: string;
+  account_type: CapitalType;
+  account_name: string;
+  current_capital: number | string;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +71,11 @@ type ManualInputState = {
 
 type CustomCurrentCapitalState = {
   amount: string;
+};
+
+type CapitalAccountFormState = {
+  accountName: string;
+  currentCapital: string;
 };
 
 type ManualScenarioResult = {
@@ -99,6 +114,11 @@ const EMPTY_CUSTOM_CURRENT: CustomCurrentCapitalState = {
   amount: "",
 };
 
+const EMPTY_CAPITAL_ACCOUNT_FORM: CapitalAccountFormState = {
+  accountName: "",
+  currentCapital: "",
+};
+
 const toPercent = (value: number) => `${(value * 100).toFixed(2)}%`;
 
 const formatMoney = (value: number) =>
@@ -120,6 +140,12 @@ const parseNumber = (value: string) => {
   if (!normalized) return null;
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return null;
+  return parsed;
+};
+
+const parsePositiveNumber = (value: string) => {
+  const parsed = parseNumber(value);
+  if (parsed === null || parsed <= 0) return null;
   return parsed;
 };
 
@@ -448,29 +474,59 @@ export default function CapitalTargetPlanner({
   const [targetInput, setTargetInput] = useState(
     buildDefaultTarget(metricsByType[initialType].totalBalance)
   );
+  const [selectedCapitalAccountId, setSelectedCapitalAccountId] = useState<string>("");
+  const [capitalAccountForm, setCapitalAccountForm] = useState<CapitalAccountFormState>(
+    EMPTY_CAPITAL_ACCOUNT_FORM
+  );
+  const [editingCapitalAccountId, setEditingCapitalAccountId] = useState<string | null>(null);
+  const [capitalAccounts, setCapitalAccounts] = useState<CapitalAccountRecord[]>([]);
   const [customCurrentInput, setCustomCurrentInput] = useState<CustomCurrentCapitalState>(EMPTY_CUSTOM_CURRENT);
   const [manualInputs, setManualInputs] = useState<ManualInputState>(EMPTY_MANUAL_INPUTS);
   const [showDetails, setShowDetails] = useState(false);
   const [savedTargets, setSavedTargets] = useState<CapitalTargetRecord[]>([]);
   const [loadingTargets, setLoadingTargets] = useState(true);
+  const [loadingCapitalAccounts, setLoadingCapitalAccounts] = useState(true);
   const [targetsError, setTargetsError] = useState<string | null>(null);
+  const [capitalAccountsError, setCapitalAccountsError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
   const [customCurrentError, setCustomCurrentError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [isSavingTarget, setIsSavingTarget] = useState(false);
+  const [isSavingCapitalAccount, setIsSavingCapitalAccount] = useState(false);
+  const [isDeletingCapitalAccount, setIsDeletingCapitalAccount] = useState(false);
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [isDeletingManual, setIsDeletingManual] = useState(false);
   const [isSavingCustomCurrent, setIsSavingCustomCurrent] = useState(false);
   const [isDeletingCustomCurrent, setIsDeletingCustomCurrent] = useState(false);
 
   const activeMetrics = metricsByType[selectedType];
+  const currentTypeCapitalAccounts = useMemo(
+    () => capitalAccounts.filter((account) => account.account_type === selectedType),
+    [capitalAccounts, selectedType]
+  );
+  const capitalAccountById = useMemo(
+    () =>
+      new Map(
+        capitalAccounts.map((account) => [account.id, account] as const)
+      ),
+    [capitalAccounts]
+  );
+  const selectedCapitalAccount = selectedCapitalAccountId
+    ? capitalAccountById.get(selectedCapitalAccountId) ?? null
+    : null;
   const customCurrentCapital = useMemo(() => parseNumber(customCurrentInput.amount), [customCurrentInput.amount]);
+  const linkedCapitalValue = useMemo(() => {
+    if (!selectedCapitalAccount) return null;
+    const parsed = Number(selectedCapitalAccount.current_capital);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [selectedCapitalAccount]);
   const activeCurrentCapital =
     customCurrentCapital !== null && customCurrentCapital > 0
       ? customCurrentCapital
-      : activeMetrics.totalBalance;
+      : linkedCapitalValue ?? 0;
   const usingCustomCurrentCapital = customCurrentCapital !== null && customCurrentCapital > 0;
+  const usingLinkedCapitalAccount = !usingCustomCurrentCapital && linkedCapitalValue !== null;
   const activeNetPnl30d = activeMetrics.netPnl30d;
   const targetCapital = useMemo(() => parseNumber(targetInput), [targetInput]);
   const invalidTarget = targetCapital === null || targetCapital <= 0;
@@ -487,97 +543,158 @@ export default function CapitalTargetPlanner({
     setSaveError(null);
     setManualError(null);
     setCustomCurrentError(null);
+    setCapitalAccountsError(null);
     setSaveSuccess(null);
   }, []);
 
-  const applyTargetToForm = useCallback((target: CapitalTargetRecord) => {
-    setActiveTargetId(target.id);
-    setTargetName(target.target_name);
-    setTargetInput(Number(target.target_capital).toFixed(2));
-    const parsedCustomCurrent = Number(target.custom_current_capital);
-    setCustomCurrentInput({
-      amount: Number.isFinite(parsedCustomCurrent) && parsedCustomCurrent > 0 ? parsedCustomCurrent.toFixed(2) : "",
-    });
-    setManualInputs({
-      monthly: asPercentInputValue(target.manual_monthly_pct),
-      quarterly: asPercentInputValue(target.manual_quarterly_pct),
-      semiannual: asPercentInputValue(target.manual_semiannual_pct),
-      annual: asPercentInputValue(target.manual_annual_pct),
-    });
-  }, []);
+  const applyTargetToForm = useCallback(
+    (target: CapitalTargetRecord, accounts: CapitalAccountRecord[] = capitalAccounts) => {
+      setActiveTargetId(target.id);
+      setTargetName(target.target_name);
+      setTargetInput(Number(target.target_capital).toFixed(2));
+      const parsedCustomCurrent = Number(target.custom_current_capital);
+      setCustomCurrentInput({
+        amount:
+          Number.isFinite(parsedCustomCurrent) && parsedCustomCurrent > 0
+            ? parsedCustomCurrent.toFixed(2)
+            : "",
+      });
+      const linkedAccount = accounts.find(
+        (account) =>
+          account.account_type === target.account_type &&
+          account.id === target.capital_account_id
+      );
+      const firstTypeAccount = accounts.find(
+        (account) => account.account_type === target.account_type
+      );
+      setSelectedCapitalAccountId(linkedAccount?.id ?? firstTypeAccount?.id ?? "");
+      setManualInputs({
+        monthly: asPercentInputValue(target.manual_monthly_pct),
+        quarterly: asPercentInputValue(target.manual_quarterly_pct),
+        semiannual: asPercentInputValue(target.manual_semiannual_pct),
+        annual: asPercentInputValue(target.manual_annual_pct),
+      });
+      setEditingCapitalAccountId(null);
+      setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
+    },
+    [capitalAccounts]
+  );
 
   const resetToNewTarget = useCallback(
-    (type: CapitalType) => {
+    (type: CapitalType, accounts: CapitalAccountRecord[] = capitalAccounts) => {
+      const defaultAccount = accounts.find((account) => account.account_type === type);
+      const defaultCurrent = Number(defaultAccount?.current_capital);
       setActiveTargetId(null);
       setTargetName(`Objetivo ${TYPE_LABEL[type]}`);
-      setTargetInput(buildDefaultTarget(metricsByType[type].totalBalance));
+      setTargetInput(
+        buildDefaultTarget(
+          Number.isFinite(defaultCurrent) && defaultCurrent > 0 ? defaultCurrent : 1000
+        )
+      );
+      setSelectedCapitalAccountId(defaultAccount?.id ?? "");
       setCustomCurrentInput(EMPTY_CUSTOM_CURRENT);
       setManualInputs(EMPTY_MANUAL_INPUTS);
+      setEditingCapitalAccountId(null);
+      setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
     },
-    [metricsByType]
+    [capitalAccounts]
   );
 
   const applyTargetPreset = useCallback(
-    (type: CapitalType, targets: CapitalTargetRecord[]) => {
+    (
+      type: CapitalType,
+      targets: CapitalTargetRecord[],
+      accounts: CapitalAccountRecord[] = capitalAccounts
+    ) => {
       const latest = targets.find((target) => target.account_type === type);
       if (latest) {
-        applyTargetToForm(latest);
+        applyTargetToForm(latest, accounts);
         return;
       }
 
-      resetToNewTarget(type);
+      resetToNewTarget(type, accounts);
     },
-    [applyTargetToForm, resetToNewTarget]
+    [applyTargetToForm, capitalAccounts, resetToNewTarget]
   );
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadTargets = async () => {
+    const loadData = async () => {
       setLoadingTargets(true);
+      setLoadingCapitalAccounts(true);
       setTargetsError(null);
+      setCapitalAccountsError(null);
       try {
-        const response = await fetch("/api/intelligence/capital-targets", {
-          cache: "no-store",
-        });
-        const payload = await response.json().catch(() => []);
-        if (!response.ok) {
-          throw new Error(payload?.error || "No se pudieron cargar los objetivos guardados.");
+        const [targetsResponse, accountsResponse] = await Promise.all([
+          fetch("/api/intelligence/capital-targets", {
+            cache: "no-store",
+          }),
+          fetch("/api/intelligence/capital-accounts", {
+            cache: "no-store",
+          }),
+        ]);
+
+        const targetsPayload = await targetsResponse.json().catch(() => []);
+        const accountsPayload = await accountsResponse.json().catch(() => []);
+
+        if (!targetsResponse.ok) {
+          throw new Error(targetsPayload?.error || "No se pudieron cargar los objetivos guardados.");
         }
+        if (!accountsResponse.ok) {
+          throw new Error(accountsPayload?.error || "No se pudieron cargar las cuentas de capital.");
+        }
+
         if (!cancelled) {
-          const records = Array.isArray(payload) ? (payload as CapitalTargetRecord[]) : [];
+          const records = Array.isArray(targetsPayload) ? (targetsPayload as CapitalTargetRecord[]) : [];
+          const accounts = Array.isArray(accountsPayload) ? (accountsPayload as CapitalAccountRecord[]) : [];
           setSavedTargets(records);
-          applyTargetPreset(initialType, records);
+          setCapitalAccounts(accounts);
+          applyTargetPreset(initialType, records, accounts);
         }
       } catch (error) {
         if (!cancelled) {
-          setTargetsError(
-            error instanceof Error ? error.message : "No se pudieron cargar los objetivos guardados."
-          );
+          const message =
+            error instanceof Error ? error.message : "No se pudieron cargar los datos de Capital Levels.";
+          setTargetsError(message);
+          setCapitalAccountsError(message);
         }
       } finally {
         if (!cancelled) {
           setLoadingTargets(false);
+          setLoadingCapitalAccounts(false);
         }
       }
     };
 
-    void loadTargets();
+    void loadData();
 
     return () => {
       cancelled = true;
     };
   }, [applyTargetPreset, initialType]);
 
+  useEffect(() => {
+    if (!selectedCapitalAccountId) return;
+    const selected = capitalAccountById.get(selectedCapitalAccountId);
+    if (selected && selected.account_type === selectedType) return;
+    setSelectedCapitalAccountId(currentTypeCapitalAccounts[0]?.id ?? "");
+  }, [
+    capitalAccountById,
+    currentTypeCapitalAccounts,
+    selectedCapitalAccountId,
+    selectedType,
+  ]);
+
   const handleTypeChange = (type: CapitalType) => {
     setSelectedType(type);
     setShowDetails(false);
     clearMessages();
-    applyTargetPreset(type, savedTargets);
+    applyTargetPreset(type, savedTargets, capitalAccounts);
   };
 
   const handleLoadSavedTarget = (target: CapitalTargetRecord) => {
-    applyTargetToForm(target);
+    applyTargetToForm(target, capitalAccounts);
     setShowDetails(true);
     clearMessages();
   };
@@ -591,6 +708,123 @@ export default function CapitalTargetPlanner({
       return prev.map((target) => (target.id === record.id ? record : target));
     });
   }, []);
+
+  const upsertCapitalAccount = useCallback((record: CapitalAccountRecord) => {
+    setCapitalAccounts((prev) => {
+      const exists = prev.some((account) => account.id === record.id);
+      if (!exists) {
+        return [record, ...prev];
+      }
+      return prev.map((account) => (account.id === record.id ? record : account));
+    });
+  }, []);
+
+  const handleSaveCapitalAccount = async () => {
+    clearMessages();
+
+    const accountName = capitalAccountForm.accountName.trim();
+    const currentCapital = parsePositiveNumber(capitalAccountForm.currentCapital);
+    if (!accountName) {
+      setSaveError("Asigna un nombre para la cuenta de capital.");
+      return;
+    }
+    if (currentCapital === null) {
+      setSaveError("Ingresa un capital actual valido y mayor a 0.");
+      return;
+    }
+
+    setIsSavingCapitalAccount(true);
+    try {
+      const endpoint = editingCapitalAccountId
+        ? `/api/intelligence/capital-accounts/${editingCapitalAccountId}`
+        : "/api/intelligence/capital-accounts";
+      const method = editingCapitalAccountId ? "PATCH" : "POST";
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          account_type: selectedType,
+          account_name: accountName,
+          current_capital: currentCapital,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo guardar la cuenta de capital.");
+      }
+
+      const saved = payload as CapitalAccountRecord;
+      upsertCapitalAccount(saved);
+      setSelectedCapitalAccountId(saved.id);
+      setEditingCapitalAccountId(null);
+      setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
+      setSaveSuccess(
+        editingCapitalAccountId
+          ? "Cuenta de capital actualizada."
+          : "Cuenta de capital creada."
+      );
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "No se pudo guardar la cuenta de capital.");
+    } finally {
+      setIsSavingCapitalAccount(false);
+    }
+  };
+
+  const handleEditCapitalAccount = (account: CapitalAccountRecord) => {
+    clearMessages();
+    setEditingCapitalAccountId(account.id);
+    setSelectedCapitalAccountId(account.id);
+    setCapitalAccountForm({
+      accountName: account.account_name,
+      currentCapital: Number(account.current_capital).toFixed(2),
+    });
+  };
+
+  const handleDeleteCapitalAccount = async () => {
+    clearMessages();
+    if (!selectedCapitalAccountId) {
+      setSaveError("Selecciona una cuenta de capital para eliminar.");
+      return;
+    }
+
+    setIsDeletingCapitalAccount(true);
+    try {
+      const response = await fetch(
+        `/api/intelligence/capital-accounts/${selectedCapitalAccountId}`,
+        {
+          method: "DELETE",
+        }
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo eliminar la cuenta de capital.");
+      }
+
+      const removedId = selectedCapitalAccountId;
+      setCapitalAccounts((prev) => prev.filter((account) => account.id !== removedId));
+      setSavedTargets((prev) =>
+        prev.map((target) =>
+          target.capital_account_id === removedId
+            ? { ...target, capital_account_id: null }
+            : target
+        )
+      );
+      setEditingCapitalAccountId(null);
+      setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
+      const nextAccountId =
+        currentTypeCapitalAccounts.find((account) => account.id !== removedId)?.id ?? "";
+      setSelectedCapitalAccountId(nextAccountId);
+      setSaveSuccess("Cuenta de capital eliminada.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "No se pudo eliminar la cuenta de capital.");
+    } finally {
+      setIsDeletingCapitalAccount(false);
+    }
+  };
 
   const handleSaveTarget = async () => {
     clearMessages();
@@ -611,6 +845,11 @@ export default function CapitalTargetPlanner({
       return;
     }
 
+    if (!selectedCapitalAccountId) {
+      setSaveError("Selecciona o crea una cuenta de capital actual para este objetivo.");
+      return;
+    }
+
     setIsSavingTarget(true);
     try {
       const endpoint = activeTargetId
@@ -627,6 +866,7 @@ export default function CapitalTargetPlanner({
           account_type: selectedType,
           target_name: targetName.trim(),
           target_capital: parsedTarget,
+          capital_account_id: selectedCapitalAccountId,
           custom_current_capital: parsedCustomCurrent,
         }),
       });
@@ -638,7 +878,7 @@ export default function CapitalTargetPlanner({
 
       const created = payload as CapitalTargetRecord;
       upsertTarget(created);
-      applyTargetToForm(created);
+      applyTargetToForm(created, capitalAccounts);
       setSaveSuccess(activeTargetId ? "Objetivo actualizado correctamente." : "Objetivo guardado correctamente.");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "No se pudo guardar el objetivo.");
@@ -705,7 +945,7 @@ export default function CapitalTargetPlanner({
 
       const updated = payload as CapitalTargetRecord;
       upsertTarget(updated);
-      applyTargetToForm(updated);
+      applyTargetToForm(updated, capitalAccounts);
       setSaveSuccess("Simulacion manual guardada.");
     } catch (error) {
       setManualError(error instanceof Error ? error.message : "No se pudo guardar la simulacion manual.");
@@ -736,7 +976,7 @@ export default function CapitalTargetPlanner({
 
       const updated = payload as CapitalTargetRecord;
       upsertTarget(updated);
-      applyTargetToForm(updated);
+      applyTargetToForm(updated, capitalAccounts);
       setSaveSuccess("Simulacion manual eliminada.");
     } catch (error) {
       setManualError(error instanceof Error ? error.message : "No se pudo eliminar la simulacion manual.");
@@ -777,7 +1017,7 @@ export default function CapitalTargetPlanner({
 
       const updated = payload as CapitalTargetRecord;
       upsertTarget(updated);
-      applyTargetToForm(updated);
+      applyTargetToForm(updated, capitalAccounts);
       setSaveSuccess("Capital actual custom guardado.");
     } catch (error) {
       setCustomCurrentError(error instanceof Error ? error.message : "No se pudo guardar el capital actual custom.");
@@ -812,7 +1052,7 @@ export default function CapitalTargetPlanner({
 
       const updated = payload as CapitalTargetRecord;
       upsertTarget(updated);
-      applyTargetToForm(updated);
+      applyTargetToForm(updated, capitalAccounts);
       setSaveSuccess("Capital actual custom eliminado.");
     } catch (error) {
       setCustomCurrentError(error instanceof Error ? error.message : "No se pudo eliminar el capital actual custom.");
@@ -1012,14 +1252,121 @@ export default function CapitalTargetPlanner({
         })}
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="space-y-4">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-white">Capital objetivo</h3>
           <p className="text-sm text-slate-400">
-            Selecciona tipo de capital (real o propfirm), crea multiples objetivos y abre detalles
-            para ver pronosticos.
+            Selecciona una cuenta de capital independiente (real o propfirm), crea objetivos y abre
+            detalles para ver pronosticos.
           </p>
         </div>
+
+        <div className="rounded border border-slate-700/70 bg-slate-900/50 p-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto_auto] lg:items-end">
+            <label>
+              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
+                Cuenta de capital actual ({TYPE_LABEL[selectedType]})
+              </span>
+              <select
+                value={selectedCapitalAccountId}
+                onChange={(event) => setSelectedCapitalAccountId(event.target.value)}
+                className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+              >
+                <option value="">Selecciona una cuenta</option>
+                {currentTypeCapitalAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.account_name} - {formatMoney(Number(account.current_capital))}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => selectedCapitalAccount && handleEditCapitalAccount(selectedCapitalAccount)}
+              disabled={!selectedCapitalAccount}
+              className="rounded border border-slate-600/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-400 disabled:opacity-60"
+            >
+              Editar cuenta
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteCapitalAccount}
+              disabled={!selectedCapitalAccount || isDeletingCapitalAccount}
+              className="rounded border border-red-700/70 bg-red-950/35 px-4 py-2 text-sm font-semibold text-red-200 hover:bg-red-950/50 disabled:opacity-60"
+            >
+              {isDeletingCapitalAccount ? "Eliminando..." : "Eliminar cuenta"}
+            </button>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
+            <label>
+              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
+                Nombre de cuenta
+              </span>
+              <input
+                type="text"
+                value={capitalAccountForm.accountName}
+                onChange={(event) =>
+                  setCapitalAccountForm((current) => ({
+                    ...current,
+                    accountName: event.target.value,
+                  }))
+                }
+                placeholder="Ej. Real 01"
+                className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
+                Capital actual
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={capitalAccountForm.currentCapital}
+                onChange={(event) =>
+                  setCapitalAccountForm((current) => ({
+                    ...current,
+                    currentCapital: event.target.value,
+                  }))
+                }
+                placeholder="Ej. 12500"
+                className="w-full rounded border border-slate-700/70 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleSaveCapitalAccount}
+              disabled={isSavingCapitalAccount}
+              className="rounded border border-sky-500/60 bg-sky-900/40 px-4 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-900/60 disabled:opacity-60"
+            >
+              {isSavingCapitalAccount
+                ? "Guardando..."
+                : editingCapitalAccountId
+                  ? "Actualizar cuenta"
+                  : "Crear cuenta"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingCapitalAccountId(null);
+                setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
+              }}
+              className="rounded border border-slate-600/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-400"
+            >
+              Limpiar
+            </button>
+          </div>
+
+          <p className="mt-3 text-xs text-slate-500">
+            {loadingCapitalAccounts
+              ? "Cargando cuentas de capital..."
+              : currentTypeCapitalAccounts.length === 0
+                ? "No hay cuentas creadas para este tipo. Crea al menos una para simular de forma independiente."
+                : `Cuentas disponibles: ${currentTypeCapitalAccounts.length}`}
+          </p>
+        </div>
+
         <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-2 sm:items-end">
           <label className="flex-1 sm:min-w-56">
             <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
@@ -1062,7 +1409,7 @@ export default function CapitalTargetPlanner({
             </button>
             <button
               type="button"
-              onClick={() => resetToNewTarget(selectedType)}
+              onClick={() => resetToNewTarget(selectedType, capitalAccounts)}
               className="rounded border border-slate-600/70 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-slate-400"
             >
               Nuevo objetivo
@@ -1079,6 +1426,11 @@ export default function CapitalTargetPlanner({
       {targetsError && (
         <div className="mt-3 rounded border border-amber-700/70 bg-amber-950/25 px-3 py-2 text-sm text-amber-200">
           {targetsError}
+        </div>
+      )}
+      {capitalAccountsError && (
+        <div className="mt-3 rounded border border-amber-700/70 bg-amber-950/25 px-3 py-2 text-sm text-amber-200">
+          {capitalAccountsError}
         </div>
       )}
       {saveError && (
@@ -1113,39 +1465,51 @@ export default function CapitalTargetPlanner({
           <p className="text-sm text-slate-400">No hay objetivos guardados para este tipo de capital.</p>
         ) : (
           <div className="space-y-2">
-            {currentTypeTargets.slice(0, 6).map((target) => (
-              <div
-                key={target.id}
-                className={`flex flex-col gap-2 rounded border p-2 sm:flex-row sm:items-center sm:justify-between ${
-                  target.id === activeTargetId
-                    ? "border-sky-500/60 bg-sky-950/30"
-                    : "border-slate-700/60 bg-slate-950/50"
-                }`}
-              >
-                <div>
-                  <p className="text-sm font-medium text-slate-100">{target.target_name}</p>
-                  <p className="text-xs text-slate-400">
-                    {formatMoney(Number(target.target_capital))} | {formatDateTime(target.created_at)}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Simulacion manual: {target.manual_updated_at ? formatDateTime(target.manual_updated_at) : "Sin guardar"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Capital actual custom:{" "}
-                    {target.custom_current_capital === null || target.custom_current_capital === undefined
-                      ? "Sin guardar"
-                      : `${formatMoney(Number(target.custom_current_capital))} (${formatDateTime(target.custom_current_updated_at)})`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleLoadSavedTarget(target)}
-                  className="rounded border border-slate-600/70 px-3 py-1 text-xs text-slate-200 hover:border-slate-400"
+            {currentTypeTargets.slice(0, 6).map((target) => {
+              const linkedAccount = target.capital_account_id
+                ? capitalAccountById.get(target.capital_account_id)
+                : null;
+
+              return (
+                <div
+                  key={target.id}
+                  className={`flex flex-col gap-2 rounded border p-2 sm:flex-row sm:items-center sm:justify-between ${
+                    target.id === activeTargetId
+                      ? "border-sky-500/60 bg-sky-950/30"
+                      : "border-slate-700/60 bg-slate-950/50"
+                  }`}
                 >
-                  Cargar
-                </button>
-              </div>
-            ))}
+                  <div>
+                    <p className="text-sm font-medium text-slate-100">{target.target_name}</p>
+                    <p className="text-xs text-slate-400">
+                      {formatMoney(Number(target.target_capital))} | {formatDateTime(target.created_at)}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Cuenta de capital:{" "}
+                      {linkedAccount
+                        ? `${linkedAccount.account_name} (${formatMoney(Number(linkedAccount.current_capital))})`
+                        : "Sin vincular"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Simulacion manual: {target.manual_updated_at ? formatDateTime(target.manual_updated_at) : "Sin guardar"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Capital actual custom:{" "}
+                      {target.custom_current_capital === null || target.custom_current_capital === undefined
+                        ? "Sin guardar"
+                        : `${formatMoney(Number(target.custom_current_capital))} (${formatDateTime(target.custom_current_updated_at)})`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSavedTarget(target)}
+                    className="rounded border border-slate-600/70 px-3 py-1 text-xs text-slate-200 hover:border-slate-400"
+                  >
+                    Cargar
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1157,7 +1521,11 @@ export default function CapitalTargetPlanner({
               <p className="text-xs text-slate-400">Capital actual</p>
               <p className="text-lg font-semibold text-white">{formatMoney(activeCurrentCapital)}</p>
               <p className="mt-1 text-xs text-slate-500">
-                {usingCustomCurrentCapital ? "Fuente: custom vinculado al objetivo" : "Fuente: balance consolidado"}
+                {usingCustomCurrentCapital
+                  ? "Fuente: custom vinculado al objetivo"
+                  : usingLinkedCapitalAccount
+                    ? "Fuente: cuenta de capital independiente"
+                    : "Selecciona una cuenta de capital para calcular"}
               </p>
             </div>
             <div className="rounded border border-slate-700/70 bg-slate-900/60 p-3">
@@ -1189,6 +1557,12 @@ export default function CapitalTargetPlanner({
             </div>
           </div>
 
+          {!usingCustomCurrentCapital && !usingLinkedCapitalAccount && (
+            <div className="rounded border border-amber-700/70 bg-amber-950/25 px-3 py-2 text-xs text-amber-200">
+              Selecciona o crea una cuenta de capital para que las simulaciones sean independientes y no usen total consolidado.
+            </div>
+          )}
+
           <div className="rounded border border-slate-700/70 bg-slate-900/60 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -1197,7 +1571,7 @@ export default function CapitalTargetPlanner({
                   Crea/edita un capital actual custom para este objetivo. Se usa en simulaciones automaticas y manuales.
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Base actual por tipo: {formatMoney(activeMetrics.totalBalance)}
+                  Base cuenta seleccionada: {formatMoney(linkedCapitalValue ?? 0)}
                 </p>
               </div>
               {!activeTargetId && (

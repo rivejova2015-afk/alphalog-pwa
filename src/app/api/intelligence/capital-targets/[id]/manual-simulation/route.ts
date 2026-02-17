@@ -52,6 +52,7 @@ export async function DELETE(
           "account_type",
           "target_name",
           "target_capital",
+          "capital_account_id",
           "manual_monthly_pct",
           "manual_quarterly_pct",
           "manual_semiannual_pct",

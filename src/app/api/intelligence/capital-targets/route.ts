@@ -12,6 +12,7 @@ type CapitalTargetRequestBody = {
   account_type?: string;
   target_name?: string;
   target_capital?: number | string;
+  capital_account_id?: string | null;
   manual_monthly_pct?: number | string | null;
   manual_quarterly_pct?: number | string | null;
   manual_semiannual_pct?: number | string | null;
@@ -24,6 +25,7 @@ const TARGET_COLUMNS = [
   "account_type",
   "target_name",
   "target_capital",
+  "capital_account_id",
   "manual_monthly_pct",
   "manual_quarterly_pct",
   "manual_semiannual_pct",
@@ -35,12 +37,17 @@ const TARGET_COLUMNS = [
   "updated_at",
 ].join(", ");
 
-const isMissingTableError = (error: unknown) => {
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isMissingSchemaError = (error: unknown) => {
   const maybe = error as { code?: string; message?: string } | null;
+  const message = typeof maybe?.message === "string" ? maybe.message.toLowerCase() : "";
   return (
     maybe?.code === "42P01" ||
-    (typeof maybe?.message === "string" &&
-      maybe.message.toLowerCase().includes("does not exist"))
+    maybe?.code === "42703" ||
+    message.includes("does not exist") ||
+    message.includes("column") && message.includes("does not exist")
   );
 };
 
@@ -118,6 +125,55 @@ const parseCustomCurrentCapital = (value: unknown) => {
   return { provided: true as const, error: "custom_current_capital must be a valid number greater than 0" };
 };
 
+const parseCapitalAccountId = (value: unknown) => {
+  if (value === undefined) {
+    return { provided: false as const, value: null as string | null };
+  }
+
+  if (value === null || value === "") {
+    return { provided: true as const, value: null as string | null };
+  }
+
+  if (typeof value !== "string") {
+    return { provided: true as const, error: "capital_account_id must be a valid UUID" };
+  }
+
+  const normalized = value.trim();
+  if (!UUID_REGEX.test(normalized)) {
+    return { provided: true as const, error: "capital_account_id must be a valid UUID" };
+  }
+
+  return { provided: true as const, value: normalized };
+};
+
+async function validateCapitalAccountLink(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  capitalAccountId: string,
+  expectedType: CapitalTargetType
+) {
+  const { data, error } = await supabase
+    .from("intelligence_capital_accounts")
+    .select("id, account_type")
+    .eq("id", capitalAccountId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .single();
+
+  if (error || !data) {
+    return { ok: false as const, error: "La cuenta de capital seleccionada no existe." };
+  }
+
+  if (data.account_type !== expectedType) {
+    return {
+      ok: false as const,
+      error: "La cuenta de capital no coincide con el tipo seleccionado (real/propfirm).",
+    };
+  }
+
+  return { ok: true as const };
+}
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -135,7 +191,7 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      if (isMissingTableError(error)) {
+      if (isMissingSchemaError(error)) {
         return NextResponse.json([]);
       }
       console.error("Error fetching intelligence capital targets:", error);
@@ -202,6 +258,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: customCurrent.error }, { status: 400 });
     }
 
+    const capitalAccount = parseCapitalAccountId(body.capital_account_id);
+    if ("error" in capitalAccount) {
+      return NextResponse.json({ error: capitalAccount.error }, { status: 400 });
+    }
+    if (capitalAccount.value) {
+      const validation = await validateCapitalAccountLink(
+        supabase,
+        userData.user.id,
+        capitalAccount.value,
+        accountType
+      );
+      if (!validation.ok) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
+    }
+
     const { data, error } = await supabase
       .from("intelligence_capital_targets")
       .insert({
@@ -209,6 +281,7 @@ export async function POST(request: NextRequest) {
         account_type: accountType,
         target_name: targetName,
         target_capital: targetCapital,
+        capital_account_id: capitalAccount.value,
         ...manualPayload,
         manual_updated_at: hasManualField ? new Date().toISOString() : null,
         custom_current_capital: customCurrent.value,
@@ -219,9 +292,9 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      if (isMissingTableError(error)) {
+      if (isMissingSchemaError(error)) {
         return NextResponse.json(
-          { error: "Missing intelligence_capital_targets table. Run migration 032 first." },
+          { error: "Missing intelligence capital schema. Run migrations 032, 033, 035 and 036." },
           { status: 500 }
         );
       }

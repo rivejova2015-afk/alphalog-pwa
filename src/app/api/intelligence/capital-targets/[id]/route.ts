@@ -13,6 +13,7 @@ type CapitalTargetPatchBody = {
   account_type?: string;
   target_name?: string;
   target_capital?: number | string;
+  capital_account_id?: string | null;
   manual_monthly_pct?: number | string | null;
   manual_quarterly_pct?: number | string | null;
   manual_semiannual_pct?: number | string | null;
@@ -25,6 +26,7 @@ const TARGET_COLUMNS = [
   "account_type",
   "target_name",
   "target_capital",
+  "capital_account_id",
   "manual_monthly_pct",
   "manual_quarterly_pct",
   "manual_semiannual_pct",
@@ -43,12 +45,16 @@ const MANUAL_FIELDS: ManualFieldKey[] = [
   "manual_annual_pct",
 ];
 
-const isMissingTableError = (error: unknown) => {
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isMissingSchemaError = (error: unknown) => {
   const maybe = error as { code?: string; message?: string } | null;
+  const message = typeof maybe?.message === "string" ? maybe.message.toLowerCase() : "";
   return (
     maybe?.code === "42P01" ||
-    (typeof maybe?.message === "string" &&
-      maybe.message.toLowerCase().includes("does not exist"))
+    maybe?.code === "42703" ||
+    message.includes("does not exist")
   );
 };
 
@@ -119,6 +125,55 @@ const parseCustomCurrentCapital = (value: unknown) => {
   return { provided: true as const, error: "custom_current_capital must be a valid number greater than 0" };
 };
 
+const parseCapitalAccountId = (value: unknown) => {
+  if (value === undefined) {
+    return { provided: false as const, value: null as string | null };
+  }
+
+  if (value === null || value === "") {
+    return { provided: true as const, value: null as string | null };
+  }
+
+  if (typeof value !== "string") {
+    return { provided: true as const, error: "capital_account_id must be a valid UUID" };
+  }
+
+  const normalized = value.trim();
+  if (!UUID_REGEX.test(normalized)) {
+    return { provided: true as const, error: "capital_account_id must be a valid UUID" };
+  }
+
+  return { provided: true as const, value: normalized };
+};
+
+async function validateCapitalAccountLink(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  capitalAccountId: string,
+  expectedType: CapitalTargetType
+) {
+  const { data, error } = await supabase
+    .from("intelligence_capital_accounts")
+    .select("id, account_type")
+    .eq("id", capitalAccountId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .single();
+
+  if (error || !data) {
+    return { ok: false as const, error: "La cuenta de capital seleccionada no existe." };
+  }
+
+  if (data.account_type !== expectedType) {
+    return {
+      ok: false as const,
+      error: "La cuenta de capital no coincide con el tipo seleccionado (real/propfirm).",
+    };
+  }
+
+  return { ok: true as const };
+}
+
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
@@ -143,6 +198,7 @@ export async function PATCH(
     const body = (await request.json()) as CapitalTargetPatchBody;
     const updatePayload: Record<string, unknown> = {};
     let hasManualField = false;
+    let parsedAccountType: CapitalTargetType | undefined;
 
     if (body.account_type !== undefined) {
       const accountType = body.account_type?.trim().toLowerCase();
@@ -152,6 +208,7 @@ export async function PATCH(
           { status: 400 }
         );
       }
+      parsedAccountType = accountType;
       updatePayload.account_type = accountType;
     }
 
@@ -198,6 +255,14 @@ export async function PATCH(
         customCurrent.value === null ? null : new Date().toISOString();
     }
 
+    const capitalAccount = parseCapitalAccountId(body.capital_account_id);
+    if ("error" in capitalAccount) {
+      return NextResponse.json({ error: capitalAccount.error }, { status: 400 });
+    }
+    if (capitalAccount.provided) {
+      updatePayload.capital_account_id = capitalAccount.value;
+    }
+
     if (hasManualField) {
       updatePayload.manual_updated_at = new Date().toISOString();
     }
@@ -211,7 +276,7 @@ export async function PATCH(
 
     const { data: existingTarget, error: existingError } = await supabase
       .from("intelligence_capital_targets")
-      .select("id")
+      .select("id, account_type, capital_account_id")
       .eq("id", id)
       .eq("user_id", userData.user.id)
       .is("deleted_at", null)
@@ -219,6 +284,24 @@ export async function PATCH(
 
     if (existingError || !existingTarget) {
       return NextResponse.json({ error: "Target not found" }, { status: 404 });
+    }
+
+    const finalAccountType = parsedAccountType ?? (existingTarget.account_type as CapitalTargetType);
+    const finalCapitalAccountId =
+      capitalAccount.provided
+        ? capitalAccount.value
+        : (existingTarget.capital_account_id as string | null);
+
+    if (finalCapitalAccountId) {
+      const validation = await validateCapitalAccountLink(
+        supabase,
+        userData.user.id,
+        finalCapitalAccountId,
+        finalAccountType
+      );
+      if (!validation.ok) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
     }
 
     const { data, error } = await supabase
@@ -230,9 +313,9 @@ export async function PATCH(
       .single();
 
     if (error) {
-      if (isMissingTableError(error)) {
+      if (isMissingSchemaError(error)) {
         return NextResponse.json(
-          { error: "Missing intelligence_capital_targets table. Run migration 032 first." },
+          { error: "Missing intelligence capital schema. Run migrations 032, 033, 035 and 036." },
           { status: 500 }
         );
       }
