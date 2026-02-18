@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ScenarioKey = "conservative" | "base" | "aggressive";
 
@@ -486,6 +486,7 @@ export default function CapitalTargetPlanner({
   const [savedTargets, setSavedTargets] = useState<CapitalTargetRecord[]>([]);
   const [loadingTargets, setLoadingTargets] = useState(true);
   const [loadingCapitalAccounts, setLoadingCapitalAccounts] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
   const [targetsError, setTargetsError] = useState<string | null>(null);
   const [capitalAccountsError, setCapitalAccountsError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -499,6 +500,8 @@ export default function CapitalTargetPlanner({
   const [isDeletingManual, setIsDeletingManual] = useState(false);
   const [isSavingCustomCurrent, setIsSavingCustomCurrent] = useState(false);
   const [isDeletingCustomCurrent, setIsDeletingCustomCurrent] = useState(false);
+  const hasAppliedInitialPresetRef = useRef(false);
+  const previousSelectedTypeRef = useRef<CapitalType>(selectedType);
 
   const activeMetrics = metricsByType[selectedType];
   const currentTypeCapitalAccounts = useMemo(
@@ -548,7 +551,7 @@ export default function CapitalTargetPlanner({
   }, []);
 
   const applyTargetToForm = useCallback(
-    (target: CapitalTargetRecord, accounts: CapitalAccountRecord[] = capitalAccounts) => {
+    (target: CapitalTargetRecord, accounts: CapitalAccountRecord[]) => {
       setActiveTargetId(target.id);
       setTargetName(target.target_name);
       setTargetInput(Number(target.target_capital).toFixed(2));
@@ -577,11 +580,11 @@ export default function CapitalTargetPlanner({
       setEditingCapitalAccountId(null);
       setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
     },
-    [capitalAccounts]
+    []
   );
 
   const resetToNewTarget = useCallback(
-    (type: CapitalType, accounts: CapitalAccountRecord[] = capitalAccounts) => {
+    (type: CapitalType, accounts: CapitalAccountRecord[]) => {
       const defaultAccount = accounts.find((account) => account.account_type === type);
       const defaultCurrent = Number(defaultAccount?.current_capital);
       setActiveTargetId(null);
@@ -597,15 +600,11 @@ export default function CapitalTargetPlanner({
       setEditingCapitalAccountId(null);
       setCapitalAccountForm(EMPTY_CAPITAL_ACCOUNT_FORM);
     },
-    [capitalAccounts]
+    []
   );
 
   const applyTargetPreset = useCallback(
-    (
-      type: CapitalType,
-      targets: CapitalTargetRecord[],
-      accounts: CapitalAccountRecord[] = capitalAccounts
-    ) => {
+    (type: CapitalType, targets: CapitalTargetRecord[], accounts: CapitalAccountRecord[]) => {
       const latest = targets.find((target) => target.account_type === type);
       if (latest) {
         applyTargetToForm(latest, accounts);
@@ -614,11 +613,11 @@ export default function CapitalTargetPlanner({
 
       resetToNewTarget(type, accounts);
     },
-    [applyTargetToForm, capitalAccounts, resetToNewTarget]
+    [applyTargetToForm, resetToNewTarget]
   );
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     const loadData = async () => {
       setLoadingTargets(true);
@@ -629,9 +628,11 @@ export default function CapitalTargetPlanner({
         const [targetsResponse, accountsResponse] = await Promise.all([
           fetch("/api/intelligence/capital-targets", {
             cache: "no-store",
+            signal: controller.signal,
           }),
           fetch("/api/intelligence/capital-accounts", {
             cache: "no-store",
+            signal: controller.signal,
           }),
         ]);
 
@@ -645,34 +646,63 @@ export default function CapitalTargetPlanner({
           throw new Error(accountsPayload?.error || "No se pudieron cargar las cuentas de capital.");
         }
 
-        if (!cancelled) {
-          const records = Array.isArray(targetsPayload) ? (targetsPayload as CapitalTargetRecord[]) : [];
-          const accounts = Array.isArray(accountsPayload) ? (accountsPayload as CapitalAccountRecord[]) : [];
-          setSavedTargets(records);
-          setCapitalAccounts(accounts);
-          applyTargetPreset(initialType, records, accounts);
-        }
+        const records = Array.isArray(targetsPayload) ? (targetsPayload as CapitalTargetRecord[]) : [];
+        const accounts = Array.isArray(accountsPayload) ? (accountsPayload as CapitalAccountRecord[]) : [];
+        setSavedTargets(records);
+        setCapitalAccounts(accounts);
       } catch (error) {
-        if (!cancelled) {
-          const message =
-            error instanceof Error ? error.message : "No se pudieron cargar los datos de Capital Levels.";
-          setTargetsError(message);
-          setCapitalAccountsError(message);
+        if ((error as { name?: string } | null)?.name === "AbortError") {
+          return;
         }
+        const message =
+          error instanceof Error ? error.message : "No se pudieron cargar los datos de Capital Levels.";
+        setTargetsError(message);
+        setCapitalAccountsError(message);
       } finally {
-        if (!cancelled) {
-          setLoadingTargets(false);
-          setLoadingCapitalAccounts(false);
-        }
+        setLoadingTargets(false);
+        setLoadingCapitalAccounts(false);
       }
     };
 
     void loadData();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [applyTargetPreset, initialType]);
+  }, [reloadToken]);
+
+  useEffect(() => {
+    if (loadingTargets || loadingCapitalAccounts) return;
+
+    const selectedTypeChanged = previousSelectedTypeRef.current !== selectedType;
+    if (selectedTypeChanged) {
+      previousSelectedTypeRef.current = selectedType;
+      applyTargetPreset(selectedType, savedTargets, capitalAccounts);
+      hasAppliedInitialPresetRef.current = true;
+      return;
+    }
+
+    if (!hasAppliedInitialPresetRef.current) {
+      hasAppliedInitialPresetRef.current = true;
+      applyTargetPreset(initialType, savedTargets, capitalAccounts);
+      return;
+    }
+
+    if (!activeTargetId) return;
+    const activeTarget = savedTargets.find((target) => target.id === activeTargetId);
+    if (!activeTarget || activeTarget.account_type !== selectedType) {
+      applyTargetPreset(selectedType, savedTargets, capitalAccounts);
+    }
+  }, [
+    activeTargetId,
+    applyTargetPreset,
+    capitalAccounts,
+    initialType,
+    loadingCapitalAccounts,
+    loadingTargets,
+    savedTargets,
+    selectedType,
+  ]);
 
   useEffect(() => {
     if (!selectedCapitalAccountId) return;
@@ -690,13 +720,19 @@ export default function CapitalTargetPlanner({
     setSelectedType(type);
     setShowDetails(false);
     clearMessages();
-    applyTargetPreset(type, savedTargets, capitalAccounts);
   };
 
   const handleLoadSavedTarget = (target: CapitalTargetRecord) => {
     applyTargetToForm(target, capitalAccounts);
     setShowDetails(true);
     clearMessages();
+  };
+
+  const handleRetryLoad = () => {
+    setLoadingTargets(true);
+    setLoadingCapitalAccounts(true);
+    hasAppliedInitialPresetRef.current = false;
+    setReloadToken((current) => current + 1);
   };
 
   const upsertTarget = useCallback((record: CapitalTargetRecord) => {
@@ -1431,6 +1467,17 @@ export default function CapitalTargetPlanner({
       {capitalAccountsError && (
         <div className="mt-3 rounded border border-amber-700/70 bg-amber-950/25 px-3 py-2 text-sm text-amber-200">
           {capitalAccountsError}
+        </div>
+      )}
+      {(targetsError || capitalAccountsError) && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={handleRetryLoad}
+            className="rounded border border-amber-600/70 bg-amber-950/25 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-900/40"
+          >
+            Reintentar carga
+          </button>
         </div>
       )}
       {saveError && (
