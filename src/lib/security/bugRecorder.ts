@@ -50,6 +50,18 @@ const resolveError = (error: unknown) => {
   };
 };
 
+type SupabaseLikeError = {
+  code?: string | null;
+  message?: string | null;
+};
+
+const isMissingBugRpc = (error: SupabaseLikeError | null | undefined): boolean => {
+  if (!error) return false;
+  if (error.code === "PGRST202" || error.code === "42883") return true;
+  const message = (error.message || "").toLowerCase();
+  return message.includes("log_bug_report") && message.includes("could not find");
+};
+
 export async function recordBugReport(input: BugReportInput): Promise<string | null> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -85,6 +97,50 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
     });
 
     if (error) {
+      if (isMissingBugRpc(error)) {
+        const fallbackUserId = input.userId || null;
+        if (!fallbackUserId) {
+          console.warn("[BugRecorder] RPC missing and no user context for fallback log");
+          return null;
+        }
+
+        const fingerprint = crypto
+          .createHash("sha256")
+          .update(
+            `${fallbackUserId}|${input.path || "unknown"}|${
+              input.errorMessage || resolved.message
+            }`
+          )
+          .digest("hex");
+
+        const { data: appLogData, error: appLogError } = await supabase
+          .from("app_logs")
+          .insert({
+            user_id: fallbackUserId,
+            level: "error",
+            area: "bug_recorder",
+            message: safeString(input.errorMessage || resolved.message, 240) || "Unknown error",
+            meta: {
+              request_id: input.requestId || null,
+              method: input.method || null,
+              path: input.path || null,
+              status: input.status || null,
+              payload_hash: payloadHash,
+              ip_hint: input.ipHint || null,
+            },
+            fingerprint,
+          })
+          .select("id")
+          .single();
+
+        if (appLogError) {
+          console.error("[BugRecorder] RPC missing and fallback app_logs insert failed:", appLogError);
+          return null;
+        }
+
+        return (appLogData?.id as string | undefined) ?? null;
+      }
+
       console.error("[BugRecorder] Failed to record bug:", error);
       return null;
     }

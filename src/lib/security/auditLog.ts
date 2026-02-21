@@ -47,6 +47,18 @@ export interface AuditLogEntry {
   userAgentHash?: string;
 }
 
+type SupabaseLikeError = {
+  code?: string | null;
+  message?: string | null;
+};
+
+const isMissingAuditRpc = (error: SupabaseLikeError | null | undefined): boolean => {
+  if (!error) return false;
+  if (error.code === "PGRST202" || error.code === "42883") return true;
+  const message = (error.message || "").toLowerCase();
+  return message.includes("log_audit_event") && message.includes("could not find");
+};
+
 /**
  * Hash user agent (SHA-256) to avoid storing full UA strings
  */
@@ -90,6 +102,63 @@ export async function logAuditEvent(
     });
 
     if (error) {
+      if (isMissingAuditRpc(error)) {
+        const fallbackPayload = {
+          user_id: entry.userId,
+          action: entry.action,
+          resource_type: entry.resourceType,
+          resource_id: entry.resourceId || null,
+          changes: entry.changes || null,
+          ip_hint: entry.ipHint || null,
+          user_agent_hash: entry.userAgentHash || null,
+          status: entry.status || "success",
+          error_message: entry.errorMessage || null,
+        };
+
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("audit_logs")
+          .insert(fallbackPayload)
+          .select("id")
+          .single();
+
+        if (fallbackError) {
+          // Final fallback for environments without audit_logs migrations.
+          const fingerprint = crypto
+            .createHash("sha256")
+            .update(
+              `${entry.userId}|${entry.action}|${entry.resourceType}|${
+                entry.resourceId || ""
+              }|${entry.status || "success"}`
+            )
+            .digest("hex");
+
+          const { data: appLogData, error: appLogError } = await supabase
+            .from("app_logs")
+            .insert({
+              user_id: entry.userId,
+              level: entry.status === "failure" ? "error" : "info",
+              area: "security_audit",
+              message: `Audit event (${entry.action}) persisted via fallback`,
+              meta: fallbackPayload,
+              fingerprint,
+            })
+            .select("id")
+            .single();
+
+          if (appLogError) {
+            console.error(
+              "[Audit] RPC missing and all fallback inserts failed:",
+              appLogError
+            );
+            return null;
+          }
+
+          return (appLogData?.id as string | undefined) ?? null;
+        }
+
+        return (fallbackData?.id as string | undefined) ?? null;
+      }
+
       console.error("[Audit] Failed to log event:", error);
       return null;
     }

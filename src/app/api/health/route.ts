@@ -45,6 +45,9 @@ function checkRuntimeEnv(): HealthCheck {
   if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
     optionalWarnings.push("NEXT_PUBLIC_VAPID_PUBLIC_KEY");
   }
+  if (!process.env.DATA_ENCRYPTION_KEY) {
+    optionalWarnings.push("DATA_ENCRYPTION_KEY");
+  }
 
   if (optionalWarnings.length > 0) {
     return {

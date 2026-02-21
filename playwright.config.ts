@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 /**
  * Read environment variables from file.
@@ -38,6 +39,9 @@ function loadEnvFile(fileName: string) {
 }
 
 envFiles.forEach(loadEnvFile);
+
+const e2eDataEncryptionKey =
+  process.env.DATA_ENCRYPTION_KEY || crypto.randomBytes(32).toString('base64');
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -108,5 +112,9 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    env: {
+      ...process.env,
+      DATA_ENCRYPTION_KEY: e2eDataEncryptionKey,
+    },
   },
 });
