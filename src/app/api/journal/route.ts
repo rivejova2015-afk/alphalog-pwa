@@ -192,6 +192,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !data) {
+      if (error?.code === "42501") {
+        console.warn("[Journal] Insert blocked by RLS policy:", error.message);
+        return NextResponse.json(
+          { error: "No tienes permisos para crear entradas de journal. Verifica la politica RLS en Supabase." },
+          { status: 403 }
+        );
+      }
+
       console.error("[Journal] Insert error:", error);
       await recordBugFromRequest(request, {
         userId: userData.user.id,
