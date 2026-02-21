@@ -75,3 +75,14 @@ El EA envía:
 - Guardar EA → compila .ex5
 - MT5 Navigator → Refresh → EA visible
 - Bot Control: ONLINE por heartbeat (10s)
+
+## 7) Troubleshooting rápido (WebRequest)
+- Error `4014` en MT5:
+  1. Abrir **Tools → Options → Expert Advisors**
+  2. Activar **Allow WebRequest for listed URL**
+  3. Agregar el origen de Supabase, por ejemplo: `https://<project-ref>.supabase.co`
+  4. Reiniciar el EA
+- Error `5203`:
+  - timeout de red; validar internet/VPS y estado de Supabase.
+- Error `5204/5205`:
+  - endpoint inválido o problema SSL/TLS; validar `ApiBaseUrl` y reloj del VPS.
