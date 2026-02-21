@@ -2,8 +2,6 @@
 // POST /functions/v1/bot-telemetry
 // Auth via instance_id + instance_secret in body
 
-// @ts-ignore: Supabase Edge Functions provide 'serve' globally
-import { serve } from 'std/server';
 // @ts-ignore: Deno URL imports are resolved at runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -65,7 +63,7 @@ async function authorizeInstance(supabase: ReturnType<typeof getSupabaseClient>,
   } as const;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("OK", {
       headers: {
