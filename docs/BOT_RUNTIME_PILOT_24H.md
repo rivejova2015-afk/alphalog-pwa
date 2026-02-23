@@ -1,12 +1,18 @@
 # Bot Runtime Pilot 24h
 
-This runbook validates Bot Control runtime using real MT5 traffic for 24 hours.
+This runbook validates Bot Control runtime using real MT5 traffic for 24 hours and produces an auditable close report with cleanup.
 
 ## Scope
 
 - Control plane stability: heartbeat, telemetry, commands, ACK status.
 - Runtime integrity: no stale instances, no stuck pending commands.
 - No schema changes and no UI redesign.
+
+## Default policy
+
+- Baseline run: 24h pilot.
+- Post-baseline validation: 12h MT5 real (no synthetic agent).
+- Temp secret files are deleted after finalize.
 
 ## Prerequisites
 
@@ -24,11 +30,38 @@ This runbook validates Bot Control runtime using real MT5 traffic for 24 hours.
 npm run pilot:bot-runtime -- --duration-min 1440 --interval-sec 60 --output bot-runtime-pilot-24h.json
 ```
 
-### 2) Optional short smoke (5 minutes)
+### 2) Optional QA runtime agent (synthetic heartbeat + ACK)
 
 ```bash
-npm run pilot:bot-runtime -- --duration-min 5 --interval-sec 30 --output bot-runtime-pilot-smoke.json
+npm run pilot:bot:agent -- --contextPath "<context-file>" --intervalSec 45
 ```
+
+> Use only in QA. For real validation, run MT5 terminal/EA and keep this agent OFF.
+
+### 3) Finalize and cleanup after pilot completes
+
+```bash
+npm run pilot:bot:finalize -- \
+  --reportPath bot-runtime-pilot-24h.json \
+  --contextPath "<context-file>" \
+  --outputPath bot-runtime-final-24h.json \
+  --emulatorPid <pid-if-agent-running>
+```
+
+### 4) Cleanup temporary secrets (always)
+
+```bash
+npm run ops:cleanup-temp-secrets
+```
+
+## 12h real validation checklist
+
+1. Stop QA synthetic agent.
+2. Keep MT5 terminal and EA online for 12h.
+3. Acceptance thresholds:
+   - `S1 = 0`
+   - `S2 <= 2` and explained
+   - Command ACK under 60s for test commands
 
 ## Report interpretation
 
@@ -41,6 +74,11 @@ Output file fields:
 - `alertsBySeverity`:
   - `S1`: stale heartbeat or timed-out pending commands.
   - `S2`: missing telemetry rows or failed commands during run.
+
+Finalizer output includes:
+- `cleanup.residuals` (must be 0 for all tracked tables)
+- `secretsCleanup` (deleted temp secret files)
+- `archive` (copies written under `docs/reports/`)
 
 ## Alert thresholds
 
@@ -84,4 +122,3 @@ or restore specific files:
 ```bash
 git restore scripts/bot-runtime-pilot.js package.json docs/BOT_RUNTIME_PILOT_24H.md
 ```
-

@@ -14,6 +14,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "pilot:bot-runtime": "node scripts/bot-runtime-pilot.js",
+    "pilot:bot:agent": "node scripts/bot-runtime-agent.js",
+    "pilot:bot:finalize": "node scripts/bot-runtime-finalizer.js",
+    "ops:cleanup-temp-secrets": "node scripts/security/cleanup-temp-secrets.js",
     "auth:link-password": "node scripts/link-password-to-google-user.js",
     "verify:all": "npm run build && npm run test:e2e && npm run audit:sprints"
   },
