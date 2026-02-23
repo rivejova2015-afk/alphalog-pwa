@@ -1,8 +1,6 @@
 // Supabase Edge Function (Cron): bot-command-timeout
 // POST /functions/v1/bot-command-timeout
 
-// @ts-ignore: Supabase Edge Functions provide 'serve' globally
-import { serve } from 'std/server';
 // @ts-ignore: Deno URL imports are resolved at runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -11,6 +9,7 @@ declare const Deno: {
   env: {
     get(key: string): string | undefined;
   };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
 };
 
 function getSupabaseClient() {
@@ -50,7 +49,7 @@ async function notifyPush(userId: string, title: string, body: string, data?: Re
   }
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("OK", {
       headers: {
