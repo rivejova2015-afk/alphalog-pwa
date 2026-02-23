@@ -8,6 +8,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "perf:bundle-budget": "node scripts/perf/check-bundle-budget.js",
+    "security:check-rls": "node scripts/security/check-rls-coverage.js",
     "audit:sprints": "node scripts/sprint-audit.js",
     "test:e2e": "node scripts/generate-storage-state.js && playwright test",
     "test:e2e:debug": "playwright test --debug",

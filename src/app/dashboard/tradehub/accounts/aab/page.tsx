@@ -5,6 +5,7 @@ import Link from "next/link";
 import AccountsPanel from "@/components/tradehub/AccountsPanel.client";
 import AabTreeView from "@/components/tradehub/aab/AabTreeView.client";
 import AabRightPanel from "@/components/tradehub/aab/AabRightPanel.client";
+import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
 
 interface CopyGroup {
   id: string;
@@ -72,7 +73,7 @@ const EXPERIMENT_FLAGS = [
 ];
 
 export default function AabPage() {
-  const isEnabled = process.env.NEXT_PUBLIC_ENABLE_AAB !== "false";
+  const isEnabled = isPublicFeatureEnabled("enableAab");
   const [groups, setGroups] = useState<CopyGroup[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");

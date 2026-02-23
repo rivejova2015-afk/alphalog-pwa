@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {
     // Only register SW in production or when explicitly enabled
-    const enableSW = process.env.NEXT_PUBLIC_ENABLE_SW === "true";
+    const enableSW = isPublicFeatureEnabled("enableServiceWorkerInDev");
     const isProduction = process.env.NODE_ENV === "production";
 
     if (!enableSW && !isProduction) {

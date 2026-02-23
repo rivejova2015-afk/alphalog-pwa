@@ -7,6 +7,7 @@ import CategoryManagerModal, { Category as CategoryType } from "./CategoryManage
 import AccountDetailsModal from "./AccountDetailsModal.client";
 import { computePnlTotals, filterTradesForPnl } from "@/lib/metrics/pnl";
 import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
+import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
 
 interface Account {
   id: string;
@@ -43,6 +44,7 @@ function formatCurrency(value: number | null | undefined, currency = "USD") {
 }
 
 export default function AccountsPanel() {
+  const enableAab = isPublicFeatureEnabled("enableAab");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<CategoryType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,7 +257,7 @@ export default function AccountsPanel() {
           <p className="text-sm text-slate-400">Categorías siempre visibles y KPIs por cuenta</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {process.env.NEXT_PUBLIC_ENABLE_AAB !== "false" && (
+          {enableAab && (
             <Link
               href="/dashboard/tradehub/accounts/aab"
               className="px-3 py-2 rounded-lg border border-slate-700 text-slate-100 bg-slate-900 hover:bg-slate-800 text-sm"

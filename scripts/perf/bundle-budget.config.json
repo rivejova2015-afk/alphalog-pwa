@@ -1,0 +1,5 @@
+{
+  "maxTotalJsKb": 3500,
+  "maxLargestChunkKb": 800,
+  "maxChunkCount": 300
+}

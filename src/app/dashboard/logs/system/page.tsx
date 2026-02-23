@@ -13,12 +13,13 @@ import SprintStatus from '@/components/logs/SprintStatus.client';
 import { generateDebugBundle, copyDebugBundleToClipboard, validateBundleIsSanitized, DebugBundle } from '@/lib/alphashield/debugBundle';
 import { generateCodexFixPrompt, copyPromptToClipboard } from '@/lib/alphashield/codexPrompt';
 import { isSafeModeActive, disableSafeMode } from '@/lib/alphashield/safeMode';
+import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
 
 type TabType = 'diagnostics' | 'sprint-status';
 
 export default function SystemPage() {
   const router = useRouter();
-  const enableSystemLogs = process.env.NEXT_PUBLIC_ENABLE_SYSTEM_LOGS === 'true';
+  const enableSystemLogs = isPublicFeatureEnabled("enableSystemLogs");
   const [activeTab, setActiveTab] = useState<TabType>('diagnostics');
   const [debugBundle, setDebugBundle] = useState<DebugBundle | null>(null);
   const [prompt, setPrompt] = useState<string>('');
@@ -243,4 +244,3 @@ export default function SystemPage() {
     </div>
   );
 }
-
