@@ -37,6 +37,19 @@ const parseContent = (content: string) => {
   return { text: content } as Record<string, unknown>;
 };
 
+const isClientAbortError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+
+  const maybeCode = "code" in error ? String((error as { code?: unknown }).code || "") : "";
+  if (maybeCode === "ECONNRESET" || maybeCode === "ABORT_ERR") return true;
+
+  const maybeName = "name" in error ? String((error as { name?: unknown }).name || "") : "";
+  if (maybeName === "AbortError") return true;
+
+  const maybeMessage = "message" in error ? String((error as { message?: unknown }).message || "") : "";
+  return maybeMessage.toLowerCase().includes("aborted");
+};
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -259,6 +272,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseCheck.data);
   } catch (error) {
+    if (isClientAbortError(error)) {
+      return NextResponse.json({ error: "Request aborted by client" }, { status: 499 });
+    }
+
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     console.error("[Journal] POST error:", error);
     await recordBugFromRequest(request, {
       userId: null,

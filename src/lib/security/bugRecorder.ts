@@ -62,6 +62,64 @@ const isMissingBugRpc = (error: SupabaseLikeError | null | undefined): boolean =
   return message.includes("log_bug_report") && message.includes("could not find");
 };
 
+let bugRpcState: "unknown" | "available" | "missing" = "unknown";
+let warnedMissingUserFallback = false;
+
+const insertFallbackAppLog = async (
+  supabase: ReturnType<typeof createServerClient>,
+  {
+    fallbackUserId,
+    payloadHash,
+    resolvedMessage,
+    input,
+  }: {
+    fallbackUserId: string | null;
+    payloadHash: string | null;
+    resolvedMessage: string;
+    input: BugReportInput;
+  }
+) => {
+  if (!fallbackUserId) {
+    if (!warnedMissingUserFallback) {
+      console.warn("[BugRecorder] RPC missing and no user context for fallback log");
+      warnedMissingUserFallback = true;
+    }
+    return null;
+  }
+
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(`${fallbackUserId}|${input.path || "unknown"}|${resolvedMessage}`)
+    .digest("hex");
+
+  const { data: appLogData, error: appLogError } = await supabase
+    .from("app_logs")
+    .insert({
+      user_id: fallbackUserId,
+      level: "error",
+      area: "bug_recorder",
+      message: safeString(resolvedMessage, 240) || "Unknown error",
+      meta: {
+        request_id: input.requestId || null,
+        method: input.method || null,
+        path: input.path || null,
+        status: input.status || null,
+        payload_hash: payloadHash,
+        ip_hint: input.ipHint || null,
+      },
+      fingerprint,
+    })
+    .select("id")
+    .single();
+
+  if (appLogError) {
+    console.error("[BugRecorder] RPC missing and fallback app_logs insert failed:", appLogError);
+    return null;
+  }
+
+  return (appLogData?.id as string | undefined) ?? null;
+};
+
 export async function recordBugReport(input: BugReportInput): Promise<string | null> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -82,6 +140,16 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
     const resolved = resolveError(input.error);
     const payloadHash = hashPayload(input.payload);
     const userAgentHash = input.userAgent ? hashUserAgent(input.userAgent) : null;
+    const resolvedMessage = safeString(input.errorMessage || resolved.message, MAX_ERROR_MESSAGE) || "Unknown error";
+
+    if (bugRpcState === "missing") {
+      return insertFallbackAppLog(supabase, {
+        fallbackUserId: input.userId || null,
+        payloadHash,
+        resolvedMessage,
+        input,
+      });
+    }
 
     const { data, error } = await supabase.rpc("log_bug_report", {
       p_user_id: input.userId || null,
@@ -89,7 +157,7 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
       p_method: input.method || null,
       p_path: input.path || null,
       p_status: input.status || null,
-      p_error_message: safeString(input.errorMessage || resolved.message, MAX_ERROR_MESSAGE),
+      p_error_message: resolvedMessage,
       p_error_stack: safeString(input.errorStack || resolved.stack, MAX_STACK),
       p_payload_hash: payloadHash,
       p_ip_hint: input.ipHint || null,
@@ -98,53 +166,20 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
 
     if (error) {
       if (isMissingBugRpc(error)) {
-        const fallbackUserId = input.userId || null;
-        if (!fallbackUserId) {
-          console.warn("[BugRecorder] RPC missing and no user context for fallback log");
-          return null;
-        }
-
-        const fingerprint = crypto
-          .createHash("sha256")
-          .update(
-            `${fallbackUserId}|${input.path || "unknown"}|${
-              input.errorMessage || resolved.message
-            }`
-          )
-          .digest("hex");
-
-        const { data: appLogData, error: appLogError } = await supabase
-          .from("app_logs")
-          .insert({
-            user_id: fallbackUserId,
-            level: "error",
-            area: "bug_recorder",
-            message: safeString(input.errorMessage || resolved.message, 240) || "Unknown error",
-            meta: {
-              request_id: input.requestId || null,
-              method: input.method || null,
-              path: input.path || null,
-              status: input.status || null,
-              payload_hash: payloadHash,
-              ip_hint: input.ipHint || null,
-            },
-            fingerprint,
-          })
-          .select("id")
-          .single();
-
-        if (appLogError) {
-          console.error("[BugRecorder] RPC missing and fallback app_logs insert failed:", appLogError);
-          return null;
-        }
-
-        return (appLogData?.id as string | undefined) ?? null;
+        bugRpcState = "missing";
+        return insertFallbackAppLog(supabase, {
+          fallbackUserId: input.userId || null,
+          payloadHash,
+          resolvedMessage,
+          input,
+        });
       }
 
       console.error("[BugRecorder] Failed to record bug:", error);
       return null;
     }
 
+    bugRpcState = "available";
     const bugId = data as string;
     const triage = classifyBug({
       status: input.status || null,
