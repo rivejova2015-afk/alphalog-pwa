@@ -1,7 +1,7 @@
 "use client";
 
-import BotControlPage from "@/app/dashboard/bot-control/page";
+import BotControlSelector from "@/components/bot-control/BotControlSelector.client";
 
 export default function BotControlTabPage() {
-  return <BotControlPage />;
+  return <BotControlSelector basePath="/trading/tabs/bot-control" />;
 }
