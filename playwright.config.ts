@@ -42,6 +42,15 @@ envFiles.forEach(loadEnvFile);
 
 const e2eDataEncryptionKey =
   process.env.DATA_ENCRYPTION_KEY || crypto.randomBytes(32).toString('base64');
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+const shouldRunLocalServer = (() => {
+  try {
+    const host = new URL(baseURL).hostname.toLowerCase();
+    return ['localhost', '127.0.0.1', '::1'].includes(host);
+  } catch {
+    return true;
+  }
+})();
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -61,7 +70,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
+    baseURL,
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
@@ -108,13 +117,15 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    env: {
-      ...process.env,
-      DATA_ENCRYPTION_KEY: e2eDataEncryptionKey,
-    },
-  },
+  webServer: shouldRunLocalServer
+    ? {
+        command: 'npm run dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !process.env.CI,
+        env: {
+          ...process.env,
+          DATA_ENCRYPTION_KEY: e2eDataEncryptionKey,
+        },
+      }
+    : undefined,
 });
