@@ -18,6 +18,7 @@
     "test:e2e:auth:remote": "playwright test tests/e2e/auth.spec.ts --project=chromium --workers=1",
     "test:e2e:smoke:remote": "playwright test tests/e2e/api-health.spec.ts tests/e2e/auth.spec.ts tests/e2e/smoke.spec.ts tests/e2e/navigation.spec.ts tests/e2e/mobile-layout-fit.spec.ts --project=chromium --workers=1",
     "pilot:bot-runtime": "node scripts/bot-runtime-pilot.js",
+    "ops:bot-control-plane-smoke": "node scripts/bot-control-plane-smoke.js",
     "pilot:bot:agent": "node scripts/bot-runtime-agent.js",
     "pilot:bot:finalize": "node scripts/bot-runtime-finalizer.js",
     "ops:cleanup-temp-secrets": "node scripts/security/cleanup-temp-secrets.js",

@@ -54,6 +54,16 @@ npm run pilot:bot:finalize -- \
 npm run ops:cleanup-temp-secrets
 ```
 
+### 5) Control-plane smoke (read/write with cleanup)
+
+```bash
+npm run ops:bot-control-plane-smoke -- --baseUrl https://www.alphalog.io
+```
+
+Optional flags:
+- `--output <path>` custom report file.
+- `--skipSignedWebhook=true` skip signed webhook check when `MT5_WEBHOOK_SECRET` is unavailable.
+
 ## 12h real validation checklist
 
 1. Stop QA synthetic agent.
