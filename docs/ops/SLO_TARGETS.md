@@ -37,16 +37,28 @@ Esta guia define los objetivos operativos minimos para produccion.
 
 1. Health endpoint
    - `curl https://www.alphalog.io/api/health`
-2. RLS coverage
+2. Bot SLO monitor (Forex + Futuros)
+   - `npm run ops:bot-slo-monitor -- --baseUrl https://www.alphalog.io --window-min 15 --market-policy auto`
+3. RLS coverage
    - `npm run security:check-rls`
-3. Calidad build
+4. Calidad build
    - `npm run lint`
    - `npm run build`
-4. Budget de frontend
+5. Budget de frontend
    - `npm run perf:bundle-budget`
 
 ## Cadencia recomendada
 
 - Diario: health + errores Sentry.
+- Cada 15 min: `ops:bot-slo-monitor` (scheduler externo), con `failFastOn s1` en ventanas largas.
 - Semanal: RLS coverage + bundle budget.
 - Mensual: simulacro de rollback + restore.
+
+## Politica mercado cerrado (Bot SLO)
+
+- Perfil Forex:
+  - abierto desde domingo 17:00 PR hasta viernes 17:00 PR.
+- Perfil Futuros:
+  - abierto desde domingo 18:00 PR hasta viernes 17:00 PR.
+- En `market-policy=auto`, `STALE_HEARTBEAT` fuera de horario se clasifica como `S2` (informativo), no `S1`.
+- `PENDING_COMMAND_TIMEOUT` permanece `S1` aunque el mercado este cerrado.

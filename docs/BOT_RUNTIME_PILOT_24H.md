@@ -77,6 +77,31 @@ Modes:
 
 The command writes one smoke report per run and a window summary under `docs/reports/`.
 
+### 7) SLO monitor (Forex + Futuros)
+
+```bash
+npm run ops:bot-slo-monitor -- --baseUrl https://www.alphalog.io --window-min 15 --market-policy auto
+```
+
+Checks included:
+- heartbeat freshness per profile
+- ACK latency within window
+- pending command timeout
+- failed command ratio
+
+Market policy:
+- `auto`: outside market hours stale heartbeat is downgraded from S1 to S2.
+- `force-open`: never downgrade.
+- `force-closed`: always downgrade heartbeat stale to S2.
+
+### 8) Continuous SLO window (15m cadence)
+
+```bash
+npm run ops:bot-control-plane-window -- --baseUrl https://www.alphalog.io --runs 96 --interval-min 15 --signedMode vercel-prod --sloMarketPolicy auto --failFastOn s1
+```
+
+This executes smoke + SLO monitor on each run and writes per-run reports plus one window summary.
+
 ## 12h real validation checklist
 
 1. Stop QA synthetic agent.

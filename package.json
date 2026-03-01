@@ -20,6 +20,8 @@
     "pilot:bot-runtime": "node scripts/bot-runtime-pilot.js",
     "ops:bot-control-plane-smoke": "node scripts/bot-control-plane-smoke.js",
     "ops:bot-control-plane-window": "node scripts/bot-control-plane-window.js",
+    "ops:bot-slo-monitor": "node scripts/bot-slo-monitor.js",
+    "ops:bot-slo-window": "node scripts/bot-control-plane-window.js --interval-min 15 --runs 96 --failFastOn s1",
     "pilot:bot:agent": "node scripts/bot-runtime-agent.js",
     "pilot:bot:finalize": "node scripts/bot-runtime-finalizer.js",
     "ops:cleanup-temp-secrets": "node scripts/security/cleanup-temp-secrets.js",

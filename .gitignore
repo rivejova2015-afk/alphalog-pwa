@@ -57,6 +57,10 @@ next-env.d.ts
 # Base44 export (solo lectura local, NO versionar)
 reference/base44_export/
 
+# Operational reports (runtime smoke/SLO)
+docs/reports/*.json
+!docs/reports/.gitkeep
+
 # Large archives (no upload)
 reference/*.zip
 *.zip
