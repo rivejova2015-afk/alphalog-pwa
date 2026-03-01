@@ -56,8 +56,45 @@ function runProcess(command, args) {
   });
 }
 
-function getVercelExecutable() {
-  return process.platform === "win32" ? "vercel.cmd" : "vercel";
+function runVercelProdSmoke({ baseUrl, reportPath }) {
+  if (process.platform === "win32") {
+    const relativeOutput = path
+      .relative(process.cwd(), reportPath)
+      .replace(/\\/g, "/");
+    const command = [
+      "vercel",
+      "env",
+      "run",
+      "-e",
+      "production",
+      "--",
+      "npm",
+      "run",
+      "ops:bot-control-plane-smoke",
+      "--",
+      "--baseUrl",
+      baseUrl,
+      "--output",
+      relativeOutput,
+    ].join(" ");
+    return runProcess("cmd", ["/c", command]);
+  }
+
+  return runProcess("vercel", [
+    "env",
+    "run",
+    "-e",
+    "production",
+    "--",
+    "npm",
+    "run",
+    "ops:bot-control-plane-smoke",
+    "--",
+    "--baseUrl",
+    baseUrl,
+    "--output",
+    reportPath,
+  ]);
 }
 
 function readJsonIfExists(filePath) {
@@ -100,21 +137,7 @@ async function run() {
 
     let exitCode = 1;
     if (runMode === "vercel-prod") {
-      exitCode = await runProcess(getVercelExecutable(), [
-        "env",
-        "run",
-        "-e",
-        "production",
-        "--",
-        "npm",
-        "run",
-        "ops:bot-control-plane-smoke",
-        "--",
-        "--baseUrl",
-        baseUrl,
-        "--output",
-        reportPath,
-      ]);
+      exitCode = await runVercelProdSmoke({ baseUrl, reportPath });
     } else {
       const smokeArgs = [
         path.join(process.cwd(), "scripts", "bot-control-plane-smoke.js"),
@@ -193,4 +216,3 @@ run().catch((error) => {
   );
   process.exit(1);
 });
-
