@@ -64,6 +64,19 @@ Optional flags:
 - `--output <path>` custom report file.
 - `--skipSignedWebhook=true` skip signed webhook check when `MT5_WEBHOOK_SECRET` is unavailable.
 
+### 6) Scheduled control-plane window
+
+```bash
+npm run ops:bot-control-plane-window -- --baseUrl https://www.alphalog.io --runs 12 --interval-min 60 --signedMode vercel-prod
+```
+
+Modes:
+- `signedMode=vercel-prod`: pulls production env (includes webhook secret) via `vercel env run`.
+- `signedMode=auto`: uses local env; skips signed webhook if secret is absent.
+- `signedMode=local`: requires local `MT5_WEBHOOK_SECRET`.
+
+The command writes one smoke report per run and a window summary under `docs/reports/`.
+
 ## 12h real validation checklist
 
 1. Stop QA synthetic agent.
