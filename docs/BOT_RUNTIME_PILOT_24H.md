@@ -102,6 +102,25 @@ npm run ops:bot-control-plane-window -- --baseUrl https://www.alphalog.io --runs
 
 This executes smoke + SLO monitor on each run and writes per-run reports plus one window summary.
 
+### 9) Auto-recovery (safe restart command on critical SLO)
+
+Dry run:
+
+```bash
+npm run ops:bot-auto-recovery -- --baseUrl https://www.alphalog.io --dryRun=true
+```
+
+Active mode:
+
+```bash
+npm run ops:bot-auto-recovery -- --baseUrl https://www.alphalog.io --dryRun=false --marketPolicy auto
+```
+
+Rules:
+- Triggers only on profiles with critical checks (`STALE_HEARTBEAT` or `PENDING_TIMEOUT`) at/above threshold severity.
+- Uses cooldown (`--cooldownMin`, default 15) to avoid command storms.
+- Creates `RESTART_LOGIC` command + `bot_command_status` rows + `AUTO_RECOVERY_TRIGGERED` event.
+
 ## 12h real validation checklist
 
 1. Stop QA synthetic agent.

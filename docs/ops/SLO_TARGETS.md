@@ -51,6 +51,7 @@ Esta guia define los objetivos operativos minimos para produccion.
 
 - Diario: health + errores Sentry.
 - Cada 15 min: `ops:bot-slo-monitor` (scheduler externo), con `failFastOn s1` en ventanas largas.
+- Cada 15 min (opcional): `ops:bot-auto-recovery -- --dryRun=false` para reaccion automatica a S1 criticos con cooldown.
 - Semanal: RLS coverage + bundle budget.
 - Mensual: simulacro de rollback + restore.
 
