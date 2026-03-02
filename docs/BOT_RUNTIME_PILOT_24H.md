@@ -121,6 +121,16 @@ Rules:
 - Uses cooldown (`--cooldownMin`, default 15) to avoid command storms.
 - Creates `RESTART_LOGIC` command + `bot_command_status` rows + `AUTO_RECOVERY_TRIGGERED` event.
 
+### 10) Daily consolidated report
+
+```bash
+npm run ops:bot-daily-summary
+```
+
+Output:
+- `docs/reports/bot-ops-daily-summary-YYYYMMDD.json`
+- Aggregates windows + SLO + auto-recovery reports for the target day.
+
 ## 12h real validation checklist
 
 1. Stop QA synthetic agent.
