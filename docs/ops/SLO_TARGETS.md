@@ -64,3 +64,21 @@ Esta guia define los objetivos operativos minimos para produccion.
   - abierto desde domingo 18:00 PR hasta viernes 17:00 PR.
 - En `market-policy=auto`, `STALE_HEARTBEAT` fuera de horario se clasifica como `S2` (informativo), no `S1`.
 - `PENDING_COMMAND_TIMEOUT` permanece `S1` aunque el mercado este cerrado.
+
+## Activacion scheduler en Windows (Task Scheduler)
+
+1. Abrir PowerShell como Administrador en la raiz del repo.
+2. Registrar tareas:
+   - `npm run ops:tasks:register`
+3. (Opcional) Ejecutar inmediatamente para validar:
+   - `npm run ops:tasks:register -- -RunNow`
+4. Confirmar en Task Scheduler que existen:
+   - `AlphaLog-BotOps-SLO-Monitor`
+   - `AlphaLog-BotOps-Auto-Recovery`
+   - `AlphaLog-BotOps-Daily-Summary`
+5. Si necesitas removerlas:
+   - `npm run ops:tasks:unregister`
+
+Notas:
+- Las tareas leen variables de `.env.local` (incluye `OPS_ALERT_TOKEN` si quieres alertas Sentry desde monitor).
+- Los logs de ejecucion quedan en `docs/reports/*.log`.

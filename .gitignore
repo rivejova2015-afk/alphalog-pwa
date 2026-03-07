@@ -59,6 +59,7 @@ reference/base44_export/
 
 # Operational reports (runtime smoke/SLO)
 docs/reports/*.json
+docs/reports/*.log
 !docs/reports/.gitkeep
 
 # Large archives (no upload)
