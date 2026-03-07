@@ -143,6 +143,18 @@ function resolveAuthMode(baseURL: string) {
   };
 }
 
+function canUseCaptchaBypassMagicFallback(params: {
+  remote: boolean;
+  allowMagicLink: boolean;
+  serviceRoleKey?: string;
+  passwordErrorMessage?: string;
+}) {
+  if (params.allowMagicLink || !params.remote || !params.serviceRoleKey) {
+    return params.allowMagicLink;
+  }
+  return /captcha/i.test(params.passwordErrorMessage || "");
+}
+
 async function ensurePasswordUser(params: {
   supabaseUrl: string;
   serviceRoleKey: string;
@@ -350,24 +362,28 @@ async function setSessionInBrowser(params: {
 }
 
 export async function login(page: Page) {
-  try {
-    await page.goto("/dashboard");
-    await page.waitForURL(/\/(dashboard|auth)(\/|$)/, { timeout: 5000 });
-    if (/\/dashboard(\/|$)/.test(page.url())) {
-      return;
-    }
-  } catch {
-    // Continue with full login flow
-  }
-
   const email = process.env.E2E_EMAIL || "test@alphalog.local";
   const rawPassword = process.env.E2E_PASSWORD || "Test@123456!";
   const password = isStrongPassword(rawPassword) ? rawPassword : "Test@123456!";
   const baseURL = getBaseUrl();
+  const mode = resolveAuthMode(baseURL);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const mode = resolveAuthMode(baseURL);
+
+  if (!mode.remote) {
+    try {
+      await page.goto("/dashboard");
+      await page.waitForURL(/\/(dashboard|auth)(\/|$)/, { timeout: 5000 });
+      if (/\/dashboard(\/|$)/.test(page.url())) {
+        return;
+      }
+    } catch {
+      // Continue with full login flow
+    }
+  } else {
+    await page.context().clearCookies();
+  }
 
   const loginWithUi = async () => {
     await page.goto("/auth");
@@ -484,7 +500,15 @@ export async function login(page: Page) {
       }
     }
 
-    if (!mode.allowMagicLink) {
+    const passwordErrorMessage = passwordResult?.error?.message || "password login failed";
+    const allowMagicFallback = canUseCaptchaBypassMagicFallback({
+      remote: mode.remote,
+      allowMagicLink: mode.allowMagicLink,
+      serviceRoleKey: serviceRoleKey || undefined,
+      passwordErrorMessage,
+    });
+
+    if (!allowMagicFallback) {
       const errorMessage = passwordResult?.error?.message || "password login failed";
       throw new Error(
         `E2E password login failed (${errorMessage}). Magic-link fallback disabled for auth mode "${mode.authMode}" on ${mode.remote ? "remote" : "local"} base URL.`

@@ -51,6 +51,7 @@ const shouldRunLocalServer = (() => {
     return true;
   }
 })();
+const storageStatePath = shouldRunLocalServer ? 'tests/e2e/.auth/state.json' : undefined;
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -75,7 +76,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    storageState: 'tests/e2e/.auth/state.json',
+    storageState: storageStatePath,
   },
 
   /* Configure projects for major browsers */
