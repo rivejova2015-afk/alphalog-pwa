@@ -24,6 +24,7 @@
     "ops:bot-slo-window": "node scripts/bot-control-plane-window.js --interval-min 15 --runs 96 --failFastOn s1",
     "ops:bot-auto-recovery": "node scripts/bot-auto-recovery.js --actionOn S1 --cooldownMin 15",
     "ops:bot-daily-summary": "node scripts/bot-ops-daily-summary.js --timezone America/Puerto_Rico --keepDays 14",
+    "ops:bot-daily-verify": "node scripts/bot-daily-verification.js",
     "ops:tasks:register": "powershell -ExecutionPolicy Bypass -File scripts/ops/register-bot-ops-tasks.ps1",
     "ops:tasks:unregister": "powershell -ExecutionPolicy Bypass -File scripts/ops/unregister-bot-ops-tasks.ps1",
     "pilot:bot:agent": "node scripts/bot-runtime-agent.js",

@@ -42,7 +42,7 @@ $summaryLog = Join-Path $ProjectPath "docs\reports\ops-daily-summary.log"
 
 $monitorCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-slo-monitor -- --baseUrl $BaseUrl --window-min 15 --market-policy auto >> `"$monitorLog`" 2>>&1"
 $recoveryCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-auto-recovery -- --baseUrl $BaseUrl --actionOn S1 --cooldownMin 15 >> `"$recoveryLog`" 2>>&1"
-$summaryCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-daily-summary -- --timezone America/Puerto_Rico --keepDays 14 >> `"$summaryLog`" 2>>&1"
+$summaryCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-daily-verify -- --baseUrl $BaseUrl --timezone America/Puerto_Rico --marketPolicy auto >> `"$summaryLog`" 2>>&1"
 
 $tasks = @(
   @{

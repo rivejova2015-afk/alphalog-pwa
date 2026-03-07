@@ -39,12 +39,14 @@ Esta guia define los objetivos operativos minimos para produccion.
    - `curl https://www.alphalog.io/api/health`
 2. Bot SLO monitor (Forex + Futuros)
    - `npm run ops:bot-slo-monitor -- --baseUrl https://www.alphalog.io --window-min 15 --market-policy auto`
-3. RLS coverage
+3. Verificacion diaria consolidada
+   - `npm run ops:bot-daily-verify`
+4. RLS coverage
    - `npm run security:check-rls`
-4. Calidad build
+5. Calidad build
    - `npm run lint`
    - `npm run build`
-5. Budget de frontend
+6. Budget de frontend
    - `npm run perf:bundle-budget`
 
 ## Cadencia recomendada
@@ -52,7 +54,7 @@ Esta guia define los objetivos operativos minimos para produccion.
 - Diario: health + errores Sentry.
 - Cada 15 min: `ops:bot-slo-monitor` (scheduler externo), con `failFastOn s1` en ventanas largas.
 - Cada 15 min (opcional): `ops:bot-auto-recovery -- --dryRun=false` para reaccion automatica a S1 criticos con cooldown.
-- Diario (fin del dia): `ops:bot-daily-summary` para consolidar evidencia operacional.
+- Diario (fin del dia): `ops:bot-daily-verify` para health + SLO + resumen consolidado.
 - Semanal: RLS coverage + bundle budget.
 - Mensual: simulacro de rollback + restore.
 
