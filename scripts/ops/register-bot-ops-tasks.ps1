@@ -14,14 +14,10 @@ function Invoke-ScheduledTaskCreate {
     [string]$Command
   )
 
-  $arguments = @(
-    "/Create",
-    "/F",
-    "/TN", $TaskName,
-    "/TR", $Command
-  ) + $ScheduleArgs + @("/RL", "LIMITED")
-
-  $process = Start-Process -FilePath "schtasks.exe" -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+  $scheduleInline = ($ScheduleArgs -join " ")
+  $escapedCommand = $Command.Replace('"', '\"')
+  $createCommand = "schtasks.exe /Create /F /TN `"$TaskName`" /TR `"$escapedCommand`" $scheduleInline /RL LIMITED"
+  $process = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/c", $createCommand) -NoNewWindow -Wait -PassThru
   if ($process.ExitCode -ne 0) {
     throw "Failed creating task '$TaskName' (ExitCode=$($process.ExitCode))."
   }
@@ -36,13 +32,13 @@ function Invoke-ScheduledTaskRun {
 }
 
 $escapedProjectPath = $ProjectPath.Replace('"', '\"')
-$monitorLog = Join-Path $ProjectPath "docs\reports\ops-slo-monitor.log"
-$recoveryLog = Join-Path $ProjectPath "docs\reports\ops-auto-recovery.log"
-$summaryLog = Join-Path $ProjectPath "docs\reports\ops-daily-summary.log"
+$monitorTaskScript = (Join-Path $ProjectPath "scripts\ops\task-slo-monitor.ps1").Replace('"', '\"')
+$recoveryTaskScript = (Join-Path $ProjectPath "scripts\ops\task-auto-recovery.ps1").Replace('"', '\"')
+$summaryTaskScript = (Join-Path $ProjectPath "scripts\ops\task-daily-verify.ps1").Replace('"', '\"')
 
-$monitorCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-slo-monitor -- --baseUrl $BaseUrl --window-min 15 --market-policy auto >> `"$monitorLog`" 2>>&1"
-$recoveryCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-auto-recovery -- --baseUrl $BaseUrl --actionOn S1 --cooldownMin 15 >> `"$recoveryLog`" 2>>&1"
-$summaryCommand = "cmd /c cd /d `"$escapedProjectPath`" && npm run ops:bot-daily-verify -- --baseUrl $BaseUrl --timezone America/Puerto_Rico --marketPolicy auto >> `"$summaryLog`" 2>>&1"
+$monitorCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$monitorTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
+$recoveryCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$recoveryTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
+$summaryCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$summaryTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
 
 $tasks = @(
   @{
