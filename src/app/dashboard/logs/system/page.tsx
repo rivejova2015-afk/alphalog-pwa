@@ -18,13 +18,29 @@ import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
 
 type TabType = 'diagnostics' | 'sprint-status';
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
 export default function SystemPage() {
   const router = useRouter();
   const enableSystemLogs = isPublicFeatureEnabled("enableSystemLogs");
   const [activeTab, setActiveTab] = useState<TabType>('diagnostics');
   const [debugBundle, setDebugBundle] = useState<DebugBundle | null>(null);
   const [prompt, setPrompt] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [copied, setCopied] = useState<'bundle' | 'prompt' | null>(null);
   const [safeMode, setSafeMode] = useState(false);
 
@@ -36,28 +52,39 @@ export default function SystemPage() {
 
   useEffect(() => {
     if (!enableSystemLogs) return;
+    let mounted = true;
+
     const loadData = async () => {
       try {
+        if (!mounted) return;
         setLoading(true);
+        setLoadingError(null);
+        setSafeMode(isSafeModeActive());
 
-        // Generate debug bundle
-        const bundle = await generateDebugBundle();
+        // Keep diagnostics resilient: if debug bundle stalls, core cards should still render.
+        const bundle = await withTimeout(generateDebugBundle(), 15000, 'Debug bundle');
+        if (!mounted) return;
         setDebugBundle(bundle);
 
-        // Generate prompt
-        const generatedPrompt = await generateCodexFixPrompt(bundle);
+        const generatedPrompt = await withTimeout(generateCodexFixPrompt(bundle), 12000, 'Codex prompt');
+        if (!mounted) return;
         setPrompt(generatedPrompt);
-
-        // Check safe mode
-        setSafeMode(isSafeModeActive());
       } catch (error) {
         console.error('Error loading system page:', error);
+        if (mounted) {
+          setLoadingError('Diagnostics advanced data is temporarily unavailable. Core system panels remain active.');
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadData();
+    return () => {
+      mounted = false;
+    };
   }, [enableSystemLogs]);
 
   const handleCopyBundle = async () => {
@@ -146,11 +173,6 @@ export default function SystemPage() {
       {/* Diagnostics Tab */}
       {activeTab === 'diagnostics' && (
         <>
-          {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-slate-400">Loading diagnostics...</div>
-        </div>
-      ) : (
         <div className="space-y-6">
           {/* System Status */}
           <div>
@@ -170,6 +192,12 @@ export default function SystemPage() {
             <RecentErrors />
           </div>
 
+          {loadingError && (
+            <div className="border border-amber-500/40 bg-amber-600/10 text-amber-100 rounded-xl p-3 text-sm">
+              {loadingError}
+            </div>
+          )}
+
           {/* Debug Bundle */}
           <div className="border border-slate-700/60 rounded-2xl p-4 bg-slate-900/70 space-y-4">
             <div className="flex items-center justify-between">
@@ -186,14 +214,18 @@ export default function SystemPage() {
               </button>
             </div>
 
-            {debugBundle && (
+            {loading && !debugBundle && (
+              <div className="text-sm text-slate-400">Loading diagnostics...</div>
+            )}
+
+            {debugBundle ? (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 <div className="text-sm space-y-2 font-mono bg-slate-900/80 p-3 rounded text-slate-200 text-xs whitespace-pre-wrap break-words max-h-48 overflow-y-auto border border-slate-700/60">
                   {JSON.stringify(debugBundle, null, 2).substring(0, 1000)}
                   {JSON.stringify(debugBundle).length > 1000 && '...\n(full bundle in clipboard)'}
                 </div>
               </div>
-            )}
+            ) : null}
 
             <p className="text-xs text-slate-400">
               Contains system diagnostics and recent errors. Sanitized (no tokens/secrets).
@@ -218,8 +250,13 @@ export default function SystemPage() {
 
             <div className="space-y-2">
               <div className="text-sm space-y-2 bg-slate-900/80 p-3 rounded text-slate-200 text-xs whitespace-pre-wrap max-h-48 overflow-y-auto border border-slate-700/60">
-                {prompt.substring(0, 1000)}
-                {prompt.length > 1000 && '...\n(full prompt in clipboard)'}
+                {loading && !prompt && 'Loading diagnostics...'}
+                {prompt && (
+                  <>
+                    {prompt.substring(0, 1000)}
+                    {prompt.length > 1000 && '...\n(full prompt in clipboard)'}
+                  </>
+                )}
               </div>
             </div>
 
@@ -240,7 +277,6 @@ export default function SystemPage() {
             </ol>
           </div>
         </div>
-      )}
       </>
       )}
 
