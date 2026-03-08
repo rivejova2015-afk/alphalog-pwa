@@ -83,4 +83,5 @@ Esta guia define los objetivos operativos minimos para produccion.
 
 Notas:
 - Las tareas leen variables de `.env.local` (incluye `OPS_ALERT_TOKEN` si quieres alertas Sentry desde monitor).
+- Define `BOT_OPS_USER_ID` para persistir snapshots diarios en `bot_events` y verlos en `/dashboard/logs/system`.
 - Los logs de ejecucion quedan en `docs/reports/*.log`.

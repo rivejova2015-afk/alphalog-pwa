@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SystemDiagnostics } from '@/components/logs/SystemDiagnostics.client';
 import { RecentErrors } from '@/components/logs/RecentErrors.client';
+import BotOpsDailyReportCard from '@/components/logs/BotOpsDailyReportCard.client';
 import SprintStatus from '@/components/logs/SprintStatus.client';
 import { generateDebugBundle, copyDebugBundleToClipboard, validateBundleIsSanitized, DebugBundle } from '@/lib/alphashield/debugBundle';
 import { generateCodexFixPrompt, copyPromptToClipboard } from '@/lib/alphashield/codexPrompt';
@@ -155,6 +156,12 @@ export default function SystemPage() {
           <div>
             <h2 className="text-lg font-semibold text-slate-100 mb-4">System Status</h2>
             <SystemDiagnostics />
+          </div>
+
+          {/* Recent Errors */}
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100 mb-4">Bot Ops</h2>
+            <BotOpsDailyReportCard />
           </div>
 
           {/* Recent Errors */}

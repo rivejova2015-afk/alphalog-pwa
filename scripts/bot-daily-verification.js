@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { createClient } = require("@supabase/supabase-js");
 
 function parseArgs(argv) {
   const out = {};
@@ -29,6 +30,51 @@ function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
+}
+
+function loadEnvFile(filePath) {
+  const env = {};
+  if (!fs.existsSync(filePath)) return env;
+
+  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const idx = line.indexOf("=");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if (
+      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    env[key] = value;
+  }
+  return env;
+}
+
+function readJsonSafe(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeName(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function resolveProfileFromName(name) {
+  const normalized = normalizeName(name);
+  if (normalized.includes("forex")) return "forex";
+  if (normalized.includes("futuro")) return "futuros";
+  return null;
 }
 
 function zonedDateKey(date, timeZone) {
@@ -85,8 +131,96 @@ async function runHealthCheck(baseUrl, timeoutMs) {
   }
 }
 
+async function persistDailyReport({
+  env,
+  report,
+  reportPath,
+  sloPayload,
+}) {
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  const userId = env.BOT_OPS_USER_ID;
+
+  if (!supabaseUrl || !serviceRoleKey || !userId) {
+    return {
+      saved: false,
+      reason: "Missing NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or BOT_OPS_USER_ID",
+    };
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: bots, error: botsError } = await supabase
+      .from("bots")
+      .select("id,name")
+      .eq("user_id", userId);
+
+    if (botsError) {
+      return { saved: false, reason: `bots query failed: ${botsError.message}` };
+    }
+    if (!bots || bots.length === 0) {
+      return { saved: false, reason: "No bots found for BOT_OPS_USER_ID" };
+    }
+
+    const candidates = [];
+    for (const bot of bots) {
+      const profile = resolveProfileFromName(bot.name);
+      if (!profile) continue;
+      if (candidates.some((item) => item.profile === profile)) continue;
+      candidates.push({ botId: bot.id, profile });
+    }
+
+    if (candidates.length === 0) {
+      return { saved: false, reason: "No Bot Forex/Bot Futuros profiles found for BOT_OPS_USER_ID" };
+    }
+
+    const inserts = candidates.map((candidate) => ({
+      bot_id: candidate.botId,
+      event_type: "DAILY_VERIFICATION",
+      payload: {
+        source: "bot_daily_verification",
+        profile: candidate.profile,
+        generatedAt: report.generatedAt,
+        overallStatus: report.overallStatus,
+        marketPolicy: report.marketPolicy,
+        recommendations: report.recommendations,
+        artifacts: report.artifacts,
+        reportPath: path.basename(reportPath),
+        health: report.steps.health,
+        sloSummary: {
+          status: sloPayload?.status || null,
+          severity: sloPayload?.severity || null,
+          byProfile: sloPayload?.byProfile || null,
+        },
+      },
+    }));
+
+    const { error: insertError } = await supabase.from("bot_events").insert(inserts);
+    if (insertError) {
+      return { saved: false, reason: `bot_events insert failed: ${insertError.message}` };
+    }
+
+    return {
+      saved: true,
+      profiles: candidates.map((item) => item.profile),
+      rows: inserts.length,
+    };
+  } catch (error) {
+    return {
+      saved: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2));
+  const env = {
+    ...process.env,
+    ...loadEnvFile(path.join(process.cwd(), ".env.local")),
+  };
   const baseUrl = args.baseUrl || "https://www.alphalog.io";
   const timeZone = args.timezone || "America/Puerto_Rico";
   const reportsDir = path.resolve(args.reportsDir || path.join(process.cwd(), "docs", "reports"));
@@ -124,6 +258,10 @@ async function run() {
       dailySummary: path.relative(process.cwd(), summaryPath),
     },
     recommendations: [],
+    persistence: {
+      saved: false,
+      reason: "not_attempted",
+    },
   };
 
   report.steps.health = await runHealthCheck(baseUrl, healthTimeoutMs);
@@ -183,6 +321,14 @@ async function run() {
     report.overallStatus = "FAIL";
     report.recommendations.push("No se pudo generar resumen diario; revisar script bot-ops-daily-summary.");
   }
+
+  const sloPayload = readJsonSafe(sloPath);
+  report.persistence = await persistDailyReport({
+    env,
+    report,
+    reportPath: verificationPath,
+    sloPayload,
+  });
 
   if (runE2E) {
     const smokeResult = spawnSync(
