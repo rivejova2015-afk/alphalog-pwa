@@ -29,6 +29,26 @@ type BotDailyReportResponse = {
   recommendations: string[];
 };
 
+type HistoryPoint = {
+  date: string;
+  generatedAt: string;
+  forex: "PASS" | "DEGRADED" | "FAIL" | "UNKNOWN";
+  futuros: "PASS" | "DEGRADED" | "FAIL" | "UNKNOWN";
+  overall: "PASS" | "DEGRADED" | "FAIL" | "UNKNOWN";
+};
+
+type HistoryResponse = {
+  ok: boolean;
+  days: number;
+  points: HistoryPoint[];
+  totals: {
+    PASS: number;
+    DEGRADED: number;
+    FAIL: number;
+    UNKNOWN: number;
+  };
+};
+
 function statusStyles(status: string) {
   const normalized = String(status || "").toUpperCase();
   if (normalized === "FAIL") return "bg-rose-600/20 text-rose-200 border-rose-500/40";
@@ -42,6 +62,7 @@ export default function BotOpsDailyReportCard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<BotDailyReportResponse | null>(null);
+  const [history, setHistory] = useState<HistoryResponse | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -57,6 +78,18 @@ export default function BotOpsDailyReportCard() {
         throw new Error((payload as { error?: string } | null)?.error || "Failed to load daily report");
       }
       setData(payload);
+
+      const historyResponse = await fetch("/api/ops/bot-daily-report/history?days=30", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const historyPayload = (await historyResponse.json().catch(() => null)) as HistoryResponse | null;
+      if (!historyResponse.ok || !historyPayload?.ok) {
+        throw new Error(
+          (historyPayload as { error?: string } | null)?.error || "Failed to load daily history"
+        );
+      }
+      setHistory(historyPayload);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Failed to load daily report");
     } finally {
@@ -161,6 +194,56 @@ export default function BotOpsDailyReportCard() {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {history && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold text-slate-200">
+                  History ({history.days} days)
+                </p>
+                <span className="text-xs text-slate-400">PASS: {history.totals.PASS}</span>
+                <span className="text-xs text-slate-400">DEGRADED: {history.totals.DEGRADED}</span>
+                <span className="text-xs text-slate-400">FAIL: {history.totals.FAIL}</span>
+              </div>
+
+              <div className="border border-slate-700/60 rounded-xl overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-800/70 text-slate-300">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">Date</th>
+                      <th className="text-left px-3 py-2 font-medium">Overall</th>
+                      <th className="text-left px-3 py-2 font-medium">Forex</th>
+                      <th className="text-left px-3 py-2 font-medium">Futuros</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.points.slice(0, 7).map((point) => (
+                      <tr key={point.date} className="border-t border-slate-700/50">
+                        <td className="px-3 py-2 text-slate-200">
+                          {new Date(point.generatedAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`px-2 py-1 rounded-full border ${statusStyles(point.overall)}`}>
+                            {point.overall}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`px-2 py-1 rounded-full border ${statusStyles(point.forex)}`}>
+                            {point.forex}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`px-2 py-1 rounded-full border ${statusStyles(point.futuros)}`}>
+                            {point.futuros}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>
