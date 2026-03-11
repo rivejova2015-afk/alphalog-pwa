@@ -23,6 +23,12 @@ function getSupabaseClient() {
   });
 }
 
+function shouldEnforceOfflineStatus() {
+  const raw = Deno.env.get("BOT_MAINTENANCE_ENFORCE_OFFLINE_STATUS");
+  if (!raw) return false;
+  return raw.toLowerCase() === "true";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("OK", {
@@ -47,12 +53,27 @@ Deno.serve(async (req: Request) => {
     const offlineCutoff = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
     const commandsCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const eventsCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const enforceOfflineStatus = shouldEnforceOfflineStatus();
 
-    const { error: offlineError } = await supabase
+    const { count: staleCandidates, error: staleCountError } = await supabase
       .from("bot_instances")
-      .update({ status: "OFFLINE" })
+      .select("id", { count: "exact", head: true })
       .lt("last_heartbeat_at", offlineCutoff)
       .neq("status", "OFFLINE");
+
+    if (staleCountError) {
+      console.error("[bot-maintenance] stale count error:", staleCountError);
+    }
+
+    let offlineError = null;
+    if (enforceOfflineStatus) {
+      const offlineMutation = await supabase
+        .from("bot_instances")
+        .update({ status: "OFFLINE" })
+        .lt("last_heartbeat_at", offlineCutoff)
+        .neq("status", "OFFLINE");
+      offlineError = offlineMutation.error;
+    }
 
     if (offlineError) {
       console.error("[bot-maintenance] offline update error:", offlineError);
@@ -86,7 +107,14 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, offlineCutoff, commandsCutoff, eventsCutoff }),
+      JSON.stringify({
+        ok: true,
+        offlineCutoff,
+        commandsCutoff,
+        eventsCutoff,
+        staleCandidates: staleCandidates ?? 0,
+        offlineMutationApplied: enforceOfflineStatus,
+      }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
