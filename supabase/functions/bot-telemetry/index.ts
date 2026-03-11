@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
 
     await supabase
       .from("bot_instances")
-      .update({ last_heartbeat_at: nowIso })
+      .update({ last_heartbeat_at: nowIso, status: "ACTIVE" })
       .eq("id", auth.instance.id);
 
     return new Response(JSON.stringify({ ok: true }), {
