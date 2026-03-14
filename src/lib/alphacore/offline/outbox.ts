@@ -20,6 +20,7 @@ import {
   getOutboxEntry,
   updateOutboxStatus,
   getOutboxStats,
+  replaceTempIdInPendingEntries,
   type IDBOutboxEntry,
 } from './idb';
 
@@ -208,9 +209,13 @@ export class OutboxManager {
 
     // Update entry metadata with server response (e.g., real ID)
     if (result.data?.id && entry.payload.id?.startsWith('temp_')) {
-      // Mutation had temp ID, replace with server ID
-      entry.payload.id = result.data.id;
-      // TODO: Update all references in cache
+      const tempId = entry.payload.id as string;
+      const realId = result.data.id as string;
+      entry.payload.id = realId;
+      // Replace temp ID references in all remaining pending entries
+      replaceTempIdInPendingEntries(tempId, realId).catch((err) =>
+        console.warn('[OutboxManager] Failed to replace temp ID refs:', err)
+      );
     }
   }
 
@@ -400,8 +405,23 @@ export class OutboxManager {
    */
   async resolveConflict(entryId: string, resolution: 'local' | 'server' | 'merged'): Promise<void> {
     console.log(`[OutboxManager] Resolving conflict ${entryId}: ${resolution}`);
-    // TODO: Implement in FASE 7
-    throw new Error('Conflict resolution not implemented yet');
+
+    if (resolution === 'server') {
+      // Discard local change — server version wins
+      await deleteOutboxEntry(entryId);
+      console.log(`[OutboxManager] Conflict ${entryId} resolved: discarded local change`);
+      return;
+    }
+
+    if (resolution === 'local') {
+      // Re-queue with pending status — local version wins, force re-sync
+      await updateOutboxStatus(entryId, 'pending', undefined);
+      console.log(`[OutboxManager] Conflict ${entryId} resolved: re-queued for sync`);
+      return;
+    }
+
+    // 'merged' is not supported without a merge UI — surface the error
+    throw new Error('Manual merge not yet supported. Choose "local" or "server".');
   }
 
   /**

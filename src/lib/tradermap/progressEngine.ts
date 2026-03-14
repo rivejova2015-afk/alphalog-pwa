@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { XP_VALUES } from "./xpConfig";
 
 export type ProgressMetricMap = {
   closed_trades: number;
@@ -593,11 +594,11 @@ export const onTradeClosedSaved = async (
       event_type: "trade",
       ref_table: "trades",
       ref_id: trade.id,
-      xp_delta: 10,
+      xp_delta: XP_VALUES.trade_complete,
       metadata: { source: "progress_map" },
       occurred_at: trade.exit_date,
       config_version_int: config.version_int,
-      payload_json: { xp_delta: 10 },
+      payload_json: { xp_delta: XP_VALUES.trade_complete },
     });
   }
 

@@ -132,10 +132,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await supabase
+    const { error: instanceUpdateError } = await supabase
       .from("bot_instances")
       .update({ last_heartbeat_at: nowIso, status: "ACTIVE" })
       .eq("id", auth.instance.id);
+
+    if (instanceUpdateError) {
+      console.error("[bot-telemetry] Failed to update bot_instances status:", instanceUpdateError.message);
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,

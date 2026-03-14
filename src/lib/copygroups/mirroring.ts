@@ -419,3 +419,177 @@ export const mirrorTradeOnUpdate = async (options: {
 
   return { synced };
 };
+
+/**
+ * mirrorTradeOnDelete - Soft-deletes all slave trades linked to a deleted master trade.
+ * Should be called after a master trade is soft-deleted.
+ */
+export const mirrorTradeOnDelete = async (options: {
+  supabase: SupabaseClient;
+  masterTradeId: string;
+  userId: string;
+}) => {
+  const { supabase, masterTradeId, userId } = options;
+
+  const { data: masterNode } = await supabase
+    .from("trade_replication_map")
+    .select("copy_group_id")
+    .eq("master_trade_id", masterTradeId)
+    .maybeSingle();
+
+  if (!masterNode?.copy_group_id) {
+    return { deleted: 0 };
+  }
+
+  const service = createServiceClient();
+
+  const { data: links } = await service
+    .from("slave_trade_links")
+    .select("id, slave_trade_id, slave_account_id")
+    .eq("master_trade_id", masterTradeId)
+    .not("status", "eq", "deleted");
+
+  if (!links?.length) {
+    return { deleted: 0 };
+  }
+
+  const deletedAt = new Date().toISOString();
+  let deleted = 0;
+
+  for (const link of links) {
+    const { error: tradeDeleteErr } = await service
+      .from("trades")
+      .update({ deleted_at: deletedAt })
+      .eq("id", link.slave_trade_id)
+      .is("deleted_at", null);
+
+    if (tradeDeleteErr) {
+      logError(tradeDeleteErr, { action: "mirror_delete_slave", slave_trade_id: link.slave_trade_id });
+      continue;
+    }
+
+    await service
+      .from("slave_trade_links")
+      .update({ status: "deleted" })
+      .eq("id", link.id);
+
+    deleted += 1;
+  }
+
+  await service.from("copy_group_events").insert({
+    copy_group_id: masterNode.copy_group_id,
+    event_type: "MIRROR_DELETED",
+    actor_id: userId,
+    payload_json: { master_trade_id: masterTradeId, deleted_count: deleted },
+  });
+
+  return { deleted };
+};
+
+/**
+ * processPendingSoftResyncs - Processes slave_trade_links with status "need_resync"
+ * by applying the latest master trade data. This completes the soft sync cycle.
+ */
+export const processPendingSoftResyncs = async (options: {
+  supabase: SupabaseClient;
+  copyGroupId: string;
+  userId: string;
+  limit?: number;
+}) => {
+  const { supabase, copyGroupId, userId, limit = 50 } = options;
+
+  const { data: group } = await supabase
+    .from("copy_groups")
+    .select("id, owner_id")
+    .eq("id", copyGroupId)
+    .eq("owner_id", userId)
+    .single();
+
+  if (!group) {
+    return { resynced: 0 };
+  }
+
+  const service = createServiceClient();
+
+  const { data: pendingLinks } = await service
+    .from("slave_trade_links")
+    .select("id, master_trade_id, slave_trade_id, slave_account_id")
+    .eq("status", "need_resync")
+    .limit(limit);
+
+  if (!pendingLinks?.length) {
+    return { resynced: 0 };
+  }
+
+  type LinkRow = { id: string; master_trade_id: string; slave_trade_id: string; slave_account_id: string };
+  const typedLinks = pendingLinks as LinkRow[];
+
+  // Group by master_trade_id to batch fetch master trades
+  const masterIds = [...new Set(typedLinks.map((l) => l.master_trade_id))];
+  const { data: masterTrades } = await service
+    .from("trades")
+    .select("id, symbol, direction, status, entry_date, exit_date, entry_price, exit_price, stop_loss_price, take_profit_price, pnl, pnl_percent, notes, setup_id, is_featured_in_report, tags")
+    .in("id", masterIds)
+    .is("deleted_at", null);
+
+  const masterMap = new Map((masterTrades ?? []).map((t: any) => [t.id as string, t]));
+
+  let resynced = 0;
+
+  for (const link of typedLinks) {
+    const master = masterMap.get(link.master_trade_id) as TradeRow | undefined;
+    if (!master) {
+      await service
+        .from("slave_trade_links")
+        .update({ status: "need_resync", last_error: "Master trade not found or deleted" })
+        .eq("id", link.id);
+      continue;
+    }
+
+    const { error: updateError } = await service
+      .from("trades")
+      .update({
+        symbol: master.symbol,
+        direction: master.direction,
+        status: master.status,
+        entry_date: master.entry_date,
+        exit_date: master.exit_date,
+        entry_price: master.entry_price,
+        exit_price: master.exit_price,
+        stop_loss_price: master.stop_loss_price,
+        take_profit_price: master.take_profit_price,
+        pnl: master.pnl,
+        pnl_percent: master.pnl_percent,
+        notes: master.notes,
+        setup_id: master.setup_id,
+        is_featured_in_report: master.is_featured_in_report,
+        tags: master.tags || [],
+      })
+      .eq("id", link.slave_trade_id)
+      .is("deleted_at", null);
+
+    if (updateError) {
+      await service
+        .from("slave_trade_links")
+        .update({ status: "need_resync", last_error: updateError.message })
+        .eq("id", link.id);
+      continue;
+    }
+
+    await service
+      .from("slave_trade_links")
+      .update({ status: "replicated", last_error: null })
+      .eq("id", link.id);
+
+    resynced += 1;
+  }
+
+  await service.from("copy_group_events").insert({
+    copy_group_id: copyGroupId,
+    event_type: "SOFT_RESYNC_PROCESSED",
+    actor_id: userId,
+    payload_json: { processed: pendingLinks.length, resynced },
+  });
+
+  return { resynced };
+};

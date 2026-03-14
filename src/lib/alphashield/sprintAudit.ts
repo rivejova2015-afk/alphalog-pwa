@@ -5,6 +5,7 @@
 
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { execSync } from 'child_process';
 import {
   SPRINT_DEFINITIONS,
   type EndpointCheck,
@@ -204,7 +205,8 @@ class SprintAuditor {
       generatedAt: new Date().toISOString(),
       generatedBy,
       repositoryInfo: {
-        branch: 'main', // TODO: obtener de git
+        branch: (() => { try { return execSync('git rev-parse --abbrev-ref HEAD', { cwd: this.repoPath, encoding: 'utf8' }).trim(); } catch { return 'unknown'; } })(),
+        commitHash: (() => { try { return execSync('git rev-parse --short HEAD', { cwd: this.repoPath, encoding: 'utf8' }).trim(); } catch { return 'unknown'; } })(),
         path: this.repoPath,
       },
       sprints,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getOfflineBridge } from '@/lib/alphacore/offline/offlineBridge';
 
 /**
@@ -24,6 +25,7 @@ interface OutboxStats {
 }
 
 export default function OutboxStatus() {
+  const router = useRouter();
   const [stats, setStats] = useState<OutboxStats | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -215,10 +217,7 @@ export default function OutboxStatus() {
 
               {conflicts > 0 && (
                 <button
-                  onClick={() => {
-                    // TODO: Navigate to conflict resolution UI
-                    console.log('Navigate to conflicts');
-                  }}
+                  onClick={() => router.push('/dashboard/conflicts')}
                   className="w-full px-3 py-2 bg-amber-600 text-slate-950 text-sm font-medium rounded-lg hover:bg-amber-700 transition"
                 >
                   ⚠️ Resolve Conflicts ({conflicts})

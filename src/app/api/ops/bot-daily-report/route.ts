@@ -57,7 +57,7 @@ export async function GET() {
       .in("bot_id", botIds)
       .eq("event_type", "DAILY_VERIFICATION")
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(100);
 
     if (eventsError) {
       return NextResponse.json(

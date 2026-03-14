@@ -251,6 +251,36 @@ export async function clearOutbox(): Promise<void> {
   });
 }
 
+/**
+ * Replace all occurrences of a temp ID with the real server ID across all pending outbox entries.
+ * Used after a successful create sync when the server assigns a permanent ID.
+ */
+export async function replaceTempIdInPendingEntries(tempId: string, realId: string): Promise<number> {
+  const db = await initDB();
+  const pending = await getPendingOutboxEntries();
+  let updated = 0;
+
+  for (const entry of pending) {
+    const serialized = JSON.stringify(entry.payload);
+    if (!serialized.includes(tempId)) continue;
+
+    const updatedPayload = JSON.parse(serialized.replaceAll(tempId, realId));
+    const updatedEntry: IDBOutboxEntry = { ...entry, payload: updatedPayload };
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([OUTBOX_STORE], 'readwrite');
+      const store = tx.objectStore(OUTBOX_STORE);
+      const req = store.put(updatedEntry);
+      req.onerror = () => reject(new Error(`Failed to update entry: ${req.error}`));
+      req.onsuccess = () => resolve();
+    });
+
+    updated++;
+  }
+
+  return updated;
+}
+
 // ============================================================================
 // METADATA OPERATIONS (Dedup Tracking, Conflict History)
 // ============================================================================

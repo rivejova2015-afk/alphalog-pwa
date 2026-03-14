@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { XP_VALUES } from "@/lib/tradermap/xpConfig";
 
 /**
  * PATCH /api/tradermap/quarters/[id]
@@ -133,7 +134,7 @@ export async function PATCH(
           event_type: "goal_complete",
           ref_table: "tradermap_goal_quarters",
           ref_id: id,
-          xp_delta: 500, // TODO: Define XP values in config
+          xp_delta: XP_VALUES.goal_complete,
           occurred_at: new Date().toISOString(),
         });
 
