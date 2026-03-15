@@ -3,6 +3,7 @@ import { proxy } from "./src/proxy";
 import { applySecurityHeaders } from "./src/lib/security/headers";
 
 export async function middleware(request: NextRequest) {
+  const startMs = Date.now();
   // Canonical domain redirect (production only)
   try {
     const host = request.headers.get("host") || "";
@@ -77,6 +78,13 @@ export async function middleware(request: NextRequest) {
       httpOnly: false,
       maxAge: 60 * 60 * 24 * 7,
     });
+  }
+
+  // Track response time; log slow API requests (>2000ms)
+  const latencyMs = Date.now() - startMs;
+  response.headers.set('x-response-time', `${latencyMs}ms`);
+  if (isApi && latencyMs > 2000) {
+    console.warn(`[perf] slow request ${request.method} ${request.nextUrl.pathname} took ${latencyMs}ms`);
   }
 
   // Apply security headers to all responses

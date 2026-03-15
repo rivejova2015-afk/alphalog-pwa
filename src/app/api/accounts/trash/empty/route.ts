@@ -1,6 +1,7 @@
 // src/app/api/accounts/trash/empty/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 /**
  * POST /api/accounts/trash/empty
@@ -32,6 +33,15 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Audit log: permanent deletion is a compliance-relevant event
+    logAuditFromRequest(request, {
+      userId,
+      action: "delete",
+      resourceType: "account",
+      changes: { scope: "hard_delete_trash", permanent: true },
+      status: "success",
+    }).catch((e) => console.warn("[audit] empty trash log failed:", e));
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

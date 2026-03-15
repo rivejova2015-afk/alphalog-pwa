@@ -269,14 +269,37 @@ async function checkBotFunctionsReachability(): Promise<HealthCheck> {
   }
 }
 
+async function checkAppLogsWritable(): Promise<HealthCheck> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { status: "degraded", message: "app_logs check skipped (no service key)" };
+  }
+  const startedAt = Date.now();
+  try {
+    const supabase = createServiceClient();
+    const { error } = await supabase
+      .from("app_logs")
+      .select("id", { head: true, count: "exact" })
+      .limit(1);
+    if (error) {
+      return { status: "degraded", message: "app_logs table not reachable", latencyMs: Date.now() - startedAt, details: error.message };
+    }
+    return { status: "ok", message: "app_logs reachable", latencyMs: Date.now() - startedAt };
+  } catch (error) {
+    return { status: "degraded", message: "app_logs check failed", latencyMs: Date.now() - startedAt, details: error instanceof Error ? error.message : "Unknown" };
+  }
+}
+
 export async function GET() {
   const runtime = checkRuntimeEnv();
-  const supabase = await checkSupabaseReadiness();
+  const [supabase, botRuntime, botFunctions, appLogs] = await Promise.all([
+    checkSupabaseReadiness(),
+    checkBotRuntime(),
+    checkBotFunctionsReachability(),
+    checkAppLogsWritable(),
+  ]);
   const botRemote = checkBotRemoteConfig();
-  const botRuntime = await checkBotRuntime();
-  const botFunctions = await checkBotFunctionsReachability();
 
-  const checks = [runtime, supabase, botRemote, botRuntime, botFunctions];
+  const checks = [runtime, supabase, botRemote, botRuntime, botFunctions, appLogs];
   const status = summarizeStatus(checks);
   const ok = status !== "error";
 
@@ -291,6 +314,7 @@ export async function GET() {
         botRemote,
         botRuntime,
         botFunctions,
+        appLogs,
       },
     },
     {
