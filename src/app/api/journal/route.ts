@@ -289,3 +289,46 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/journal
+ * Soft-deletes a journal entry by id (sets deleted_at).
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({})) as { id?: string };
+    const { id } = body;
+
+    if (!id || typeof id !== "string") {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from("journal_entries")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", userData.user.id);
+
+    if (error) {
+      console.error("[Journal] Delete error:", error);
+      return NextResponse.json({ error: "Failed to delete entry" }, { status: 500 });
+    }
+
+    logAuditFromRequest(
+      { userId: userData.user.id, action: "delete", resourceType: "journal", resourceId: id, status: "success" },
+      request
+    ).catch((e) => console.warn("[Audit] journal delete log failed:", e));
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("[Journal] DELETE error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
