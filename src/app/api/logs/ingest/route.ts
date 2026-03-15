@@ -190,16 +190,24 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const ALLOWED_ORIGINS = [
+  process.env.NEXT_PUBLIC_APP_URL || 'https://alphalog.io',
+  'https://www.alphalog.io',
+  ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000'] : []),
+];
+
 /**
  * OPTIONS handler (for CORS preflight)
  */
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin') || '';
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return NextResponse.json(
     {},
     {
       status: 200,
       headers: {
-        'Access-Control-Allow-Origin': 'https://alphalog.io, https://www.alphalog.io, http://localhost:3000',
+        'Access-Control-Allow-Origin': allowedOrigin,
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },

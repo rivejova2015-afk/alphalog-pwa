@@ -4,6 +4,7 @@
 
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 
 // Ensure Node.js runtime for compatibility with web-push and Supabase client
 export const runtime = 'nodejs';
@@ -36,14 +37,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify request is from server (has authorization header)
-    // In production, use service role key or internal header validation
+    // Verify request is from an internal server caller using INTERNAL_API_SECRET
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+    if (!authHeader || !internalSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    let authorized = false;
+    try {
+      const tokenBuf = Buffer.from(token);
+      const secretBuf = Buffer.from(internalSecret);
+      authorized = tokenBuf.length === secretBuf.length && timingSafeEqual(tokenBuf, secretBuf);
+    } catch {
+      authorized = false;
+    }
+    if (!authorized) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Create Supabase client at runtime (safe for build)

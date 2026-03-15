@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${request.headers.get('authorization') || ''}`,
+        Authorization: `Bearer ${process.env.INTERNAL_API_SECRET || ''}`,
       },
       body: JSON.stringify(pushPayload),
     }).catch((error) => {

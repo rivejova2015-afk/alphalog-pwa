@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
     "/api/auth/refresh",
     "/api/auth/logout",
     "/api/auth/device/verify",
-    "/api/push/",
+    "/api/push/notify-user",
     "/api/outbound/email/send",
     "/api/treasury/export",
     "/api/treasury/calendar-events",
@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
 
   if (csrfCookie && isApi && isMutating && !isPublicApi && !hasAuthHeader) {
     const csrfHeader = request.headers.get("x-csrf-token");
-    if (!csrfCookie || csrfHeader !== csrfCookie) {
+    if (csrfHeader !== csrfCookie) {
       return NextResponse.json(
         { error: "CSRF token missing or invalid" },
         { status: 403 }

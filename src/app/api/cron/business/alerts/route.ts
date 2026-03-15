@@ -26,6 +26,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
 
@@ -83,11 +84,22 @@ function calculateRunway(
 
 export async function GET(request: NextRequest) {
   try {
-    // 1) Verify CRON_SECRET header
+    // 1) Verify CRON_SECRET header using timing-safe comparison
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret || !expectedSecret || cronSecret !== expectedSecret) {
+    let authorized = false;
+    try {
+      if (cronSecret && expectedSecret) {
+        const cronBuf = Buffer.from(cronSecret);
+        const expectedBuf = Buffer.from(expectedSecret);
+        authorized = cronBuf.length === expectedBuf.length && timingSafeEqual(cronBuf, expectedBuf);
+      }
+    } catch {
+      authorized = false;
+    }
+
+    if (!authorized) {
       return NextResponse.json(
         { error: 'Unauthorized: Invalid or missing cron secret' },
         { status: 401 }

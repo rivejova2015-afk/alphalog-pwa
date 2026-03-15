@@ -38,7 +38,9 @@ function checkRuntimeEnv(): HealthCheck {
     return {
       status: "error",
       message: "Missing required environment variables",
-      details: missing.join(", "),
+      details: process.env.NODE_ENV === "production"
+        ? `${missing.length} required variable(s) missing`
+        : missing.join(", "),
     };
   }
 
@@ -60,7 +62,9 @@ function checkRuntimeEnv(): HealthCheck {
     return {
       status: "degraded",
       message: "Optional integrations not fully configured",
-      details: optionalWarnings.join(", "),
+      details: process.env.NODE_ENV === "production"
+        ? `${optionalWarnings.length} optional variable(s) missing`
+        : optionalWarnings.join(", "),
     };
   }
 
