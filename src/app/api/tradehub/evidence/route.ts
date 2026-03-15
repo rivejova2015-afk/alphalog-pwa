@@ -129,6 +129,9 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const setupId = url.searchParams.get("setupId");
     const range = url.searchParams.get("range") || "all";
+    const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") || "50", 10)));
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+    const offset = (page - 1) * limit;
 
     let dateFrom: string | null = null;
     if (range && range !== "all") {
@@ -164,10 +167,9 @@ export async function GET(request: NextRequest) {
     }
 
     let tradeEvidenceRows: EvidenceRow[] = [];
-    const { data: tradeEvidenceData, error: tradeEvidenceError } = await tradeEvidenceQuery.order(
-      "created_at",
-      { ascending: false }
-    );
+    const { data: tradeEvidenceData, error: tradeEvidenceError } = await tradeEvidenceQuery
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit * 2 - 1); // fetch 2x limit to allow dedup with legacy
 
     if (tradeEvidenceError && !isMissingTable(tradeEvidenceError)) {
       console.error("Error fetching trade_evidence:", tradeEvidenceError);
@@ -183,7 +185,7 @@ export async function GET(request: NextRequest) {
     let legacyRows: EvidenceRow[] = [];
     let legacyQuery = supabase
       .from("tv_analysis_evidence")
-      .select("*, account:accounts(id, name), trade:trades(id, symbol, direction, setup_id)")
+      .select("id, image_path, mime_type, validation_status, trade_id, account_id, captured_at, created_at, user_notes, account:accounts(id, name), trade:trades(id, symbol, direction, setup_id)")
       .eq("user_id", userData.user.id)
       .is("deleted_at", null);
 
@@ -195,9 +197,9 @@ export async function GET(request: NextRequest) {
       legacyQuery = legacyQuery.gte("captured_at", dateFrom);
     }
 
-    const { data: legacyData, error: legacyError } = await legacyQuery.order("captured_at", {
-      ascending: false,
-    });
+    const { data: legacyData, error: legacyError } = await legacyQuery
+      .order("captured_at", { ascending: false })
+      .range(offset, offset + limit * 2 - 1);
 
     if (legacyError && !isMissingTable(legacyError)) {
       console.error("Error fetching legacy evidence:", legacyError);
@@ -222,9 +224,12 @@ export async function GET(request: NextRequest) {
       const aDate = new Date(a.captured_at || a.created_at || 0).getTime();
       const bDate = new Date(b.captured_at || b.created_at || 0).getTime();
       return bDate - aDate;
-    });
+    }).slice(0, limit);
 
-    return NextResponse.json(deduped);
+    return NextResponse.json(
+      { items: deduped, page, limit, hasMore: deduped.length === limit },
+      { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' } }
+    );
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/evidence:", err);
     return NextResponse.json(

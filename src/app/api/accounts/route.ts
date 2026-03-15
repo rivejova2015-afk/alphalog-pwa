@@ -108,7 +108,9 @@ export async function GET(request: NextRequest) {
         category: null,
       }));
 
-      return NextResponse.json(fallbackMapped);
+      return NextResponse.json(fallbackMapped, {
+        headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+      });
     }
 
     // Map category to flattened structure
@@ -128,7 +130,9 @@ export async function GET(request: NextRequest) {
       category: acc.account_categories ?? null,
     }));
 
-    return NextResponse.json(mapped);
+    return NextResponse.json(mapped, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/accounts:", err);
     return NextResponse.json(

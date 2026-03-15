@@ -135,7 +135,10 @@ export async function GET(request: NextRequest) {
         page,
         pageSize,
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+      }
     );
   } catch (err) {
     console.error("[Logs API] Unexpected error:", err);
@@ -208,40 +211,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Handle tags
+    // Handle tags (batched — single SELECT + batch upsert + batch insert)
     if (tagNames && Array.isArray(tagNames) && tagNames.length > 0) {
-      const tagsToCreate = tagNames.slice(0, 25); // Max 25 tags
-      for (const tagName of tagsToCreate) {
-        const trimmedName = tagName.trim();
-        if (!trimmedName) continue;
-
-        const { data: existingTag } = await supabase
+      const trimmedNames = [...new Set(tagNames.slice(0, 25).map((t: string) => t.trim()).filter(Boolean))];
+      if (trimmedNames.length > 0) {
+        // 1. Fetch all existing tags in one query
+        const { data: existingTags } = await supabase
           .from("tags")
-          .select("id")
+          .select("id, name_lower")
           .eq("user_id", userId)
-          .eq("name_lower", trimmedName.toLowerCase())
-          .is("deleted_at", null)
-          .single();
+          .in("name_lower", trimmedNames.map((n) => n.toLowerCase()))
+          .is("deleted_at", null);
 
-        let tagId = existingTag?.id;
-        if (!existingTag) {
-          const { data: newTag } = await supabase
+        const existingMap = new Map((existingTags || []).map((t: { id: string; name_lower: string }) => [t.name_lower, t.id]));
+        const toInsert = trimmedNames.filter((n) => !existingMap.has(n.toLowerCase()));
+
+        // 2. Batch-create missing tags
+        if (toInsert.length > 0) {
+          const { data: newTags } = await supabase
             .from("tags")
-            .insert({ user_id: userId, name: trimmedName })
-            .select("id")
-            .single();
-          tagId = newTag?.id;
+            .insert(toInsert.map((n) => ({ user_id: userId, name: n })))
+            .select("id, name_lower");
+          (newTags || []).forEach((t: { id: string; name_lower: string }) => existingMap.set(t.name_lower, t.id));
         }
 
-        if (tagId) {
-          await supabase
-            .from("log_tags")
-            .insert({
-              log_id: logData.id,
-              tag_id: tagId,
-              user_id: userId,
-            })
-            .select();
+        // 3. Batch-insert log_tag associations
+        const logTagRows = trimmedNames
+          .map((n) => existingMap.get(n.toLowerCase()))
+          .filter(Boolean)
+          .map((tagId) => ({ log_id: logData.id, tag_id: tagId, user_id: userId }));
+        if (logTagRows.length > 0) {
+          await supabase.from("log_tags").insert(logTagRows);
         }
       }
     }
@@ -328,41 +328,36 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update tags if provided
+    // Update tags if provided (batched — single SELECT + batch upsert + batch insert)
     if (tagNames !== undefined && Array.isArray(tagNames)) {
-      // Delete old associations
       await supabase.from("log_tags").delete().eq("log_id", id);
 
-      // Create new associations
-      const tagsToCreate = tagNames.slice(0, 25); // Max 25 tags
-      for (const tagName of tagsToCreate) {
-        const trimmedName = tagName.trim();
-        if (!trimmedName) continue;
-
-        const { data: existingTag } = await supabase
+      const trimmedNames = [...new Set(tagNames.slice(0, 25).map((t: string) => t.trim()).filter(Boolean))];
+      if (trimmedNames.length > 0) {
+        const { data: existingTags } = await supabase
           .from("tags")
-          .select("id")
+          .select("id, name_lower")
           .eq("user_id", userId)
-          .eq("name_lower", trimmedName.toLowerCase())
-          .is("deleted_at", null)
-          .single();
+          .in("name_lower", trimmedNames.map((n) => n.toLowerCase()))
+          .is("deleted_at", null);
 
-        let tagId = existingTag?.id;
-        if (!existingTag) {
-          const { data: newTag } = await supabase
+        const existingMap = new Map((existingTags || []).map((t: { id: string; name_lower: string }) => [t.name_lower, t.id]));
+        const toInsert = trimmedNames.filter((n) => !existingMap.has(n.toLowerCase()));
+
+        if (toInsert.length > 0) {
+          const { data: newTags } = await supabase
             .from("tags")
-            .insert({ user_id: userId, name: trimmedName })
-            .select("id")
-            .single();
-          tagId = newTag?.id;
+            .insert(toInsert.map((n) => ({ user_id: userId, name: n })))
+            .select("id, name_lower");
+          (newTags || []).forEach((t: { id: string; name_lower: string }) => existingMap.set(t.name_lower, t.id));
         }
 
-        if (tagId) {
-          await supabase.from("log_tags").insert({
-            log_id: id,
-            tag_id: tagId,
-            user_id: userId,
-          }).select();
+        const logTagRows = trimmedNames
+          .map((n) => existingMap.get(n.toLowerCase()))
+          .filter(Boolean)
+          .map((tagId) => ({ log_id: id, tag_id: tagId, user_id: userId }));
+        if (logTagRows.length > 0) {
+          await supabase.from("log_tags").insert(logTagRows);
         }
       }
     }
