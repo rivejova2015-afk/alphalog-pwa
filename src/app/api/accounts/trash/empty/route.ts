@@ -35,13 +35,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit log: permanent deletion is a compliance-relevant event
-    logAuditFromRequest(request, {
-      userId,
-      action: "delete",
-      resourceType: "account",
-      changes: { scope: "hard_delete_trash", permanent: true },
-      status: "success",
-    }).catch((e) => console.warn("[audit] empty trash log failed:", e));
+    logAuditFromRequest(
+      { userId, action: "delete", resourceType: "account", changes: { scope: "hard_delete_trash", permanent: true }, status: "success" },
+      request,
+    ).catch((e) => console.warn("[audit] empty trash log failed:", e));
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
