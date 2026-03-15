@@ -17,6 +17,10 @@
     {
       "path": "/api/ops/cron/bot-auto-recovery",
       "schedule": "*/5 8-22 * * 1-5"
+    },
+    {
+      "path": "/api/cron/terminal/news-fetch",
+      "schedule": "0 */2 * * *"
     }
   ]
 }
