@@ -3,7 +3,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Flag, Plus, Trash2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { loadBusinessDecisions, loadBusinessDecisionTasks } from "@/lib/business/offline-loader";
 import { deleteBusinessDecision, getBusinessDecisionWithTasks } from "@/lib/business/queries";
 import DecisionForm from "../forms/DecisionForm.client";
@@ -22,6 +23,10 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
   const [expandedDecision, setExpandedDecision] = useState<string | null>(null);
   const [decisionTasks, setDecisionTasks] = useState<BusinessDecisionTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [addTaskDecisionId, setAddTaskDecisionId] = useState<string | null>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const taskInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadDecisions();
@@ -40,32 +45,35 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this decision?")) return;
     try {
       await deleteBusinessDecision(id);
+      setConfirmDeleteId(null);
       await loadDecisions();
+      toast.success("Decision deleted");
     } catch (err) {
       console.error("Error deleting decision:", err);
+      toast.error("Failed to delete decision");
     }
   }
 
   async function handleAddTask(decisionId: string) {
-    const title = prompt('Task title');
+    const title = newTaskTitle.trim();
     if (!title) return;
     try {
       const supabase = (await import('@/lib/supabase/browser')).createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        alert('Not authenticated');
-        return;
-      }
-      await supabase.from('business_decision_tasks').insert([{ decision_id: decisionId, user_id: user.id, title, done: false, sort_index: 0 }]);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast.error("Not authenticated"); return; }
+      await supabase.from('business_decision_tasks').insert([
+        { decision_id: decisionId, user_id: user.id, title, done: false, sort_index: 0 },
+      ]);
+      setAddTaskDecisionId(null);
+      setNewTaskTitle("");
       await loadDecisions();
       if (expandedDecision === decisionId) await loadDecisionTasks(decisionId);
+      toast.success("Task added");
     } catch (err) {
       console.error('Error creating decision task:', err);
+      toast.error("Failed to add task");
     }
   }
 
@@ -142,9 +150,10 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
                         {decision.priority}
                       </span>
                       <button
-                        onClick={() => handleAddTask(decision.id)}
+                        onClick={() => { setAddTaskDecisionId(decision.id); setNewTaskTitle(""); setTimeout(() => taskInputRef.current?.focus(), 50); }}
                         className="p-1 hover:bg-slate-700/20 rounded text-slate-300 hover:text-white"
                         title="Add follow-up task"
+                        aria-label="Add follow-up task"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -156,15 +165,19 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
                           else setDecisionTasks([]);
                         }}
                         className="px-2 py-1 bg-slate-700 rounded text-slate-200 text-sm"
+                        aria-expanded={expandedDecision === decision.id}
                       >
                         Tasks
                       </button>
-                      <button
-                        onClick={() => handleDelete(decision.id)}
-                        className="p-1 hover:bg-red-900/30 rounded text-red-400 hover:text-red-300"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          onClick={() => setConfirmDeleteId(decision.id)}
+                          className="p-1 hover:bg-red-900/30 rounded text-red-400 hover:text-red-300"
+                          aria-label="Delete decision"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   {decision.tags && decision.tags.length > 0 && (
@@ -220,8 +233,44 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
           onSave={() => {
             setShowForm(false);
             loadDecisions();
+            toast.success("Decision saved");
           }}
         />
+      )}
+
+      {/* Inline add-task input */}
+      {addTaskDecisionId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Add task">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-sm shadow-xl">
+            <h3 className="text-sm font-semibold text-slate-100 mb-3">Add Follow-up Task</h3>
+            <input
+              ref={taskInputRef}
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(addTaskDecisionId); if (e.key === "Escape") { setAddTaskDecisionId(null); setNewTaskTitle(""); } }}
+              placeholder="Task title..."
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 mb-3"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setAddTaskDecisionId(null); setNewTaskTitle(""); }} className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition">Cancel</button>
+              <button onClick={() => handleAddTask(addTaskDecisionId)} disabled={!newTaskTitle.trim()} className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg transition">Add Task</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline confirm delete */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Confirm delete">
+          <div className="bg-slate-900 border border-red-800/60 rounded-xl p-5 w-full max-w-sm shadow-xl">
+            <h3 className="text-sm font-semibold text-slate-100 mb-2">Delete Decision?</h3>
+            <p className="text-xs text-slate-400 mb-4">This action cannot be undone. All tasks associated with this decision will also be removed.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteId(null)} className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition">Cancel</button>
+              <button onClick={() => handleDelete(confirmDeleteId)} className="px-3 py-1.5 text-sm bg-red-700 hover:bg-red-600 text-white rounded-lg transition">Delete</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

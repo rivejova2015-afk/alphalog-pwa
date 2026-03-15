@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { logError } from '@/lib/log';
 
 export default function DashboardError({
   error,
@@ -11,8 +12,7 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log error to console for debugging
-    console.error('[DashboardError]', error);
+    logError('DashboardError', { component: 'dashboard', message: error.message, error: error.digest });
   }, [error]);
 
   return (

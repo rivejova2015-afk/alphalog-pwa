@@ -6,6 +6,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { logError } from "@/lib/log";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -17,8 +18,7 @@ export default function TerminalErrorBoundary({
   reset,
 }: ErrorBoundaryProps) {
   useEffect(() => {
-    // Log error para monitoreo (en producción irías a Sentry/etc)
-    console.error("[TerminalErrorBoundary]", error);
+    logError('TerminalError', { component: 'terminal', message: error.message, error: error.digest });
   }, [error]);
 
   return (

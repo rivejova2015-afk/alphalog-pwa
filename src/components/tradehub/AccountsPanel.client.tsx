@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import Link from "next/link";
 import AccountDialog from "./AccountDialog.client";
 import CategoryManagerModal, { Category as CategoryType } from "./CategoryManagerModal.client";
@@ -61,6 +62,7 @@ export default function AccountsPanel() {
   const [detailsStatus, setDetailsStatus] = useState<string | undefined>("active");
   const [stats, setStats] = useState<Record<string, AccountStats>>({});
   const [statsRefresh, setStatsRefresh] = useState(0);
+  const [confirmDeleteAccountId, setConfirmDeleteAccountId] = useState<string | null>(null);
 
   const sortedCategories = useMemo(() => {
     const list = [...categories];
@@ -218,21 +220,21 @@ export default function AccountsPanel() {
   };
 
   const handleDeleteAccount = async (accountId: string) => {
-    if (!confirm("Esto eliminará permanentemente la cuenta y todas sus operaciones/evidencias asociadas. ¿Continuar?")) return;
     try {
       const res = await fetch(`/api/accounts/${accountId}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || "No se pudo eliminar");
-      }
+      if (!res.ok) throw new Error(data?.error || "No se pudo eliminar");
+      setConfirmDeleteAccountId(null);
       setAccounts((prev) => prev.filter((a) => a.id !== accountId));
       void fetchAccounts();
+      toast.success("Cuenta eliminada");
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("accounts:updated"));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al eliminar";
       setError(message);
+      toast.error(message);
     }
   };
 
@@ -379,8 +381,9 @@ export default function AccountsPanel() {
                               Detalles
                             </button>
                             <button
-                              onClick={() => handleDeleteAccount(acc.id)}
+                              onClick={() => setConfirmDeleteAccountId(acc.id)}
                               className="px-3 py-1.5 rounded-md bg-red-900/40 hover:bg-red-800 text-red-200 text-xs"
+                              aria-label={`Eliminar cuenta ${acc.name}`}
                             >
                               Eliminar
                             </button>
@@ -434,6 +437,19 @@ export default function AccountsPanel() {
           status={detailsStatus}
           onClose={() => setDetailsAccountId(null)}
         />
+      )}
+
+      {confirmDeleteAccountId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Confirmar eliminación">
+          <div className="bg-slate-900 border border-red-800/60 rounded-xl p-5 w-full max-w-sm shadow-xl">
+            <h3 className="text-sm font-semibold text-slate-100 mb-2">¿Eliminar cuenta?</h3>
+            <p className="text-xs text-slate-400 mb-4">Esto eliminará permanentemente la cuenta y todas sus operaciones y evidencias asociadas. Esta acción no se puede deshacer.</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDeleteAccountId(null)} className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition">Cancelar</button>
+              <button onClick={() => handleDeleteAccount(confirmDeleteAccountId)} className="px-3 py-1.5 text-sm bg-red-700 hover:bg-red-600 text-white rounded-lg transition">Eliminar</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

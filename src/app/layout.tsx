@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, JetBrains_Mono, Manrope } from "next/font/google";
+import { Toaster } from "sonner";
 import UpdateManager from "@/components/pwa/UpdateManager";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
 import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
@@ -53,6 +54,7 @@ export default function RootLayout({
         <GlobalBackButton />
         <UpdateManager />
         <CsrfBridge />
+        <Toaster position="bottom-right" theme="dark" richColors closeButton />
       </body>
     </html>
   );
