@@ -414,6 +414,14 @@ export default function NewTradesLog() {
           >
             Refrescar
           </button>
+          <a
+            href={`/api/tradehub/trades/export${filterAccountId ? `?accountId=${filterAccountId}` : ""}`}
+            download
+            className="rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600"
+            aria-label="Exportar trades como CSV"
+          >
+            Exportar CSV
+          </a>
           <button
             onClick={openCreate}
             className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"

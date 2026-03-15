@@ -53,7 +53,7 @@ export default async function Dashboard() {
           </p>
         </div>
 
-        <DashboardPerformancePanel />
+        <DashboardPerformancePanel metrics={metrics} />
 
         <footer className="mt-12 border-t border-slate-700/60 pt-6 text-center text-sm text-slate-400">
           <p>AlphaLog © 2024 | Trading & Analysis Platform</p>
