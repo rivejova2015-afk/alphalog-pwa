@@ -22,6 +22,8 @@ tests/e2e/.auth/
 /.next/
 /out/
 public/workbox-*.js
+public/sw.js
+public/fallback-*.js
 
 # production
 /build
