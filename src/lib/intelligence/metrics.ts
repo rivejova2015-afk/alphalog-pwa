@@ -121,6 +121,13 @@ export type ConstraintSolverData = {
   blockedCount: number;
 };
 
+export type MoodOutcomeCorrelation = {
+  highMoodAvgPnl: number | null;
+  lowMoodAvgPnl: number | null;
+  biasSignal: "positive" | "negative" | "neutral";
+  correlationSampleSize: number;
+};
+
 export type MindOpsData = {
   authenticated: boolean;
   entries7d: number;
@@ -130,6 +137,7 @@ export type MindOpsData = {
   topTags: Array<{ tag: string; count: number }>;
   actionItems: string[];
   moodBreakdown: Array<{ mood: string; count: number }>;
+  moodOutcomeCorrelation: MoodOutcomeCorrelation;
 };
 
 export type KnowledgeFactoryData = {
@@ -318,6 +326,131 @@ async function getBaseRows(
   ]);
 
   return { supabase, accounts, categories, trades, journalEntries };
+}
+
+/**
+ * Extracts the date portion (YYYY-MM-DD) from an ISO datetime string.
+ */
+const toDateKey = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+};
+
+/**
+ * Computes the mood-outcome correlation for the last 30 days.
+ *
+ * For each day that has BOTH a journal entry with a mood score AND at least
+ * one closed trade (by exit_date), it computes the average PnL for high-mood
+ * days (score >= 7) vs low-mood days (score <= 4).
+ *
+ * The biasSignal indicates whether high mood correlates with better or worse
+ * trading performance:
+ * - 'positive': high mood days have higher avg PnL (good mood = better trading)
+ * - 'negative': high mood days have lower avg PnL (possible overconfidence)
+ * - 'neutral': insufficient data (< 5 days with both) or difference < 10%
+ */
+function computeMoodOutcomeCorrelation(
+  journalEntries30d: JournalRow[],
+  trades30d: TradeRow[],
+  scoreFromEntry: (entry: JournalRow) => number
+): MoodOutcomeCorrelation {
+  const neutralResult: MoodOutcomeCorrelation = {
+    highMoodAvgPnl: null,
+    lowMoodAvgPnl: null,
+    biasSignal: "neutral",
+    correlationSampleSize: 0,
+  };
+
+  // Group journal entries by date, using the best mood score per day
+  const moodByDate = new Map<string, number>();
+  for (const entry of journalEntries30d) {
+    const dateKey = toDateKey(entry.created_at);
+    if (!dateKey) continue;
+    const score = scoreFromEntry(entry);
+    const existing = moodByDate.get(dateKey);
+    // If multiple entries in a day, keep the latest (first in desc order from query)
+    if (existing === undefined) {
+      moodByDate.set(dateKey, score);
+    }
+  }
+
+  // Group closed trades by exit_date, computing avg PnL per day
+  const pnlByDate = new Map<string, { total: number; count: number }>();
+  for (const trade of trades30d) {
+    if (normalizeStatus(trade.status) !== "closed") continue;
+    const dateKey = toDateKey(trade.exit_date || trade.created_at);
+    if (!dateKey) continue;
+    const pnl = asNumber(trade.pnl);
+    const existing = pnlByDate.get(dateKey);
+    if (existing) {
+      existing.total += pnl;
+      existing.count += 1;
+    } else {
+      pnlByDate.set(dateKey, { total: pnl, count: 1 });
+    }
+  }
+
+  // Find days with BOTH mood and trades
+  const highMoodPnls: number[] = [];
+  const lowMoodPnls: number[] = [];
+  let sampleSize = 0;
+
+  for (const [dateKey, moodScore] of moodByDate) {
+    const dayPnl = pnlByDate.get(dateKey);
+    if (!dayPnl) continue;
+
+    sampleSize += 1;
+    const avgDayPnl = dayPnl.total / dayPnl.count;
+
+    if (moodScore >= 7) {
+      highMoodPnls.push(avgDayPnl);
+    } else if (moodScore <= 4) {
+      lowMoodPnls.push(avgDayPnl);
+    }
+    // Scores 5-6 are "mid-range" and excluded from high/low buckets
+  }
+
+  if (sampleSize < 5) return neutralResult;
+
+  const highMoodAvgPnl =
+    highMoodPnls.length > 0
+      ? highMoodPnls.reduce((sum, v) => sum + v, 0) / highMoodPnls.length
+      : null;
+
+  const lowMoodAvgPnl =
+    lowMoodPnls.length > 0
+      ? lowMoodPnls.reduce((sum, v) => sum + v, 0) / lowMoodPnls.length
+      : null;
+
+  // Determine bias signal
+  let biasSignal: "positive" | "negative" | "neutral" = "neutral";
+
+  if (highMoodAvgPnl !== null && lowMoodAvgPnl !== null) {
+    // Need at least 2 days in each bucket for a meaningful signal
+    if (highMoodPnls.length >= 2 && lowMoodPnls.length >= 2) {
+      const diff = highMoodAvgPnl - lowMoodAvgPnl;
+      const avgMagnitude = (Math.abs(highMoodAvgPnl) + Math.abs(lowMoodAvgPnl)) / 2;
+      // Only signal if the difference is > 10% of the average magnitude
+      if (avgMagnitude > 0 && Math.abs(diff) / avgMagnitude > 0.1) {
+        biasSignal = diff > 0 ? "positive" : "negative";
+      }
+    }
+  } else if (highMoodAvgPnl !== null && highMoodPnls.length >= 2) {
+    // Only high mood data available
+    biasSignal = highMoodAvgPnl > 0 ? "positive" : "neutral";
+  } else if (lowMoodAvgPnl !== null && lowMoodPnls.length >= 2) {
+    // Only low mood data available
+    biasSignal = lowMoodAvgPnl < 0 ? "positive" : "neutral";
+  }
+
+  return {
+    highMoodAvgPnl: highMoodAvgPnl !== null ? Math.round(highMoodAvgPnl * 100) / 100 : null,
+    lowMoodAvgPnl: lowMoodAvgPnl !== null ? Math.round(lowMoodAvgPnl * 100) / 100 : null,
+    biasSignal,
+    correlationSampleSize: sampleSize,
+  };
 }
 
 export async function getCapitalLevelsData(): Promise<CapitalLevelsData> {
@@ -541,10 +674,16 @@ export async function getMindOpsData(): Promise<MindOpsData> {
       topTags: [],
       actionItems: [],
       moodBreakdown: [],
+      moodOutcomeCorrelation: {
+        highMoodAvgPnl: null,
+        lowMoodAvgPnl: null,
+        biasSignal: "neutral",
+        correlationSampleSize: 0,
+      },
     };
   }
 
-  const { journalEntries } = await getBaseRows(supabase, userId);
+  const { journalEntries, trades } = await getBaseRows(supabase, userId);
 
   const entries7dRows = journalEntries.filter((entry) => isWithinLastDays(entry.created_at, 7));
   const entries30dRows = journalEntries.filter((entry) => isWithinLastDays(entry.created_at, 30));
@@ -584,6 +723,17 @@ export async function getMindOpsData(): Promise<MindOpsData> {
     moodCounts.set(mood, (moodCounts.get(mood) || 0) + 1);
   });
 
+  // Compute mood-outcome correlation using 30d journal entries and trades
+  const trades30d = trades.filter(
+    (trade) => isWithinLastDays(trade.exit_date || trade.created_at, 30)
+  );
+
+  const moodOutcomeCorrelation = computeMoodOutcomeCorrelation(
+    entries30dRows,
+    trades30d,
+    scoreFromEntry
+  );
+
   return {
     authenticated: true,
     entries7d: entries7dRows.length,
@@ -598,6 +748,7 @@ export async function getMindOpsData(): Promise<MindOpsData> {
     moodBreakdown: Array.from(moodCounts.entries())
       .map(([mood, count]) => ({ mood, count }))
       .sort((left, right) => right.count - left.count),
+    moodOutcomeCorrelation,
   };
 }
 

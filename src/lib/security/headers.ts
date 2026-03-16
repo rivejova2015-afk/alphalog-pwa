@@ -73,6 +73,8 @@ export function getCSPHeader(): string {
       "'unsafe-inline'", // Required for Next.js
       "'unsafe-eval'", // Required for Next.js dev
       "https://cdn.jsdelivr.net", // Allow CDN scripts
+      "https://js.hcaptcha.com", // hCaptcha
+      "https://newassets.hcaptcha.com", // hCaptcha assets
     ],
     "style-src": [
       "'self'",
@@ -88,6 +90,8 @@ export function getCSPHeader(): string {
       "https://api.openai.com", // OpenAI API
       "https://api.postmarkapp.com", // Postmark
       "https://qstash.upstash.io", // QStash
+      "https://hcaptcha.com", // hCaptcha
+      "https://newassets.hcaptcha.com", // hCaptcha assets
     ],
     "media-src": ["'self'", "blob:"],
     "object-src": ["'none'"],
@@ -95,7 +99,7 @@ export function getCSPHeader(): string {
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
     "frame-src": [
-      "'none'", // Prevent any framing
+      "https://newassets.hcaptcha.com", // hCaptcha widget iframe
     ],
     "worker-src": ["'self'", "blob:"],
     "child-src": ["'self'", "blob:"],

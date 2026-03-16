@@ -160,6 +160,147 @@ export const sendEmailResponseSchema = z.object({
   provider_message_id: z.string(),
 }).passthrough();
 
+// ─── Sprint 3: Response schemas for the 6 critical endpoints ───────────────
+
+/**
+ * accountResponseSchema
+ * Shape returned by GET /api/accounts (array of mapped account rows)
+ * The `category` field is a flattened join of account_categories.
+ */
+export const accountResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  category_id: z.string(),
+  account_size: z.number().nullable(),
+  current_balance: z.number().nullable(),
+  operation_state: z.string().nullable(),
+  phase_status: z.string().nullable(),
+  role: z.string().nullable(),
+  withdrawals_enabled: z.boolean().nullable(),
+  currency: z.string(),
+  status: z.string(),
+  sort_index: z.number().nullable(),
+  category: z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+  }).nullable(),
+}).passthrough();
+
+/**
+ * setupResponseSchema
+ * Shape returned by GET /api/tradehub/setups (select("*"))
+ */
+export const setupResponseSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  name: z.string(),
+  name_lower: z.string().optional(),
+  description: z.string().nullable().optional(),
+  sort_index: z.number().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional(),
+}).passthrough();
+
+/**
+ * goalResponseSchema
+ * Shape returned by GET /api/tradermap/goals
+ * Includes joined account and quarters sub-arrays, title is decrypted.
+ */
+export const goalResponseSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  account_id: z.string().uuid(),
+  year: z.number(),
+  title: z.string(),
+  active_quarter: z.string(),
+  sort_index: z.number().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional(),
+  account: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    currency: z.string().optional(),
+  }).nullable().optional(),
+  quarters: z.array(z.object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    goal_id: z.string().uuid(),
+    quarter: z.string(),
+    start_date: z.string(),
+    end_date: z.string(),
+    start_balance: z.number(),
+    target_balance: z.number(),
+    current_balance: z.number().nullable(),
+    sort_index: z.number().nullable().optional(),
+    created_at: z.string().nullable().optional(),
+    updated_at: z.string().nullable().optional(),
+  }).passthrough()).optional(),
+}).passthrough();
+
+/**
+ * capitalTargetResponseSchema
+ * Shape returned by GET /api/intelligence/capital-targets
+ * Based on TARGET_COLUMNS selected explicitly in the handler.
+ */
+export const capitalTargetResponseSchema = z.object({
+  id: z.string().uuid(),
+  account_type: z.string(),
+  target_name: z.string(),
+  target_capital: z.number(),
+  capital_account_id: z.string().uuid().nullable(),
+  manual_monthly_pct: z.number().nullable(),
+  manual_quarterly_pct: z.number().nullable(),
+  manual_semiannual_pct: z.number().nullable(),
+  manual_annual_pct: z.number().nullable(),
+  manual_updated_at: z.string().nullable(),
+  custom_current_capital: z.number().nullable(),
+  custom_current_updated_at: z.string().nullable(),
+  created_at: z.string().nullable(),
+  updated_at: z.string().nullable(),
+}).passthrough();
+
+/**
+ * newsItemResponseSchema
+ * Shape returned by GET /api/terminal/news (select("*") + decrypted fields)
+ */
+export const newsItemResponseSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  instrument_id: z.string().uuid(),
+  title: z.string(),
+  url: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  relevancy_score: z.number().nullable().optional(),
+  impact_label: z.string().nullable().optional(),
+  timestamp_utc: z.string().nullable().optional(),
+  sort_index: z.number().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional(),
+}).passthrough();
+
+/**
+ * eventItemResponseSchema
+ * Shape returned by GET /api/terminal/events (select("*") + decrypted name)
+ */
+export const eventItemResponseSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  instrument_id: z.string().uuid(),
+  name: z.string(),
+  impact: z.string().nullable().optional(),
+  timestamp_utc: z.string(),
+  sort_index: z.number().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional(),
+}).passthrough();
+
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
  * Parse and validate payload, throwing ZodError if invalid
  */

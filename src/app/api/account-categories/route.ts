@@ -1,6 +1,7 @@
 // src/app/api/account-categories/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 type Category = { id: string; name: string; description: string | null; created_at: string };
 
@@ -34,9 +35,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(categories || []);
+    return NextResponse.json(categories || [], {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/account-categories:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -87,6 +95,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(category, { status: 201 });
   } catch (err: unknown) {
     console.error("Error in POST /api/account-categories:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -153,6 +166,11 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(updated);
   } catch (err: unknown) {
     console.error("Error in PATCH /api/account-categories:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -306,6 +324,11 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, targetCategoryId });
   } catch (err: unknown) {
     console.error("Error in DELETE /api/account-categories:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

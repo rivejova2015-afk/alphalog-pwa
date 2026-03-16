@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { goalResponseSchema } from "@/lib/validation/schemas";
 
 type QuarterKey = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -181,7 +184,7 @@ const validateQuarters = (quarters: QuarterInput[] | undefined) => {
   return { ok: true as const, rows: normalizedRows };
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -209,9 +212,21 @@ export async function GET() {
       title: safeDecrypt(goal.title as string | null),
     }));
 
-    return NextResponse.json(decrypted);
+    const contractResult = enforceResponseContract(goalResponseSchema.array(), decrypted);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] GET /api/tradermap/goals contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err) {
     console.error("Error in GET /api/tradermap/goals:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -338,12 +353,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       ...fullGoal,
       title: safeDecrypt((fullGoal as { title?: string | null } | null)?.title || ""),
-    });
+    };
+
+    const contractResult = enforceResponseContract(goalResponseSchema, responsePayload);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] POST /api/tradermap/goals contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (err) {
     console.error("Error in POST /api/tradermap/goals:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

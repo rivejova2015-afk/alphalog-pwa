@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createInitialVersion, reportCopyGroupError } from "@/lib/copygroups/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -22,9 +23,16 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch copy groups" }, { status: 500 });
     }
 
-    return NextResponse.json(data || []);
+    return NextResponse.json(data || [], {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (error) {
     reportCopyGroupError(error, { area: "copy-groups", action: "GET" });
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -74,6 +82,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(group);
   } catch (error) {
     reportCopyGroupError(error, { area: "copy-groups", action: "POST" });
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

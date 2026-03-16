@@ -2,6 +2,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { eventItemResponseSchema } from "@/lib/validation/schemas";
 
 /**
  * GET /api/terminal/events?instrumentId={id}
@@ -45,9 +48,21 @@ export async function GET(request: NextRequest) {
       name: decryptText(item.name),
     }));
 
-    return NextResponse.json(decrypted);
+    const contractResult = enforceResponseContract(eventItemResponseSchema.array(), decrypted);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] GET /api/terminal/events contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/terminal/events:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -116,12 +131,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       ...data,
       name: decryptText(data.name),
-    });
+    };
+
+    const contractResult = enforceResponseContract(eventItemResponseSchema, responsePayload);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] POST /api/terminal/events contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/events:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

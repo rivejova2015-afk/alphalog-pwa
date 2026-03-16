@@ -1,4 +1,5 @@
 import { getKnowledgeFactoryData } from "@/lib/intelligence/metrics";
+import KnowledgeFactorySynthesis from "@/components/intelligence/KnowledgeFactorySynthesis.client";
 
 const sourceLabel: Record<string, string> = {
   weekly_report: "Weekly report",
@@ -70,6 +71,12 @@ export default async function KnowledgeFactoryTab() {
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="premium-card">
+        <KnowledgeFactorySynthesis
+          insights={data.insights.map((item) => ({ summary: item.summary }))}
+        />
       </div>
     </div>
   );

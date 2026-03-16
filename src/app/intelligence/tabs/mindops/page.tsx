@@ -1,4 +1,5 @@
 import { getMindOpsData } from "@/lib/intelligence/metrics";
+import type { MoodOutcomeCorrelation } from "@/lib/intelligence/metrics";
 
 const moodLabel = (value: string) => {
   const normalized = value.toLowerCase();
@@ -7,6 +8,24 @@ const moodLabel = (value: string) => {
   if (normalized === "bad") return "Bad";
   if (normalized === "terrible") return "Terrible";
   return "Neutral";
+};
+
+const biasSignalLabel: Record<MoodOutcomeCorrelation["biasSignal"], string> = {
+  positive: "Positiva",
+  negative: "Negativa (posible sobreconfianza)",
+  neutral: "Neutral / datos insuficientes",
+};
+
+const biasSignalColor: Record<MoodOutcomeCorrelation["biasSignal"], string> = {
+  positive: "text-emerald-400",
+  negative: "text-amber-400",
+  neutral: "text-slate-400",
+};
+
+const formatPnl = (value: number | null) => {
+  if (value === null) return "--";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}$${value.toFixed(2)}`;
 };
 
 export default async function MindOpsTab() {
@@ -20,6 +39,8 @@ export default async function MindOpsTab() {
       </div>
     );
   }
+
+  const correlation = data.moodOutcomeCorrelation;
 
   return (
     <div className="space-y-5">
@@ -51,6 +72,50 @@ export default async function MindOpsTab() {
           <p className="mt-2 text-2xl font-semibold text-white">{data.topTags.length}</p>
           <p className="mt-1 text-xs text-slate-500">Top tags en 30 dias</p>
         </div>
+      </div>
+
+      {/* Mood-Outcome Correlation */}
+      <div className="premium-card">
+        <h3 className="text-lg font-semibold text-white mb-3">Correlacion mood-outcome (30d)</h3>
+        {correlation.correlationSampleSize < 5 ? (
+          <p className="text-slate-400">
+            Se necesitan al menos 5 dias con journal y trades cerrados para calcular la correlacion.
+            Actualmente hay {correlation.correlationSampleSize} dia{correlation.correlationSampleSize !== 1 ? "s" : ""} con ambos datos.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="rounded border border-slate-700/70 bg-slate-900/50 p-3">
+                <p className="text-xs uppercase text-slate-400 mb-1">Avg PnL dias buen humor</p>
+                <p className="text-lg font-semibold text-white">
+                  {formatPnl(correlation.highMoodAvgPnl)}
+                </p>
+                <p className="text-xs text-slate-500">Mood score &gt;= 7</p>
+              </div>
+              <div className="rounded border border-slate-700/70 bg-slate-900/50 p-3">
+                <p className="text-xs uppercase text-slate-400 mb-1">Avg PnL dias mal humor</p>
+                <p className="text-lg font-semibold text-white">
+                  {formatPnl(correlation.lowMoodAvgPnl)}
+                </p>
+                <p className="text-xs text-slate-500">Mood score &lt;= 4</p>
+              </div>
+              <div className="rounded border border-slate-700/70 bg-slate-900/50 p-3">
+                <p className="text-xs uppercase text-slate-400 mb-1">Senal de sesgo</p>
+                <p className={`text-lg font-semibold ${biasSignalColor[correlation.biasSignal]}`}>
+                  {biasSignalLabel[correlation.biasSignal]}
+                </p>
+                <p className="text-xs text-slate-500">{correlation.correlationSampleSize} dias analizados</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              {correlation.biasSignal === "positive"
+                ? "Buen humor se asocia con mejor PnL promedio. Tu estado emocional parece alineado con buenas decisiones."
+                : correlation.biasSignal === "negative"
+                  ? "Atencion: dias de buen humor muestran peor PnL que dias de mal humor. Esto puede indicar sobreconfianza o relajacion de disciplina cuando el animo es alto."
+                  : "No hay suficiente diferencia o datos para determinar una correlacion clara entre humor y resultados."}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

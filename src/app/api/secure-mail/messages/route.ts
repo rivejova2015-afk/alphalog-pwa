@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptText } from "@/lib/security/encryption";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -56,9 +57,16 @@ export async function GET(request: NextRequest) {
       body_ciphertext: safeDecrypt(msg.body_ciphertext),
     }));
 
-    return NextResponse.json(decrypted);
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch (error) {
     console.error("[SecureMail] GET messages error:", error);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

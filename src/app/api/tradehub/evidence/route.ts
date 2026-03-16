@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { decryptText, encryptText } from "@/lib/security/encryption";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
@@ -232,6 +233,11 @@ export async function GET(request: NextRequest) {
     );
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/evidence:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -437,6 +443,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(mapLegacyEvidence(data as EvidenceRow));
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/evidence:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

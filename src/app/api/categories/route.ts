@@ -1,6 +1,7 @@
 // src/app/api/categories/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,9 +36,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ items: categories || [] });
+    return NextResponse.json({ items: categories || [] }, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err) {
     console.error("[Categories API] Error:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -118,6 +126,11 @@ export async function POST(request: NextRequest) {
     );
   } catch (err) {
     console.error("[Categories API POST] Unexpected error:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

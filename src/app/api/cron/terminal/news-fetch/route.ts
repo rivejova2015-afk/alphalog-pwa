@@ -123,15 +123,18 @@ function matchesKeywords(text: string, keywords: string[]): boolean {
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
-export async function POST(request: NextRequest) {
+async function handleNewsFetch(request: NextRequest) {
   try {
-    // 1. Auth — x-cron-secret header, timingSafeEqual
-    const cronSecret   = request.headers.get('x-cron-secret');
+    // 1. Auth — accepts x-cron-secret header (manual) OR Authorization: Bearer (Vercel cron)
     const expectedSecret = process.env.CRON_SECRET;
+    const xCronSecret    = request.headers.get('x-cron-secret');
+    const authHeader     = request.headers.get('authorization') ?? '';
+    const bearerToken    = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const token          = xCronSecret || bearerToken;
     let authorized = false;
     try {
-      if (cronSecret && expectedSecret) {
-        const a = Buffer.from(cronSecret);
+      if (token && expectedSecret) {
+        const a = Buffer.from(token);
         const b = Buffer.from(expectedSecret);
         authorized = a.length === b.length && timingSafeEqual(a, b);
       }
@@ -449,3 +452,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Vercel cron sends GET; manual invocations may use POST
+export const GET  = handleNewsFetch;
+export const POST = handleNewsFetch;

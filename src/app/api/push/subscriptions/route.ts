@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 async function getUserFromRequest(request: NextRequest) {
   const supabase = await createClient();
@@ -43,9 +44,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch subscriptions" }, { status: 500 });
     }
 
-    return NextResponse.json({ subscriptions: subscriptions || [] });
+    return NextResponse.json({ subscriptions: subscriptions || [] }, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (error) {
     console.error("Get subscriptions endpoint error:", error);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

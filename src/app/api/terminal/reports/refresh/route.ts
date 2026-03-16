@@ -3,9 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 
 export async function GET(request: NextRequest) {
   try {
-    const cronSecret = request.headers.get("x-cron-secret");
     const expected = process.env.CRON_SECRET;
-    if (!cronSecret || !expected || cronSecret !== expected) {
+    const xCronSecret = request.headers.get("x-cron-secret");
+    const authHeader = request.headers.get("authorization") ?? "";
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const token = xCronSecret || bearerToken;
+    if (!token || !expected || token !== expected) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

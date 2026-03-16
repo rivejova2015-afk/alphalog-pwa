@@ -1,6 +1,6 @@
 /**
  * Conflict Resolution Engine
- * 
+ *
  * Handles merge conflicts when offline changes conflict with server state:
  * - Detects version mismatches
  * - Implements resolution strategies (last-write-wins, user-choice, merge)
@@ -26,7 +26,7 @@ export interface ConflictDetection {
 /**
  * Conflict resolution strategies
  */
-export type ResolutionStrategy = 
+export type ResolutionStrategy =
   | 'last-write-wins'    // Server data wins (default)
   | 'client-preference'   // Client data wins
   | 'manual-merge'        // Requires user intervention
@@ -64,7 +64,7 @@ export interface ConflictMetadata {
 
 /**
  * Detect version-based conflicts
- * 
+ *
  * Compares local version against server version to detect conflicts
  * Version format: incremented on each server mutation
  */
@@ -75,7 +75,7 @@ export function detectVersionConflict(
   serverData: Record<string, any>
 ): ConflictDetection {
   const hasConflict = clientVersion !== serverVersion;
-  
+
   return {
     hasConflict,
     type: hasConflict ? 'version-mismatch' : 'none',
@@ -89,7 +89,7 @@ export function detectVersionConflict(
 
 /**
  * Detect content-based conflicts
- * 
+ *
  * Compares field values to detect if actual content conflicts
  * (not just version numbers)
  */
@@ -99,18 +99,18 @@ export function detectContentConflict(
   protectedFields: string[] = ['id', 'user_id', 'created_at', 'deleted_at']
 ): ConflictDetection {
   const conflictingFields: string[] = [];
-  
+
   // Check for modified fields (excluding protected ones)
   for (const key of Object.keys(clientData)) {
     if (protectedFields.includes(key)) continue;
-    
+
     if (JSON.stringify(clientData[key]) !== JSON.stringify(serverData[key])) {
       conflictingFields.push(key);
     }
   }
-  
+
   const hasConflict = conflictingFields.length > 0;
-  
+
   return {
     hasConflict,
     type: hasConflict ? 'content-mismatch' : 'none',
@@ -124,7 +124,7 @@ export function detectContentConflict(
 
 /**
  * Detect delete conflicts
- * 
+ *
  * Handles cases where record was deleted locally but modified on server
  * (or vice versa)
  */
@@ -135,7 +135,7 @@ export function detectDeleteConflict(
   serverData: Record<string, any>
 ): ConflictDetection {
   const hasConflict = clientDeleted !== serverDeleted;
-  
+
   return {
     hasConflict,
     type: hasConflict ? 'delete-conflict' : 'none',
@@ -153,10 +153,10 @@ export function detectDeleteConflict(
 
 /**
  * Last-write-wins strategy
- * 
+ *
  * Server data is authoritative (default strategy)
  * Client changes are discarded
- * 
+ *
  * Use case: Most conflicts where server is source of truth
  */
 export function resolveLastWriteWins(
@@ -175,10 +175,10 @@ export function resolveLastWriteWins(
 
 /**
  * Client-preference strategy
- * 
+ *
  * Client data is retained despite server changes
  * Server changes are overwritten on next sync
- * 
+ *
  * Use case: User explicitly wants their version
  */
 export function resolveClientPreference(
@@ -198,10 +198,10 @@ export function resolveClientPreference(
 
 /**
  * Field-level merge strategy
- * 
+ *
  * Merges non-conflicting fields from both sides
  * Conflicting fields use server version with warning
- * 
+ *
  * Use case: Multiple fields were edited, some conflict
  */
 export function resolveManualMerge(
@@ -211,14 +211,14 @@ export function resolveManualMerge(
 ): ConflictResolution {
   const mergedData: Record<string, any> = {};
   const conflictingFields: string[] = [];
-  
+
   // Start with server data as base
   Object.assign(mergedData, serverData);
-  
+
   // Merge non-conflicting client fields
   for (const key of Object.keys(clientData)) {
     if (protectedFields.includes(key)) continue;
-    
+
     if (JSON.stringify(clientData[key]) === JSON.stringify(serverData[key])) {
       // No conflict - field values are same
       mergedData[key] = clientData[key];
@@ -229,7 +229,7 @@ export function resolveManualMerge(
       mergedData[key] = serverData[key];
     }
   }
-  
+
   return {
     resolved: true,
     strategy: 'manual-merge',
@@ -242,10 +242,10 @@ export function resolveManualMerge(
 
 /**
  * Abort strategy
- * 
+ *
  * Reject the mutation entirely and prompt user
  * No data is persisted
- * 
+ *
  * Use case: Critical conflicts requiring user decision
  */
 export function resolveAbort(
@@ -270,7 +270,7 @@ export function resolveAbort(
 
 /**
  * Auto-resolve conflicts based on type
- * 
+ *
  * Routes to appropriate resolution strategy based on conflict characteristics
  */
 export async function autoResolveConflict(
@@ -290,27 +290,27 @@ export async function autoResolveConflict(
       notes: 'No conflict detected'
     };
   }
-  
+
   // Use provided strategy or default based on conflict type
   const strategy = options?.strategy || conflict.suggestedResolution;
-  
+
   switch (strategy) {
     case 'last-write-wins':
       return resolveLastWriteWins(conflict.clientData, conflict.serverData);
-      
+
     case 'client-preference':
       return resolveClientPreference(conflict.clientData, conflict.serverData);
-      
+
     case 'manual-merge':
       return resolveManualMerge(
         conflict.clientData,
         conflict.serverData,
         options?.protectedFields
       );
-      
+
     case 'abort':
       return resolveAbort(conflict.clientData, conflict.serverData);
-      
+
     default:
       return resolveLastWriteWins(conflict.clientData, conflict.serverData);
   }
@@ -348,12 +348,12 @@ export class ConflictMetrics {
     'manual-merge': 0,
     'abort': 0
   };
-  
+
   record(resolution: ConflictResolution): void {
     this.conflicts.set(resolution.conflictId, resolution);
     this.resolutionCounts[resolution.strategy]++;
   }
-  
+
   getMetrics(): {
     totalConflicts: number;
     resolutions: Record<ResolutionStrategy, number>;
@@ -361,14 +361,14 @@ export class ConflictMetrics {
   } {
     const total = this.conflicts.size;
     const resolved = Array.from(this.conflicts.values()).filter(r => r.resolved).length;
-    
+
     return {
       totalConflicts: total,
       resolutions: this.resolutionCounts,
       successRate: total > 0 ? (resolved / total) * 100 : 100
     };
   }
-  
+
   clear(): void {
     this.conflicts.clear();
     this.resolutionCounts = {
@@ -421,28 +421,70 @@ export function createRollbackSnapshot(
 
 /**
  * Rollback to snapshot
+ *
+ * Restores the entity to its state before the conflicting change by calling
+ * the AlphaCore update endpoint with dataBeforeChange as the payload.
+ *
+ * This function runs client-side, so it uses fetch() against the API rather
+ * than Supabase directly. The server-side endpoint handles encryption, RLS,
+ * and audit logging.
+ *
+ * Throws on failure so callers can handle the error (not swallowed).
  */
 export async function rollbackToSnapshot(
   snapshot: RollbackSnapshot
 ): Promise<void> {
-  // TODO: Implement actual rollback logic in API
-  // This is a stub that would:
-  // 1. Restore dataBeforeChange to database
-  // 2. Update version numbers
-  // 3. Log rollback to audit log
-  // 4. Notify user of rollback
-  
-  console.warn(
-    `[ROLLBACK] Would restore ${snapshot.table}/${snapshot.entityId} to state before conflict`
-  );
-  
-  // Log to console for now
-  console.log('[Rollback] Conflict snapshot:', {
+  console.log('[Rollback] Starting rollback for conflict:', {
     entityId: snapshot.entityId,
     table: snapshot.table,
     operation: snapshot.operation,
     conflictId: snapshot.conflictId,
-    restoredVersion: snapshot.dataBeforeChange.version
+  });
+
+  // Build the payload from the pre-change data.
+  // Strip fields that the update endpoint manages or rejects.
+  const restorePayload: Record<string, unknown> = { ...snapshot.dataBeforeChange };
+  delete restorePayload.id;
+  delete restorePayload.user_id;
+  delete restorePayload.created_at;
+
+  const url = `/api/alphacore/${snapshot.table}/${snapshot.entityId}/update`;
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      payload: restorePayload,
+      metadata: {
+        source: 'conflict_rollback',
+        conflictId: snapshot.conflictId,
+        rolledBackAt: new Date().toISOString(),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage =
+      (errorData as Record<string, unknown>).message ||
+      `HTTP ${response.status}`;
+    console.error('[Rollback] Failed to rollback:', {
+      entityId: snapshot.entityId,
+      table: snapshot.table,
+      conflictId: snapshot.conflictId,
+      status: response.status,
+      error: errorMessage,
+    });
+    throw new Error(
+      `Rollback failed for ${snapshot.table}/${snapshot.entityId}: ${errorMessage}`
+    );
+  }
+
+  console.log('[Rollback] Successfully restored entity to pre-conflict state:', {
+    entityId: snapshot.entityId,
+    table: snapshot.table,
+    conflictId: snapshot.conflictId,
+    restoredVersion: snapshot.dataBeforeChange.version,
   });
 }
 
@@ -455,7 +497,7 @@ export async function rollbackToSnapshot(
  */
 export class ConflictManager {
   private metrics = new ConflictMetrics();
-  
+
   async resolveConflict(
     clientData: Record<string, any>,
     serverData: Record<string, any>,
@@ -473,13 +515,13 @@ export class ConflictManager {
       clientData,
       serverData
     );
-    
+
     // Auto-resolve
     const resolution = await autoResolveConflict(conflict, options);
-    
+
     // Track metrics
     this.metrics.record(resolution);
-    
+
     // Log to AlphaShield
     if (options?.table && options?.entityId) {
       await logConflict(
@@ -496,14 +538,14 @@ export class ConflictManager {
         resolution
       );
     }
-    
+
     return resolution;
   }
-  
+
   getMetrics() {
     return this.metrics.getMetrics();
   }
-  
+
   resetMetrics(): void {
     this.metrics.clear();
   }

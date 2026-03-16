@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recomputeProgress } from "@/lib/tradermap/progressEngine";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 const normalizeIds = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String).filter(Boolean) : [];
@@ -9,7 +10,7 @@ const normalizeIds = (value: unknown): string[] =>
  * GET /api/tradermap/progress-map/config
  * Returns current config + versions
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -25,7 +26,9 @@ export async function GET() {
       .maybeSingle();
 
     if (!config) {
-      return NextResponse.json({ config: null, versions: [] });
+      return NextResponse.json({ config: null, versions: [] }, {
+        headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+      });
     }
 
     const { data: versions } = await supabase
@@ -40,9 +43,16 @@ export async function GET() {
         satellite_account_ids: normalizeIds(config.satellite_account_ids),
       },
       versions: versions || [],
+    }, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
     console.error("Error in GET /api/tradermap/progress-map/config:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -146,6 +156,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ config: result.config, state: result });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradermap/progress-map/config:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

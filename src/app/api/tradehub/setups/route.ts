@@ -1,6 +1,9 @@
 // src/app/api/tradehub/setups/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { setupResponseSchema } from "@/lib/validation/schemas";
 
 /**
  * GET /api/tradehub/setups
@@ -30,9 +33,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data || []);
+    const result = data || [];
+
+    const contractResult = enforceResponseContract(setupResponseSchema.array(), result);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] GET /api/tradehub/setups contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/setups:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -97,9 +114,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const contractResult = enforceResponseContract(setupResponseSchema, data);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] POST /api/tradehub/setups contract violation:", contractResult.errors);
+    }
+
     return NextResponse.json(data);
   } catch (err: unknown) {
     console.error("Error in POST /api/tradehub/setups:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

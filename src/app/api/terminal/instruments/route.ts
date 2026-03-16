@@ -1,7 +1,8 @@
 // src/app/api/terminal/instruments/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 interface ErrorResponse {
   data: any[];
@@ -16,14 +17,14 @@ interface ErrorResponse {
 /**
  * GET /api/terminal/instruments
  * Returns all available instruments (global, read-only)
- * 
+ *
  * Response behavior:
  * - 200: Normal response (data array + meta)
  * - 503: Temporary service error (retry recommended)
  * - 401: Unauthorized (check auth)
  * Note: Never returns 500 to allow graceful client handling
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
@@ -95,6 +96,8 @@ export async function GET() {
     return NextResponse.json({
       data: data || [],
       meta: { error: null, isTemporary: false },
+    }, {
+      headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=600' },
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -103,6 +106,12 @@ export async function GET() {
       endpoint: "/api/terminal/instruments",
       message: errorMsg || "Unknown error",
       stack: errorStack,
+    });
+
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 503,
+      error: err,
     });
 
     const response: ErrorResponse = {

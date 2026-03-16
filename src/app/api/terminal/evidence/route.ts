@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -55,9 +56,16 @@ export async function GET(request: NextRequest) {
       content: safeDecrypt(report.content),
     }));
 
-    return NextResponse.json(decrypted);
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/terminal/evidence:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -125,6 +133,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/evidence:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

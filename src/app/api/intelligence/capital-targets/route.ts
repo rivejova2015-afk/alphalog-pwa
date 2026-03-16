@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { capitalTargetResponseSchema } from "@/lib/validation/schemas";
 
 type CapitalTargetType = "real" | "propfirm";
 type ManualFieldKey =
@@ -174,7 +177,7 @@ async function validateCapitalAccountLink(
   return { ok: true as const };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -198,9 +201,23 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch targets" }, { status: 500 });
     }
 
-    return NextResponse.json(data || []);
+    const result = data || [];
+
+    const contractResult = enforceResponseContract(capitalTargetResponseSchema.array(), result);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] GET /api/intelligence/capital-targets contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (error) {
     console.error("Error in GET /api/intelligence/capital-targets:", error);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -302,9 +319,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save target" }, { status: 500 });
     }
 
+    const contractResult = enforceResponseContract(capitalTargetResponseSchema, data);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] POST /api/intelligence/capital-targets contract violation:", contractResult.errors);
+    }
+
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("Error in POST /api/intelligence/capital-targets:", error);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

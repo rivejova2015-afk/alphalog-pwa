@@ -1,7 +1,8 @@
 // src/app/api/tradehub/reports/route.ts
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { decryptText } from "@/lib/security/encryption";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -16,7 +17,7 @@ const safeDecrypt = (value?: string | null) => {
  * GET /api/tradehub/reports
  * List all weekly reports for authenticated user
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -45,9 +46,16 @@ export async function GET() {
       content_md: safeDecrypt(report.content_md),
     }));
 
-    return NextResponse.json(decrypted);
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("[Reports GET] Error:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

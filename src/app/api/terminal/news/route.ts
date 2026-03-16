@@ -2,6 +2,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { newsItemResponseSchema } from "@/lib/validation/schemas";
 
 /**
  * GET /api/terminal/news?instrumentId={id}
@@ -47,9 +50,21 @@ export async function GET(request: NextRequest) {
       source: decryptText(item.source),
     }));
 
-    return NextResponse.json(decrypted);
+    const contractResult = enforceResponseContract(newsItemResponseSchema.array(), decrypted);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] GET /api/terminal/news contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/terminal/news:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -125,14 +140,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       ...data,
       title: decryptText(data.title),
       url: decryptText(data.url),
       source: decryptText(data.source),
-    });
+    };
+
+    const contractResult = enforceResponseContract(newsItemResponseSchema, responsePayload);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] POST /api/terminal/news contract violation:", contractResult.errors);
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (err: unknown) {
     console.error("Error in POST /api/terminal/news:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

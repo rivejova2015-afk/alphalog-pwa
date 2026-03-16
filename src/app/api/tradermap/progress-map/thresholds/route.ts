@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 
 /**
  * GET /api/tradermap/progress-map/thresholds
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -24,9 +25,16 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch thresholds" }, { status: 500 });
     }
 
-    return NextResponse.json(data || []);
+    return NextResponse.json(data || [], {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/tradermap/progress-map/thresholds:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -79,6 +87,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error("Error in POST /api/tradermap/progress-map/thresholds:", err);
+    await recordBugFromRequest(request, {
+      userId: null,
+      status: 500,
+      error: err,
+    });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

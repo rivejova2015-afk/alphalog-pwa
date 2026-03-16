@@ -1,6 +1,8 @@
 // src/app/api/accounts/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { accountResponseSchema } from "@/lib/validation/schemas";
 
 /**
  * GET /api/accounts?trash=false
@@ -108,6 +110,11 @@ export async function GET(request: NextRequest) {
         category: null,
       }));
 
+      const contractResult = enforceResponseContract(accountResponseSchema.array(), fallbackMapped);
+      if (!contractResult.ok) {
+        console.warn("[ContractGuard] GET /api/accounts (fallback) contract violation:", contractResult.errors);
+      }
+
       return NextResponse.json(fallbackMapped, {
         headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
       });
@@ -129,6 +136,11 @@ export async function GET(request: NextRequest) {
       sort_index: acc.sort_index,
       category: acc.account_categories ?? null,
     }));
+
+    const contractResult = enforceResponseContract(accountResponseSchema.array(), mapped);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] GET /api/accounts contract violation:", contractResult.errors);
+    }
 
     return NextResponse.json(mapped, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
@@ -244,6 +256,11 @@ export async function POST(request: NextRequest) {
         { error: "Failed to create account" },
         { status: 500 }
       );
+    }
+
+    const contractResult = enforceResponseContract(accountResponseSchema, account);
+    if (!contractResult.ok) {
+      console.warn("[ContractGuard] POST /api/accounts contract violation:", contractResult.errors);
     }
 
     return NextResponse.json(account, { status: 201 });
