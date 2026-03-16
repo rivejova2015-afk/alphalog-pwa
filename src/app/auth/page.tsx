@@ -509,7 +509,7 @@ export default function AuthPage() {
               </div>
             )}
 
-            {hcaptchaSiteKey ? (
+            {hcaptchaSiteKey && (
               <div>
                 <label className="block text-xs uppercase tracking-[0.2em] text-slate-400">
                   Verificacion
@@ -522,10 +522,6 @@ export default function AuthPage() {
                   <p className="mt-2 text-xs text-slate-500">Cargando captcha...</p>
                 )}
               </div>
-            ) : (
-              <p className="text-xs text-amber-300">
-                Falta configurar hCaptcha (NEXT_PUBLIC_HCAPTCHA_SITE_KEY).
-              </p>
             )}
 
             <button
