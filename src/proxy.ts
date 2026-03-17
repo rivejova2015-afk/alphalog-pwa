@@ -103,8 +103,9 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
 
       if (!skipStepUp) {
         const userAgent = request.headers.get("user-agent") || "";
-        const ipHint = getIpHint(request);
-        const fingerprintHash = await hashFingerprint(`${userAgent}|${ipHint}`);
+        // Use only userAgent for fingerprint — IP excluded so mobile users
+        // don't trigger step-up every time they switch WiFi↔cellular.
+        const fingerprintHash = await hashFingerprint(userAgent);
 
         const { data: device, error: deviceError } = await supabase
           .from("auth_device_sessions")
