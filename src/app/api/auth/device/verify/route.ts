@@ -33,8 +33,8 @@ export async function POST(request: Request) {
 
     const userAgent = request.headers.get("user-agent") || "";
     const ipHint = getIpHint(request);
-    const fingerprintSource = `${userAgent}|${ipHint}`;
-    const fingerprintHash = hashFingerprint(fingerprintSource);
+    // Must match the fingerprint logic in proxy.ts (userAgent only, no IP)
+    const fingerprintHash = hashFingerprint(userAgent);
 
     const { data, error } = await supabase
       .from("auth_device_sessions")
