@@ -103,6 +103,7 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
 
       if (!skipStepUp) {
         const userAgent = request.headers.get("user-agent") || "";
+        const ipHint = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
         // Use only userAgent for fingerprint — IP excluded so mobile users
         // don't trigger step-up every time they switch WiFi↔cellular.
         const fingerprintHash = await hashFingerprint(userAgent);
