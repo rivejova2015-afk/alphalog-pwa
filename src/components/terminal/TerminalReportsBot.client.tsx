@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { logger } from "@/lib/alphashield/logger";
 
-type Asset = "US500" | "XAUUSD" | "BOTH";
+type Asset = "XAUUSD";
 
 type Job = {
   id: string;
-  asset: Asset;
+  asset: string;
   scheduled_for: string;
   status: string;
   outcome?: string | null;
@@ -15,14 +15,12 @@ type Job = {
 };
 
 const ASSET_OPTIONS: { value: Asset; label: string }[] = [
-  { value: "US500", label: "US500 (S&P500)" },
   { value: "XAUUSD", label: "XAUUSD (Gold)" },
-  { value: "BOTH", label: "Ambos" },
 ];
 
 export default function TerminalReportsBot() {
-  const [asset, setAsset] = useState<Asset>("US500");
-  const [scheduleAsset, setScheduleAsset] = useState<Asset>("US500");
+  const [asset, setAsset] = useState<Asset>("XAUUSD");
+  const [scheduleAsset, setScheduleAsset] = useState<Asset>("XAUUSD");
   const [datetimePR, setDatetimePR] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);

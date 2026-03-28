@@ -5,11 +5,10 @@ import type { Asset } from "@/lib/news/sources";
 import { ingestNewsForAsset } from "@/lib/news/ingest";
 import { dedupeNews } from "@/lib/news/dedupe";
 import { scoreImpact } from "@/lib/news/impactScore";
-import { analyzeNewsWithAI } from "@/lib/terminal-ia/analyzeWithAI";
 import { buildReportBase } from "@/lib/reports/buildBase";
 import { reportLog } from "@/lib/logging/reportLogs";
 
-const allowedAssets: Asset[] = ["US500", "XAUUSD"];
+const allowedAssets: Asset[] = ["XAUUSD"];
 
 const safeEncrypt = (value: string) => {
   try {
@@ -24,7 +23,7 @@ const buildReportForAsset = async (asset: Asset, title: string) => {
   const { items, failures } = await ingestNewsForAsset(asset);
   if (failures.length > 0) {
     reportLog.failure(
-      `Fuentes fallidas IA ${asset}`,
+      `Fuentes fallidas ${asset}`,
       new Error("Sources failed"),
       {
         failures: failures.map((f) => `${f.source.name}: ${f.reason}`),
@@ -42,19 +41,13 @@ const buildReportForAsset = async (asset: Asset, title: string) => {
     impact: scoreImpact(asset, item).label,
   }));
 
-  let aiAnalysis: Awaited<ReturnType<typeof analyzeNewsWithAI>> = null;
-  try {
-    aiAnalysis = await analyzeNewsWithAI(asset, scored);
-  } catch {
-    // AI analysis is best-effort; fall back to keyword-based
-  }
-
-  return buildReportBase(asset, scored, { titleOverride: title, aiAnalysis });
+  return buildReportBase(asset, scored, { titleOverride: title });
 };
 
 /**
  * POST /api/terminal/evidence/generate
- * Generate evidence report using official news sources (informational only).
+ * Generate evidence report using official news sources (keyword-based).
+ * AI analysis is handled externally by Lattice agents via /api/terminal/reports/analyze.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -105,10 +98,7 @@ export async function POST(request: NextRequest) {
 
     const reports = await Promise.all(
       assetsToRun.map((asset) =>
-        buildReportForAsset(
-          asset,
-          assetsToRun.length > 1 ? `${title.trim()} - ${asset}` : title.trim()
-        )
+        buildReportForAsset(asset, title.trim())
       )
     );
 

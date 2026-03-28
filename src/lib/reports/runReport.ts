@@ -3,19 +3,21 @@ import type { Asset } from "@/lib/news/sources";
 import { ingestNewsForAsset } from "@/lib/news/ingest";
 import { dedupeNews } from "@/lib/news/dedupe";
 import { scoreImpact } from "@/lib/news/impactScore";
-import { analyzeNewsWithAI } from "@/lib/terminal-ia/analyzeWithAI";
 import { buildUS500Report } from "@/lib/reports/buildUS500";
 import { buildXAUUSDReport } from "@/lib/reports/buildXAUUSD";
 import { saveReportEvidence } from "@/lib/evidence/saveReport";
 import { reportLog } from "@/lib/logging/reportLogs";
 import type { ScoredNewsItem } from "@/lib/reports/buildBase";
 import type { ReportBuild } from "@/lib/reports/types";
+import type { AIAnalysis } from "@/lib/terminal-ia/analyzeWithAI";
 
 type RunReportInput = {
   supabase: SupabaseClient;
   userId: string;
   asset: Asset;
   lookbackDays: number;
+  /** Optional AI analysis provided by external agents (e.g. Lattice). */
+  aiAnalysis?: AIAnalysis | null;
 };
 
 export type RunReportOutcome = "done" | "done_no_changes" | "failed";
@@ -33,7 +35,7 @@ export type RunReportResult = {
 const buildReport = (
   asset: Asset,
   items: ScoredNewsItem[],
-  aiAnalysis?: Awaited<ReturnType<typeof analyzeNewsWithAI>>
+  aiAnalysis?: AIAnalysis | null,
 ): ReportBuild => {
   if (asset === "US500") return buildUS500Report(items, aiAnalysis);
   return buildXAUUSDReport(items, aiAnalysis);
@@ -63,6 +65,7 @@ export const runReportPipeline = async ({
   userId,
   asset,
   lookbackDays,
+  aiAnalysis: externalAI,
 }: RunReportInput): Promise<RunReportResult> => {
   reportLog.start(`Inicio reporte ${asset}`, { asset, userId });
 
@@ -123,20 +126,7 @@ export const runReportPipeline = async ({
       };
     }
 
-    let aiAnalysis: Awaited<ReturnType<typeof analyzeNewsWithAI>> = null;
-    try {
-      aiAnalysis = await analyzeNewsWithAI(asset, scored);
-      if (aiAnalysis) {
-        reportLog.start(`IA completada ${asset}`, {
-          sentiment: aiAnalysis.sentiment_label,
-          confidence: aiAnalysis.confidence,
-        });
-      }
-    } catch (err) {
-      reportLog.failure(`IA fallida ${asset}`, err, { asset });
-    }
-
-    const report = buildReport(asset, scored, aiAnalysis);
+    const report = buildReport(asset, scored, externalAI);
     const instrumentId = await getInstrumentId(supabase, asset);
     const { reportId } = await saveReportEvidence({
       userId,
