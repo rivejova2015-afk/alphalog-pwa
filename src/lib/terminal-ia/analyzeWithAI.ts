@@ -12,12 +12,14 @@ export type AIAnalysis = {
   confidence: number;
 };
 
-type OpenAIChatResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string;
-    };
+type ClaudeResponse = {
+  content?: Array<{
+    type: string;
+    text?: string;
   }>;
+  error?: {
+    message?: string;
+  };
 };
 
 const ASSET_CONTEXT: Record<Asset, string> = {
@@ -55,17 +57,18 @@ Reglas:
 - Escribe en español profesional y conciso.
 - No inventes datos ni precios. Solo analiza lo que te dan.
 - Si los datos son insuficientes, indica confidence bajo (<40) y mencionalo en sentiment_reasoning.
-- Prioriza noticias de alto impacto (FOMC, CPI, NFP, GDP) sobre las de medio impacto.`;
+- Prioriza noticias de alto impacto (FOMC, CPI, NFP, GDP) sobre las de medio impacto.
+- Responde SOLO con el JSON, sin texto adicional.`;
 
 /**
- * Analyzes scored news items using OpenAI gpt-4o-mini.
+ * Analyzes scored news items using Claude (Anthropic API).
  * Returns null if AI is unavailable or analysis fails (caller should fall back to keyword-based).
  */
 export const analyzeNewsWithAI = async (
   asset: Asset,
   items: ScoredNewsItem[],
 ): Promise<AIAnalysis | null> => {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
   const relevant = items
@@ -84,26 +87,25 @@ export const analyzeNewsWithAI = async (
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        system: buildSystemPrompt(asset),
         messages: [
-          { role: "system", content: buildSystemPrompt(asset) },
           {
             role: "user",
             content: `Analiza estas ${relevant.length} noticias de impacto medio/alto para ${asset} de los últimos 7 días:\n\n${newsBlock}`,
           },
         ],
-        response_format: { type: "json_object" },
-        max_tokens: 1000,
-        temperature: 0.3,
       }),
       signal: controller.signal,
     });
@@ -112,11 +114,16 @@ export const analyzeNewsWithAI = async (
 
     if (!response.ok) return null;
 
-    const data = (await response.json()) as OpenAIChatResponse;
-    const content = data.choices?.[0]?.message?.content;
+    const data = (await response.json()) as ClaudeResponse;
+    const textBlock = data.content?.find((block) => block.type === "text");
+    const content = textBlock?.text;
     if (!content) return null;
 
-    const raw = JSON.parse(content) as Record<string, unknown>;
+    // Extract JSON from response (Claude may wrap in markdown code blocks)
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const raw = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
 
     const validLabels = ["Bullish", "Bearish", "Neutral"] as const;
     const rawLabel = raw.sentiment_label;

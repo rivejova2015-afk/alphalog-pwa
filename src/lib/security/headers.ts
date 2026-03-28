@@ -87,7 +87,8 @@ export function getCSPHeader(): string {
       baseUrl,
       supabaseUrl,
       "*.supabase.co",
-      "https://api.openai.com", // OpenAI API
+      "https://api.openai.com", // OpenAI API (knowledge-factory)
+      "https://api.anthropic.com", // Claude API (terminal reports)
       "https://api.postmarkapp.com", // Postmark
       "https://qstash.upstash.io", // QStash
       "https://hcaptcha.com", // hCaptcha
