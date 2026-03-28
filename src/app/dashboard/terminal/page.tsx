@@ -1,10 +1,8 @@
 // src/app/dashboard/terminal/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { Radio, Calendar, BarChart3, Search, Zap } from "lucide-react";
-import { clusterStories, NewsItem } from '@/lib/terminal-ia/storyClustering';
-import { buildImpactMatrix, ImpactMatrixRow } from '@/lib/terminal-ia/impactMatrix';
+import { useState, useEffect, useCallback } from "react";
+import { Radio, Calendar, BarChart3, Search, Zap, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
 import NewsPanel from "@/components/terminal/NewsPanel.client";
 import CalendarPanel from "@/components/terminal/CalendarPanel.client";
 import EvidenceReports from "@/components/terminal/EvidenceReports.client";
@@ -23,56 +21,175 @@ interface TerminalTab {
 }
 
 const TABS: TerminalTab[] = [
-  { id: "overview", label: "Overview", icon: <Zap className="w-4 h-4" />, description: "Market overview" },
-  { id: "news", label: "News", icon: <Radio className="w-4 h-4" />, description: "Latest news & events" },
-  { id: "calendar", label: "Calendar", icon: <Calendar className="w-4 h-4" />, description: "Economic calendar" },
-  { id: "evidence", label: "Evidence", icon: <BarChart3 className="w-4 h-4" />, description: "AI-powered analysis" },
-  { id: "search", label: "Search", icon: <Search className="w-4 h-4" />, description: "Market search" },
+  { id: "overview", label: "Overview", icon: <Zap className="w-4 h-4" />, description: "Resumen del mercado" },
+  { id: "news", label: "News", icon: <Radio className="w-4 h-4" />, description: "Noticias e instrumentos" },
+  { id: "calendar", label: "Calendar", icon: <Calendar className="w-4 h-4" />, description: "Calendario economico" },
+  { id: "evidence", label: "Evidence", icon: <BarChart3 className="w-4 h-4" />, description: "Analisis con IA" },
+  { id: "search", label: "Search", icon: <Search className="w-4 h-4" />, description: "Buscar en el mercado" },
 ];
 
-function TerminalOverview() {
+type OverviewReport = {
+  id: string;
+  title: string;
+  created_at: string;
+  instrument_id: string | null;
+};
+
+type OverviewStats = {
+  newsCount: number;
+  eventsCount: number;
+  reportsCount: number;
+  latestReports: OverviewReport[];
+  loading: boolean;
+};
+
+function SentimentBadge({ label }: { label: string }) {
+  if (label.includes("Buy") || label.includes("Bullish")) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/50 border border-emerald-700/60 text-emerald-300 text-xs font-medium">
+        <TrendingUp className="w-3 h-3" /> Bullish
+      </span>
+    );
+  }
+  if (label.includes("Sell") || label.includes("Bearish")) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-900/50 border border-red-700/60 text-red-300 text-xs font-medium">
+        <TrendingDown className="w-3 h-3" /> Bearish
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-slate-300 text-xs font-medium">
+      <Minus className="w-3 h-3" /> Neutral
+    </span>
+  );
+}
+
+function TerminalOverview({ stats, onRefresh }: { stats: OverviewStats; onRefresh: () => void }) {
+  if (stats.loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl bg-slate-800/50 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  const hasData = stats.newsCount > 0 || stats.eventsCount > 0 || stats.reportsCount > 0;
+
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)] backdrop-blur">
-        <h3 className="display-font text-lg font-semibold text-slate-100 mb-2">Overview</h3>
-        <p className="text-sm text-slate-400">
-          Aún no hay datos suficientes para mostrar un resumen. Genera reportes o agrega noticias/eventos para ver métricas aquí.
-        </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-5">
+          <p className="text-xs text-slate-400 mb-1">Noticias rastreadas</p>
+          <p className="text-2xl font-semibold text-slate-100">{stats.newsCount}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-5">
+          <p className="text-xs text-slate-400 mb-1">Eventos economicos</p>
+          <p className="text-2xl font-semibold text-slate-100">{stats.eventsCount}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-5">
+          <p className="text-xs text-slate-400 mb-1">Reportes generados</p>
+          <p className="text-2xl font-semibold text-slate-100">{stats.reportsCount}</p>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-700/60 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)]">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-slate-100">Ultimos reportes</h3>
+          <button
+            onClick={onRefresh}
+            className="p-1.5 rounded-lg hover:bg-slate-800/70 text-slate-400 transition"
+            title="Refrescar"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+        {!hasData ? (
+          <div className="text-center py-8">
+            <BarChart3 className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-400">
+              Sin datos aun. Genera un reporte en la tab Evidence para comenzar.
+            </p>
+          </div>
+        ) : stats.latestReports.length === 0 ? (
+          <p className="text-sm text-slate-400">No hay reportes generados todavia.</p>
+        ) : (
+          <div className="space-y-3">
+            {stats.latestReports.map((report) => {
+              const titleText = report.title;
+              const sentimentMatch = titleText.match(/sentiment_label:\s*(\w+)/);
+              const sentimentLabel = sentimentMatch?.[1] ?? "";
+              const displayTitle = titleText.replace(/\s*\[IA\]/, "").split(" - ")[0] || titleText;
+
+              return (
+                <div
+                  key={report.id}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/50 border border-slate-700/50 px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-100 font-medium truncate">{displayTitle}</p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(report.created_at).toLocaleDateString("es-PR", {
+                        timeZone: "America/Puerto_Rico",
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  {sentimentLabel && <SentimentBadge label={sentimentLabel} />}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export default function TerminalPage() {
-    // Demo: fake news items
-    const demoNews: NewsItem[] = [
-      { id: '1', title: 'Fed raises rates', content: '...', topic: 'Fed', date: new Date() },
-      { id: '2', title: 'ECB holds rates', content: '...', topic: 'ECB', date: new Date() },
-      { id: '3', title: 'Fed signals pause', content: '...', topic: 'Fed', date: new Date() },
-    ];
-    const clusters = clusterStories(demoNews);
-    const impactMatrix = buildImpactMatrix([
-      { topic: 'Fed', impact: 'High', bias: 'Hawkish', confidence: 0.9 },
-      { topic: 'ECB', impact: 'Medium', bias: 'Neutral', confidence: 0.7 },
-    ]);
   const [activeTab, setActiveTab] = useState<TerminalTabType>("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [stats, setStats] = useState<OverviewStats>({
+    newsCount: 0,
+    eventsCount: 0,
+    reportsCount: 0,
+    latestReports: [],
+    loading: true,
+  });
+
+  const fetchOverview = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const [news, events, reports, latestReports] = await Promise.all([
+        supabase.from("terminal_news").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("deleted_at", null),
+        supabase.from("terminal_events").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("deleted_at", null),
+        supabase.from("terminal_evidence_reports").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("deleted_at", null),
+        supabase.from("terminal_evidence_reports").select("id, title, created_at, instrument_id").eq("user_id", user.id).is("deleted_at", null).order("created_at", { ascending: false }).limit(5),
+      ]);
+
+      setStats({
+        newsCount: news.count ?? 0,
+        eventsCount: events.count ?? 0,
+        reportsCount: reports.count ?? 0,
+        latestReports: (latestReports.data ?? []) as OverviewReport[],
+        loading: false,
+      });
+    } catch {
+      setStats((prev) => ({ ...prev, loading: false }));
+    }
+  }, []);
 
   useEffect(() => {
-    const getUser = async () => {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUserId(user.id);
-        }
-      } catch (err) {
-        console.error("[Terminal] Error getting user:", err);
-      }
-    };
-    getUser();
-  }, []);
+    fetchOverview();
+  }, [fetchOverview]);
 
   const currentTab = TABS.find(t => t.id === activeTab);
 
@@ -156,38 +273,10 @@ export default function TerminalPage() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">
-            {activeTab === "overview" && <TerminalOverview />}
+            {activeTab === "overview" && (
+              <TerminalOverview stats={stats} onRefresh={fetchOverview} />
+            )}
             {activeTab === "news" && <NewsPanel />}
-                    {activeTab === "news" && (
-                      <div className="mb-8">
-                        <h3 className="text-lg font-semibold text-white mb-2">Story Clustering</h3>
-                        <ul className="mb-4">
-                          {clusters.map(cluster => (
-                            <li key={cluster.topic} className="mb-2">
-                              <span className="font-bold text-blue-300">{cluster.topic}</span>: {cluster.items.length} noticias
-                            </li>
-                          ))}
-                        </ul>
-                        <h3 className="text-lg font-semibold text-white mb-2">Impact Matrix</h3>
-                        <table className="table-mobile-cards w-full text-xs text-slate-200">
-                          <thead>
-                            <tr>
-                              <th>Tema</th><th>Impacto</th><th>Sesgo</th><th>Confianza</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {impactMatrix.map(row => (
-                              <tr key={row.topic}>
-                                <td data-label="Tema">{row.topic}</td>
-                                <td data-label="Impacto">{row.impact}</td>
-                                <td data-label="Sesgo">{row.bias}</td>
-                                <td data-label="Confianza">{(row.confidence*100).toFixed(0)}%</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
             {activeTab === "calendar" && <CalendarPanel />}
             {activeTab === "evidence" && (
               <div className="space-y-6">
@@ -198,8 +287,8 @@ export default function TerminalPage() {
             {activeTab === "search" && (
               <div className="text-center py-12">
                 <Search className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-slate-200 font-medium">Search Markets</h3>
-                <p className="text-slate-400 text-sm">Coming soon</p>
+                <h3 className="text-slate-200 font-medium">Busqueda de mercado</h3>
+                <p className="text-slate-400 text-sm">Proximamente</p>
               </div>
             )}
           </div>

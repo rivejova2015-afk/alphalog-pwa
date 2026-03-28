@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import type { Asset } from "@/lib/news/sources";
 import type { NewsItem } from "@/lib/news/ingest";
 import type { ImpactLabel } from "@/lib/news/impactScore";
+import type { AIAnalysis } from "@/lib/terminal-ia/analyzeWithAI";
 import type { ReportBuild, ReportSection, SentimentLabel } from "./types";
 
 export type ScoredNewsItem = NewsItem & { impact: ImpactLabel };
@@ -224,8 +225,40 @@ const buildSections = (
   ];
 };
 
+const buildAISections = (
+  ai: AIAnalysis,
+  dataSection: ReportSection,
+): ReportSection[] => {
+  return [
+    {
+      title: "Contexto del mercado (IA)",
+      bullets: [ai.market_context],
+    },
+    dataSection,
+    {
+      title: "Análisis y sentimiento (IA)",
+      bullets: [
+        ai.sentiment_reasoning,
+        `Sentimiento: ${ai.sentiment_label} (score ${ai.sentiment_score}, confianza ${ai.confidence}%)`,
+      ],
+    },
+    {
+      title: "Drivers clave (IA)",
+      bullets:
+        ai.key_drivers.length > 0
+          ? ai.key_drivers
+          : ["No se identificaron drivers clave en este periodo."],
+    },
+    {
+      title: "Perspectiva y sesgo (IA)",
+      bullets: [ai.forward_outlook, `Sesgo operativo: ${ai.trading_bias}`],
+    },
+  ];
+};
+
 type BuildOptions = {
   titleOverride?: string;
+  aiAnalysis?: AIAnalysis | null;
 };
 
 export const buildReportBase = (
@@ -239,20 +272,46 @@ export const buildReportBase = (
     .update(relevantItemIds.join("|"))
     .digest("hex");
 
-  const sentiment = computeSentiment(asset, relevantItems);
+  const ai = options.aiAnalysis ?? null;
+  const keywordSentiment = computeSentiment(asset, relevantItems);
   const incompleteReasons: string[] = [];
 
   if (relevantItems.length === 0) {
     incompleteReasons.push("Sin eventos de impacto medio/alto en los ultimos 7 dias.");
   }
 
-  const sections = buildSections(
-    items,
-    relevantItems,
-    sentiment.score,
-    sentiment.label,
-    incompleteReasons
-  );
+  const effectiveScore = ai ? ai.sentiment_score : keywordSentiment.score;
+  const effectiveLabel: SentimentLabel = ai
+    ? (ai.sentiment_label === "Bullish" ? "Buy" : ai.sentiment_label === "Bearish" ? "Sell" : "Neutral")
+    : keywordSentiment.label;
+
+  const dataSection: ReportSection = (() => {
+    const sorted = [...relevantItems].sort(
+      (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime()
+    );
+    const bullets = sorted.map((item) => {
+      const impactLabel = item.impact === "high" ? "Alto" : "Medio";
+      return `${item.title} (${impactLabel}, ${item.source}, ${formatDate(item.publishedAt)})`;
+    });
+    return {
+      title: "Ultimos 7 dias (datos)",
+      bullets:
+        bullets.length > 0
+          ? bullets
+          : ["Sin eventos medio/alto en los ultimos 7 dias."],
+    };
+  })();
+
+  const sections = ai
+    ? buildAISections(ai, dataSection)
+    : buildSections(
+        items,
+        relevantItems,
+        keywordSentiment.score,
+        keywordSentiment.label,
+        incompleteReasons
+      );
+
   const incomplete = incompleteReasons.length > 0;
 
   const titleRaw = options.titleOverride?.trim();
@@ -261,10 +320,16 @@ export const buildReportBase = (
       ? titleRaw
       : `Reporte Terminal ${asset} - ${formatDateUtc(new Date())}`;
 
+  const analysisTag = ai ? " [IA]" : "";
+
   const summaryParts = [
-    `${incomplete ? "Informe incompleto" : "Informe completo"}: ${relevantItems.length} eventos de impacto medio/alto en los ultimos 7 dias.`,
-    `sentiment_score: ${sentiment.score} | sentiment_label: ${sentiment.label}.`,
+    `${incomplete ? "Informe incompleto" : "Informe completo"}${analysisTag}: ${relevantItems.length} eventos de impacto medio/alto en los ultimos 7 dias.`,
+    `sentiment_score: ${effectiveScore} | sentiment_label: ${effectiveLabel}.`,
   ];
+
+  if (ai) {
+    summaryParts.push(`Sesgo: ${ai.trading_bias} (confianza ${ai.confidence}%).`);
+  }
 
   if (incomplete) {
     summaryParts.push(`Motivos: ${incompleteReasons.join(" | ")}`);
@@ -305,9 +370,10 @@ export const buildReportBase = (
     sections,
     relevantItemIds,
     hash,
-    sentimentScore: sentiment.score,
-    sentimentLabel: sentiment.label,
+    sentimentScore: effectiveScore,
+    sentimentLabel: effectiveLabel,
     incomplete,
     incompleteReasons,
+    aiAnalysis: ai,
   };
 };

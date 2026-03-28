@@ -5,6 +5,7 @@ import type { Asset } from "@/lib/news/sources";
 import { ingestNewsForAsset } from "@/lib/news/ingest";
 import { dedupeNews } from "@/lib/news/dedupe";
 import { scoreImpact } from "@/lib/news/impactScore";
+import { analyzeNewsWithAI } from "@/lib/terminal-ia/analyzeWithAI";
 import { buildReportBase } from "@/lib/reports/buildBase";
 import { reportLog } from "@/lib/logging/reportLogs";
 
@@ -41,7 +42,14 @@ const buildReportForAsset = async (asset: Asset, title: string) => {
     impact: scoreImpact(asset, item).label,
   }));
 
-  return buildReportBase(asset, scored, { titleOverride: title });
+  let aiAnalysis: Awaited<ReturnType<typeof analyzeNewsWithAI>> = null;
+  try {
+    aiAnalysis = await analyzeNewsWithAI(asset, scored);
+  } catch {
+    // AI analysis is best-effort; fall back to keyword-based
+  }
+
+  return buildReportBase(asset, scored, { titleOverride: title, aiAnalysis });
 };
 
 /**

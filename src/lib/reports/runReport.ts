@@ -3,6 +3,7 @@ import type { Asset } from "@/lib/news/sources";
 import { ingestNewsForAsset } from "@/lib/news/ingest";
 import { dedupeNews } from "@/lib/news/dedupe";
 import { scoreImpact } from "@/lib/news/impactScore";
+import { analyzeNewsWithAI } from "@/lib/terminal-ia/analyzeWithAI";
 import { buildUS500Report } from "@/lib/reports/buildUS500";
 import { buildXAUUSDReport } from "@/lib/reports/buildXAUUSD";
 import { saveReportEvidence } from "@/lib/evidence/saveReport";
@@ -29,9 +30,13 @@ export type RunReportResult = {
   incompleteReasons?: string[];
 };
 
-const buildReport = (asset: Asset, items: ScoredNewsItem[]): ReportBuild => {
-  if (asset === "US500") return buildUS500Report(items);
-  return buildXAUUSDReport(items);
+const buildReport = (
+  asset: Asset,
+  items: ScoredNewsItem[],
+  aiAnalysis?: Awaited<ReturnType<typeof analyzeNewsWithAI>>
+): ReportBuild => {
+  if (asset === "US500") return buildUS500Report(items, aiAnalysis);
+  return buildXAUUSDReport(items, aiAnalysis);
 };
 
 const getInstrumentId = async (
@@ -118,7 +123,20 @@ export const runReportPipeline = async ({
       };
     }
 
-    const report = buildReport(asset, scored);
+    let aiAnalysis: Awaited<ReturnType<typeof analyzeNewsWithAI>> = null;
+    try {
+      aiAnalysis = await analyzeNewsWithAI(asset, scored);
+      if (aiAnalysis) {
+        reportLog.start(`IA completada ${asset}`, {
+          sentiment: aiAnalysis.sentiment_label,
+          confidence: aiAnalysis.confidence,
+        });
+      }
+    } catch (err) {
+      reportLog.failure(`IA fallida ${asset}`, err, { asset });
+    }
+
+    const report = buildReport(asset, scored, aiAnalysis);
     const instrumentId = await getInstrumentId(supabase, asset);
     const { reportId } = await saveReportEvidence({
       userId,

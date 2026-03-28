@@ -1,4 +1,5 @@
 import type { Asset } from "@/lib/news/sources";
+import type { AIAnalysis } from "@/lib/terminal-ia/analyzeWithAI";
 
 export type ReportSection = {
   title: string;
@@ -20,4 +21,5 @@ export type ReportBuild = {
   sentimentLabel: SentimentLabel;
   incomplete: boolean;
   incompleteReasons: string[];
+  aiAnalysis?: AIAnalysis | null;
 };
