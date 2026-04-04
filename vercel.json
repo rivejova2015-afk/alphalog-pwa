@@ -21,6 +21,14 @@
     {
       "path": "/api/cron/terminal/news-fetch",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/terminal/price-fetch",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/terminal/calendar-fetch",
+      "schedule": "0 6 * * 1"
     }
   ]
 }

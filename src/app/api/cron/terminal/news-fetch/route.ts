@@ -4,7 +4,7 @@
  *
  * Purpose:
  *   - Fetch news from Finnhub (general + forex) and Alpha Vantage (SPY, GLD)
- *   - Analyze with OpenAI gpt-4o-mini for trading relevancy and impact
+ *   - Analyze with Anthropic claude-haiku-4-5-20251001 for trading relevancy and impact
  *   - Insert relevant news (relevancy_score >= 30) into terminal_news table
  *   - Send push notification for first High Impact item (score >= 70)
  *
@@ -16,7 +16,7 @@
  * Environment:
  *   - FINNHUB_API_KEY       — Finnhub market news API
  *   - ALPHA_VANTAGE_API_KEY — Alpha Vantage news sentiment API
- *   - OPENAI_API_KEY        — GPT-4o-mini analysis
+ *   - ANTHROPIC_API_KEY     — claude-haiku-4-5-20251001 analysis
  *   - CRON_SECRET           — Auth token
  *   - INTERNAL_API_SECRET   — Push notification auth
  */
@@ -292,38 +292,35 @@ async function handleNewsFetch(request: NextRequest) {
 
     const batchToAnalyze = classified.slice(0, MAX_ANALYZE);
 
-    // 7. OpenAI Analysis
+    // 7. Anthropic Haiku Analysis
     let analyzed: AnalyzedNews[];
 
-    if (batchToAnalyze.length > 0 && process.env.OPENAI_API_KEY) {
+    if (batchToAnalyze.length > 0 && process.env.ANTHROPIC_API_KEY) {
       try {
         const aiController = new AbortController();
         const aiTimeout    = setTimeout(() => aiController.abort(), 20_000);
 
-        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
-            Authorization:  `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
+            'x-api-key':         process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+            'Content-Type':      'application/json',
           },
           body: JSON.stringify({
-            model:           'gpt-4o-mini',
-            temperature:     0.1,
-            response_format: { type: 'json_object' },
+            model:      'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+            system: `You are a financial news analyst for a prop trader who trades US500 (S&P 500) and XAUUSD (Gold). Analyze each news item and rate its trading relevance. Return ONLY a valid JSON object with an "items" array. Each item must have: "index" (number, matching input order), "relevancy_score" (integer 0-100, where 0=noise 100=must-trade-now), "impact_label" ("High" or "Medium" or "Low"), "sentiment" ("Bullish" or "Bearish" or "Neutral"). High impact = directly moves price of the instrument. Medium = context that affects multi-day outlook. Low = general background noise. Be strict: most financial news is Low (score 10-30). Only truly market-moving events like FOMC decisions, major earnings surprises, geopolitical shocks, or significant economic data releases deserve High (score 70+). Return only JSON, no explanation.`,
             messages: [
               {
-                role: 'system',
-                content: `You are a financial news analyst for a prop trader who trades US500 (S&P 500) and XAUUSD (Gold). Analyze each news item and rate its trading relevance. Return a JSON object with an "items" array. Each item must have: "index" (number, matching input order), "relevancy_score" (integer 0-100, where 0=noise 100=must-trade-now), "impact_label" ("High" or "Medium" or "Low"), "sentiment" ("Bullish" or "Bearish" or "Neutral"). High impact = directly moves price of the instrument. Medium = context that affects multi-day outlook. Low = general background noise. Be strict: most financial news is Low (score 10-30). Only truly market-moving events like FOMC decisions, major earnings surprises, geopolitical shocks, or significant economic data releases deserve High (score 70+).`,
-              },
-              {
-                role: 'user',
+                role:    'user',
                 content: JSON.stringify(
                   batchToAnalyze.map((n, i) => ({
-                    index:       i,
-                    instrument:  n.instrumentSymbol,
-                    title:       n.title,
-                    summary:     n.summary?.slice(0, 200),
-                    source:      n.source,
+                    index:        i,
+                    instrument:   n.instrumentSymbol,
+                    title:        n.title,
+                    summary:      n.summary?.slice(0, 200),
+                    source:       n.source,
                     av_sentiment: n.av_sentiment_label ?? null,
                   }))
                 ),
@@ -333,14 +330,14 @@ async function handleNewsFetch(request: NextRequest) {
           signal: aiController.signal,
         }).finally(() => clearTimeout(aiTimeout));
 
-        if (!aiRes.ok) throw new Error(`OpenAI HTTP ${aiRes.status}`);
+        if (!aiRes.ok) throw new Error(`Anthropic HTTP ${aiRes.status}`);
 
-        const aiJson     = await aiRes.json();
-        const rawContent = aiJson.choices?.[0]?.message?.content;
-        if (!rawContent) throw new Error('Empty OpenAI response');
+        const aiJson     = await aiRes.json() as { content?: Array<{ type: string; text: string }> };
+        const rawContent = aiJson.content?.[0]?.text;
+        if (!rawContent) throw new Error('Empty Anthropic response');
 
         const parsedAI = OAIResponseSchema.safeParse(JSON.parse(rawContent));
-        if (!parsedAI.success) throw new Error('OpenAI schema mismatch');
+        if (!parsedAI.success) throw new Error('Anthropic schema mismatch');
 
         analyzed = batchToAnalyze.map((item, i) => {
           const aiItem = parsedAI.data.items.find((a) => a.index === i);
@@ -351,7 +348,7 @@ async function handleNewsFetch(request: NextRequest) {
           };
         });
       } catch (e) {
-        console.error('[news-fetch] OpenAI error, using defaults:', e);
+        console.error('[news-fetch] Anthropic error, using defaults:', e);
         analyzed = batchToAnalyze.map((item) => ({
           ...item, relevancy_score: 50, impact_label: 'Medium',
         }));

@@ -2,16 +2,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Radio, Calendar, BarChart3, Search, Zap, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
+import { Radio, Calendar, BarChart3, Search, Zap, TrendingUp, TrendingDown, Minus, RefreshCw, Bot } from "lucide-react";
 import NewsPanel from "@/components/terminal/NewsPanel.client";
 import CalendarPanel from "@/components/terminal/CalendarPanel.client";
 import EvidenceReports from "@/components/terminal/EvidenceReports.client";
 import TerminalReportsBot from "@/components/terminal/TerminalReportsBot.client";
+import { AssistantPanel } from "@/components/terminal/AssistantPanel.client";
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
 import { createClient } from "@/lib/supabase/browser";
 
-type TerminalTabType = "news" | "calendar" | "evidence" | "search" | "overview";
+type TerminalTabType = "news" | "calendar" | "evidence" | "search" | "overview" | "assistant";
 
 interface TerminalTab {
   id: TerminalTabType;
@@ -22,6 +23,7 @@ interface TerminalTab {
 
 const TABS: TerminalTab[] = [
   { id: "overview", label: "Overview", icon: <Zap className="w-4 h-4" />, description: "Resumen del mercado" },
+  { id: "assistant", label: "Asistente", icon: <Bot className="w-4 h-4" />, description: "Chat con IA financiera" },
   { id: "news", label: "News", icon: <Radio className="w-4 h-4" />, description: "Noticias e instrumentos" },
   { id: "calendar", label: "Calendar", icon: <Calendar className="w-4 h-4" />, description: "Calendario economico" },
   { id: "evidence", label: "Evidence", icon: <BarChart3 className="w-4 h-4" />, description: "Analisis con IA" },
@@ -275,6 +277,11 @@ export default function TerminalPage() {
           <div className="max-w-7xl mx-auto">
             {activeTab === "overview" && (
               <TerminalOverview stats={stats} onRefresh={fetchOverview} />
+            )}
+            {activeTab === "assistant" && (
+              <div className="h-[calc(100vh-200px)] min-h-[500px]">
+                <AssistantPanel />
+              </div>
             )}
             {activeTab === "news" && <NewsPanel />}
             {activeTab === "calendar" && <CalendarPanel />}
