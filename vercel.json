@@ -29,6 +29,14 @@
     {
       "path": "/api/cron/terminal/calendar-fetch",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/ops/cron/polyarb-heartbeat",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/ops/cron/polyarb-daily-report",
+      "schedule": "0 22 * * *"
     }
   ]
 }
