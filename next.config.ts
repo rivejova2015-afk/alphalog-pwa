@@ -53,20 +53,36 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
-      // Trading Hub
-      { source: '/trading/tradehub', destination: '/trading/tabs/tradehub', permanent: true },
+      // === AlphaLog 2.0 redirects ===
+      // Trading → Intelligence Suite (algo-trading)
+      { source: '/trading/tabs/tradehub', destination: '/intelligence/algo-trading', permanent: true },
+      { source: '/trading/tradehub', destination: '/intelligence/algo-trading', permanent: true },
+      { source: '/trading/tabs/bot-control', destination: '/intelligence/agents', permanent: true },
+      { source: '/trading/bot-control', destination: '/intelligence/agents', permanent: true },
+      { source: '/trading/trades', destination: '/intelligence/algo-trading/trades', permanent: true },
+      { source: '/trading/evidence', destination: '/intelligence/algo-trading/evidence', permanent: true },
+      { source: '/trading/playbook', destination: '/intelligence/algo-trading/playbook', permanent: true },
+      { source: '/trading/reports', destination: '/intelligence/algo-trading/reports', permanent: true },
+      // Intelligence tabs → flattened
+      { source: '/intelligence/tabs/capital-levels', destination: '/intelligence/capital-levels', permanent: true },
+      { source: '/intelligence/tabs/constraint-solver', destination: '/intelligence/constraint-solver', permanent: true },
+      { source: '/intelligence/tabs/mindops', destination: '/intelligence/mindops', permanent: true },
+      { source: '/intelligence/tabs/knowledge-factory', destination: '/intelligence/knowledge-factory', permanent: true },
+      // Dashboard duplicates → Intelligence
+      { source: '/dashboard/polyarb', destination: '/intelligence/agents/polyarb', permanent: true },
+      { source: '/dashboard/bot-control', destination: '/intelligence/agents', permanent: true },
+      // TraderMap → Map Hot
+      { source: '/dashboard/tradermap', destination: '/map/goals', permanent: true },
+      { source: '/dashboard/tradermap/progress-map', destination: '/map/progress', permanent: true },
+      { source: '/trading/tabs/tradermap', destination: '/map/goals', permanent: true },
+      { source: '/trading/tradermap', destination: '/map/goals', permanent: true },
+      // Trading Hub (keep terminal + journal for now)
       { source: '/trading/terminal', destination: '/trading/tabs/terminal', permanent: true },
-      { source: '/trading/bot-control', destination: '/trading/tabs/bot-control', permanent: true },
       { source: '/trading/journal-pt', destination: '/trading/tabs/journal-pt', permanent: true },
-      { source: '/trading/tradermap', destination: '/trading/tabs/tradermap', permanent: true },
-      // Business Hub
-      { source: '/business/treasury', destination: '/business/tabs/treasury', permanent: true },
-      { source: '/business/business', destination: '/business/tabs/business', permanent: true },
-      // Intelligence Suite
-      { source: '/intelligence/capital-levels', destination: '/intelligence/tabs/capital-levels', permanent: true },
-      { source: '/intelligence/constraint-solver', destination: '/intelligence/tabs/constraint-solver', permanent: true },
-      { source: '/intelligence/mindops', destination: '/intelligence/tabs/mindops', permanent: true },
-      { source: '/intelligence/knowledge-factory', destination: '/intelligence/tabs/knowledge-factory', permanent: true },
+      // Business Hub (tabs → flattened)
+      { source: '/business/tabs/treasury', destination: '/business/treasury', permanent: true },
+      { source: '/business/tabs/business', destination: '/business/operations', permanent: true },
+      { source: '/business/business', destination: '/business/operations', permanent: true },
     ];
   },
 };

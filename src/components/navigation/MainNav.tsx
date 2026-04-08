@@ -8,12 +8,12 @@ const mainNav = [
 
 export default function MainNav() {
   return (
-    <nav className="main-nav flex gap-6 py-4 px-8 border-b border-gold bg-black/80">
+    <nav className="main-nav flex gap-6 py-4 px-8 border-b border-cyan-400/30 bg-black/80">
       {mainNav.map((item) => (
         <a
           key={item.href}
           href={item.href}
-          className="text-xl font-serif text-gold hover:text-white transition-all"
+          className="text-xl font-mono text-cyan-400 hover:text-white transition-all"
         >
           {item.label}
         </a>

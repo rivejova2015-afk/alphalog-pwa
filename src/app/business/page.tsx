@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 export default function BusinessPage() {
-  redirect('/business/tabs/treasury');
+  redirect('/business/treasury');
   return null;
 }

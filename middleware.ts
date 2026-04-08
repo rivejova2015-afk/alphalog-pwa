@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname;
-  const isDashboard = pathname.startsWith("/dashboard");
+  const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/map");
   const isApi = pathname.startsWith("/api");
 
   const publicApiPrefixes = [

@@ -34,7 +34,7 @@ export default async function MindOpsTab() {
   if (!data.authenticated) {
     return (
       <div className="premium-card">
-        <h2 className="text-2xl font-bold text-gold mb-2">MindOps</h2>
+        <h2 className="text-2xl font-bold text-cyan-400 mb-2">MindOps</h2>
         <p className="text-slate-300">Inicia sesion para cargar analitica de journal y sesgos.</p>
       </div>
     );
@@ -45,7 +45,7 @@ export default async function MindOpsTab() {
   return (
     <div className="space-y-5">
       <div className="premium-card">
-        <h2 className="text-2xl font-bold text-gold mb-2">MindOps</h2>
+        <h2 className="text-2xl font-bold text-cyan-400 mb-2">MindOps</h2>
         <p className="text-slate-300">
           Seguimiento emocional y de disciplina a partir de tus entradas de journal.
         </p>

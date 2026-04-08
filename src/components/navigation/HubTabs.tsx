@@ -17,14 +17,14 @@ export default function HubTabs({ tabs, basePath, variant }: HubTabsProps) {
   const pathname = usePathname();
 
   return (
-    <nav className={`hub-tabs ${variant === 'premium' ? 'hub-tabs-premium' : ''} flex overflow-x-auto border-b border-gold`}> 
+    <nav className={`hub-tabs ${variant === 'premium' ? 'hub-tabs-premium' : ''} flex overflow-x-auto border-b border-cyan-400/30`}> 
       {tabs.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
           <a
             key={tab.href}
             href={tab.href}
-            className={`px-6 py-3 font-semibold text-lg whitespace-nowrap transition-all ${active ? 'text-gold border-b-2 border-gold bg-black/60' : 'text-slate-300 hover:text-gold'}`}
+            className={`px-6 py-3 font-semibold text-lg whitespace-nowrap transition-all ${active ? 'text-cyan-400 border-b-2 border-cyan-400/30 bg-black/60' : 'text-slate-300 hover:text-cyan-400'}`}
             style={{ minWidth: 120 }}
           >
             {tab.label}

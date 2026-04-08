@@ -81,7 +81,7 @@ export default function KnowledgeFactorySynthesis({ insights }: Props) {
           type="button"
           onClick={handleSynthesize}
           disabled={loading || insights.length === 0}
-          className="rounded border border-gold/40 bg-gold/10 px-4 py-2 text-sm font-medium text-gold transition-colors hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-sm font-medium text-cyan-400 transition-colors hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Sintetizando..." : "Sintetizar con IA"}
         </button>
@@ -95,7 +95,7 @@ export default function KnowledgeFactorySynthesis({ insights }: Props) {
 
       {loading && (
         <div className="flex items-center gap-3 rounded border border-slate-700/70 bg-slate-900/50 p-4">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
           <p className="text-sm text-slate-300">
             Analizando {insights.length} insight{insights.length !== 1 ? "s" : ""} con IA...
           </p>
@@ -124,7 +124,7 @@ export default function KnowledgeFactorySynthesis({ insights }: Props) {
                     key={`lesson-${index}`}
                     className="flex items-start gap-2 text-sm text-slate-200"
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/20 text-xs font-bold text-gold">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-400/20 text-xs font-bold text-cyan-400">
                       {index + 1}
                     </span>
                     <span>{lesson}</span>

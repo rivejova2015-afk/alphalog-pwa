@@ -25,7 +25,7 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-screen text-slate-200">
-      <header className="sticky top-0 z-10 border-b border-slate-700/60 bg-slate-900/80 shadow-[0_12px_30px_rgba(2,4,10,0.45)] backdrop-blur-xl md:ml-60">
+      <header className="sticky top-0 z-10 border-b border-slate-700/60 bg-slate-900/80 shadow-[0_12px_30px_rgba(2,4,10,0.45)] backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
@@ -43,7 +43,7 @@ export default async function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 md:ml-60">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-10 rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_24px_60px_rgba(2,4,10,0.5)] backdrop-blur animate-fade-rise">
           <h2 className="display-font text-2xl font-semibold text-slate-50">
             Bienvenido, {user.user_metadata?.full_name?.split(" ")[0] || user.email?.split("@")[0]}

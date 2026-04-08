@@ -18,7 +18,7 @@ export default async function ConstraintSolverTab() {
   if (!data.authenticated) {
     return (
       <div className="premium-card">
-        <h2 className="text-2xl font-bold text-gold mb-2">Constraint Solver for Growth</h2>
+        <h2 className="text-2xl font-bold text-cyan-400 mb-2">Constraint Solver for Growth</h2>
         <p className="text-slate-300">Inicia sesion para cargar el diagnostico de restricciones.</p>
       </div>
     );
@@ -29,7 +29,7 @@ export default async function ConstraintSolverTab() {
       <div className="premium-card">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gold mb-1">Constraint Solver for Growth</h2>
+            <h2 className="text-2xl font-bold text-cyan-400 mb-1">Constraint Solver for Growth</h2>
             <p className="text-slate-300">
               Diagnostico operativo para detectar cuellos de botella de crecimiento.
             </p>

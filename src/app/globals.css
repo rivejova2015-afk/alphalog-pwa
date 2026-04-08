@@ -1,28 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --al-bg: #0f1115;
-  --al-bg-deep: #0b0d11;
-  --al-surface: #151a23;
-  --al-surface-2: #1b2130;
-  --al-surface-3: #232a3b;
+  /* AlphaLog 2.0 — Retro-futuristic palette */
+  --al-bg: #0a0e1a;
+  --al-bg-deep: #060a14;
+  --al-surface: #151b28;
+  --al-surface-2: #1c2335;
+  --al-surface-3: #242d42;
   --al-border: #2b3548;
   --al-border-strong: #36435a;
   --al-text: #e5e7ee;
   --al-text-strong: #f7f8fb;
   --al-text-muted: #b2bccd;
   --al-text-subtle: #8d96aa;
-  --al-accent: #c8a36a;
-  --al-accent-strong: #a9824f;
-  --al-accent-cool: #3f8f98;
+  --al-accent: #00e5ff;
+  --al-accent-strong: #00b8d4;
+  --al-accent-cool: #39ff14;
+  --al-warning: #ffab00;
+  --al-success: #39ff14;
+  --al-danger: #ff073a;
   --background: var(--al-bg);
   --foreground: var(--al-text);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-manrope);
-  --font-display: var(--font-fraunces);
-  --font-mono: var(--font-jetbrains);
+  --font-sans: var(--font-ibm-plex-mono);
+  --font-display: var(--font-instrument-sans);
+  --font-mono: var(--font-ibm-plex-mono);
   --color-slate-950: var(--al-bg-deep);
   --color-slate-900: var(--al-bg);
   --color-slate-800: var(--al-surface);
@@ -47,20 +51,20 @@
   --color-blue-700: var(--al-accent-strong);
   --color-indigo-600: var(--al-accent);
   --color-indigo-700: var(--al-accent-strong);
-  --color-cyan-600: var(--al-accent-cool);
-  --color-cyan-700: #2f7177;
+  --color-cyan-600: var(--al-accent);
+  --color-cyan-700: var(--al-accent-strong);
   --color-purple-600: var(--al-accent);
   --color-purple-700: var(--al-accent-strong);
-  --color-green-600: #4a9c6d;
-  --color-green-700: #3b7f59;
-  --color-red-600: #c45b5b;
-  --color-red-700: #a34848;
-  --color-orange-600: #c9843f;
-  --color-orange-700: #a56e35;
-  --color-amber-600: #c98a3e;
-  --color-amber-700: #a87031;
-  --color-rose-500: #c45b5b;
-  --color-rose-600: #a34848;
+  --color-green-600: #39ff14;
+  --color-green-700: #2dd410;
+  --color-red-600: #ff073a;
+  --color-red-700: #d4062f;
+  --color-orange-600: #ff6b35;
+  --color-orange-700: #d4582c;
+  --color-amber-600: #ffab00;
+  --color-amber-700: #d48f00;
+  --color-rose-500: #ff073a;
+  --color-rose-600: #d4062f;
   --color-card: var(--al-surface);
   --color-card-foreground: var(--al-text);
   --color-muted: var(--al-surface-2);
@@ -71,10 +75,10 @@
   --color-input: var(--al-surface-2);
   --color-ring: var(--al-accent);
   --color-primary: var(--al-accent);
-  --color-primary-foreground: #1a1410;
+  --color-primary-foreground: #0a0e1a;
   --color-secondary: var(--al-surface-3);
   --color-secondary-foreground: var(--al-text);
-  --color-destructive: #c45b5b;
+  --color-destructive: #ff073a;
   --color-destructive-foreground: #140b0b;
   --runtime-glass-blur: 16px;
   --runtime-floating-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
@@ -91,12 +95,12 @@ body {
   min-height: 100vh;
   background-color: var(--al-bg);
   background-image:
-    radial-gradient(1200px circle at 10% -10%, rgba(200, 163, 106, 0.14), transparent 60%),
-    radial-gradient(900px circle at 90% 0%, rgba(63, 143, 152, 0.12), transparent 55%),
-    linear-gradient(180deg, #0f1115 0%, #10141d 100%);
+    radial-gradient(1200px circle at 10% -10%, rgba(0, 229, 255, 0.08), transparent 60%),
+    radial-gradient(900px circle at 90% 0%, rgba(57, 255, 20, 0.06), transparent 55%),
+    linear-gradient(180deg, #0a0e1a 0%, #0c1020 100%);
   background-attachment: fixed;
   color: var(--al-text);
-  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-family: var(--font-sans), "Segoe UI", monospace;
   letter-spacing: -0.015em;
 }
 
@@ -116,7 +120,7 @@ canvas {
 }
 
 ::selection {
-  background-color: rgba(200, 163, 106, 0.25);
+  background-color: rgba(0, 229, 255, 0.25);
 }
 
 h1,
@@ -141,10 +145,24 @@ h3,
 @keyframes glow-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 rgba(200, 163, 106, 0);
+    box-shadow: 0 0 0 rgba(0, 229, 255, 0);
   }
   50% {
-    box-shadow: 0 0 24px rgba(200, 163, 106, 0.16);
+    box-shadow: 0 0 24px rgba(0, 229, 255, 0.16);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.06;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
   }
 }
 
@@ -227,7 +245,7 @@ h3,
     border-radius: 0.75rem;
     margin-bottom: 0.75rem;
     padding: 0.25rem 0;
-    background: rgba(15, 17, 21, 0.75);
+    background: rgba(10, 14, 26, 0.75);
   }
 
   .table-mobile-cards td {
@@ -248,11 +266,11 @@ h3,
   }
 }
 
-/* Premium horizontal tabs */
+/* Horizontal tabs */
 .hub-tabs {
   scrollbar-width: thin;
   scrollbar-color: var(--al-accent) var(--al-bg);
-  background: linear-gradient(90deg, rgba(21,26,35,0.98) 80%, rgba(200,163,106,0.04) 100%);
+  background: linear-gradient(90deg, rgba(21,27,40,0.98) 80%, rgba(0,229,255,0.03) 100%);
 }
 .hub-tabs::-webkit-scrollbar {
   height: 6px;
@@ -269,21 +287,21 @@ h3,
 }
 .hub-tabs-premium a[aria-current], .hub-tabs-premium a.active {
   box-shadow: 0 2px 0 0 var(--al-accent);
-  background: rgba(200,163,106,0.08);
+  background: rgba(0,229,255,0.06);
 }
 
-/* Premium card for Intelligence Suite */
+/* Premium card */
 .premium-card {
-  background: linear-gradient(120deg, rgba(21,26,35,0.98) 80%, rgba(200,163,106,0.04) 100%);
+  background: linear-gradient(120deg, rgba(21,27,40,0.98) 80%, rgba(0,229,255,0.03) 100%);
   border: 1px solid var(--al-border);
   border-radius: 1.2rem;
-  box-shadow: 0 2px 16px 0 rgba(200,163,106,0.04);
+  box-shadow: 0 2px 16px 0 rgba(0,229,255,0.03);
   padding: 2.5rem 2rem 2rem 2rem;
   margin-bottom: 2.5rem;
   transition: box-shadow 0.2s;
 }
 .premium-card:hover {
-  box-shadow: 0 4px 32px 0 rgba(200,163,106,0.10);
+  box-shadow: 0 4px 32px 0 rgba(0,229,255,0.08);
 }
 
 .premium-frame {
@@ -315,4 +333,26 @@ h3, .h3 {
   font-weight: 500;
   color: var(--al-text);
   margin-bottom: 0.5rem;
+}
+
+/* Glow border utility */
+.al-glow-border {
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.06);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.al-glow-border:hover,
+.al-glow-border:focus-within {
+  border-color: rgba(0, 229, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.1);
+}
+
+/* Scanline sweep overlay */
+.al-scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 229, 255, 0.03) 50%, transparent 100%);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
 }

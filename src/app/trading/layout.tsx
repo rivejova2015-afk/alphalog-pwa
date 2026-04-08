@@ -12,7 +12,7 @@ const tradingTabs = [
 export default function TradingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="premium-frame">
-      <h1 className="text-3xl font-serif text-gold mb-6">Trading Hub</h1>
+      <h1 className="text-3xl font-semibold text-cyan-400 mb-6">Trading Hub</h1>
       <HubTabs tabs={tradingTabs} basePath="/trading" />
       <div className="mt-8">{children}</div>
     </div>

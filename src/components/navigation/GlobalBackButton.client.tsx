@@ -10,6 +10,7 @@ function resolveFallback(pathname: string): string {
   if (pathname.startsWith("/business")) return "/business";
   if (pathname.startsWith("/intelligence")) return "/intelligence";
   if (pathname.startsWith("/inbox")) return "/inbox";
+  if (pathname.startsWith("/map")) return "/map";
   if (pathname.startsWith("/auth")) return "/auth";
   return "/dashboard";
 }
@@ -38,7 +39,7 @@ export default function GlobalBackButton() {
     "inline-flex items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/80 px-4 py-2 text-sm font-medium text-slate-100 shadow-[0_12px_30px_rgba(2,4,10,0.5)] transition hover:bg-slate-800/90";
 
   return (
-    <div className="app-floating-safe app-glass-surface fixed z-50 inline-flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-2">
+    <div className="hidden md:inline-flex app-glass-surface fixed bottom-5 left-1/2 z-50 -translate-x-1/2 max-w-[calc(100vw-1.5rem)] flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={onGoBack}
