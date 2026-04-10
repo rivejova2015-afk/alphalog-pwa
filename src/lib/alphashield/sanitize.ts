@@ -72,9 +72,7 @@ const SENSITIVE_KEYS = [
  */
 function isSensitiveKey(key: string): boolean {
   const lowerKey = key.toLowerCase();
-  return SENSITIVE_KEYS.some(sensitiveKey => 
-    lowerKey.includes(sensitiveKey) || sensitiveKey.includes(lowerKey)
-  );
+  return SENSITIVE_KEYS.some(sensitiveKey => lowerKey.includes(sensitiveKey));
 }
 
 /**
