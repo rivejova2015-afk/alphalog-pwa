@@ -10,6 +10,7 @@ interface EquityPoint {
 interface EquityCurveProps {
   points?: EquityPoint[];
   height?: number;
+  algoId?: string;
 }
 
 // Generate demo equity curve
@@ -28,7 +29,7 @@ function generateDemoPoints(): EquityPoint[] {
 
 const DEMO_POINTS = generateDemoPoints();
 
-export function EquityCurve({ points = DEMO_POINTS, height = 120 }: EquityCurveProps) {
+export function EquityCurve({ points = DEMO_POINTS, height = 120, algoId = 'default' }: EquityCurveProps) {
   const { path, minEquity, maxEquity, isPositive } = useMemo(() => {
     if (points.length < 2) return { path: '', minEquity: 0, maxEquity: 0, isPositive: true };
 
@@ -57,7 +58,7 @@ export function EquityCurve({ points = DEMO_POINTS, height = 120 }: EquityCurveP
   }, [points, height]);
 
   const color = isPositive ? '#34d399' : '#ef4444';
-  const gradientId = `equity-gradient-${Math.random().toString(36).slice(2, 7)}`;
+  const gradientId = `equity-gradient-${algoId.replace(/\s+/g, '-').toLowerCase()}`;
 
   return (
     <div className="w-full">

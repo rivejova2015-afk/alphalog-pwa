@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 
 export function useRealtime<T extends Record<string, unknown> & { id: string }>(
@@ -10,11 +10,10 @@ export function useRealtime<T extends Record<string, unknown> & { id: string }>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const filterFn = useCallback(
-    (item: T) => (filter ? filter(item) : true),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
+
+  const filterFn = (item: T) => (filterRef.current ? filterRef.current(item) : true);
 
   useEffect(() => {
     const supabase = createClient();
