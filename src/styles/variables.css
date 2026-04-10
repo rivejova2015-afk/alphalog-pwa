@@ -1,0 +1,31 @@
+:root {
+  /* Colors */
+  --color-bg-primary: #0a0e1a;
+  --color-bg-surface: #151b28;
+  --color-border: #1f2937;
+  --color-border-hi: #2d3748;
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #475569;
+
+  /* Accents */
+  --color-cyan: #22d3ee;
+  --color-green: #34d399;
+  --color-red: #ef4444;
+  --color-yellow: #eab308;
+  --color-purple: #c084fc;
+  --color-blue: #60a5fa;
+
+  /* Dimensions */
+  --header-height: 64px;
+  --sidebar-width: 280px;
+  --sidebar-collapsed: 60px;
+  --border-radius: 8px;
+  --animation-duration: 0.15s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animation-duration: 0s;
+  }
+}

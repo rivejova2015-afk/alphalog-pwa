@@ -1,8 +1,8 @@
-// src/app/page.tsx
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { SelectorDashboard } from "@/components/home/SelectorDashboard";
 
-// Marca la página como dinámica porque accede a cookies (Supabase auth)
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
@@ -10,15 +10,16 @@ export default async function Home() {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.getUser();
 
-    if (!error && data?.user) {
-      // Hay sesión, redirige a dashboard
-      redirect("/dashboard");
+    if (error || !data?.user) {
+      redirect("/auth");
     }
-  } catch (error) {
-    // Log errors but don't crash
-    console.error("[Home] Auth check failed:", error instanceof Error ? error.message : error);
+  } catch {
+    redirect("/auth");
   }
 
-  // No hay sesión (o error), redirige a auth
-  redirect("/auth");
+  return (
+    <MainLayout>
+      <SelectorDashboard />
+    </MainLayout>
+  );
 }

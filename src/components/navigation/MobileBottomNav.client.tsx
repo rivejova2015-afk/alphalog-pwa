@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 
 const items = [
-  { label: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Home", href: "/", icon: LayoutDashboard },
   { label: "Intel", href: "/intelligence", icon: Brain },
   { label: "Business", href: "/business", icon: Building2 },
-  { label: "Map", href: "/map", icon: Flame },
+  { label: "Map Hot", href: "/map-hot", icon: Flame },
   { label: "Inbox", href: "/inbox", icon: Mail },
 ];
 

@@ -53,35 +53,56 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
-      // === AlphaLog 2.0 redirects ===
-      // Trading → Intelligence Suite (algo-trading)
-      { source: '/trading/tabs/tradehub', destination: '/intelligence/algo-trading', permanent: true },
-      { source: '/trading/tradehub', destination: '/intelligence/algo-trading', permanent: true },
+      // === AlphaLog 2.1 redirects ===
+
+      // Trading → Intelligence (all old /trading/* paths)
+      { source: '/trading', destination: '/intelligence', permanent: true },
+      { source: '/trading/tabs/tradehub', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/trading/tradehub', destination: '/intelligence/algorithms', permanent: true },
       { source: '/trading/tabs/bot-control', destination: '/intelligence/agents', permanent: true },
       { source: '/trading/bot-control', destination: '/intelligence/agents', permanent: true },
-      { source: '/trading/trades', destination: '/intelligence/algo-trading/trades', permanent: true },
-      { source: '/trading/evidence', destination: '/intelligence/algo-trading/evidence', permanent: true },
-      { source: '/trading/playbook', destination: '/intelligence/algo-trading/playbook', permanent: true },
-      { source: '/trading/reports', destination: '/intelligence/algo-trading/reports', permanent: true },
-      // Intelligence tabs → flattened
-      { source: '/intelligence/tabs/capital-levels', destination: '/intelligence/capital-levels', permanent: true },
-      { source: '/intelligence/tabs/constraint-solver', destination: '/intelligence/constraint-solver', permanent: true },
-      { source: '/intelligence/tabs/mindops', destination: '/intelligence/mindops', permanent: true },
-      { source: '/intelligence/tabs/knowledge-factory', destination: '/intelligence/knowledge-factory', permanent: true },
-      // Dashboard duplicates → Intelligence
-      { source: '/dashboard/polyarb', destination: '/intelligence/agents/polyarb', permanent: true },
+      { source: '/trading/accounts', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/trading/trades', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/trading/evidence', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/trading/playbook', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/trading/reports', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/trading/tabs/terminal', destination: '/intelligence', permanent: true },
+      { source: '/trading/tabs/tradermap', destination: '/map-hot/goals', permanent: true },
+      { source: '/trading/tabs/journal-pt', destination: '/business/journal', permanent: true },
+      { source: '/trading/:path*', destination: '/intelligence', permanent: true },
+
+      // algo-trading → algorithms (2.0 route renamed in 2.1)
+      { source: '/intelligence/algo-trading', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/intelligence/algo-trading/:path*', destination: '/intelligence/algorithms', permanent: true },
+
+      // Old intelligence tabs → deleted (send to intelligence hub)
+      { source: '/intelligence/tabs/:path*', destination: '/intelligence', permanent: true },
+      { source: '/intelligence/capital-levels', destination: '/intelligence', permanent: true },
+      { source: '/intelligence/constraint-solver', destination: '/intelligence', permanent: true },
+      { source: '/intelligence/mindops', destination: '/intelligence', permanent: true },
+      { source: '/intelligence/knowledge-factory', destination: '/intelligence', permanent: true },
+      { source: '/intelligence/overview', destination: '/intelligence', permanent: true },
+
+      // Dashboard duplicates → Intelligence / Map Hot
+      { source: '/dashboard/polyarb', destination: '/intelligence/agents', permanent: true },
       { source: '/dashboard/bot-control', destination: '/intelligence/agents', permanent: true },
-      // TraderMap → Map Hot
-      { source: '/dashboard/tradermap', destination: '/map/goals', permanent: true },
-      { source: '/dashboard/tradermap/progress-map', destination: '/map/progress', permanent: true },
-      { source: '/trading/tabs/tradermap', destination: '/map/goals', permanent: true },
-      { source: '/trading/tradermap', destination: '/map/goals', permanent: true },
-      // Trading Hub (keep terminal + journal for now)
-      { source: '/trading/terminal', destination: '/trading/tabs/terminal', permanent: true },
-      { source: '/trading/journal-pt', destination: '/trading/tabs/journal-pt', permanent: true },
-      // Business Hub (tabs → flattened)
-      { source: '/business/tabs/treasury', destination: '/business/treasury', permanent: true },
+      { source: '/dashboard/bot-control/:path*', destination: '/intelligence/agents', permanent: true },
+      { source: '/dashboard/tradehub', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/dashboard/tradehub/:path*', destination: '/intelligence/algorithms', permanent: true },
+      { source: '/dashboard/tradermap', destination: '/map-hot/goals', permanent: true },
+      { source: '/dashboard/tradermap/:path*', destination: '/map-hot/goals', permanent: true },
+      { source: '/dashboard/treasury', destination: '/business/operations', permanent: true },
+
+      // Map → Map Hot (2.0 routes → 2.1 routes)
+      { source: '/map', destination: '/map-hot', permanent: true },
+      { source: '/map/goals', destination: '/map-hot/goals', permanent: true },
+      { source: '/map/progress', destination: '/map-hot/progress', permanent: true },
+      { source: '/map/planning', destination: '/map-hot/planning', permanent: true },
+
+      // Business: remove treasury, fix old tabs
+      { source: '/business/tabs/treasury', destination: '/business/operations', permanent: true },
       { source: '/business/tabs/business', destination: '/business/operations', permanent: true },
+      { source: '/business/treasury', destination: '/business/operations', permanent: true },
       { source: '/business/business', destination: '/business/operations', permanent: true },
     ];
   },

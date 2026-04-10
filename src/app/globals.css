@@ -1,24 +1,25 @@
 @import "tailwindcss";
+@import "../styles/variables.css";
 
 :root {
-  /* AlphaLog 2.0 — Retro-futuristic palette */
+  /* AlphaLog 2.1 palette */
   --al-bg: #0a0e1a;
   --al-bg-deep: #060a14;
   --al-surface: #151b28;
   --al-surface-2: #1c2335;
   --al-surface-3: #242d42;
-  --al-border: #2b3548;
-  --al-border-strong: #36435a;
-  --al-text: #e5e7ee;
-  --al-text-strong: #f7f8fb;
-  --al-text-muted: #b2bccd;
-  --al-text-subtle: #8d96aa;
-  --al-accent: #00e5ff;
-  --al-accent-strong: #00b8d4;
-  --al-accent-cool: #39ff14;
-  --al-warning: #ffab00;
-  --al-success: #39ff14;
-  --al-danger: #ff073a;
+  --al-border: #1f2937;
+  --al-border-strong: #2d3748;
+  --al-text: #e2e8f0;
+  --al-text-strong: #f1f5f9;
+  --al-text-muted: #94a3b8;
+  --al-text-subtle: #475569;
+  --al-accent: #22d3ee;
+  --al-accent-strong: #06b6d4;
+  --al-accent-cool: #34d399;
+  --al-warning: #eab308;
+  --al-success: #34d399;
+  --al-danger: #ef4444;
   --background: var(--al-bg);
   --foreground: var(--al-text);
 
@@ -55,10 +56,10 @@
   --color-cyan-700: var(--al-accent-strong);
   --color-purple-600: var(--al-accent);
   --color-purple-700: var(--al-accent-strong);
-  --color-green-600: #39ff14;
-  --color-green-700: #2dd410;
-  --color-red-600: #ff073a;
-  --color-red-700: #d4062f;
+  --color-green-600: #34d399;
+  --color-green-700: #2ba88b;
+  --color-red-600: #ef4444;
+  --color-red-700: #dc2626;
   --color-orange-600: #ff6b35;
   --color-orange-700: #d4582c;
   --color-amber-600: #ffab00;

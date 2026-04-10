@@ -18,8 +18,8 @@ const instrumentSans = Instrument_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "AlphaLog",
-  description: "AlphaLog PWA",
+  title: "AlphaLog 2.1",
+  description: "WebApp for AI Agents & Algorithmic Trading",
   icons: {
     icon: [
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
