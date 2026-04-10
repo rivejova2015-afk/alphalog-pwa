@@ -1,15 +1,16 @@
-import { TrendingUp, Play, Pause, Settings, Plus } from "lucide-react";
-import { Badge } from "@/components/shared/Badge";
+import { TrendingUp, Plus } from "lucide-react";
+import { AlgoAccordion } from "@/components/intelligence/algorithms/AlgoAccordion.client";
 
-const PLACEHOLDER_ALGOS = [
-  { id: '1', name: 'GoldRange Basket v3', market_type: 'forex', instrument: 'XAU/USD', status: 'ACTIVE', pnl_today: 312.50, win_rate: 71, total_trades: 847 },
-  { id: '2', name: 'EUR Trend Follower', market_type: 'forex', instrument: 'EUR/USD', status: 'PAUSED', pnl_today: -45.20, win_rate: 58, total_trades: 234 },
-  { id: '3', name: 'ES Futures Mean Rev', market_type: 'futures', instrument: 'ES1!', status: 'ACTIVE', pnl_today: 180.00, win_rate: 64, total_trades: 412 },
+const ALGOS = [
+  { id: '1', name: 'GoldRange Basket v3', marketType: 'forex' as const, instrument: 'XAU/USD', status: 'ACTIVE' as const, pnlToday: 312.50, pnlTotal: 18450, winRate: 71, totalTrades: 847, profitFactor: 2.14, maxDrawdown: -6.8 },
+  { id: '2', name: 'EUR Trend Follower', marketType: 'forex' as const, instrument: 'EUR/USD', status: 'PAUSED' as const, pnlToday: -45.20, pnlTotal: 5200, winRate: 58, totalTrades: 234, profitFactor: 1.42, maxDrawdown: -12.3 },
+  { id: '3', name: 'ES Futures Mean Rev', marketType: 'futures' as const, instrument: 'ES1!', status: 'ACTIVE' as const, pnlToday: 180.00, pnlTotal: 9800, winRate: 64, totalTrades: 412, profitFactor: 1.87, maxDrawdown: -8.5 },
 ];
 
 export default function AlgorithmsPage() {
   return (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono flex items-center gap-2">
@@ -39,53 +40,8 @@ export default function AlgorithmsPage() {
         ))}
       </div>
 
-      {/* Algorithm Cards */}
-      <div className="space-y-3">
-        {PLACEHOLDER_ALGOS.map((algo) => {
-          const statusVariant = algo.status === 'ACTIVE' ? 'success' : algo.status === 'ERROR' ? 'error' : 'warning';
-          return (
-            <div key={algo.id} className="bg-[#151b28] border border-[#1f2937] rounded-lg p-4 hover:border-[#34d399]/30 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-[#e2e8f0]">{algo.name}</h3>
-                      <Badge variant={statusVariant}>{algo.status}</Badge>
-                    </div>
-                    <p className="text-xs text-[#94a3b8] mt-0.5">
-                      {algo.market_type.toUpperCase()} · {algo.instrument}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right hidden md:block">
-                    <div className="text-xs text-[#475569]">P&L Today</div>
-                    <div className={`text-sm font-bold font-mono ${algo.pnl_today >= 0 ? 'text-[#34d399]' : 'text-[#ef4444]'}`}>
-                      {algo.pnl_today >= 0 ? '+' : ''}${algo.pnl_today.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="text-right hidden md:block">
-                    <div className="text-xs text-[#475569]">Win Rate</div>
-                    <div className="text-sm font-bold font-mono text-[#22d3ee]">{algo.win_rate}%</div>
-                  </div>
-                  <div className="text-right hidden md:block">
-                    <div className="text-xs text-[#475569]">Total Trades</div>
-                    <div className="text-sm font-bold font-mono text-[#e2e8f0]">{algo.total_trades.toLocaleString()}</div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button className="p-2 hover:bg-[#0a0e1a] text-[#94a3b8] rounded transition-colors" aria-label="Toggle strategy">
-                      {algo.status === 'ACTIVE' ? <Pause size={16} /> : <Play size={16} />}
-                    </button>
-                    <button className="p-2 hover:bg-[#0a0e1a] text-[#94a3b8] rounded transition-colors" aria-label="Strategy settings">
-                      <Settings size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {/* Accordion with full detail */}
+      <AlgoAccordion algos={ALGOS} />
     </div>
   );
 }
