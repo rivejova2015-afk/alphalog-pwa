@@ -1,12 +1,51 @@
 import { Bot, Plus } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 import { AgentsList } from "@/components/intelligence/agents/AgentsList.client";
 
-const PLACEHOLDER_AGENTS = [
-  { id: '1', name: 'PolyMarket Alpha', type: 'polymarket' as const, status: 'ACTIVE' as const, portfolioValue: 12500, winRate: 68, roi: 24.5, sharpeRatio: 1.8, maxDrawdown: -8.2, lastTradeTime: '2m ago' },
-  { id: '2', name: 'Custom IA Bot v2', type: 'custom_ia' as const, status: 'PAUSED' as const, portfolioValue: 8200, winRate: 54, roi: 12.1, sharpeRatio: 1.2, maxDrawdown: -14.5, lastTradeTime: '1h ago' },
-];
+export default async function AgentsDashboardPage() {
+  const supabase = await createClient();
+  const { data: userData } = await supabase.auth.getUser();
 
-export default function AgentsDashboardPage() {
+  const agents = userData?.user
+    ? (await supabase
+        .from("agents")
+        .select("*")
+        .eq("user_id", userData.user.id)
+        .is("deleted_at", null)
+        .order("sort_index", { ascending: true })
+      ).data ?? []
+    : [];
+
+  const active = agents.filter((a) => a.status === "running");
+  const totalPortfolio = agents.reduce((sum, a) => sum + (a.portfolio_usd ?? 0), 0);
+  const avgWinRate = agents.length > 0
+    ? agents.reduce((sum, a) => sum + (a.win_rate ?? 0), 0) / agents.length
+    : 0;
+  const avgRoi = agents.length > 0
+    ? agents.reduce((sum, a) => sum + (a.roi_percent ?? 0), 0) / agents.length
+    : 0;
+
+  // Map DB rows to AgentCard shape
+  const agentData = agents.map((a) => ({
+    id: a.id as string,
+    name: a.name as string,
+    type: (a.type as string) === "polyarb" ? "polymarket" as const : "custom_ia" as const,
+    status: a.status === "running" ? "ACTIVE" as const : a.status === "paused" ? "PAUSED" as const : "ERROR" as const,
+    portfolioValue: a.portfolio_usd as number ?? 0,
+    winRate: a.win_rate as number ?? 0,
+    roi: a.roi_percent as number ?? 0,
+    sharpeRatio: a.sharpe_ratio as number ?? 0,
+    maxDrawdown: -(a.max_drawdown_pct as number ?? 0),
+    lastTradeTime: "—",
+  }));
+
+  const stats = [
+    { label: "Active Agents", value: active.length.toString(), color: "#34d399" },
+    { label: "Total Portfolio", value: `$${totalPortfolio.toLocaleString()}`, color: "#22d3ee" },
+    { label: "Avg Win Rate", value: `${avgWinRate.toFixed(1)}%`, color: "#34d399" },
+    { label: "Combined ROI", value: `${avgRoi >= 0 ? "+" : ""}${avgRoi.toFixed(1)}%`, color: avgRoi >= 0 ? "#34d399" : "#ef4444" },
+  ];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -22,20 +61,25 @@ export default function AgentsDashboardPage() {
           New Agent
         </button>
       </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: 'Active Agents', value: '1', color: '#34d399' },
-          { label: 'Total Portfolio', value: '$20,700', color: '#22d3ee' },
-          { label: 'Avg Win Rate', value: '61%', color: '#34d399' },
-          { label: 'Combined ROI', value: '+18.3%', color: '#34d399' },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <div key={stat.label} className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3">
             <div className="text-xs text-[#475569] mb-1">{stat.label}</div>
             <div className="text-lg font-bold font-mono" style={{ color: stat.color }}>{stat.value}</div>
           </div>
         ))}
       </div>
-      <AgentsList agents={PLACEHOLDER_AGENTS} />
+
+      {agentData.length === 0 ? (
+        <div className="text-center py-20">
+          <Bot size={40} className="text-[#1f2937] mx-auto mb-4" />
+          <p className="text-[#475569] text-sm">No agents configured yet.</p>
+          <p className="text-[#2d3748] text-xs mt-1">Create your first agent to start monitoring.</p>
+        </div>
+      ) : (
+        <AgentsList agents={agentData} />
+      )}
     </div>
   );
 }

@@ -26,13 +26,31 @@ interface AgentsListProps {
   agents: AgentData[];
 }
 
-export function AgentsList({ agents }: AgentsListProps) {
+export function AgentsList({ agents: initialAgents }: AgentsListProps) {
+  const [agents, setAgents] = useState<AgentData[]>(initialAgents);
   const [opsAgent, setOpsAgent] = useState<AgentData | null>(null);
   const [showCompare, setShowCompare] = useState(false);
 
-  const handlePause = (id: string) => {
-    // TODO: connect to API route to update agent status
-    console.log('Toggle agent:', id);
+  const handlePause = async (id: string) => {
+    const agent = agents.find((a) => a.id === id);
+    if (!agent) return;
+    const newStatus = agent.status === 'ACTIVE' ? 'paused' : 'running';
+    try {
+      await fetch(`/api/agents/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, status: newStatus === 'paused' ? 'PAUSED' : 'ACTIVE' }
+            : a
+        )
+      );
+    } catch {
+      // silently ignore — user sees no change
+    }
   };
 
   return (
@@ -57,7 +75,7 @@ export function AgentsList({ agents }: AgentsListProps) {
             key={agent.id}
             {...agent}
             onViewOps={() => setOpsAgent(agent)}
-            onPause={() => handlePause(agent.id)}
+            onPause={() => void handlePause(agent.id)}
             onSettings={() => {}}
           />
         ))}

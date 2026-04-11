@@ -38,11 +38,19 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
     setSaved(false);
   };
 
-  const handleSave = () => {
-    // TODO: connect to API route to update strategy params
-    console.log('Saving params for algo:', algoId, params);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    const payload = Object.fromEntries(params.map((p) => [p.key, p.value]));
+    try {
+      await fetch(`/api/algorithms/${algoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // silently ignore
+    }
   };
 
   const handleReset = () => {
@@ -50,9 +58,18 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
     setSaved(false);
   };
 
-  const toggleStatus = () => {
+  const toggleStatus = async () => {
     const next = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-    onStatusChange?.(algoId, next);
+    try {
+      await fetch(`/api/algorithms/${algoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next === 'ACTIVE' ? 'running' : 'paused' }),
+      });
+      onStatusChange?.(algoId, next);
+    } catch {
+      // silently ignore
+    }
   };
 
   return (
@@ -72,7 +89,7 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
           {/* Status toggle */}
           <div className="flex items-center gap-3">
             <button
-              onClick={toggleStatus}
+              onClick={() => void toggleStatus()}
               className={`flex items-center gap-2 px-4 py-2 rounded text-sm font-bold transition-colors ${
                 status === 'ACTIVE'
                   ? 'bg-[#eab308]/10 hover:bg-[#eab308]/20 text-[#eab308] border border-[#eab308]/30'
@@ -115,7 +132,7 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
           {/* Actions */}
           <div className="flex gap-2 pt-2">
             <button
-              onClick={handleSave}
+              onClick={() => void handleSave()}
               className={`flex-1 py-2 text-sm font-bold rounded transition-colors ${
                 saved
                   ? 'bg-[#34d399] text-[#0a0e1a]'

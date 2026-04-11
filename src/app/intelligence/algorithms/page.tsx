@@ -1,16 +1,52 @@
 import { TrendingUp, Plus } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 import { AlgoAccordion } from "@/components/intelligence/algorithms/AlgoAccordion.client";
 
-const ALGOS = [
-  { id: '1', name: 'GoldRange Basket v3', marketType: 'forex' as const, instrument: 'XAU/USD', status: 'ACTIVE' as const, pnlToday: 312.50, pnlTotal: 18450, winRate: 71, totalTrades: 847, profitFactor: 2.14, maxDrawdown: -6.8 },
-  { id: '2', name: 'EUR Trend Follower', marketType: 'forex' as const, instrument: 'EUR/USD', status: 'PAUSED' as const, pnlToday: -45.20, pnlTotal: 5200, winRate: 58, totalTrades: 234, profitFactor: 1.42, maxDrawdown: -12.3 },
-  { id: '3', name: 'ES Futures Mean Rev', marketType: 'futures' as const, instrument: 'ES1!', status: 'ACTIVE' as const, pnlToday: 180.00, pnlTotal: 9800, winRate: 64, totalTrades: 412, profitFactor: 1.87, maxDrawdown: -8.5 },
-];
+export default async function AlgorithmsPage() {
+  const supabase = await createClient();
+  const { data: userData } = await supabase.auth.getUser();
 
-export default function AlgorithmsPage() {
+  const algorithms = userData?.user
+    ? (await supabase
+        .from("algorithms")
+        .select("*")
+        .eq("user_id", userData.user.id)
+        .is("deleted_at", null)
+        .order("sort_index", { ascending: true })
+      ).data ?? []
+    : [];
+
+  const active = algorithms.filter((a) => a.status === "running");
+  const pnlToday = algorithms.reduce((sum, a) => sum + (a.pnl_today ?? 0), 0);
+  const avgWinRate = algorithms.length > 0
+    ? algorithms.reduce((sum, a) => sum + (a.win_rate ?? 0), 0) / algorithms.length
+    : 0;
+  const totalTrades = algorithms.reduce((sum, a) => sum + (a.trade_count ?? 0), 0);
+
+  // Map DB rows to AlgoAccordion shape
+  const algos = algorithms.map((a) => ({
+    id: a.id as string,
+    name: a.name as string,
+    marketType: "forex" as const,
+    instrument: a.instrument as string ?? "XAUUSD",
+    status: a.status === "running" ? "ACTIVE" as const : a.status === "paused" ? "PAUSED" as const : "ERROR" as const,
+    pnlToday: a.pnl_today as number ?? 0,
+    pnlTotal: a.pnl_total as number ?? 0,
+    winRate: a.win_rate as number ?? 0,
+    totalTrades: a.trade_count as number ?? 0,
+    profitFactor: a.profit_factor as number ?? 0,
+    maxDrawdown: -(a.max_drawdown_pct as number ?? 0),
+  }));
+
+  const stats = [
+    { label: "Active Strategies", value: active.length.toString(), color: "#34d399" },
+    { label: "P&L Today", value: `${pnlToday >= 0 ? "+" : ""}$${Math.abs(pnlToday).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: pnlToday >= 0 ? "#34d399" : "#ef4444" },
+    { label: "Avg Win Rate", value: `${avgWinRate.toFixed(1)}%`, color: "#22d3ee" },
+    { label: "Total Trades", value: totalTrades.toLocaleString(), color: "#94a3b8" },
+  ];
+
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono flex items-center gap-2">
@@ -25,14 +61,8 @@ export default function AlgorithmsPage() {
         </button>
       </div>
 
-      {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {[
-          { label: 'Active Strategies', value: '2', color: '#34d399' },
-          { label: "P&L Today", value: '+$447.30', color: '#34d399' },
-          { label: 'Avg Win Rate', value: '64.3%', color: '#22d3ee' },
-          { label: 'Total Trades', value: '1,493', color: '#94a3b8' },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <div key={stat.label} className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3">
             <div className="text-xs text-[#475569] mb-1">{stat.label}</div>
             <div className="text-lg font-bold font-mono" style={{ color: stat.color }}>{stat.value}</div>
@@ -40,8 +70,15 @@ export default function AlgorithmsPage() {
         ))}
       </div>
 
-      {/* Accordion with full detail */}
-      <AlgoAccordion algos={ALGOS} />
+      {algos.length === 0 ? (
+        <div className="text-center py-20">
+          <TrendingUp size={40} className="text-[#1f2937] mx-auto mb-4" />
+          <p className="text-[#475569] text-sm">No strategies configured yet.</p>
+          <p className="text-[#2d3748] text-xs mt-1">Create your first strategy to start tracking performance.</p>
+        </div>
+      ) : (
+        <AlgoAccordion algos={algos} />
+      )}
     </div>
   );
 }
