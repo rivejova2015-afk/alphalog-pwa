@@ -65,6 +65,55 @@ interface VelocitySignal {
   computedAt: number;
 }
 
+// SP#5 Regime Detector
+interface RegimeState {
+  regime: "CALM" | "TRENDING" | "VOLATILE" | "CRISIS";
+  annualizedVolPct: number;
+  agentMultiplier: number;
+  samplesUsed: number;
+}
+
+// SP#3 Adaptive Kelly
+interface AdaptiveState {
+  baseMinEdge: number;
+  currentMinEdge: number;
+  perfMultiplier: number;
+  winRateN: number;
+  winRateWindow: number;
+  consecutiveLosses: number;
+}
+
+// SP#6 Cross-Market
+interface CrossMarketSignal {
+  primarySymbol: string;
+  primaryDirection: "UP" | "DOWN" | "FLAT";
+  alignmentStrength: "STRONG" | "MODERATE" | "WEAK" | "DIVERGING";
+  alignedCount: number;
+  totalCount: number;
+  edgeMultiplier: number;
+  details: Array<{ symbol: string; direction: "UP" | "DOWN" | "FLAT"; velocity5m: number }>;
+}
+
+// SP#4 Sentiment Pulse
+interface SentimentPulse {
+  conditionId: string;
+  bidFlowZScore: number;
+  askFlowZScore: number;
+  signal: "ACCUMULATION" | "DISTRIBUTION" | "NEUTRAL";
+  edgeMultiplier: number;
+  samplesInWindow: number;
+  lastBidSize: number;
+  lastAskSize: number;
+}
+
+// SP#2 Memory Bank stats
+interface MemoryBankStat {
+  key: string;
+  wins: number;
+  total: number;
+  winRate: number;
+}
+
 interface Telemetry {
   equity_usd: number;
   available_balance_usd: number;
@@ -84,6 +133,11 @@ interface Telemetry {
   error_count_1h: number;
   last_heartbeat_at: string;
   velocity_snapshot: VelocitySignal[] | null;
+  regime_snapshot: RegimeState | null;
+  adaptive_kelly_state: AdaptiveState | null;
+  cross_market_snapshot: CrossMarketSignal | null;
+  sentiment_snapshot: SentimentPulse[] | null;
+  memory_bank_stats: MemoryBankStat[] | null;
 }
 
 interface Position {
@@ -532,6 +586,273 @@ function VelocityPanel({ signals }: { signals: VelocitySignal[] }) {
   );
 }
 
+// ─── SP#5 Regime Panel ────────────────────────────────────────────────────────
+
+const REGIME_CONFIG: Record<string, { color: string; bg: string; label: string; desc: string }> = {
+  CALM:     { color: "#34d399", bg: "#16450e", label: "CALM",     desc: "Low volatility — Kelly full" },
+  TRENDING: { color: "#22d3ee", bg: "#0c2e40", label: "TREND",    desc: "Directional — Kelly +30%" },
+  VOLATILE: { color: "#fbbf24", bg: "#2d2a0a", label: "VOLATILE", desc: "High vol — Kelly ×0.5" },
+  CRISIS:   { color: "#f87171", bg: "#3d0a0a", label: "CRISIS",   desc: "Extreme — Kelly ×0.2" },
+};
+
+function RegimePanel({ regime }: { regime: RegimeState }) {
+  const cfg = REGIME_CONFIG[regime.regime] ?? REGIME_CONFIG.CALM;
+  const volPct = regime.annualizedVolPct.toFixed(1);
+  return (
+    <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Activity className="w-4 h-4" style={{ color: cfg.color }} />
+        <span className="text-sm font-bold text-[#e2e8f0] font-mono">Regime Detector</span>
+        <span className="text-[10px] text-[#475569] font-mono">SUPERPOWER #5</span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div
+          className="px-4 py-2.5 rounded-lg text-center"
+          style={{ backgroundColor: cfg.bg, border: `1px solid ${cfg.color}33` }}
+        >
+          <div className="text-xl font-bold font-mono" style={{ color: cfg.color }}>{cfg.label}</div>
+          <div className="text-[10px] mt-0.5" style={{ color: cfg.color + "99" }}>{cfg.desc}</div>
+        </div>
+        <div className="text-right space-y-1">
+          <div className="text-[10px] text-[#475569]">Annualized Vol</div>
+          <div className="text-lg font-mono font-bold" style={{ color: cfg.color }}>{volPct}%</div>
+          <div className="text-[10px] text-[#475569]">Kelly ×{regime.agentMultiplier.toFixed(2)}</div>
+        </div>
+      </div>
+
+      {/* Vol bar */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[9px] text-[#334155] font-mono">
+          <span>0%</span><span>calm 30%</span><span>vol 55%</span><span>crisis 120%</span>
+        </div>
+        <div className="h-2 rounded-full bg-[#1e2a3a] relative overflow-hidden">
+          {/* Calm zone */}
+          <div className="absolute left-0 top-0 h-full rounded-l-full bg-[#16450e]" style={{ width: "25%" }} />
+          {/* Trending zone */}
+          <div className="absolute top-0 h-full bg-[#0c2e40]" style={{ left: "25%", width: "20.8%" }} />
+          {/* Volatile zone */}
+          <div className="absolute top-0 h-full bg-[#2d2a0a]" style={{ left: "45.8%", width: "54.2%" }} />
+          {/* Crisis zone */}
+          <div className="absolute top-0 h-full bg-[#3d0a0a]" style={{ left: "100%", width: "0%" }} />
+          {/* Needle */}
+          <div
+            className="absolute top-0 w-0.5 h-full rounded-full"
+            style={{
+              left: `${Math.min(98, (regime.annualizedVolPct / 140) * 100)}%`,
+              backgroundColor: cfg.color,
+              boxShadow: `0 0 6px ${cfg.color}`,
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SP#3 Adaptive Kelly Panel ────────────────────────────────────────────────
+
+function AdaptiveKellyPanel({ state }: { state: AdaptiveState }) {
+  const edgePct = (state.currentMinEdge * 100).toFixed(2);
+  const basePct = (state.baseMinEdge * 100).toFixed(2);
+  const winRateDisplay = state.winRateN > 0 ? ((state.winRateWindow / state.winRateN) * 100).toFixed(1) : null;
+  const mult = state.perfMultiplier;
+  const multColor = mult <= 1.0 ? "#34d399" : mult <= 1.5 ? "#fbbf24" : "#f87171";
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Target className="w-4 h-4 text-[#a78bfa]" />
+        <span className="text-sm font-bold text-[#e2e8f0] font-mono">Adaptive Kelly</span>
+        <span className="text-[10px] text-[#475569] font-mono">SUPERPOWER #3</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="bg-[#0d1424] rounded-lg px-3 py-2">
+          <div className="text-[9px] text-[#475569] font-mono mb-1">base edge</div>
+          <div className="text-base font-mono font-bold text-[#64748b]">{basePct}%</div>
+        </div>
+        <div className="bg-[#0d1424] rounded-lg px-3 py-2">
+          <div className="text-[9px] text-[#475569] font-mono mb-1">multiplier</div>
+          <div className="text-base font-mono font-bold" style={{ color: multColor }}>×{mult.toFixed(2)}</div>
+        </div>
+        <div className="bg-[#0d1424] rounded-lg px-3 py-2">
+          <div className="text-[9px] text-[#475569] font-mono mb-1">current edge</div>
+          <div className="text-base font-mono font-bold text-[#22d3ee]">{edgePct}%</div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] font-mono">
+        <span className="text-[#475569]">win rate (20 trades)</span>
+        <span className={winRateDisplay ? (parseFloat(winRateDisplay) >= 55 ? "text-[#34d399]" : parseFloat(winRateDisplay) >= 45 ? "text-[#fbbf24]" : "text-[#f87171]") : "text-[#334155]"}>
+          {winRateDisplay ? `${winRateDisplay}%` : `${state.winRateN} trades`}
+        </span>
+      </div>
+
+      {state.consecutiveLosses > 0 && (
+        <div className="flex items-center gap-2 text-[11px] bg-[#3d1a0a] rounded px-3 py-1.5">
+          <AlertTriangle className="w-3 h-3 text-[#f87171]" />
+          <span className="text-[#f87171] font-mono">{state.consecutiveLosses} consecutive losses → edge raised</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SP#6 Cross-Market Panel ──────────────────────────────────────────────────
+
+const ALIGNMENT_CONFIG: Record<string, { color: string; bg: string }> = {
+  STRONG:    { color: "#34d399", bg: "#16450e" },
+  MODERATE:  { color: "#22d3ee", bg: "#0c2e40" },
+  WEAK:      { color: "#94a3b8", bg: "#1e2a3a" },
+  DIVERGING: { color: "#f87171", bg: "#3d0a0a" },
+};
+
+function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
+  const cfg = ALIGNMENT_CONFIG[signal.alignmentStrength] ?? ALIGNMENT_CONFIG.WEAK;
+  return (
+    <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-[#34d399]" />
+        <span className="text-sm font-bold text-[#e2e8f0] font-mono">Cross-Market</span>
+        <span className="text-[10px] text-[#475569] font-mono">SUPERPOWER #6</span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div
+          className="px-3 py-2 rounded-lg"
+          style={{ backgroundColor: cfg.bg, border: `1px solid ${cfg.color}33` }}
+        >
+          <div className="text-sm font-bold font-mono" style={{ color: cfg.color }}>{signal.alignmentStrength}</div>
+          <div className="text-[9px] mt-0.5" style={{ color: cfg.color + "99" }}>
+            {signal.alignedCount}/{signal.totalCount} aligned
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] text-[#475569] mb-0.5">edge ×</div>
+          <div className="text-xl font-mono font-bold" style={{ color: cfg.color }}>
+            {signal.edgeMultiplier.toFixed(2)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5">
+        {signal.details.map((d) => {
+          const c = SYMBOL_COLORS[d.symbol] ?? SYMBOL_COLORS.CRYPTO;
+          const dirColor = d.direction === "UP" ? "#34d399" : d.direction === "DOWN" ? "#f87171" : "#475569";
+          return (
+            <div key={d.symbol} className="bg-[#0d1424] rounded px-2 py-1.5 text-center">
+              <div className="text-[10px] font-mono font-bold" style={{ color: c.text }}>{d.symbol}</div>
+              <div className="text-[9px] font-mono mt-0.5" style={{ color: dirColor }}>
+                {d.direction === "UP" ? "↑" : d.direction === "DOWN" ? "↓" : "→"} {Math.abs(d.velocity5m).toFixed(0)}/h
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── SP#4 Sentiment Pulse Panel ───────────────────────────────────────────────
+
+function SentimentPanel({ pulses }: { pulses: SentimentPulse[] }) {
+  const topPulses = pulses.slice(0, 6);
+  return (
+    <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Radio className="w-4 h-4 text-[#f59e0b]" />
+        <span className="text-sm font-bold text-[#e2e8f0] font-mono">Sentiment Pulse</span>
+        <span className="text-[10px] text-[#475569] font-mono">SUPERPOWER #4</span>
+      </div>
+
+      {topPulses.length === 0 ? (
+        <p className="text-xs text-[#334155] text-center py-2">Acumulando datos de orderbook (5 min)…</p>
+      ) : (
+        <div className="space-y-1.5">
+          {topPulses.map((p) => {
+            const isAcc = p.signal === "ACCUMULATION";
+            const isDist = p.signal === "DISTRIBUTION";
+            const sigColor = isAcc ? "#34d399" : isDist ? "#f87171" : "#475569";
+            const sigLabel = isAcc ? "ACC" : isDist ? "DIST" : "NEU";
+            const zBid = p.bidFlowZScore.toFixed(1);
+            const zAsk = p.askFlowZScore.toFixed(1);
+            return (
+              <div key={p.conditionId} className="flex items-center gap-2 text-[11px] bg-[#0d1424] rounded px-3 py-1.5">
+                <span
+                  className="w-7 text-center rounded px-1 font-mono font-bold text-[10px]"
+                  style={{ color: sigColor, backgroundColor: sigColor + "15" }}
+                >
+                  {sigLabel}
+                </span>
+                <span className="flex-1 truncate text-[#64748b] font-mono">
+                  {p.conditionId.slice(0, 10)}…
+                </span>
+                <span className="text-[#475569] font-mono">bid z{zBid}</span>
+                <span className="text-[#475569] font-mono">ask z{zAsk}</span>
+                <span className="font-mono font-bold" style={{ color: p.edgeMultiplier >= 1.2 ? "#34d399" : p.edgeMultiplier <= 0.7 ? "#f87171" : "#64748b" }}>
+                  ×{p.edgeMultiplier.toFixed(2)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SP#2 Memory Bank Panel ───────────────────────────────────────────────────
+
+function MemoryBankPanel({ stats }: { stats: MemoryBankStat[] }) {
+  const sorted = [...stats].sort((a, b) => b.total - a.total).slice(0, 8);
+  return (
+    <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Cpu className="w-4 h-4 text-[#818cf8]" />
+          <span className="text-sm font-bold text-[#e2e8f0] font-mono">Memory Bank</span>
+          <span className="text-[10px] text-[#475569] font-mono">SUPERPOWER #2</span>
+        </div>
+        <span className="text-[10px] text-[#475569] font-mono">{stats.length} patrones</span>
+      </div>
+
+      {sorted.length === 0 ? (
+        <p className="text-xs text-[#334155] text-center py-2">Sin historial aún — el agente aprenderá con cada trade.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-[#334155] border-b border-[#1e2a3a]">
+                <th className="text-left pb-1.5 pr-2 font-mono">patrón</th>
+                <th className="text-right pb-1.5 pr-2 font-mono">trades</th>
+                <th className="text-right pb-1.5 font-mono">win%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((s) => {
+                const parts = s.key.split("|");
+                const label = parts.slice(0, 3).join(" · ");
+                const wr = (s.winRate * 100).toFixed(0);
+                const wrColor = s.winRate >= 0.6 ? "#34d399" : s.winRate >= 0.45 ? "#fbbf24" : "#f87171";
+                return (
+                  <tr key={s.key} className="border-b border-[#0f1724]">
+                    <td className="py-1.5 pr-2">
+                      <span className="text-[#64748b] font-mono truncate max-w-[160px] block" title={s.key}>{label}</span>
+                    </td>
+                    <td className="py-1.5 pr-2 text-right font-mono text-[#475569]">{s.total}</td>
+                    <td className="py-1.5 text-right font-mono font-bold" style={{ color: wrColor }}>{wr}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PolyArbDashboard() {
@@ -628,6 +949,11 @@ export default function PolyArbDashboard() {
   const polymarketActive = heartbeatMs < 30_000;
 
   const velocitySignals: VelocitySignal[] = telemetry?.velocity_snapshot ?? [];
+  const regimeState = telemetry?.regime_snapshot ?? null;
+  const adaptiveKellyState = telemetry?.adaptive_kelly_state ?? null;
+  const crossMarketSignal = telemetry?.cross_market_snapshot ?? null;
+  const sentimentPulses = telemetry?.sentiment_snapshot ?? [];
+  const memoryBankStats = telemetry?.memory_bank_stats ?? [];
 
   return (
     <div className="space-y-5">
@@ -688,6 +1014,15 @@ export default function PolyArbDashboard() {
 
       {/* ── VELOCITY DETECTOR ───────────────────────────────────────────── */}
       <VelocityPanel signals={velocitySignals} />
+
+      {/* ── SUPERPOWERS #2–#6 ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {regimeState && <RegimePanel regime={regimeState} />}
+        {adaptiveKellyState && <AdaptiveKellyPanel state={adaptiveKellyState} />}
+        {crossMarketSignal && <CrossMarketPanel signal={crossMarketSignal} />}
+        {sentimentPulses.length > 0 && <SentimentPanel pulses={sentimentPulses} />}
+      </div>
+      {memoryBankStats.length > 0 && <MemoryBankPanel stats={memoryBankStats} />}
 
       {/* ── Equity Curve ────────────────────────────────────────────────── */}
       {equityCurve.length > 1 ? (

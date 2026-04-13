@@ -16,6 +16,9 @@ import { logCompliance } from './telemetry/compliance.js';
 import { createCircuitBreakerState } from './trading/circuit-breaker.js';
 import { tradingTick, createLoopMetrics, type LoopDeps } from './loop.js';
 import { parseMilestonePrice } from './skills/velocity-detector.js';
+import { AdaptiveKelly } from './skills/adaptive-kelly.js';
+import { MemoryBank } from './skills/memory-bank.js';
+import { SentimentPulseTracker } from './skills/sentiment-pulse.js';
 
 let loopInterval: ReturnType<typeof setInterval> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
@@ -81,9 +84,25 @@ async function main(): Promise<void> {
   telemetryWriter.start();
   console.log('[main] Telemetry writer started');
 
-  // 7. Initialize state
+  // 7. Initialize state + superpowers
   const cbState = createCircuitBreakerState(config.startingCapitalUsd);
   const metrics = createLoopMetrics(config.startingCapitalUsd);
+
+  // SP#3 Adaptive Kelly
+  const adaptiveKelly = new AdaptiveKelly(config.params.minEdgePercent);
+
+  // SP#2 Memory Bank — load historical signal outcomes from DB
+  const memoryBank = new MemoryBank(config.agentId, config.userId);
+  await memoryBank.loadFromDb();
+  console.log('[main] Memory Bank loaded');
+
+  // SP#4 Sentiment Pulse tracker
+  const sentimentPulse = new SentimentPulseTracker();
+
+  // Wire Sentiment Pulse into Polymarket feed (hook on every orderbook poll)
+  polymarketFeed.onOrderbookUpdate = (conditionId, bidSize, askSize, bidPrice, askPrice) => {
+    sentimentPulse.record(conditionId, bidSize, askSize, bidPrice, askPrice);
+  };
 
   const deps: LoopDeps = {
     config,
@@ -94,6 +113,9 @@ async function main(): Promise<void> {
     telemetryWriter,
     cbState,
     milestoneMap,
+    adaptiveKelly,
+    memoryBank,
+    sentimentPulse,
   };
 
   // 8. Start main trading loop

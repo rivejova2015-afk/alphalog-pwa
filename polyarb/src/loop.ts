@@ -2,16 +2,19 @@
  * Main Trading Loop — runs every 250ms
  *
  * Pipeline per tick:
- * 1. Read feeds (BTC price + Polymarket orderbook)
- * 2. Compute belief volatility
- * 3. Compute fair price (jump-diffusion)
- * 4. Detect edge
- * 5. Compute momentum physics
- * 6. Kelly sizing
- * 7. Risk/reward check
- * 8. Execute order
- * 9. Check circuit breakers
- * 10. Update telemetry
+ * 1. Read feeds (BTC/ETH/SOL prices + Polymarket orderbook)
+ * 2. Detect market regime [SP#5 Regime Detector]
+ * 3. Compute belief volatility + base fair price
+ * 4. Apply Velocity Detector [SP#1] → velocity-adjusted fair price
+ * 5. Apply Sentiment Pulse [SP#4] → edge multiplier from orderbook anomalies
+ * 6. Apply Cross-Market Confirmation [SP#6] → confirm with ETH/SOL
+ * 7. Apply Memory Bank filter [SP#2] → skip historically bad conditions
+ * 8. Apply Adaptive Kelly threshold [SP#3] → dynamic min edge
+ * 9. Kelly sizing
+ * 10. Risk/reward check
+ * 11. Execute order
+ * 12. Check circuit breakers
+ * 13. Update telemetry
  */
 
 import type { AgentConfig } from './config.js';
@@ -30,10 +33,17 @@ import { estimateBeliefVolatility, computeFairPrice, computeEdge } from './math/
 import { calculateMomentumVector, isReversalImminent } from './math/momentum-physics.js';
 import { aggressiveKelly, checkRiskReward } from './math/kelly-sizer.js';
 import { hestonStep, type HestonState } from './math/heston-vol.js';
+
+// ── Superpowers ──────────────────────────────────────────────────────────────
 import {
   computeVelocitySignal,
   type VelocitySignal,
 } from './skills/velocity-detector.js';
+import { detectRegime, type RegimeState } from './skills/regime-detector.js';
+import { AdaptiveKelly } from './skills/adaptive-kelly.js';
+import { type MemoryBank } from './skills/memory-bank.js';
+import { computeCrossMarketSignal, type CrossMarketSignal } from './skills/cross-market.js';
+import { type SentimentPulseTracker, type SentimentPulse } from './skills/sentiment-pulse.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -45,6 +55,10 @@ export interface LoopDeps {
   cbState: CircuitBreakerState;
   /** conditionId → parsed milestone price (null = couldn't parse) */
   milestoneMap: Map<string, number | null>;
+  // Superpowers
+  adaptiveKelly: AdaptiveKelly;
+  memoryBank: MemoryBank;
+  sentimentPulse: SentimentPulseTracker;
 }
 
 interface LoopMetrics {
@@ -61,6 +75,12 @@ interface LoopMetrics {
   hestonState: HestonState;
   /** Latest velocity signals per market — written to telemetry */
   lastVelocitySignals: VelocitySignal[];
+  /** Latest regime state */
+  lastRegime: RegimeState | null;
+  /** Latest cross-market signal */
+  lastCrossMarket: CrossMarketSignal | null;
+  /** Latest sentiment pulses */
+  lastSentimentPulses: SentimentPulse[];
 }
 
 export function createLoopMetrics(startingEquity: number): LoopMetrics {
@@ -77,6 +97,9 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
     errorCount1h: 0,
     hestonState: { variance: 0.15, leverage: 2.0 },
     lastVelocitySignals: [],
+    lastRegime: null,
+    lastCrossMarket: null,
+    lastSentimentPulses: [],
   };
 }
 
@@ -96,12 +119,15 @@ export async function tradingTick(
   const orderbooks = polymarketFeed.getAllOrderbooks();
 
   if (!btcPrice || orderbooks.length === 0) {
-    // No data yet — update telemetry but skip trading
     updateTelemetry(deps, metrics, tickStart);
     return;
   }
 
-  // ── Check circuit breakers first ──
+  // ── SP#5 Regime Detector — classify market before any trading decisions ──
+  const regime = detectRegime(binanceFeed.getTimestampedSamples('BTC'));
+  metrics.lastRegime = regime;
+
+  // ── Check circuit breakers ──
   const cbEvents = checkCircuitBreakers(
     cbState,
     config.startingCapitalUsd + metrics.totalPnlUsd,
@@ -115,14 +141,10 @@ export async function tradingTick(
 
   if (cbEvents.length > 0) {
     void logCircuitBreakerEvents(config.agentId, config.userId, cbEvents);
-
-    // If CLOSE_ALL action triggered, liquidate
     const closeAllEvent = cbEvents.find(e => e.actionTaken === 'CLOSE_ALL');
     if (closeAllEvent && positionTracker.openCount > 0) {
       const prices = new Map<string, number>();
-      for (const ob of orderbooks) {
-        prices.set(ob.conditionId, ob.midPrice);
-      }
+      for (const ob of orderbooks) prices.set(ob.conditionId, ob.midPrice);
       await positionTracker.closeAll(prices);
     }
   }
@@ -140,23 +162,42 @@ export async function tradingTick(
     const closed = await positionTracker.closePosition(pos.id, exitPrice, 'timeout');
     if (closed) {
       recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd);
+      deps.adaptiveKelly.recordOutcome({
+        conditionId: pos.conditionId,
+        edge: 0,
+        pnlUsd: closed.pnlUsd,
+        won: closed.pnlUsd > 0,
+        symbol: 'BTC',
+        computedAt: Date.now(),
+      });
+      void deps.memoryBank.recordOutcome(pos.id, closed.pnlUsd);
       void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
     }
   }
 
+  // ── SP#6 Cross-Market Confirmation — computed once per tick ──
+  const crossMarket = computeCrossMarketSignal(
+    'BTC',
+    btcPrice.last > 0 ? 'UP' : 'DOWN', // placeholder — refined per market below
+    binanceFeed.getTimestampedSamples('BTC'),
+    binanceFeed.getTimestampedSamples('ETH'),
+    binanceFeed.getTimestampedSamples('SOL'),
+  );
+  metrics.lastCrossMarket = crossMarket;
+
+  // ── SP#4 Sentiment Pulses — computed once per tick ──
+  metrics.lastSentimentPulses = deps.sentimentPulse.computeAll();
+
   // ── Process each market ──
   for (const orderbook of orderbooks) {
-    await processMarket(deps, metrics, orderbook, btcPrice.last);
+    await processMarket(deps, metrics, orderbook, btcPrice.last, regime, crossMarket);
   }
 
   // ── Evolve Heston vol ──
-  const dt = params.loopIntervalMs / 86_400_000; // fraction of day
+  const dt = params.loopIntervalMs / 86_400_000;
   metrics.hestonState = hestonStep(metrics.hestonState.variance, dt, undefined, params.maxLeverage);
 
-  // ── Drain circuit breaker events ──
   drainEvents(cbState);
-
-  // ── Update telemetry ──
   updateTelemetry(deps, metrics, tickStart);
 }
 
@@ -164,63 +205,84 @@ async function processMarket(
   deps: LoopDeps,
   metrics: LoopMetrics,
   orderbook: PolymarketOrderbook,
-  btcSpotPrice: number
+  btcSpotPrice: number,
+  regime: RegimeState,
+  crossMarket: CrossMarketSignal,
 ): Promise<void> {
-  const { config, binanceFeed, positionTracker, orderManager, milestoneMap } = deps;
+  const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse } = deps;
   const { params } = config;
 
-  // Already have an open position in this market? Skip new entries
-  const hasOpenPosition = positionTracker.open.some(
-    p => p.conditionId === orderbook.conditionId
-  );
+  const hasOpenPosition = positionTracker.open.some(p => p.conditionId === orderbook.conditionId);
   if (hasOpenPosition) return;
 
   // ── 2. Compute belief volatility ──
   const priceHistory = binanceFeed.history;
-  if (priceHistory.length < 10) return; // not enough data
+  if (priceHistory.length < 10) return;
 
-  const sigma = estimateBeliefVolatility(
-    priceHistory,
-    orderbook.bidPrice,
-    orderbook.askPrice
-  );
+  const sigma = estimateBeliefVolatility(priceHistory, orderbook.bidPrice, orderbook.askPrice);
 
-  // ── 3. Compute fair price ──
+  // ── 3. Compute base fair price ──
   const baseFairPrice = computeFairPrice(orderbook.midPrice, sigma);
 
-  // ── 3b. Velocity Detector — adjust fair price with momentum signal ──
+  // ── SP#1 Velocity Detector — adjust fair price with momentum ──
   const market = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
   const milestonePrice = milestoneMap.get(orderbook.conditionId) ?? null;
   const velocitySignal = computeVelocitySignal(
     orderbook.conditionId,
     market?.question ?? orderbook.marketSlug,
     btcSpotPrice,
-    binanceFeed.getTimestampedSamples(),
+    binanceFeed.getTimestampedSamples('BTC'),
     orderbook.midPrice,
     baseFairPrice,
-    milestonePrice
+    milestonePrice,
   );
 
-  // Store signal for telemetry (replace or add)
+  // Store for telemetry
   const vsIdx = metrics.lastVelocitySignals.findIndex(s => s.conditionId === orderbook.conditionId);
   if (vsIdx >= 0) metrics.lastVelocitySignals[vsIdx] = velocitySignal;
   else metrics.lastVelocitySignals.push(velocitySignal);
 
-  // Use velocity-adjusted fair price
+  // ── 4. Detect edge with velocity-adjusted fair price ──
   const fairPrice = velocitySignal.adjustedFairProb;
+  let edge = computeEdge(fairPrice, orderbook.midPrice);
 
-  // ── 4. Detect edge ──
-  const edge = computeEdge(fairPrice, orderbook.midPrice);
-  if (Math.abs(edge) < params.minEdgePercent) return;
+  // ── SP#4 Sentiment Pulse — apply edge multiplier ──
+  const tradingBullish = edge > 0;
+  const sentimentMultiplier = sentimentPulse.getEdgeMultiplier(orderbook.conditionId, tradingBullish);
+  edge *= sentimentMultiplier;
+
+  // ── SP#6 Cross-Market — apply confirmation multiplier ──
+  // Re-compute with correct direction for this market's velocity signal
+  const marketVelDirection = velocitySignal.windows.find(w => w.label === '5m')?.direction;
+  const primaryDir = marketVelDirection === 'UP' ? 'UP' : marketVelDirection === 'DOWN' ? 'DOWN' : null;
+  if (primaryDir) {
+    const marketCross = computeCrossMarketSignal(
+      velocitySignal.symbol,
+      primaryDir,
+      binanceFeed.getTimestampedSamples('BTC'),
+      binanceFeed.getTimestampedSamples('ETH'),
+      binanceFeed.getTimestampedSamples('SOL'),
+    );
+    edge *= marketCross.edgeMultiplier;
+  }
+
+  // ── SP#3 Adaptive Kelly — dynamic min edge threshold ──
+  const adaptiveMinEdge = adaptiveKelly.getCurrentMinEdge(regime.agentMultiplier);
+  if (Math.abs(edge) < adaptiveMinEdge) return;
+
+  // ── SP#2 Memory Bank — filter historically bad conditions ──
+  const memoryFilter = memoryBank.shouldFilter(velocitySignal, regime.regime);
+  if (memoryFilter.filter) {
+    console.log(`[loop] Memory filter: ${memoryFilter.reason}`);
+    return;
+  }
 
   // ── 5. Momentum physics ──
-  // Convert Polymarket orderbook history to price array
-  // For now, use the BTC price history as proxy signal
   const momentum = calculateMomentumVector(
     priceHistory,
     params.loopIntervalMs / 1000,
     params.accelerationThreshold,
-    params.jerkReversalThreshold
+    params.jerkReversalThreshold,
   );
 
   if (momentum.signal === 'HOLD') return;
@@ -244,10 +306,9 @@ async function processMarket(
     fairPrice,
     params.maxKellyFraction,
     Math.min(params.maxLeverage, metrics.hestonState.leverage),
-    params.winStreakBonus
+    params.winStreakBonus,
   );
 
-  // Apply slippage reduction if flagged
   const sizeMultiplier = deps.cbState.reduceSizeNextTrade ? 0.8 : 1.0;
   deps.cbState.reduceSizeNextTrade = false;
   const finalSize = kelly.positionSizeUsd * sizeMultiplier;
@@ -275,7 +336,7 @@ async function processMarket(
     return;
   }
 
-  // Open position
+  // ── Open position + record in Memory Bank ──
   const position = await positionTracker.openPosition({
     marketSlug: orderbook.marketSlug,
     conditionId: orderbook.conditionId,
@@ -286,7 +347,7 @@ async function processMarket(
     shares: result.filledSize,
     leverageUsed: kelly.leverage,
     entryReason: {
-      pillar: 'jump-diffusion + momentum',
+      pillar: 'velocity+regime+cross+memory+sentiment',
       edge,
       fairPrice,
       kellyFraction: kelly.fraction,
@@ -294,11 +355,17 @@ async function processMarket(
       confidence: momentum.confidence,
       sigma,
       hestonLeverage: metrics.hestonState.leverage,
+      regime: regime.regime,
+      crossMarketStrength: crossMarket.strength,
+      velocityHuntStrength: velocitySignal.huntStrength,
+      sentimentMultiplier,
     },
   });
 
   if (position) {
     metrics.totalTrades++;
+    // SP#2: record entry in Memory Bank
+    memoryBank.recordEntry(position.id, velocitySignal, regime.regime, edge);
     void logCompliance(
       config.agentId,
       config.userId,
@@ -306,7 +373,7 @@ async function processMarket(
       position.id,
       'polyarb_positions',
       undefined,
-      { price: result.filledPrice, size: finalSize, edge, kelly: kelly.fraction }
+      { price: result.filledPrice, size: finalSize, edge, kelly: kelly.fraction, regime: regime.regime },
     );
   }
 }
@@ -322,11 +389,8 @@ function recordTradeResult(metrics: LoopMetrics, pnlUsd: number, startingCapital
     metrics.consecutiveLosses++;
     metrics.consecutiveWins = 0;
   }
-
   const currentEquity = startingCapital + metrics.totalPnlUsd;
-  if (currentEquity > metrics.peakEquity) {
-    metrics.peakEquity = currentEquity;
-  }
+  if (currentEquity > metrics.peakEquity) metrics.peakEquity = currentEquity;
 }
 
 function updateTelemetry(deps: LoopDeps, metrics: LoopMetrics, tickStart: number): void {
@@ -346,7 +410,7 @@ function updateTelemetry(deps: LoopDeps, metrics: LoopMetrics, tickStart: number
     openPositionsCount: positionTracker.openCount,
     totalPnlUsd: metrics.totalPnlUsd,
     winRate: totalTrades > 0 ? (metrics.wins / totalTrades) * 100 : null,
-    profitFactor: null, // computed separately
+    profitFactor: null,
     sharpeRatio: null,
     maxDrawdownPct: maxDrawdown,
     loopLatencyMs,
@@ -358,5 +422,10 @@ function updateTelemetry(deps: LoopDeps, metrics: LoopMetrics, tickStart: number
     lastSignal: null,
     errorCount1h: metrics.errorCount1h,
     velocitySnapshot: metrics.lastVelocitySignals.length > 0 ? metrics.lastVelocitySignals : null,
+    regimeSnapshot: metrics.lastRegime,
+    adaptiveKellyState: deps.adaptiveKelly.getState(metrics.lastRegime?.agentMultiplier ?? 1),
+    crossMarketSnapshot: metrics.lastCrossMarket,
+    sentimentSnapshot: metrics.lastSentimentPulses.length > 0 ? metrics.lastSentimentPulses : null,
+    memoryBankStats: deps.memoryBank.getStats().length > 0 ? deps.memoryBank.getStats() : null,
   });
 }

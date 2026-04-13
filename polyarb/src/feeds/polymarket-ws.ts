@@ -38,6 +38,18 @@ export class PolymarketFeed {
   private shouldRun = false;
   private trackedConditionIds: string[] = [];
 
+  /**
+   * Sentiment Pulse callback — called every time a new orderbook is fetched.
+   * Set this from the outside to hook in SentimentPulseTracker.record().
+   */
+  onOrderbookUpdate: ((
+    conditionId: string,
+    bidSize: number,
+    askSize: number,
+    bidPrice: number,
+    askPrice: number,
+  ) => void) | null = null;
+
   get isConnected(): boolean {
     return this.shouldRun && this.orderbooks.size > 0;
   }
@@ -171,6 +183,9 @@ export class PolymarketFeed {
         const askPrice = parseFloat(bestAsk.price);
         const midPrice = (bidPrice + askPrice) / 2;
 
+        const bidSize = parseFloat(bestBid.size);
+        const askSize = parseFloat(bestAsk.size);
+
         this.orderbooks.set(conditionId, {
           marketSlug: this.markets.get(conditionId)?.slug ?? conditionId,
           conditionId,
@@ -178,11 +193,14 @@ export class PolymarketFeed {
           askPrice,
           midPrice,
           spread: askPrice - bidPrice,
-          bidSize: parseFloat(bestBid.size),
-          askSize: parseFloat(bestAsk.size),
+          bidSize,
+          askSize,
           lastTradePrice: midPrice, // approximation
           timestamp: Date.now(),
         });
+
+        // Feed SentimentPulseTracker if hooked
+        this.onOrderbookUpdate?.(conditionId, bidSize, askSize, bidPrice, askPrice);
       } catch {
         // Skip failed fetches
       }

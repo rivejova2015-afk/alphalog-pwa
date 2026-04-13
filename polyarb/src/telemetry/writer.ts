@@ -5,6 +5,10 @@
 
 import { getSupabase } from '../supabase.js';
 import type { VelocitySignal } from '../skills/velocity-detector.js';
+import type { RegimeState } from '../skills/regime-detector.js';
+import type { AdaptiveState } from '../skills/adaptive-kelly.js';
+import type { CrossMarketSignal } from '../skills/cross-market.js';
+import type { SentimentPulse } from '../skills/sentiment-pulse.js';
 
 export interface TelemetrySnapshot {
   agentId: string;
@@ -25,8 +29,19 @@ export interface TelemetrySnapshot {
   consecutiveLosses: number;
   lastSignal: Record<string, unknown> | null;
   errorCount1h: number;
-  /** Velocity Detector signals — one per tracked Polymarket market */
+  // ── Superpowers ──────────────────────────────────────────────────
+  /** SP#1 Velocity Detector — one signal per tracked Polymarket market */
   velocitySnapshot: VelocitySignal[] | null;
+  /** SP#5 Regime Detector — current market regime */
+  regimeSnapshot: RegimeState | null;
+  /** SP#3 Adaptive Kelly — current threshold state */
+  adaptiveKellyState: AdaptiveState | null;
+  /** SP#6 Cross-Market Confirmation */
+  crossMarketSnapshot: CrossMarketSignal | null;
+  /** SP#4 Sentiment Pulse — anomaly scores per market */
+  sentimentSnapshot: SentimentPulse[] | null;
+  /** SP#2 Memory Bank — conditional win rate stats */
+  memoryBankStats: Array<{ key: string; wins: number; total: number; winRate: number }> | null;
 }
 
 const UPSERT_INTERVAL_MS = 5_000;
@@ -95,6 +110,11 @@ export class TelemetryWriter {
           last_signal: s.lastSignal,
           error_count_1h: s.errorCount1h,
           velocity_snapshot: s.velocitySnapshot ?? null,
+          regime_snapshot: s.regimeSnapshot ?? null,
+          adaptive_kelly_state: s.adaptiveKellyState ?? null,
+          cross_market_snapshot: s.crossMarketSnapshot ?? null,
+          sentiment_snapshot: s.sentimentSnapshot ?? null,
+          memory_bank_stats: s.memoryBankStats ?? null,
           last_heartbeat_at: new Date().toISOString(),
         },
         { onConflict: 'agent_id' }

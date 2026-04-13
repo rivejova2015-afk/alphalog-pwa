@@ -1,8 +1,11 @@
 /**
- * Binance WebSocket price feed for BTC/USDT spot.
+ * Binance WebSocket multi-asset price feed.
  *
- * Connects to wss://stream.binance.com:9443/ws/btcusdt@ticker
- * Maintains in-memory latest price + price history buffer.
+ * Uses Binance combined stream to track BTC, ETH, and SOL simultaneously.
+ * Maintains timestamped price history (1h) per asset for:
+ *   - VelocityDetector (BTC primary)
+ *   - CrossMarketConfirmation (ETH + SOL secondary)
+ *   - RegimeDetector (BTC volatility)
  */
 
 import WebSocket from 'ws';
@@ -17,37 +20,53 @@ export interface BinancePrice {
   timestamp: number;
 }
 
-const WS_URL = 'wss://stream.binance.com:9443/ws/btcusdt@ticker';
+// Combined stream endpoint — all 3 assets in one connection
+const WS_URL = 'wss://stream.binance.com:9443/stream?streams=btcusdt@ticker/ethusdt@ticker/solusdt@ticker';
 const RECONNECT_DELAY_MS = 3_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
-const PRICE_HISTORY_MAX = 240; // 60s at 250ms intervals — used for vol calculation
-const TIMESTAMPED_HISTORY_MS = 3_600_000; // Keep 1h of timestamped samples for velocity detector
+const PRICE_HISTORY_MAX = 240;        // 60s plain buffer for vol calc
+const TIMESTAMPED_HISTORY_MS = 3_600_000; // 1h timestamped buffer per asset
+
+type AssetSymbol = 'BTC' | 'ETH' | 'SOL';
+
+const STREAM_TO_SYMBOL: Record<string, AssetSymbol> = {
+  btcusdt: 'BTC',
+  ethusdt: 'ETH',
+  solusdt: 'SOL',
+};
 
 export class BinanceFeed {
   private ws: WebSocket | null = null;
-  private latestPrice: BinancePrice | null = null;
-  private priceHistory: number[] = [];
-  private timestampedSamples: PriceSample[] = []; // 1h ring buffer for velocity windows
   private connected = false;
   private reconnectDelay = RECONNECT_DELAY_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldRun = true;
 
-  get isConnected(): boolean {
-    return this.connected;
+  // Per-asset state
+  private prices: Map<AssetSymbol, BinancePrice> = new Map();
+  private histories: Map<AssetSymbol, number[]> = new Map([
+    ['BTC', []], ['ETH', []], ['SOL', []],
+  ]);
+  private timestampedSamples: Map<AssetSymbol, PriceSample[]> = new Map([
+    ['BTC', []], ['ETH', []], ['SOL', []],
+  ]);
+
+  get isConnected(): boolean { return this.connected; }
+
+  /** Latest BTC price (primary) */
+  get price(): BinancePrice | null { return this.prices.get('BTC') ?? null; }
+
+  /** Plain BTC price history for vol calc */
+  get history(): number[] { return this.histories.get('BTC') ?? []; }
+
+  /** Timestamped BTC samples for VelocityDetector (last 1h) */
+  getTimestampedSamples(symbol: AssetSymbol = 'BTC'): PriceSample[] {
+    return this.timestampedSamples.get(symbol) ?? [];
   }
 
-  get price(): BinancePrice | null {
-    return this.latestPrice;
-  }
-
-  get history(): number[] {
-    return this.priceHistory;
-  }
-
-  /** Timestamped samples for the last 1h — used by VelocityDetector */
-  getTimestampedSamples(): PriceSample[] {
-    return this.timestampedSamples;
+  /** Latest price for any tracked asset */
+  getPrice(symbol: AssetSymbol): BinancePrice | null {
+    return this.prices.get(symbol) ?? null;
   }
 
   start(): void {
@@ -57,14 +76,8 @@ export class BinanceFeed {
 
   stop(): void {
     this.shouldRun = false;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.ws) { this.ws.close(); this.ws = null; }
     this.connected = false;
   }
 
@@ -75,46 +88,56 @@ export class BinanceFeed {
       this.ws = new WebSocket(WS_URL);
 
       this.ws.on('open', () => {
-        console.log('[binance-ws] Connected');
+        console.log('[binance-ws] Connected (BTC+ETH+SOL combined stream)');
         this.connected = true;
         this.reconnectDelay = RECONNECT_DELAY_MS;
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
         try {
-          const msg = JSON.parse(data.toString()) as {
-            c?: string; // last price
-            b?: string; // best bid
-            a?: string; // best ask
-            v?: string; // 24h volume
-            P?: string; // 24h change percent
+          // Combined stream format: { stream: "btcusdt@ticker", data: {...} }
+          const envelope = JSON.parse(data.toString()) as {
+            stream?: string;
+            data?: {
+              c?: string; b?: string; a?: string; v?: string; P?: string;
+            };
           };
 
+          if (!envelope.stream || !envelope.data) return;
+
+          // Extract base symbol from stream name (e.g. "btcusdt@ticker" → "btcusdt")
+          const streamBase = envelope.stream.split('@')[0];
+          const symbol = STREAM_TO_SYMBOL[streamBase];
+          if (!symbol) return;
+
+          const msg = envelope.data;
           const last = parseFloat(msg.c ?? '0');
           if (last <= 0) return;
 
-          this.latestPrice = {
+          const ts = Date.now();
+
+          this.prices.set(symbol, {
             last,
             bid: parseFloat(msg.b ?? '0'),
             ask: parseFloat(msg.a ?? '0'),
             volume24h: parseFloat(msg.v ?? '0'),
             changePct24h: parseFloat(msg.P ?? '0'),
-            timestamp: Date.now(),
-          };
+            timestamp: ts,
+          });
 
-          // Append to plain history buffer (used for volatility calc)
-          this.priceHistory.push(last);
-          if (this.priceHistory.length > PRICE_HISTORY_MAX) {
-            this.priceHistory.shift();
+          // Plain history (BTC only for vol calc)
+          if (symbol === 'BTC') {
+            const h = this.histories.get('BTC')!;
+            h.push(last);
+            if (h.length > PRICE_HISTORY_MAX) h.shift();
           }
 
-          // Append to timestamped buffer (used by VelocityDetector — last 1h)
-          const ts = Date.now();
-          this.timestampedSamples.push({ price: last, timestamp: ts });
-          // Prune samples older than 1h
+          // Timestamped history (all 3 assets)
+          const tsBuf = this.timestampedSamples.get(symbol)!;
+          tsBuf.push({ price: last, timestamp: ts });
           const cutoff = ts - TIMESTAMPED_HISTORY_MS;
-          while (this.timestampedSamples.length > 0 && this.timestampedSamples[0].timestamp < cutoff) {
-            this.timestampedSamples.shift();
+          while (tsBuf.length > 0 && tsBuf[0].timestamp < cutoff) {
+            tsBuf.shift();
           }
         } catch {
           // Skip malformed messages
@@ -140,9 +163,7 @@ export class BinanceFeed {
   private scheduleReconnect(): void {
     if (!this.shouldRun) return;
     console.log(`[binance-ws] Reconnecting in ${this.reconnectDelay}ms...`);
-    this.reconnectTimer = setTimeout(() => {
-      this.connect();
-    }, this.reconnectDelay);
+    this.reconnectTimer = setTimeout(() => { this.connect(); }, this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }
 }
