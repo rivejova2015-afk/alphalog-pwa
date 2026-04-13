@@ -94,13 +94,15 @@ export class PolymarketFeed {
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as Array<{
+      const raw = await res.json() as Array<{
         condition_id?: string;
         question?: string;
         end_date_iso?: string;
         active?: boolean;
         market_slug?: string;
-      }>;
+      }> | { data?: Array<{ condition_id?: string; question?: string; end_date_iso?: string; active?: boolean; market_slug?: string }> };
+
+      const data = Array.isArray(raw) ? raw : (raw?.data ?? []);
 
       const cryptoMarkets: PolymarketMarket[] = [];
       for (const m of data) {
