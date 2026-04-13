@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -14,9 +14,9 @@ import {
   Play,
   Radio,
   Square,
+  Target,
   TrendingUp,
   Wifi,
-  WifiOff,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,6 +30,39 @@ interface Agent {
   starting_capital_usd: number;
   last_heartbeat_at: string | null;
   config: Record<string, unknown>;
+}
+
+interface VelocityWindow {
+  label: "1m" | "5m" | "15m" | "1h";
+  velocity: number;
+  acceleration: number;
+  direction: "UP" | "DOWN" | "FLAT";
+  samplesUsed: number;
+}
+
+interface MilestoneProximity {
+  milestonePrice: number;
+  distancePct: number;
+  distanceUsd: number;
+  direction: "ABOVE" | "BELOW";
+  movingToward: boolean;
+  timeToHitHours: number | null;
+}
+
+interface VelocitySignal {
+  conditionId: string;
+  symbol: string;
+  question: string;
+  currentPrice: number;
+  marketImpliedProb: number;
+  windows: VelocityWindow[];
+  milestone: MilestoneProximity | null;
+  velocityProbDelta: number;
+  adjustedFairProb: number;
+  lagEstimateMinutes: number | null;
+  huntStrength: number;
+  isAccelerating: boolean;
+  computedAt: number;
 }
 
 interface Telemetry {
@@ -50,6 +83,7 @@ interface Telemetry {
   last_signal: Record<string, unknown> | null;
   error_count_1h: number;
   last_heartbeat_at: string;
+  velocity_snapshot: VelocitySignal[] | null;
 }
 
 interface Position {
@@ -89,6 +123,13 @@ const STATUS_COLORS: Record<string, string> = {
   ERROR: "bg-red-500",
 };
 
+const SYMBOL_COLORS: Record<string, { stroke: string; fill: string; text: string }> = {
+  BTC:    { stroke: "#f59e0b", fill: "#f59e0b22", text: "#f59e0b" },
+  ETH:    { stroke: "#818cf8", fill: "#818cf822", text: "#818cf8" },
+  SOL:    { stroke: "#34d399", fill: "#34d39922", text: "#34d399" },
+  CRYPTO: { stroke: "#22d3ee", fill: "#22d3ee22", text: "#22d3ee" },
+};
+
 function fmt(n: number | null | undefined, decimals = 2): string {
   if (n === null || n === undefined) return "—";
   return n.toFixed(decimals);
@@ -100,6 +141,12 @@ function fmtUsd(n: number | null | undefined): string {
   return `${prefix}${Math.abs(n).toFixed(2)}`;
 }
 
+function fmtVelocity(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 1000) return `${(v / 1000).toFixed(1)}K/h`;
+  return `${v >= 0 ? "+" : ""}${v.toFixed(0)}/h`;
+}
+
 function timeAgo(iso: string | null): string {
   if (!iso) return "—";
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -108,7 +155,384 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Hunt Map 3D (Canvas) ──────────────────────────────────────────────────
+
+function HuntMap3D({ signals }: { signals: VelocitySignal[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<number>(0);
+  const tickRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctxRaw = canvas.getContext("2d");
+    if (!ctxRaw) return;
+    const ctx: CanvasRenderingContext2D = ctxRaw;
+
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Perspective projection: (worldX, worldY, worldZ) → (px, py)
+    // worldX: 0=left(far from milestone), 1=right(close to milestone)
+    // worldY: 0=bottom(low prob), 1=top(high prob)
+    // worldZ: 0=back, 1=front (hunt strength)
+    const VP = { x: W * 0.5, y: H * 0.08 }; // vanishing point
+    const BASE_Y = H * 0.92;
+    const DEPTH = H * 0.7;
+
+    function project(wx: number, wy: number): { x: number; y: number; scale: number } {
+      // Tilted plane: wx → horizontal, wy → depth into screen
+      const groundX = W * 0.05 + wx * W * 0.9;
+      const groundY = BASE_Y - wy * DEPTH * 0.6;
+
+      // Apply perspective toward vanishing point
+      const t = (groundY - BASE_Y) / (VP.y - BASE_Y);
+      const scale = 1 - t * 0.5;
+      const px = VP.x + (groundX - VP.x) * (1 - t * 0.45);
+      const py = groundY;
+      return { x: px, y: py, scale };
+    }
+
+    function draw(tick: number) {
+      ctx.clearRect(0, 0, W, H);
+
+      // ── Background grid ──
+      ctx.strokeStyle = "#1a2740";
+      ctx.lineWidth = 0.5;
+
+      // Horizontal grid lines (depth)
+      const ROWS = 8;
+      for (let r = 0; r <= ROWS; r++) {
+        const wy = r / ROWS;
+        const left  = project(0, wy);
+        const right = project(1, wy);
+        ctx.beginPath();
+        ctx.moveTo(left.x, left.y);
+        ctx.lineTo(right.x, right.y);
+        ctx.stroke();
+      }
+
+      // Vertical grid lines (left-right)
+      const COLS = 10;
+      for (let c = 0; c <= COLS; c++) {
+        const wx = c / COLS;
+        const front = project(wx, 0);
+        const back  = project(wx, 1);
+        ctx.beginPath();
+        ctx.moveTo(front.x, front.y);
+        ctx.lineTo(back.x, back.y);
+        ctx.stroke();
+      }
+
+      // ── Axis labels ──
+      ctx.font = "9px monospace";
+      ctx.fillStyle = "#334155";
+      ctx.textAlign = "center";
+
+      // X-axis: milestone distance (bottom)
+      ["20%", "15%", "10%", "5%", "0%"].forEach((label, i) => {
+        const pt = project(i / 4, 0);
+        ctx.fillText(label, pt.x, pt.y + 12);
+      });
+
+      // Y-axis label
+      ctx.save();
+      ctx.fillStyle = "#475569";
+      ctx.font = "8px monospace";
+      const left0 = project(0, 0);
+      const left1 = project(0, 1);
+      ctx.fillText("prob →", left0.x - 24, (left0.y + left1.y) / 2);
+      ctx.restore();
+
+      // ── Axis titles ──
+      ctx.fillStyle = "#475569";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("← distancia al hito", W * 0.05, H - 2);
+
+      // ── Market bubbles ──
+      // Sort by huntStrength ascending so strongest renders on top
+      const sorted = [...signals].sort((a, b) => a.huntStrength - b.huntStrength);
+
+      for (const sig of sorted) {
+        if (!sig.milestone) continue;
+
+        // Map to world coordinates
+        // X: milestone distance (0%=right, 20%=left) → invert
+        const wx = 1 - Math.min(sig.milestone.distancePct, 20) / 20;
+        // Y: implied probability
+        const wy = Math.max(0, Math.min(1, sig.marketImpliedProb));
+
+        const { x, y, scale } = project(wx, wy);
+
+        // Bubble radius: proportional to huntStrength (min 4, max 22)
+        const baseR = 4 + (sig.huntStrength / 100) * 18;
+        const r = baseR * scale;
+
+        const colors = SYMBOL_COLORS[sig.symbol] ?? SYMBOL_COLORS.CRYPTO;
+
+        // Pulse animation for accelerating markets
+        const pulse = sig.isAccelerating
+          ? 1 + 0.12 * Math.sin((tick / 8) + sig.conditionId.charCodeAt(0))
+          : 1;
+        const rAnimated = r * pulse;
+
+        // Outer glow
+        if (sig.huntStrength > 30) {
+          const glowR = rAnimated * 2.2;
+          const grad = ctx.createRadialGradient(x, y, rAnimated * 0.5, x, y, glowR);
+          grad.addColorStop(0, colors.stroke + "44");
+          grad.addColorStop(1, "transparent");
+          ctx.beginPath();
+          ctx.arc(x, y, glowR, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
+
+        // Bubble fill
+        ctx.beginPath();
+        ctx.arc(x, y, rAnimated, 0, Math.PI * 2);
+        ctx.fillStyle = colors.fill;
+        ctx.strokeStyle = colors.stroke;
+        ctx.lineWidth = sig.isAccelerating ? 1.8 : 1;
+        ctx.fill();
+        ctx.stroke();
+
+        // Symbol label inside bubble
+        if (r > 8) {
+          ctx.fillStyle = colors.text;
+          ctx.font = `bold ${Math.round(8 * scale)}px monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(sig.symbol, x, y);
+        }
+
+        // Hunt strength badge
+        if (sig.huntStrength > 20) {
+          ctx.font = `${Math.round(7 * scale)}px monospace`;
+          ctx.fillStyle = "#94a3b8";
+          ctx.textBaseline = "top";
+          ctx.fillText(`${sig.huntStrength}`, x, y + rAnimated + 2);
+        }
+      }
+
+      // ── Legend ──
+      const legendItems = Object.entries(SYMBOL_COLORS).filter(([k]) => k !== "CRYPTO");
+      legendItems.forEach(([sym, c], i) => {
+        const lx = W - 60;
+        const ly = 12 + i * 14;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+        ctx.fillStyle = c.fill;
+        ctx.strokeStyle = c.stroke;
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#64748b";
+        ctx.font = "9px monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(sym, lx + 8, ly);
+      });
+    }
+
+    function loop() {
+      tickRef.current++;
+      draw(tickRef.current);
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [signals]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={560}
+      height={260}
+      className="w-full rounded"
+      style={{ imageRendering: "crisp-edges", background: "#0a0e1a" }}
+    />
+  );
+}
+
+// ─── Velocity Gauge Strip ─────────────────────────────────────────────────
+
+function VelocityGauges({ windows }: { windows: VelocityWindow[] }) {
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {windows.map((w) => {
+        const absV = Math.abs(w.velocity);
+        const maxV = 2000; // $/h scale
+        const barPct = Math.min(100, (absV / maxV) * 100);
+        const isUp = w.direction === "UP";
+        const isFlat = w.direction === "FLAT";
+        const color = isFlat ? "#475569" : isUp ? "#34d399" : "#f87171";
+        const accLabel = w.acceleration > 50 ? "↑↑" : w.acceleration < -50 ? "↓↓" : "";
+
+        return (
+          <div key={w.label} className="bg-[#0d1424] rounded-lg px-3 py-2.5 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-[#475569] font-mono">{w.label}</span>
+              <span className="text-[9px] font-mono" style={{ color: "#64748b" }}>{accLabel}</span>
+            </div>
+            {/* Bar */}
+            <div className="h-1.5 rounded-full bg-[#1e2a3a] overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${barPct}%`, backgroundColor: color }}
+              />
+            </div>
+            <div className="text-[11px] font-mono font-bold" style={{ color }}>
+              {isFlat ? "FLAT" : fmtVelocity(w.velocity)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Velocity Panel ───────────────────────────────────────────────────────
+
+function VelocityPanel({ signals }: { signals: VelocitySignal[] }) {
+  const topSignal = signals.reduce(
+    (best, s) => (s.huntStrength > (best?.huntStrength ?? -1) ? s : best),
+    null as VelocitySignal | null
+  );
+
+  // BTC windows (pick BTC signal or first available)
+  const btcSignal = signals.find(s => s.symbol === "BTC") ?? signals[0] ?? null;
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4 text-[#22d3ee]" />
+          <span className="text-sm font-bold text-[#e2e8f0] font-mono">Velocity Detector</span>
+          <span className="text-[10px] text-[#475569] font-mono">SUPERPOWER #1</span>
+        </div>
+        {topSignal && topSignal.huntStrength > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-[#475569]">best hunt</span>
+            <span
+              className="px-2 py-0.5 rounded font-mono font-bold text-xs"
+              style={{
+                backgroundColor: topSignal.huntStrength > 60 ? "#16450e" : topSignal.huntStrength > 30 ? "#2d2a0a" : "#1e2a3a",
+                color: topSignal.huntStrength > 60 ? "#34d399" : topSignal.huntStrength > 30 ? "#fbbf24" : "#64748b",
+              }}
+            >
+              {topSignal.huntStrength}/100
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* BTC Velocity Gauges */}
+      {btcSignal && (
+        <div>
+          <div className="text-[10px] text-[#475569] font-mono mb-1.5">
+            BTC velocidad — ${fmt(btcSignal.currentPrice, 0)} spot
+          </div>
+          <VelocityGauges windows={btcSignal.windows} />
+        </div>
+      )}
+
+      {/* 3D Hunt Map */}
+      <div>
+        <div className="text-[10px] text-[#475569] font-mono mb-1.5">
+          mapa de caza — X: distancia al hito · Y: prob implícita · tamaño: hunt strength
+        </div>
+        {signals.filter(s => s.milestone).length > 0 ? (
+          <HuntMap3D signals={signals} />
+        ) : (
+          <div className="h-20 flex items-center justify-center text-xs text-[#334155]">
+            El agente necesita ≥1 mercado con hito parseado para mostrar el mapa.
+          </div>
+        )}
+      </div>
+
+      {/* Per-market table */}
+      {signals.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-[#334155] border-b border-[#1e2a3a]">
+                <th className="text-left pb-1.5 pr-3 font-mono">mercado</th>
+                <th className="text-right pb-1.5 pr-3 font-mono">prob</th>
+                <th className="text-right pb-1.5 pr-3 font-mono">Δvel</th>
+                <th className="text-right pb-1.5 pr-3 font-mono">lag</th>
+                <th className="text-right pb-1.5 font-mono">hunt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signals
+                .sort((a, b) => b.huntStrength - a.huntStrength)
+                .map((sig) => {
+                  const colors = SYMBOL_COLORS[sig.symbol] ?? SYMBOL_COLORS.CRYPTO;
+                  const delta = sig.velocityProbDelta;
+                  return (
+                    <tr key={sig.conditionId} className="border-b border-[#0f1724]">
+                      <td className="py-1.5 pr-3">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: colors.stroke }}
+                          />
+                          {sig.isAccelerating && (
+                            <span className="text-[#f59e0b] text-[9px]">↑↑</span>
+                          )}
+                          <span
+                            className="truncate max-w-[160px] text-[#94a3b8]"
+                            title={sig.question}
+                          >
+                            {sig.milestone
+                              ? `${sig.symbol} $${(sig.milestone.milestonePrice / 1000).toFixed(0)}K`
+                              : sig.question.slice(0, 28)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-1.5 pr-3 text-right font-mono text-[#64748b]">
+                        {fmt(sig.marketImpliedProb * 100, 1)}%
+                      </td>
+                      <td className="py-1.5 pr-3 text-right font-mono"
+                        style={{ color: delta > 0 ? "#34d399" : delta < 0 ? "#f87171" : "#475569" }}>
+                        {delta !== 0 ? `${delta > 0 ? "+" : ""}${fmt(delta * 100, 1)}%` : "—"}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right font-mono text-[#64748b]">
+                        {sig.lagEstimateMinutes ? `~${sig.lagEstimateMinutes}m` : "—"}
+                      </td>
+                      <td className="py-1.5 text-right">
+                        <span
+                          className="px-1.5 py-0.5 rounded font-mono font-bold"
+                          style={{
+                            backgroundColor: sig.huntStrength > 60 ? "#16450e" : sig.huntStrength > 30 ? "#2d2a0a" : "#1a1f2e",
+                            color: sig.huntStrength > 60 ? "#34d399" : sig.huntStrength > 30 ? "#fbbf24" : "#475569",
+                          }}
+                        >
+                          {sig.huntStrength}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {signals.length === 0 && (
+        <p className="text-xs text-[#334155] text-center py-4">
+          El agente computará señales de velocidad en el próximo tick (≤5s).
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PolyArbDashboard() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -120,14 +544,12 @@ export default function PolyArbDashboard() {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
 
-  // Clock tick for live "time ago"
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(t);
   }, []);
-  void now; // used implicitly via timeAgo re-render
+  void now;
 
-  // Fetch agents
   useEffect(() => {
     fetch("/api/polyarb/agents")
       .then((r) => r.json())
@@ -139,17 +561,14 @@ export default function PolyArbDashboard() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Fetch data when active agent changes
   const fetchData = useCallback(async () => {
     if (!activeAgent) return;
-
     const [telRes, posRes, cbRes, eqRes] = await Promise.allSettled([
       fetch("/api/polyarb/telemetry").then((r) => r.json()),
       fetch("/api/polyarb/positions?status=open").then((r) => r.json()),
       fetch("/api/polyarb/circuit-breaker?limit=10").then((r) => r.json()),
       fetch("/api/polyarb/telemetry/history?days=7").then((r) => r.json()),
     ]);
-
     if (telRes.status === "fulfilled") setTelemetry(telRes.value);
     if (posRes.status === "fulfilled") setPositions(posRes.value.data ?? []);
     if (cbRes.status === "fulfilled") setCbEvents(cbRes.value ?? []);
@@ -203,11 +622,12 @@ export default function PolyArbDashboard() {
   const startCap = activeAgent?.starting_capital_usd ?? 50;
   const pnlPct = (pnl / startCap) * 100;
 
-  // Polymarket "connected" = agente tiene heartbeat reciente (< 30s)
   const heartbeatMs = telemetry?.last_heartbeat_at
     ? Date.now() - new Date(telemetry.last_heartbeat_at).getTime()
     : Infinity;
   const polymarketActive = heartbeatMs < 30_000;
+
+  const velocitySignals: VelocitySignal[] = telemetry?.velocity_snapshot ?? [];
 
   return (
     <div className="space-y-5">
@@ -237,6 +657,19 @@ export default function PolyArbDashboard() {
         </div>
       </div>
 
+      {/* ── Status bar ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+        <StatusPill icon={<Wifi className="w-3 h-3" />} label="Binance" active={telemetry?.ws_binance_connected ?? false} activeLabel="Live" inactiveLabel="Off" />
+        <StatusPill icon={<Radio className="w-3 h-3" />} label="Polymarket" active={polymarketActive} activeLabel="REST" inactiveLabel="Off" />
+        <StatusPill icon={<Cpu className="w-3 h-3" />} label="Loop" active={true} activeLabel={`${telemetry?.loop_latency_ms ?? 0}ms`} inactiveLabel="—" />
+        <StatusPill icon={<Zap className="w-3 h-3" />} label="BTC" active={true} activeLabel={`$${fmt(telemetry?.btc_spot_price, 0)}`} inactiveLabel="—" />
+        <StatusPill icon={<TrendingUp className="w-3 h-3" />} label="Streak"
+          active={(telemetry?.consecutive_wins ?? 0) > 0}
+          activeLabel={`${telemetry?.consecutive_wins ?? 0}W`}
+          inactiveLabel={`${telemetry?.consecutive_losses ?? 0}L`} />
+        <StatusPill icon={<Clock className="w-3 h-3" />} label="Heartbeat" active={heartbeatMs < 30_000} activeLabel={timeAgo(telemetry?.last_heartbeat_at ?? null)} inactiveLabel="Stale" />
+      </div>
+
       {/* ── Métricas principales ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Equity" value={`$${fmt(telemetry?.equity_usd)}`} sub={null} />
@@ -253,30 +686,8 @@ export default function PolyArbDashboard() {
         <MetricCard label="Errors (1h)" value={String(telemetry?.error_count_1h ?? 0)} sub={null} positive={(telemetry?.error_count_1h ?? 0) === 0} />
       </div>
 
-      {/* ── Status bar ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-        <StatusPill icon={<Wifi className="w-3 h-3" />} label="Binance" active={telemetry?.ws_binance_connected ?? false} activeLabel="Live" inactiveLabel="Off" />
-        <StatusPill icon={<Radio className="w-3 h-3" />} label="Polymarket" active={polymarketActive} activeLabel="REST" inactiveLabel="Off" />
-        <StatusPill icon={<Cpu className="w-3 h-3" />} label="Loop" active={true} activeLabel={`${telemetry?.loop_latency_ms ?? 0}ms`} inactiveLabel="—" />
-        <StatusPill icon={<Zap className="w-3 h-3" />} label="BTC" active={true} activeLabel={`$${fmt(telemetry?.btc_spot_price, 0)}`} inactiveLabel="—" />
-        <StatusPill icon={<TrendingUp className="w-3 h-3" />} label="Streak"
-          active={(telemetry?.consecutive_wins ?? 0) > 0}
-          activeLabel={`${telemetry?.consecutive_wins ?? 0}W`}
-          inactiveLabel={`${telemetry?.consecutive_losses ?? 0}L`} />
-        <StatusPill icon={<Clock className="w-3 h-3" />} label="Heartbeat" active={heartbeatMs < 30_000} activeLabel={timeAgo(telemetry?.last_heartbeat_at ?? null)} inactiveLabel="Stale" />
-      </div>
-
-      {/* ── Última señal ────────────────────────────────────────────────── */}
-      {telemetry?.last_signal && (
-        <div className="bg-zinc-800/40 rounded-lg p-4">
-          <h2 className="text-sm font-medium text-zinc-300 mb-2 flex items-center gap-2">
-            <Zap className="w-4 h-4 text-yellow-400" /> Última Señal
-          </h2>
-          <pre className="text-xs text-zinc-400 overflow-x-auto">
-            {JSON.stringify(telemetry.last_signal, null, 2)}
-          </pre>
-        </div>
-      )}
+      {/* ── VELOCITY DETECTOR ───────────────────────────────────────────── */}
+      <VelocityPanel signals={velocitySignals} />
 
       {/* ── Equity Curve ────────────────────────────────────────────────── */}
       {equityCurve.length > 1 ? (
@@ -429,23 +840,19 @@ function StatusPill({ icon, label, active, activeLabel, inactiveLabel }: {
 
 function EquityChart({ data, startingCapital }: { data: EquityPoint[]; startingCapital: number }) {
   if (data.length < 2) return null;
-
   const values = data.map((d) => d.equity_usd);
   const min = Math.min(...values) * 0.98;
   const max = Math.max(...values) * 1.02;
   const range = max - min || 1;
   const width = 600;
   const height = 120;
-
   const points = data.map((d, i) => {
     const x = (i / (data.length - 1)) * width;
     const y = height - ((d.equity_usd - min) / range) * height;
     return `${x},${y}`;
   }).join(" ");
-
   const lastValue = values[values.length - 1];
   const isUp = lastValue >= startingCapital;
-
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-28" preserveAspectRatio="none">
       <line

@@ -6,6 +6,7 @@
  */
 
 import WebSocket from 'ws';
+import type { PriceSample } from '../skills/velocity-detector.js';
 
 export interface BinancePrice {
   last: number;
@@ -19,12 +20,14 @@ export interface BinancePrice {
 const WS_URL = 'wss://stream.binance.com:9443/ws/btcusdt@ticker';
 const RECONNECT_DELAY_MS = 3_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
-const PRICE_HISTORY_MAX = 240; // 60s at 250ms intervals
+const PRICE_HISTORY_MAX = 240; // 60s at 250ms intervals — used for vol calculation
+const TIMESTAMPED_HISTORY_MS = 3_600_000; // Keep 1h of timestamped samples for velocity detector
 
 export class BinanceFeed {
   private ws: WebSocket | null = null;
   private latestPrice: BinancePrice | null = null;
   private priceHistory: number[] = [];
+  private timestampedSamples: PriceSample[] = []; // 1h ring buffer for velocity windows
   private connected = false;
   private reconnectDelay = RECONNECT_DELAY_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -40,6 +43,11 @@ export class BinanceFeed {
 
   get history(): number[] {
     return this.priceHistory;
+  }
+
+  /** Timestamped samples for the last 1h — used by VelocityDetector */
+  getTimestampedSamples(): PriceSample[] {
+    return this.timestampedSamples;
   }
 
   start(): void {
@@ -94,10 +102,19 @@ export class BinanceFeed {
             timestamp: Date.now(),
           };
 
-          // Append to history buffer
+          // Append to plain history buffer (used for volatility calc)
           this.priceHistory.push(last);
           if (this.priceHistory.length > PRICE_HISTORY_MAX) {
             this.priceHistory.shift();
+          }
+
+          // Append to timestamped buffer (used by VelocityDetector — last 1h)
+          const ts = Date.now();
+          this.timestampedSamples.push({ price: last, timestamp: ts });
+          // Prune samples older than 1h
+          const cutoff = ts - TIMESTAMPED_HISTORY_MS;
+          while (this.timestampedSamples.length > 0 && this.timestampedSamples[0].timestamp < cutoff) {
+            this.timestampedSamples.shift();
           }
         } catch {
           // Skip malformed messages

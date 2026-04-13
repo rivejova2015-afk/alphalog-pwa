@@ -15,6 +15,7 @@ import { TelemetryWriter } from './telemetry/writer.js';
 import { logCompliance } from './telemetry/compliance.js';
 import { createCircuitBreakerState } from './trading/circuit-breaker.js';
 import { tradingTick, createLoopMetrics, type LoopDeps } from './loop.js';
+import { parseMilestonePrice } from './skills/velocity-detector.js';
 
 let loopInterval: ReturnType<typeof setInterval> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
@@ -62,6 +63,13 @@ async function main(): Promise<void> {
   const activeMarkets = markets.filter(m => m.active);
   console.log(`[main] Found ${activeMarkets.length} active crypto markets`);
 
+  // Build milestone price map (conditionId → parsed milestone price)
+  const milestoneMap = new Map<string, number | null>();
+  for (const market of activeMarkets) {
+    milestoneMap.set(market.conditionId, parseMilestonePrice(market.question));
+  }
+  console.log(`[main] Parsed milestones: ${[...milestoneMap.entries()].filter(([,v]) => v !== null).length}/${activeMarkets.length} markets`);
+
   if (activeMarkets.length > 0) {
     polymarketFeed.start(activeMarkets.map(m => m.conditionId));
     console.log('[main] Polymarket feed started');
@@ -85,6 +93,7 @@ async function main(): Promise<void> {
     orderManager,
     telemetryWriter,
     cbState,
+    milestoneMap,
   };
 
   // 8. Start main trading loop

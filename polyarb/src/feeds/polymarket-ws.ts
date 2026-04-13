@@ -43,6 +43,13 @@ export class PolymarketFeed {
   }
 
   /**
+   * Get all tracked markets (includes question text for milestone parsing).
+   */
+  getMarkets(): PolymarketMarket[] {
+    return Array.from(this.markets.values());
+  }
+
+  /**
    * Get the latest orderbook for a condition.
    */
   getOrderbook(conditionId: string): PolymarketOrderbook | null {

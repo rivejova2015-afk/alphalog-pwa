@@ -4,6 +4,7 @@
  */
 
 import { getSupabase } from '../supabase.js';
+import type { VelocitySignal } from '../skills/velocity-detector.js';
 
 export interface TelemetrySnapshot {
   agentId: string;
@@ -24,6 +25,8 @@ export interface TelemetrySnapshot {
   consecutiveLosses: number;
   lastSignal: Record<string, unknown> | null;
   errorCount1h: number;
+  /** Velocity Detector signals — one per tracked Polymarket market */
+  velocitySnapshot: VelocitySignal[] | null;
 }
 
 const UPSERT_INTERVAL_MS = 5_000;
@@ -91,6 +94,7 @@ export class TelemetryWriter {
           consecutive_losses: s.consecutiveLosses,
           last_signal: s.lastSignal,
           error_count_1h: s.errorCount1h,
+          velocity_snapshot: s.velocitySnapshot ?? null,
           last_heartbeat_at: new Date().toISOString(),
         },
         { onConflict: 'agent_id' }

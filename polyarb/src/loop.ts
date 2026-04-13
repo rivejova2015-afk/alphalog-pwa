@@ -30,6 +30,10 @@ import { estimateBeliefVolatility, computeFairPrice, computeEdge } from './math/
 import { calculateMomentumVector, isReversalImminent } from './math/momentum-physics.js';
 import { aggressiveKelly, checkRiskReward } from './math/kelly-sizer.js';
 import { hestonStep, type HestonState } from './math/heston-vol.js';
+import {
+  computeVelocitySignal,
+  type VelocitySignal,
+} from './skills/velocity-detector.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -39,6 +43,8 @@ export interface LoopDeps {
   orderManager: OrderManager;
   telemetryWriter: TelemetryWriter;
   cbState: CircuitBreakerState;
+  /** conditionId → parsed milestone price (null = couldn't parse) */
+  milestoneMap: Map<string, number | null>;
 }
 
 interface LoopMetrics {
@@ -53,6 +59,8 @@ interface LoopMetrics {
   lastSlippage: number;
   errorCount1h: number;
   hestonState: HestonState;
+  /** Latest velocity signals per market — written to telemetry */
+  lastVelocitySignals: VelocitySignal[];
 }
 
 export function createLoopMetrics(startingEquity: number): LoopMetrics {
@@ -68,6 +76,7 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
     lastSlippage: 0,
     errorCount1h: 0,
     hestonState: { variance: 0.15, leverage: 2.0 },
+    lastVelocitySignals: [],
   };
 }
 
@@ -157,7 +166,7 @@ async function processMarket(
   orderbook: PolymarketOrderbook,
   btcSpotPrice: number
 ): Promise<void> {
-  const { config, binanceFeed, positionTracker, orderManager } = deps;
+  const { config, binanceFeed, positionTracker, orderManager, milestoneMap } = deps;
   const { params } = config;
 
   // Already have an open position in this market? Skip new entries
@@ -177,7 +186,28 @@ async function processMarket(
   );
 
   // ── 3. Compute fair price ──
-  const fairPrice = computeFairPrice(orderbook.midPrice, sigma);
+  const baseFairPrice = computeFairPrice(orderbook.midPrice, sigma);
+
+  // ── 3b. Velocity Detector — adjust fair price with momentum signal ──
+  const market = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
+  const milestonePrice = milestoneMap.get(orderbook.conditionId) ?? null;
+  const velocitySignal = computeVelocitySignal(
+    orderbook.conditionId,
+    market?.question ?? orderbook.marketSlug,
+    btcSpotPrice,
+    binanceFeed.getTimestampedSamples(),
+    orderbook.midPrice,
+    baseFairPrice,
+    milestonePrice
+  );
+
+  // Store signal for telemetry (replace or add)
+  const vsIdx = metrics.lastVelocitySignals.findIndex(s => s.conditionId === orderbook.conditionId);
+  if (vsIdx >= 0) metrics.lastVelocitySignals[vsIdx] = velocitySignal;
+  else metrics.lastVelocitySignals.push(velocitySignal);
+
+  // Use velocity-adjusted fair price
+  const fairPrice = velocitySignal.adjustedFairProb;
 
   // ── 4. Detect edge ──
   const edge = computeEdge(fairPrice, orderbook.midPrice);
@@ -327,5 +357,6 @@ function updateTelemetry(deps: LoopDeps, metrics: LoopMetrics, tickStart: number
     consecutiveLosses: metrics.consecutiveLosses,
     lastSignal: null,
     errorCount1h: metrics.errorCount1h,
+    velocitySnapshot: metrics.lastVelocitySignals.length > 0 ? metrics.lastVelocitySignals : null,
   });
 }
