@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('polyarb_positions')
-    .select('*', { count: 'exact' })
+    .select('id, market_slug, condition_id, outcome, side, entry_price, size_usd, pnl_usd, pnl_percent, status, opened_at, closed_at', { count: 'exact' })
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .range(offset, offset + limit - 1);
@@ -28,5 +28,7 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data: data ?? [], total: count ?? 0 });
+  return NextResponse.json({ data: data ?? [], total: count ?? 0 }, {
+    headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=20' },
+  });
 }

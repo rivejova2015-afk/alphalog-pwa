@@ -10,11 +10,13 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('polyarb_circuit_breaker_events')
-    .select('*')
+    .select('id, trigger_type, severity, detail, action_taken, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  return NextResponse.json(data ?? [], {
+    headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=30' },
+  });
 }

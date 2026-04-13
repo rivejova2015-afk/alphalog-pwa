@@ -124,7 +124,9 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      return NextResponse.json(responseCheck.data);
+      return NextResponse.json(responseCheck.data, {
+        headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+      });
     }
 
     const decrypted = (data || []).map((trade: any) => ({
@@ -132,7 +134,9 @@ export async function GET(request: NextRequest) {
       notes: decryptText(asString(trade.notes)),
     }));
 
-    return NextResponse.json(decrypted);
+    return NextResponse.json(decrypted, {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+    });
   } catch (err: unknown) {
     console.error("Error in GET /api/tradehub/trades:", err);
     await recordBugFromRequest(request, {

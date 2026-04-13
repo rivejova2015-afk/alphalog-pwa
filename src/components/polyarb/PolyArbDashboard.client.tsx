@@ -215,6 +215,8 @@ function HuntMap3D({ signals }: { signals: VelocitySignal[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const tickRef = useRef(0);
+  // Cache de gradients por conditionId+x+y — evita recrearlos en cada frame
+  const gradientCache = useRef<Map<string, { x: number; y: number; grad: CanvasGradient }>>(new Map());
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -331,12 +333,20 @@ function HuntMap3D({ signals }: { signals: VelocitySignal[] }) {
           : 1;
         const rAnimated = r * pulse;
 
-        // Outer glow
+        // Outer glow — gradient cacheado por conditionId, recreado solo si cambió la posición
         if (sig.huntStrength > 30) {
           const glowR = rAnimated * 2.2;
-          const grad = ctx.createRadialGradient(x, y, rAnimated * 0.5, x, y, glowR);
-          grad.addColorStop(0, colors.stroke + "44");
-          grad.addColorStop(1, "transparent");
+          const cacheKey = sig.conditionId;
+          const cached = gradientCache.current.get(cacheKey);
+          let grad: CanvasGradient;
+          if (!cached || Math.abs(cached.x - x) > 1 || Math.abs(cached.y - y) > 1) {
+            grad = ctx.createRadialGradient(x, y, rAnimated * 0.5, x, y, glowR);
+            grad.addColorStop(0, colors.stroke + "44");
+            grad.addColorStop(1, "transparent");
+            gradientCache.current.set(cacheKey, { x, y, grad });
+          } else {
+            grad = cached.grad;
+          }
           ctx.beginPath();
           ctx.arc(x, y, glowR, 0, Math.PI * 2);
           ctx.fillStyle = grad;
@@ -863,13 +873,6 @@ export default function PolyArbDashboard() {
   const [cbEvents, setCbEvents] = useState<CBEvent[]>([]);
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 5_000);
-    return () => clearInterval(t);
-  }, []);
-  void now;
 
   useEffect(() => {
     fetch("/api/polyarb/agents")
@@ -882,14 +885,16 @@ export default function PolyArbDashboard() {
       .catch(() => setLoading(false));
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!activeAgent) return;
+    if (document.hidden) return; // no polling cuando el tab está en background
     const [telRes, posRes, cbRes, eqRes] = await Promise.allSettled([
-      fetch("/api/polyarb/telemetry").then((r) => r.json()),
-      fetch("/api/polyarb/positions?status=open").then((r) => r.json()),
-      fetch("/api/polyarb/circuit-breaker?limit=10").then((r) => r.json()),
-      fetch("/api/polyarb/telemetry/history?days=7").then((r) => r.json()),
+      fetch("/api/polyarb/telemetry", { signal }).then((r) => r.json()),
+      fetch("/api/polyarb/positions?status=open", { signal }).then((r) => r.json()),
+      fetch("/api/polyarb/circuit-breaker?limit=10", { signal }).then((r) => r.json()),
+      fetch("/api/polyarb/telemetry/history?days=7", { signal }).then((r) => r.json()),
     ]);
+    if (signal?.aborted) return; // descartar respuesta si se desmontó
     if (telRes.status === "fulfilled") setTelemetry(telRes.value);
     if (posRes.status === "fulfilled") setPositions(posRes.value.data ?? []);
     if (cbRes.status === "fulfilled") setCbEvents(cbRes.value ?? []);
@@ -897,9 +902,17 @@ export default function PolyArbDashboard() {
   }, [activeAgent]);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10_000);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    void fetchData(controller.signal);
+    const interval = setInterval(() => void fetchData(controller.signal), 10_000);
+    // Reanudar al volver al tab
+    const onVisible = () => { if (!document.hidden) void fetchData(controller.signal); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchData]);
 
   const sendCommand = async (action: "start" | "stop" | "pause" | "resume") => {

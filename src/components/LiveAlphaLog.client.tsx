@@ -18,8 +18,7 @@ export function LiveAlphaLog() {
       if (refreshLock.current) return;
       refreshLock.current = true;
       setTimeout(() => {
-        router.refresh();
-        refreshLock.current = false;
+        try { router.refresh(); } finally { refreshLock.current = false; }
       }, REFRESH_DEBOUNCE_MS);
     };
 

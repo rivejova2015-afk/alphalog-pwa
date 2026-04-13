@@ -1,80 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
- * AppAutoRefresh: Monitorea cambios en el servidor y notifica/recarga automáticamente
- * - Escucha eventos del Service Worker (UPDATE disponible)
- * - Cada 30 segundos verifica cambios mediante archivo estático
- * - Si detecta cambio: muestra notificación y opción de recargar
- * - Auto-reload opcional después de inactividad
+ * AppAutoRefresh: Monitorea cambios en el servidor y notifica/recarga automáticamente.
+ * FIX: buildHash en useRef (no state) → evita loop: setBuildHash → effect destruye/
+ * recrea el interval → stale closure infinito. Pausa checks en tab background.
  */
 export default function AppAutoRefresh() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [buildHash, setBuildHash] = useState<string | null>(null);
+  const buildHashRef = useRef<string | null>(null);
 
+  // ── Hash polling — effect único sin dependencias ────────────────────────────
   useEffect(() => {
-    // Obtener el hash inicial
-    const getBuildHash = async () => {
+    let cancelled = false;
+
+    const getHash = async (): Promise<string | null> => {
       try {
         const res = await fetch("/manifest.webmanifest?" + Date.now());
-        const data = await res.text();
-        const hash = btoa(data).substring(0, 16);
-        setBuildHash(hash);
-        console.log("[AppAutoRefresh] Initial build hash:", hash);
+        return btoa(await res.text()).substring(0, 16);
       } catch {
-        console.debug("[AppAutoRefresh] Failed to get initial hash");
+        return null;
       }
     };
 
-    void getBuildHash();
+    // Hash inicial
+    getHash().then((h) => {
+      if (h && !cancelled) buildHashRef.current = h;
+    });
 
-    // Intervalo periódico de chequeo cada 30 segundos
     const checkInterval = setInterval(async () => {
-      if (!buildHash) return;
-      try {
-        const res = await fetch("/manifest.webmanifest?" + Date.now());
-        const data = await res.text();
-        const newHash = btoa(data).substring(0, 16);
-        
-        if (newHash !== buildHash) {
-          console.log("[AppAutoRefresh] New build detected. Old:", buildHash, "New:", newHash);
-          setUpdateAvailable(true);
-          setBuildHash(newHash);
-        }
-      } catch {
-        console.debug("[AppAutoRefresh] Periodic check failed");
-      }
-    }, 30000); // cada 30 segundos
-
-    return () => clearInterval(checkInterval);
-  }, [buildHash]);
-
-  // Escuchar mensajes del Service Worker
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!navigator.serviceWorker?.controller) return;
-
-    const handleSWMessage = (event: MessageEvent) => {
-      console.log("[AppAutoRefresh] SW message:", event.data);
-      
-      // El SW notifica cuando detecta una actualización
-      if (event.data?.type === "SW_UPDATED") {
-        console.log("[AppAutoRefresh] Service Worker update detected");
+      if (cancelled || document.hidden) return;
+      const newHash = await getHash();
+      if (!newHash || !buildHashRef.current) return;
+      if (newHash !== buildHashRef.current) {
+        buildHashRef.current = newHash;
         setUpdateAvailable(true);
       }
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(checkInterval);
+    };
+  }, []); // sin dependencias — buildHashRef es estable
+
+  // ── Service Worker messages ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.serviceWorker?.controller) return;
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === "SW_UPDATED") setUpdateAvailable(true);
     };
 
     navigator.serviceWorker.addEventListener("message", handleSWMessage);
 
-    // Pedir al SW que verifique cambios cada 60 segundos
     const swCheckInterval = setInterval(() => {
       if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: "CHECK_UPDATE",
-        });
+        navigator.serviceWorker.controller.postMessage({ type: "CHECK_UPDATE" });
       }
-    }, 60000);
+    }, 60_000);
 
     return () => {
       navigator.serviceWorker.removeEventListener("message", handleSWMessage);
