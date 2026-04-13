@@ -1,4 +1,5 @@
-import { Bot, Plus } from "lucide-react";
+import { Bot, Plus, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { AgentsList } from "@/components/intelligence/agents/AgentsList.client";
 
@@ -70,6 +71,21 @@ export default async function AgentsDashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* PolyArb Agent — link directo al dashboard live */}
+      <Link
+        href="/intelligence/agents/polyarb"
+        className="flex items-center justify-between bg-[#0f1e2e] border border-[#22d3ee]/30 hover:border-[#22d3ee] rounded-lg p-4 mb-4 transition-colors group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-[#34d399] animate-pulse" />
+          <div>
+            <div className="text-sm font-bold text-[#e2e8f0] font-mono">PolyArb Alpha v1</div>
+            <div className="text-xs text-[#475569] mt-0.5">Polymarket crypto markets · Frankfurt · RUNNING</div>
+          </div>
+        </div>
+        <ExternalLink size={14} className="text-[#475569] group-hover:text-[#22d3ee] transition-colors" />
+      </Link>
 
       {agentData.length === 0 ? (
         <div className="text-center py-20">
