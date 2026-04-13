@@ -46,7 +46,9 @@
     "reference",
     "supabase/functions/**",
     "tests/**",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "lattice-desktop/**",
+    "polyarb/**"
   ],
   "ts-node": {
     "transpileOnly": true,
