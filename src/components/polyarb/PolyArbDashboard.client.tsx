@@ -68,30 +68,44 @@ interface VelocitySignal {
 // SP#5 Regime Detector
 interface RegimeState {
   regime: "CALM" | "TRENDING" | "VOLATILE" | "CRISIS";
-  annualizedVolPct: number;
+  volatilityPct: number;
+  trend: string;
+  trendStrength: number;
   agentMultiplier: number;
-  samplesUsed: number;
+  consistencyScore: number;
+  computedAt: number;
 }
 
 // SP#3 Adaptive Kelly
 interface AdaptiveState {
   baseMinEdge: number;
   currentMinEdge: number;
-  perfMultiplier: number;
-  winRateN: number;
-  winRateWindow: number;
-  consecutiveLosses: number;
+  multiplier: number;
+  winRateRecent: number | null;
+  samplesUsed: number;
+  recentLosses: number;
+  trend: "TIGHTENING" | "LOOSENING" | "STABLE";
+  reason: string;
 }
 
 // SP#6 Cross-Market
+interface AssetMomentum {
+  symbol: string;
+  velocity5m: number;
+  direction: "UP" | "DOWN" | "FLAT";
+  isAccelerating: boolean;
+  samplesUsed: number;
+}
+
 interface CrossMarketSignal {
   primarySymbol: string;
-  primaryDirection: "UP" | "DOWN" | "FLAT";
-  alignmentStrength: "STRONG" | "MODERATE" | "WEAK" | "DIVERGING";
-  alignedCount: number;
-  totalCount: number;
+  primaryDirection: "UP" | "DOWN";
+  assets: AssetMomentum[];
+  agreementCount: number;
+  strength: "STRONG" | "MODERATE" | "WEAK" | "DIVERGING";
+  allAccelerating: boolean;
   edgeMultiplier: number;
-  details: Array<{ symbol: string; direction: "UP" | "DOWN" | "FLAT"; velocity5m: number }>;
+  computedAt: number;
 }
 
 // SP#4 Sentiment Pulse
@@ -607,7 +621,7 @@ const REGIME_CONFIG: Record<string, { color: string; bg: string; label: string; 
 
 function RegimePanel({ regime }: { regime: RegimeState }) {
   const cfg = REGIME_CONFIG[regime.regime] ?? REGIME_CONFIG.CALM;
-  const volPct = regime.annualizedVolPct.toFixed(1);
+  const volPct = regime.volatilityPct.toFixed(1);
   return (
     <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -649,7 +663,7 @@ function RegimePanel({ regime }: { regime: RegimeState }) {
           <div
             className="absolute top-0 w-0.5 h-full rounded-full"
             style={{
-              left: `${Math.min(98, (regime.annualizedVolPct / 140) * 100)}%`,
+              left: `${Math.min(98, (regime.volatilityPct / 140) * 100)}%`,
               backgroundColor: cfg.color,
               boxShadow: `0 0 6px ${cfg.color}`,
             }}
@@ -665,9 +679,9 @@ function RegimePanel({ regime }: { regime: RegimeState }) {
 function AdaptiveKellyPanel({ state }: { state: AdaptiveState }) {
   const edgePct = (state.currentMinEdge * 100).toFixed(2);
   const basePct = (state.baseMinEdge * 100).toFixed(2);
-  const winRateDisplay = state.winRateN > 0 ? ((state.winRateWindow / state.winRateN) * 100).toFixed(1) : null;
-  const mult = state.perfMultiplier;
-  const multColor = mult <= 1.0 ? "#34d399" : mult <= 1.5 ? "#fbbf24" : "#f87171";
+  const winRateDisplay = state.winRateRecent !== null ? (state.winRateRecent * 100).toFixed(1) : null;
+  const mult = state.multiplier;
+  const multColor = mult >= 1.0 ? "#34d399" : mult >= 0.7 ? "#fbbf24" : "#f87171";
 
   return (
     <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
@@ -693,16 +707,16 @@ function AdaptiveKellyPanel({ state }: { state: AdaptiveState }) {
       </div>
 
       <div className="flex items-center justify-between text-[11px] font-mono">
-        <span className="text-[#475569]">win rate (20 trades)</span>
+        <span className="text-[#475569]">win rate ({state.samplesUsed} trades)</span>
         <span className={winRateDisplay ? (parseFloat(winRateDisplay) >= 55 ? "text-[#34d399]" : parseFloat(winRateDisplay) >= 45 ? "text-[#fbbf24]" : "text-[#f87171]") : "text-[#334155]"}>
-          {winRateDisplay ? `${winRateDisplay}%` : `${state.winRateN} trades`}
+          {winRateDisplay ? `${winRateDisplay}%` : "—"}
         </span>
       </div>
 
-      {state.consecutiveLosses > 0 && (
+      {state.recentLosses > 0 && (
         <div className="flex items-center gap-2 text-[11px] bg-[#3d1a0a] rounded px-3 py-1.5">
           <AlertTriangle className="w-3 h-3 text-[#f87171]" />
-          <span className="text-[#f87171] font-mono">{state.consecutiveLosses} consecutive losses → edge raised</span>
+          <span className="text-[#f87171] font-mono">{state.recentLosses} consecutive losses → edge raised</span>
         </div>
       )}
     </div>
@@ -719,7 +733,7 @@ const ALIGNMENT_CONFIG: Record<string, { color: string; bg: string }> = {
 };
 
 function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
-  const cfg = ALIGNMENT_CONFIG[signal.alignmentStrength] ?? ALIGNMENT_CONFIG.WEAK;
+  const cfg = ALIGNMENT_CONFIG[signal.strength] ?? ALIGNMENT_CONFIG.WEAK;
   return (
     <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -733,9 +747,9 @@ function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
           className="px-3 py-2 rounded-lg"
           style={{ backgroundColor: cfg.bg, border: `1px solid ${cfg.color}33` }}
         >
-          <div className="text-sm font-bold font-mono" style={{ color: cfg.color }}>{signal.alignmentStrength}</div>
+          <div className="text-sm font-bold font-mono" style={{ color: cfg.color }}>{signal.strength}</div>
           <div className="text-[9px] mt-0.5" style={{ color: cfg.color + "99" }}>
-            {signal.alignedCount}/{signal.totalCount} aligned
+            {signal.agreementCount}/{signal.assets.length} aligned
           </div>
         </div>
         <div className="text-right">
@@ -747,7 +761,7 @@ function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
       </div>
 
       <div className="grid grid-cols-3 gap-1.5">
-        {signal.details.map((d) => {
+        {signal.assets.map((d) => {
           const c = SYMBOL_COLORS[d.symbol] ?? SYMBOL_COLORS.CRYPTO;
           const dirColor = d.direction === "UP" ? "#34d399" : d.direction === "DOWN" ? "#f87171" : "#475569";
           return (
