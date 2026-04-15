@@ -10,10 +10,12 @@ export interface AgentConfig {
   userId: string;
   name: string;
   walletAddress: string | null;
+  walletPrivateKey: string | null;   // for EIP-712 order signing
   apiKey: string | null;
   apiSecret: string | null;
   apiPassphrase: string | null;
   startingCapitalUsd: number;
+  dryRun: boolean;                   // POLYARB_DRY_RUN=true → simulate, don't send orders
   params: TradingParams;
 }
 
@@ -90,10 +92,12 @@ export async function loadAgentConfig(): Promise<AgentConfig> {
     userId,
     name: data.name as string,
     walletAddress: decryptText(data.wallet_address as string | null),
+    walletPrivateKey: process.env.POLYARB_WALLET_PRIVATE_KEY ?? null,
     apiKey: decryptText(data.api_key_encrypted as string | null),
     apiSecret: decryptText(data.api_secret_encrypted as string | null),
     apiPassphrase: decryptText(data.api_passphrase_encrypted as string | null),
     startingCapitalUsd: Number(data.starting_capital_usd) || 50,
+    dryRun: process.env.POLYARB_DRY_RUN === 'true',
     params,
   };
 }

@@ -26,6 +26,8 @@ export interface PolymarketMarket {
   question: string;
   endDate: string;
   active: boolean;
+  yesTokenId: string;   // ERC1155 token ID for YES outcome
+  noTokenId: string;    // ERC1155 token ID for NO outcome
 }
 
 const CLOB_REST_BASE = 'https://clob.polymarket.com';
@@ -124,7 +126,14 @@ export class PolymarketFeed {
       const data = Array.isArray(raw) ? raw : (raw?.data ?? []);
 
       const cryptoMarkets: PolymarketMarket[] = [];
-      for (const m of data) {
+      for (const m of data as Array<{
+        condition_id?: string;
+        question?: string;
+        end_date_iso?: string;
+        active?: boolean;
+        market_slug?: string;
+        tokens?: Array<{ token_id?: string; outcome?: string }>;
+      }>) {
         const q = (m.question ?? '').toLowerCase();
         // Filter for crypto price milestone markets
         if (
@@ -133,12 +142,17 @@ export class PolymarketFeed {
            q.includes('sol') || q.includes('solana')) &&
           (q.includes('above') || q.includes('below') || q.includes('reach'))
         ) {
+          const tokens = m.tokens ?? [];
+          const yesToken = tokens.find(t => t.outcome?.toLowerCase() === 'yes');
+          const noToken  = tokens.find(t => t.outcome?.toLowerCase() === 'no');
           cryptoMarkets.push({
             slug: m.market_slug ?? '',
             conditionId: m.condition_id ?? '',
             question: m.question ?? '',
             endDate: m.end_date_iso ?? '',
             active: m.active ?? false,
+            yesTokenId: yesToken?.token_id ?? m.condition_id ?? '',
+            noTokenId:  noToken?.token_id  ?? '',
           });
         }
       }

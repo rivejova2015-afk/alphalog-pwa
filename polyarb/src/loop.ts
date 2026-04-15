@@ -317,8 +317,10 @@ async function processMarket(
   if (!checkRiskReward(entryPrice, kelly.stopLoss, kelly.takeProfit, params.minRiskReward)) return;
 
   // ── 8. Execute order ──
+  const market2 = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
   const result = await orderManager.placeOrder({
     conditionId: orderbook.conditionId,
+    yesTokenId: market2?.yesTokenId ?? orderbook.conditionId,
     marketSlug: orderbook.marketSlug,
     outcome: buyYes ? 'YES' : 'NO',
     side: 'BUY',

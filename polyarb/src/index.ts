@@ -38,6 +38,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  if (config.dryRun) {
+    console.log('[main] *** DRY_RUN mode active — no real orders will be placed ***');
+  } else if (!config.walletPrivateKey) {
+    console.error('[main] LIVE mode requires POLYARB_WALLET_PRIVATE_KEY. Set it with: fly secrets set POLYARB_WALLET_PRIVATE_KEY=0x...');
+    process.exit(1);
+  }
+
   // 2. Set agent status to RUNNING
   const supabase = getSupabase();
   await supabase
@@ -51,7 +58,7 @@ async function main(): Promise<void> {
   const binanceFeed = new BinanceFeed();
   const polymarketFeed = new PolymarketFeed();
   const positionTracker = new PositionTracker(config.agentId, config.userId);
-  const orderManager = new OrderManager(config.apiKey, config.apiSecret, config.apiPassphrase);
+  const orderManager = new OrderManager(config.apiKey, config.apiSecret, config.apiPassphrase, config.walletPrivateKey, config.dryRun);
   const telemetryWriter = new TelemetryWriter();
 
   // 4. Load existing positions
