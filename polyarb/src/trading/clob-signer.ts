@@ -1,18 +1,25 @@
 /**
  * Polymarket CLOB EIP-712 Order Signer
  *
- * Signs orders using the EIP-712 typed data standard required by the
- * Polymarket CTF Exchange contract on Polygon mainnet.
+ * Two signing modes:
+ *
+ * EOA (signatureType=0):
+ *   - maker = signer = wallet address
+ *   - Signs with wallet private key (POLYARB_WALLET_PRIVATE_KEY)
+ *
+ * POLY_PROXY (signatureType=1):
+ *   - maker = main wallet address (0xbf57...)
+ *   - signer = api_key address (the L2 key Polymarket generated)
+ *   - Signs with api_secret (the L2 private key)
+ *   - No main wallet private key needed
  *
  * References:
  *  - Contract: 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E (Polygon)
  *  - Chain: 137 (Polygon mainnet)
- *  - Docs: https://docs.polymarket.com/
  */
 
-import { ethers } from 'ethers';
+import { ethers, type TypedDataField } from 'ethers';
 
-// Polymarket CTF Exchange on Polygon mainnet
 const CTF_EXCHANGE = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
 const CHAIN_ID = 137;
 
@@ -22,8 +29,6 @@ const DOMAIN = {
   chainId: CHAIN_ID,
   verifyingContract: CTF_EXCHANGE,
 } as const;
-
-import type { TypedDataField } from 'ethers';
 
 const ORDER_TYPES: Record<string, TypedDataField[]> = {
   Order: [
@@ -42,41 +47,39 @@ const ORDER_TYPES: Record<string, TypedDataField[]> = {
   ],
 };
 
-// Side enum
 export const Side = { BUY: 0, SELL: 1 } as const;
 
-// Signature type: 0 = EOA
-const SIGNATURE_TYPE_EOA = 0;
+const SIGNATURE_TYPE_EOA        = 0;
+const SIGNATURE_TYPE_POLY_PROXY = 1;
 
-// Zero address (taker = open order)
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
-// USDC decimals on Polygon
+const ZERO_ADDRESS  = '0x0000000000000000000000000000000000000000';
 const USDC_DECIMALS = 6;
 
 export interface ClobOrderParams {
-  tokenId: string;     // YES or NO token ID
-  side: 0 | 1;        // Side.BUY or Side.SELL
-  price: number;       // Limit price 0–1 (e.g. 0.65)
-  sizeUsd: number;     // Size in USD
+  tokenId:    string;
+  side:       0 | 1;
+  price:      number;
+  sizeUsd:    number;
   feeRateBps: number;
 }
 
 export interface SignedOrder {
-  salt: string;
-  maker: string;
-  signer: string;
-  taker: string;
-  tokenId: string;
-  makerAmount: string;
-  takerAmount: string;
-  expiration: string;
-  nonce: string;
-  feeRateBps: string;
-  side: number;
+  salt:          string;
+  maker:         string;
+  signer:        string;
+  taker:         string;
+  tokenId:       string;
+  makerAmount:   string;
+  takerAmount:   string;
+  expiration:    string;
+  nonce:         string;
+  feeRateBps:    string;
+  side:          number;
   signatureType: number;
-  signature: string;
+  signature:     string;
 }
+
+// ─── EOA mode ─────────────────────────────────────────────────────────────────
 
 export class ClobSigner {
   private wallet: ethers.Wallet;
@@ -85,65 +88,78 @@ export class ClobSigner {
     this.wallet = new ethers.Wallet(privateKey);
   }
 
-  get address(): string {
-    return this.wallet.address;
+  get address(): string { return this.wallet.address; }
+
+  async signOrder(params: ClobOrderParams): Promise<SignedOrder> {
+    return signEip712(params, this.wallet, this.wallet.address, SIGNATURE_TYPE_EOA);
   }
+}
+
+// ─── POLY_PROXY mode ──────────────────────────────────────────────────────────
+// Uses the L2 API credentials Polymarket generated.
+// maker  = main wallet address stored in DB
+// signer = api_key address (the L2 Ethereum address)
+// signs  = api_secret (the L2 private key, 64-char hex)
+
+export class ClobL2Signer {
+  private l2Wallet:     ethers.Wallet;
+  private makerAddress: string;
 
   /**
-   * Build and sign an EIP-712 order for the Polymarket CLOB.
-   *
-   * For a BUY order:
-   *   makerAmount = sizeUsd * 10^6  (USDC the maker gives)
-   *   takerAmount = shares = sizeUsd / price * 10^6
-   *
-   * For a SELL order:
-   *   makerAmount = shares to sell * 10^6
-   *   takerAmount = USDC to receive * 10^6
+   * @param makerAddress  Main wallet address (0xbf57... from polyarb_agents)
+   * @param apiSecret     POLY-SECRET — must be a 64-char hex Ethereum private key
    */
-  async signOrder(params: ClobOrderParams): Promise<SignedOrder> {
-    const { tokenId, side, price, sizeUsd, feeRateBps } = params;
-
-    const makerAmountRaw = BigInt(Math.round(sizeUsd * 10 ** USDC_DECIMALS));
-    const takerAmountRaw =
-      side === Side.BUY
-        ? BigInt(Math.round((sizeUsd / price) * 10 ** USDC_DECIMALS))
-        : BigInt(Math.round(sizeUsd * 10 ** USDC_DECIMALS));
-
-    const salt = BigInt(Date.now()).toString();
-    const nonce = '0';
-    const expiration = '0'; // 0 = no expiration (GTC)
-
-    const orderData = {
-      salt,
-      maker:         this.wallet.address,
-      signer:        this.wallet.address,
-      taker:         ZERO_ADDRESS,
-      tokenId:       BigInt(tokenId).toString(),
-      makerAmount:   makerAmountRaw.toString(),
-      takerAmount:   takerAmountRaw.toString(),
-      expiration,
-      nonce,
-      feeRateBps:    feeRateBps.toString(),
-      side,
-      signatureType: SIGNATURE_TYPE_EOA,
-    };
-
-    const signature = await this.wallet.signTypedData(DOMAIN, ORDER_TYPES, orderData);
-
-    return {
-      salt,
-      maker:         this.wallet.address,
-      signer:        this.wallet.address,
-      taker:         ZERO_ADDRESS,
-      tokenId:       BigInt(tokenId).toString(),
-      makerAmount:   makerAmountRaw.toString(),
-      takerAmount:   takerAmountRaw.toString(),
-      expiration,
-      nonce,
-      feeRateBps:    feeRateBps.toString(),
-      side,
-      signatureType: SIGNATURE_TYPE_EOA,
-      signature,
-    };
+  constructor(makerAddress: string, apiSecret: string) {
+    // Normalise: Polymarket secrets may omit the 0x prefix
+    const key = apiSecret.startsWith('0x') ? apiSecret : `0x${apiSecret}`;
+    this.l2Wallet     = new ethers.Wallet(key);
+    this.makerAddress = makerAddress;
   }
+
+  get signerAddress(): string  { return this.l2Wallet.address; }
+  get makerAddr():    string   { return this.makerAddress; }
+
+  async signOrder(params: ClobOrderParams): Promise<SignedOrder> {
+    return signEip712(params, this.l2Wallet, this.makerAddress, SIGNATURE_TYPE_POLY_PROXY);
+  }
+}
+
+// ─── Shared EIP-712 logic ─────────────────────────────────────────────────────
+
+async function signEip712(
+  params:        ClobOrderParams,
+  signerWallet:  ethers.Wallet,
+  makerAddress:  string,
+  signatureType: number,
+): Promise<SignedOrder> {
+  const { tokenId, side, price, sizeUsd, feeRateBps } = params;
+
+  const makerAmountRaw = BigInt(Math.round(sizeUsd * 10 ** USDC_DECIMALS));
+  const takerAmountRaw =
+    side === Side.BUY
+      ? BigInt(Math.round((sizeUsd / price) * 10 ** USDC_DECIMALS))
+      : BigInt(Math.round(sizeUsd * 10 ** USDC_DECIMALS));
+
+  const salt       = BigInt(Date.now()).toString();
+  const nonce      = '0';
+  const expiration = '0';
+
+  const orderData = {
+    salt,
+    maker:         makerAddress,
+    signer:        signerWallet.address,
+    taker:         ZERO_ADDRESS,
+    tokenId:       BigInt(tokenId).toString(),
+    makerAmount:   makerAmountRaw.toString(),
+    takerAmount:   takerAmountRaw.toString(),
+    expiration,
+    nonce,
+    feeRateBps:    feeRateBps.toString(),
+    side,
+    signatureType,
+  };
+
+  const signature = await signerWallet.signTypedData(DOMAIN, ORDER_TYPES, orderData);
+
+  return { ...orderData, signature };
 }

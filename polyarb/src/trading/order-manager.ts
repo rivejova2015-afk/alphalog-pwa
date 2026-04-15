@@ -9,7 +9,7 @@
  */
 
 import { getSupabase } from '../supabase.js';
-import { ClobSigner, Side, type SignedOrder } from './clob-signer.js';
+import { ClobSigner, ClobL2Signer, Side, type SignedOrder } from './clob-signer.js';
 
 export interface OrderParams {
   conditionId: string;
@@ -39,31 +39,44 @@ const CLOB_BASE = 'https://clob.polymarket.com';
 const FEE_RATE_BPS = 156; // Polymarket standard fee (Feb 2026)
 
 export class OrderManager {
-  private signer: ClobSigner | null;
-  private apiKey: string;
-  private apiSecret: string;
+  private signer:   ClobSigner | ClobL2Signer | null;
+  private apiKey:       string;
+  private apiSecret:    string;
   private apiPassphrase: string;
-  private dryRun: boolean;
+  private dryRun:       boolean;
 
   constructor(
-    apiKey: string,
-    apiSecret: string,
+    apiKey:       string,
+    apiSecret:    string,
     apiPassphrase: string,
-    privateKey: string | null,
-    dryRun: boolean,
+    privateKey:   string | null,
+    dryRun:       boolean,
+    walletAddress?: string | null,
   ) {
-    this.apiKey = apiKey;
-    this.apiSecret = apiSecret;
+    this.apiKey        = apiKey;
+    this.apiSecret     = apiSecret;
     this.apiPassphrase = apiPassphrase;
-    this.dryRun = dryRun;
-    this.signer = privateKey ? new ClobSigner(privateKey) : null;
+    this.dryRun        = dryRun;
 
     if (dryRun) {
-      console.log('[order-manager] DRY_RUN mode enabled — orders will be simulated');
-    } else if (!this.signer) {
-      console.warn('[order-manager] No wallet private key — orders cannot be signed. Set POLYARB_WALLET_PRIVATE_KEY.');
+      this.signer = null;
+      console.log('[order-manager] DRY_RUN mode — orders will be simulated');
+    } else if (privateKey) {
+      // EOA: wallet private key available
+      this.signer = new ClobSigner(privateKey);
+      console.log(`[order-manager] EOA signer ready: ${(this.signer as ClobSigner).address}`);
+    } else if (walletAddress && apiSecret) {
+      // POLY_PROXY: sign with L2 api_secret, maker = wallet_address
+      try {
+        this.signer = new ClobL2Signer(walletAddress, apiSecret);
+        console.log(`[order-manager] POLY_PROXY signer ready — maker: ${walletAddress} signer: ${(this.signer as ClobL2Signer).signerAddress}`);
+      } catch (e) {
+        this.signer = null;
+        console.warn(`[order-manager] POLY_PROXY init failed (api_secret may not be a valid Ethereum key): ${e}`);
+      }
     } else {
-      console.log(`[order-manager] Signer ready: ${this.signer.address}`);
+      this.signer = null;
+      console.warn('[order-manager] No signer available — set POLYARB_WALLET_PRIVATE_KEY or ensure api_secret is a valid L2 key');
     }
   }
 
@@ -87,7 +100,7 @@ export class OrderManager {
         slippageBps: 0,
         executionLatencyMs: 0,
         simulated: false,
-        error: 'No wallet private key configured (POLYARB_WALLET_PRIVATE_KEY)',
+        error: 'No signer available — set POLYARB_WALLET_PRIVATE_KEY or verify api_secret is a valid L2 key',
       };
     }
 
