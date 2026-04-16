@@ -31,6 +31,7 @@ export interface PolymarketMarket {
 }
 
 const CLOB_REST_BASE = 'https://clob.polymarket.com';
+const GAMMA_BASE = 'https://gamma-api.polymarket.com';
 const POLL_INTERVAL_MS = 1_000; // Poll every 1s via REST
 
 export class PolymarketFeed {
@@ -104,57 +105,85 @@ export class PolymarketFeed {
   }
 
   /**
-   * Fetch active crypto markets from Polymarket.
-   * Filter for BTC milestone markets (e.g., "BTC above $X").
+   * Fetch active crypto markets from Polymarket via gamma API.
+   * Finds any open binary market with crypto price relevance.
    */
   async fetchCryptoMarkets(): Promise<PolymarketMarket[]> {
     try {
-      const res = await fetch(`${CLOB_REST_BASE}/markets`, {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(8_000),
-      });
+      // Gamma API returns currently active, open markets with real token IDs.
+      // CLOB /markets only returns historical markets (mostly closed 2022-2023).
+      const res = await fetch(
+        `${GAMMA_BASE}/markets?active=true&closed=false&limit=500`,
+        {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(8_000),
+        }
+      );
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json() as Array<{
-        condition_id?: string;
+        conditionId?: string;
         question?: string;
-        end_date_iso?: string;
+        endDate?: string;
         active?: boolean;
-        market_slug?: string;
-      }> | { data?: Array<{ condition_id?: string; question?: string; end_date_iso?: string; active?: boolean; market_slug?: string }> };
+        slug?: string;
+        outcomes?: string[];
+        outcomePrices?: string[];
+        /** JSON-encoded array: [yesTokenId, noTokenId] */
+        clobTokenIds?: string;
+      }>;
 
-      const data = Array.isArray(raw) ? raw : (raw?.data ?? []);
+      const data = Array.isArray(raw) ? raw : [];
 
       const cryptoMarkets: PolymarketMarket[] = [];
-      for (const m of data as Array<{
-        condition_id?: string;
-        question?: string;
-        end_date_iso?: string;
-        active?: boolean;
-        market_slug?: string;
-        tokens?: Array<{ token_id?: string; outcome?: string }>;
-      }>) {
+      for (const m of data) {
         const q = (m.question ?? '').toLowerCase();
-        // Filter for crypto price milestone markets
-        if (
-          (q.includes('btc') || q.includes('bitcoin') ||
-           q.includes('eth') || q.includes('ethereum') ||
-           q.includes('sol') || q.includes('solana')) &&
-          (q.includes('above') || q.includes('below') || q.includes('reach'))
-        ) {
-          const tokens = m.tokens ?? [];
-          const yesToken = tokens.find(t => t.outcome?.toLowerCase() === 'yes');
-          const noToken  = tokens.find(t => t.outcome?.toLowerCase() === 'no');
-          cryptoMarkets.push({
-            slug: m.market_slug ?? '',
-            conditionId: m.condition_id ?? '',
-            question: m.question ?? '',
-            endDate: m.end_date_iso ?? '',
-            active: m.active ?? false,
-            yesTokenId: yesToken?.token_id ?? m.condition_id ?? '',
-            noTokenId:  noToken?.token_id  ?? '',
-          });
+
+        // Crypto price / crypto-adjacent filter — broader than the old CLOB approach
+        const isCrypto =
+          q.includes('btc') || q.includes('bitcoin') ||
+          q.includes('eth') || q.includes('ethereum') ||
+          q.includes('sol') || q.includes('solana') ||
+          q.includes('crypto') || q.includes('coinbase') ||
+          q.includes('binance') || q.includes('doge') ||
+          q.includes('xrp') || q.includes('ripple') ||
+          q.includes('$1m') || q.includes('$1,000,000');
+
+        if (!isCrypto) continue;
+
+        // gamma API encodes outcomes and clobTokenIds as JSON strings, not arrays
+        let outcomes: string[] = [];
+        let tokenIds: string[] = [];
+        try {
+          outcomes = typeof m.outcomes === 'string'
+            ? JSON.parse(m.outcomes) as string[]
+            : (m.outcomes ?? []);
+          tokenIds = typeof m.clobTokenIds === 'string'
+            ? JSON.parse(m.clobTokenIds) as string[]
+            : [];
+        } catch {
+          continue;
         }
+
+        // Binary markets only (exactly 2 outcomes: Yes/No)
+        if (outcomes.length !== 2) continue;
+
+        const yesIdx = outcomes.findIndex(o => o.toLowerCase() === 'yes');
+        const noIdx  = outcomes.findIndex(o => o.toLowerCase() === 'no');
+        const yesTokenId = tokenIds[yesIdx >= 0 ? yesIdx : 0] ?? '';
+        const noTokenId  = tokenIds[noIdx  >= 0 ? noIdx  : 1] ?? '';
+
+        if (!yesTokenId || !m.conditionId) continue;
+
+        cryptoMarkets.push({
+          slug:        m.slug ?? '',
+          conditionId: m.conditionId,
+          question:    m.question ?? '',
+          endDate:     m.endDate ?? '',
+          active:      m.active ?? true,
+          yesTokenId,
+          noTokenId,
+        });
       }
 
       // Cache locally
@@ -162,6 +191,7 @@ export class PolymarketFeed {
         this.markets.set(market.conditionId, market);
       }
 
+      console.log(`[polymarket-ws] Found ${cryptoMarkets.length} active crypto markets via gamma API`);
       return cryptoMarkets;
     } catch (err) {
       console.error('[polymarket-ws] Market fetch error:', err);
@@ -175,8 +205,12 @@ export class PolymarketFeed {
   private async pollOrderbooks(): Promise<void> {
     for (const conditionId of this.trackedConditionIds) {
       try {
+        // Use the YES token ID for orderbook queries — conditionId alone is not a valid token_id
+        const market = this.markets.get(conditionId);
+        const tokenId = market?.yesTokenId || conditionId;
+
         const res = await fetch(
-          `${CLOB_REST_BASE}/book?token_id=${conditionId}`,
+          `${CLOB_REST_BASE}/book?token_id=${tokenId}`,
           {
             headers: { 'Accept': 'application/json' },
             signal: AbortSignal.timeout(5_000),
