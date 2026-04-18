@@ -1,5 +1,5 @@
 app = "polyarb-crypto-v1"
-primary_region = "fra"
+primary_region = "sin"
 
 [build]
   dockerfile = "Dockerfile"
