@@ -30,6 +30,8 @@ export interface PolymarketMarket {
   noTokenId: string;    // ERC1155 token ID for NO outcome
 }
 
+import { clobFetch } from '../lib/clob-fetch.js';
+
 const CLOB_REST_BASE = 'https://clob.polymarket.com';
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
 const POLL_INTERVAL_MS = 2_000; // Poll every 2s via REST
@@ -220,7 +222,7 @@ export class PolymarketFeed {
       const market = this.markets.get(conditionId);
       const tokenId = market?.yesTokenId || conditionId;
 
-      const res = await fetch(
+      const res = await clobFetch(
         `${CLOB_REST_BASE}/book?token_id=${tokenId}`,
         {
           headers: { 'Accept': 'application/json' },

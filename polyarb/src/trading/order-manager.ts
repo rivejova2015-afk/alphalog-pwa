@@ -12,6 +12,7 @@ import { ethers } from 'ethers';
 import { getSupabase } from '../supabase.js';
 import { ClobSigner, ClobL2Signer, Side, type SignedOrder } from './clob-signer.js';
 import { buildL2AuthHeaders } from './clob-auth.js';
+import { clobFetch } from '../lib/clob-fetch.js';
 
 export interface OrderParams {
   conditionId: string;
@@ -188,7 +189,7 @@ export class OrderManager {
         '/order',
         body,
       );
-      const res = await fetch(`${CLOB_BASE}/order`, {
+      const res = await clobFetch(`${CLOB_BASE}/order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -296,7 +297,7 @@ export class OrderManager {
         path,
         '',
       );
-      const res = await fetch(`${CLOB_BASE}${path}`, {
+      const res = await clobFetch(`${CLOB_BASE}${path}`, {
         method: 'DELETE',
         headers: authHeaders,
         signal: AbortSignal.timeout(5_000),
@@ -334,7 +335,7 @@ export class OrderManager {
         this.apiKey, this.apiSecret, this.apiPassphrase,
         this.walletAddress, 'GET', path,
       );
-      const res = await fetch(`${CLOB_BASE}${path}`, { headers: headers as Record<string, string> });
+      const res = await clobFetch(`${CLOB_BASE}${path}`, { headers: headers as Record<string, string> });
       if (!res.ok) return null;
       const json = await res.json() as { balance?: string; USDC?: string };
       const raw = json.balance ?? json.USDC;
