@@ -32,7 +32,7 @@ export interface PolymarketMarket {
 
 const CLOB_REST_BASE = 'https://clob.polymarket.com';
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
-const POLL_INTERVAL_MS = 1_000; // Poll every 1s via REST
+const POLL_INTERVAL_MS = 2_000; // Poll every 2s via REST
 
 export class PolymarketFeed {
   private markets: Map<string, PolymarketMarket> = new Map();
@@ -40,6 +40,7 @@ export class PolymarketFeed {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private shouldRun = false;
   private trackedConditionIds: string[] = [];
+  private polling = false; // lock to prevent overlapping polls
 
   /**
    * Sentiment Pulse callback — called every time a new orderbook is fetched.
@@ -200,58 +201,65 @@ export class PolymarketFeed {
   }
 
   /**
-   * Poll orderbooks for tracked conditions via REST.
+   * Poll orderbooks for all tracked conditions in parallel.
    */
   private async pollOrderbooks(): Promise<void> {
-    for (const conditionId of this.trackedConditionIds) {
-      try {
-        // Use the YES token ID for orderbook queries — conditionId alone is not a valid token_id
-        const market = this.markets.get(conditionId);
-        const tokenId = market?.yesTokenId || conditionId;
+    if (this.polling) return; // skip if previous poll still running
+    this.polling = true;
+    try {
+      await Promise.allSettled(
+        this.trackedConditionIds.map(conditionId => this.fetchOneOrderbook(conditionId))
+      );
+    } finally {
+      this.polling = false;
+    }
+  }
 
-        const res = await fetch(
-          `${CLOB_REST_BASE}/book?token_id=${tokenId}`,
-          {
-            headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(5_000),
-          }
-        );
+  private async fetchOneOrderbook(conditionId: string): Promise<void> {
+    try {
+      const market = this.markets.get(conditionId);
+      const tokenId = market?.yesTokenId || conditionId;
 
-        if (!res.ok) continue;
-        const book = await res.json() as {
-          bids?: Array<{ price: string; size: string }>;
-          asks?: Array<{ price: string; size: string }>;
-        };
+      const res = await fetch(
+        `${CLOB_REST_BASE}/book?token_id=${tokenId}`,
+        {
+          headers: { 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(4_000),
+        }
+      );
 
-        const bestBid = book.bids?.[0];
-        const bestAsk = book.asks?.[0];
-        if (!bestBid || !bestAsk) continue;
+      if (!res.ok) return;
+      const book = await res.json() as {
+        bids?: Array<{ price: string; size: string }>;
+        asks?: Array<{ price: string; size: string }>;
+      };
 
-        const bidPrice = parseFloat(bestBid.price);
-        const askPrice = parseFloat(bestAsk.price);
-        const midPrice = (bidPrice + askPrice) / 2;
+      const bestBid = book.bids?.[0];
+      const bestAsk = book.asks?.[0];
+      if (!bestBid || !bestAsk) return;
 
-        const bidSize = parseFloat(bestBid.size);
-        const askSize = parseFloat(bestAsk.size);
+      const bidPrice = parseFloat(bestBid.price);
+      const askPrice = parseFloat(bestAsk.price);
+      const midPrice = (bidPrice + askPrice) / 2;
+      const bidSize = parseFloat(bestBid.size);
+      const askSize = parseFloat(bestAsk.size);
 
-        this.orderbooks.set(conditionId, {
-          marketSlug: this.markets.get(conditionId)?.slug ?? conditionId,
-          conditionId,
-          bidPrice,
-          askPrice,
-          midPrice,
-          spread: askPrice - bidPrice,
-          bidSize,
-          askSize,
-          lastTradePrice: midPrice, // approximation
-          timestamp: Date.now(),
-        });
+      this.orderbooks.set(conditionId, {
+        marketSlug: market?.slug ?? conditionId,
+        conditionId,
+        bidPrice,
+        askPrice,
+        midPrice,
+        spread: askPrice - bidPrice,
+        bidSize,
+        askSize,
+        lastTradePrice: midPrice,
+        timestamp: Date.now(),
+      });
 
-        // Feed SentimentPulseTracker if hooked
-        this.onOrderbookUpdate?.(conditionId, bidSize, askSize, bidPrice, askPrice);
-      } catch {
-        // Skip failed fetches
-      }
+      this.onOrderbookUpdate?.(conditionId, bidSize, askSize, bidPrice, askPrice);
+    } catch {
+      // skip failed fetches silently
     }
   }
 }
