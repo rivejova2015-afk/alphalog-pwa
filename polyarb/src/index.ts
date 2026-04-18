@@ -127,7 +127,28 @@ async function main(): Promise<void> {
     sentimentPulse,
   };
 
-  // 8. Poll real CLOB balance every 30s and write to Supabase
+  // 8. Refresh crypto market list every 5 min — catches new short-term markets
+  const refreshMarkets = async () => {
+    try {
+      const fresh = await polymarketFeed.fetchCryptoMarkets();
+      const freshActive = fresh.filter(m => m.active);
+      if (freshActive.length === 0) return;
+      // Add newly discovered conditionIds to tracking
+      const currentIds = new Set(deps.milestoneMap.keys());
+      for (const m of freshActive) {
+        if (!currentIds.has(m.conditionId)) {
+          deps.milestoneMap.set(m.conditionId, parseMilestonePrice(m.question));
+          console.log(`[markets] New market discovered: ${m.question.slice(0, 60)}`);
+        }
+      }
+      polymarketFeed.start(freshActive.map(m => m.conditionId));
+    } catch (err) {
+      console.error('[markets] Refresh error:', err);
+    }
+  };
+  setInterval(() => void refreshMarkets(), 5 * 60_000);
+
+  // Poll real CLOB balance every 30s and write to Supabase
   const pollRealBalance = async () => {
     const bal = await orderManager.fetchBalance();
     if (bal !== null) {

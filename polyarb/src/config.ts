@@ -34,6 +34,9 @@ export interface TradingParams {
   priceHistoryWindowMs: number;
   accelerationThreshold: number;
   jerkReversalThreshold: number;
+  minPositionSizeUsd: number;       // Minimum bet size in USD
+  lossStreakRiskReduction: number;  // Kelly multiplier when >= 10 consecutive losses (0–1)
+  lossStreakThreshold: number;      // How many consecutive losses trigger reduction
 }
 
 const DEFAULT_PARAMS: TradingParams = {
@@ -51,6 +54,9 @@ const DEFAULT_PARAMS: TradingParams = {
   priceHistoryWindowMs: 60_000,
   accelerationThreshold: 0.00005,
   jerkReversalThreshold: -0.0001,
+  minPositionSizeUsd: 5.0,    // never bet less than $5
+  lossStreakRiskReduction: 0.4, // reduce Kelly to 40% after streak
+  lossStreakThreshold: 10,    // trigger after 10 consecutive losses
 };
 
 export async function loadAgentConfig(): Promise<AgentConfig> {
@@ -85,6 +91,9 @@ export async function loadAgentConfig(): Promise<AgentConfig> {
     priceHistoryWindowMs:    (configJson.price_history_window_ms as number)  ?? DEFAULT_PARAMS.priceHistoryWindowMs,
     accelerationThreshold:   (configJson.acceleration_threshold as number)   ?? DEFAULT_PARAMS.accelerationThreshold,
     jerkReversalThreshold:   (configJson.jerk_reversal_threshold as number)  ?? DEFAULT_PARAMS.jerkReversalThreshold,
+    minPositionSizeUsd:      (configJson.min_position_size_usd as number)    ?? DEFAULT_PARAMS.minPositionSizeUsd,
+    lossStreakRiskReduction: (configJson.loss_streak_risk_reduction as number) ?? DEFAULT_PARAMS.lossStreakRiskReduction,
+    lossStreakThreshold:     (configJson.loss_streak_threshold as number)    ?? DEFAULT_PARAMS.lossStreakThreshold,
   };
 
   return {

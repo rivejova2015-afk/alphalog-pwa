@@ -303,9 +303,16 @@ async function processMarket(
     params.winStreakBonus,
   );
 
-  const sizeMultiplier = deps.cbState.reduceSizeNextTrade ? 0.8 : 1.0;
+  // Consecutive loss risk reduction: after N losses, reduce Kelly until recovery
+  const lossStreakMult = metrics.consecutiveLosses >= params.lossStreakThreshold
+    ? params.lossStreakRiskReduction
+    : 1.0;
+
+  const sizeMultiplier = (deps.cbState.reduceSizeNextTrade ? 0.8 : 1.0) * lossStreakMult;
   deps.cbState.reduceSizeNextTrade = false;
-  const finalSize = kelly.positionSizeUsd * sizeMultiplier;
+
+  // Enforce minimum position size ($5) — Kelly may produce tiny sizes with small account
+  const finalSize = Math.max(params.minPositionSizeUsd, kelly.positionSizeUsd * sizeMultiplier);
 
   // risk/reward gate removed — super-aggressive mode
 
