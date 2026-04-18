@@ -117,14 +117,25 @@ export class PolymarketFeed {
 
       for (const m of data) {
         const q = (m.question ?? '').toLowerCase();
+
+        // Word-boundary regex — prevents false positives like:
+        // "Hegseth" matching \beth\b, "Solanke" matching \bsol\b,
+        // "Netherlands" matching \beth\b
         const isCrypto =
-          q.includes('btc') || q.includes('bitcoin') ||
-          q.includes('eth') || q.includes('ethereum') ||
-          q.includes('sol') || q.includes('solana') ||
-          q.includes('crypto') || q.includes('coinbase') ||
-          q.includes('binance') || q.includes('doge') ||
-          q.includes('xrp') || q.includes('ripple') ||
-          q.includes('$1m') || q.includes('$1,000,000');
+          /\bbtc\b/.test(q) || /\bbitcoin\b/.test(q) ||
+          /\beth\b/.test(q) || /\bethereum\b/.test(q) ||
+          /\bsol\b/.test(q) || /\bsolana\b/.test(q) ||
+          /\bdoge\b/.test(q) || /\bdogecoin\b/.test(q) ||
+          /\bxrp\b/.test(q) || /\bripple\b/.test(q) ||
+          /\bada\b/.test(q) || /\bcardano\b/.test(q) ||
+          /\bavax\b/.test(q) || /\bavalanche\b/.test(q) ||
+          /\bmatic\b/.test(q) || /\bpolygon\b/.test(q) ||
+          /\blink\b/.test(q) || /\bchainlink\b/.test(q) ||
+          /\bbnb\b/.test(q) || /\bshib\b/.test(q) ||
+          /\bcrypto\b/.test(q) || /\bcoinbase\b/.test(q) ||
+          /\bbinance\b/.test(q) || /\bstablecoin\b/.test(q) ||
+          /\bdefi\b/.test(q) || /\bnft\b/.test(q) ||
+          /\baltcoin\b/.test(q) || /\bblockchain\b/.test(q);
 
         if (!isCrypto) continue;
 
@@ -215,18 +226,26 @@ export class PolymarketFeed {
       const bestAsk = book.asks?.[0];
 
       if (!bestBid || !bestAsk) {
-        // Track empty streak — dead markets get deprioritized
         this.emptyStreak.set(conditionId, (this.emptyStreak.get(conditionId) ?? 0) + 1);
         return;
       }
-
-      // Reset dead streak on successful data
-      this.emptyStreak.set(conditionId, 0);
 
       const bidPrice = parseFloat(bestBid.price);
       const askPrice = parseFloat(bestAsk.price);
       const bidSize  = parseFloat(bestBid.size);
       const askSize  = parseFloat(bestAsk.size);
+
+      // Liquidity filter: require at least $5 on each side and spread < 30%
+      // Markets below this have no real arbitrage opportunity
+      const minLiquidityUsd = 5;
+      const spreadPct = (askPrice - bidPrice) / ((bidPrice + askPrice) / 2);
+      if (bidSize < minLiquidityUsd || askSize < minLiquidityUsd || spreadPct > 0.30) {
+        this.emptyStreak.set(conditionId, (this.emptyStreak.get(conditionId) ?? 0) + 1);
+        return;
+      }
+
+      // Reset dead streak — market has real liquidity
+      this.emptyStreak.set(conditionId, 0);
 
       this.orderbooks.set(conditionId, {
         marketSlug: market?.slug ?? conditionId,
