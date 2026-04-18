@@ -96,9 +96,11 @@ export class PolymarketFeed {
 
   async fetchCryptoMarkets(): Promise<PolymarketMarket[]> {
     try {
+      // Fetch up to 2000 markets sorted by soonest expiry first —
+      // short-term (5min/15min/1h/4h/daily) markets appear at the top
       const res = await fetch(
-        `${GAMMA_BASE}/markets?active=true&closed=false&limit=500`,
-        { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8_000) }
+        `${GAMMA_BASE}/markets?active=true&closed=false&limit=2000&order=end_date_min&ascending=true`,
+        { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(15_000) }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -166,14 +168,21 @@ export class PolymarketFeed {
         });
       }
 
-      for (const market of cryptoMarkets) {
+      // Sort by expiry: soonest first (5min > 15min > 1h > 4h > daily > weekly)
+      cryptoMarkets.sort((a, b) =>
+        new Date(a.endDate).getTime() - new Date(b.endDate).getTime()
+      );
+
+      // Cap at 60 markets — enough variety, avoids polling overload
+      const selected = cryptoMarkets.slice(0, 60);
+
+      for (const market of selected) {
         this.markets.set(market.conditionId, market);
-        // Reset dead market streak when rediscovered
         this.emptyStreak.delete(market.conditionId);
       }
 
-      console.log(`[polymarket-ws] Found ${cryptoMarkets.length} active crypto markets via gamma API`);
-      return cryptoMarkets;
+      console.log(`[polymarket-ws] Found ${cryptoMarkets.length} crypto markets → tracking top ${selected.length} by soonest expiry`);
+      return selected;
     } catch (err) {
       console.error('[polymarket-ws] Market fetch error:', err);
       return [];
