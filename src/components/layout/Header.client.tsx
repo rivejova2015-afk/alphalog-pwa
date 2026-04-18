@@ -1,12 +1,22 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { RefreshCw, Settings } from 'lucide-react';
 import Link from 'next/link';
 
 export function Header() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [spinning, setSpinning] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleRefresh = async () => {
+    setSpinning(true);
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+    }
+    window.location.reload();
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -37,6 +47,19 @@ export function Header() {
           <span className="text-[#34d399]">2.2</span>
         </div>
       </div>
+
+      {/* Refresh */}
+      <button
+        onClick={handleRefresh}
+        className="p-2 hover:bg-[#151b28] rounded transition-colors"
+        aria-label="Refrescar app"
+        title="Refrescar app"
+      >
+        <RefreshCw
+          size={16}
+          className={`text-[#475569] hover:text-[#22d3ee] transition-colors ${spinning ? 'animate-spin' : ''}`}
+        />
+      </button>
 
       {/* Settings */}
       <div className="relative" ref={menuRef}>
