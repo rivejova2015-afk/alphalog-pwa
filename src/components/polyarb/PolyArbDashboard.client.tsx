@@ -527,7 +527,7 @@ function VelocityPanel({ signals }: { signals: VelocitySignal[] }) {
           <div className="text-[10px] text-[#475569] font-mono mb-1.5">
             BTC velocidad — ${fmt(btcSignal.currentPrice, 0)} spot
           </div>
-          <VelocityGauges windows={btcSignal.windows} />
+          <VelocityGauges windows={btcSignal.windows ?? []} />
         </div>
       )}
 
@@ -774,7 +774,7 @@ function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
       </div>
 
       <div className="grid grid-cols-3 gap-1.5">
-        {signal.assets.map((d) => {
+        {(signal.assets ?? []).map((d) => {
           const c = SYMBOL_COLORS[d.symbol] ?? SYMBOL_COLORS.CRYPTO;
           const dirColor = d.direction === "UP" ? "#34d399" : d.direction === "DOWN" ? "#f87171" : "#475569";
           return (
@@ -978,9 +978,10 @@ export default function PolyArbDashboard() {
   useEffect(() => {
     fetch("/api/polyarb/agents")
       .then((r) => r.json())
-      .then((data: Agent[]) => {
-        setAgents(data);
-        if (data.length > 0) setActiveAgent(data[0]);
+      .then((data: unknown) => {
+        const list = Array.isArray(data) ? (data as Agent[]) : [];
+        setAgents(list);
+        if (list.length > 0) setActiveAgent(list[0]);
         setLoading(false);
       })
       .catch(() => setLoading(false));

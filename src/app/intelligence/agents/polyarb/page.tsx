@@ -1,5 +1,3 @@
-"use client";
-
 import PolyArbDashboard from "@/components/polyarb/PolyArbDashboard.client";
 
 export default function PolyArbPage() {
