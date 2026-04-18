@@ -890,6 +890,78 @@ function MemoryBankPanel({ stats }: { stats: MemoryBankStat[] }) {
   );
 }
 
+// ─── Setup Panel (no agent yet) ──────────────────────────────────────────────
+
+function PolyArbSetup({ onCreated }: { onCreated: (agent: Agent) => void }) {
+  const [creating, setCreating] = useState(false);
+
+  const createAgent = async () => {
+    setCreating(true);
+    try {
+      const res = await fetch("/api/polyarb/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "PolyArb Alpha v1", starting_capital_usd: 50 }),
+      });
+      if (res.status === 409) {
+        // Already exists — just refetch
+        const list = await fetch("/api/polyarb/agents").then((r) => r.json()) as Agent[];
+        if (list[0]) onCreated(list[0]);
+        return;
+      }
+      const agent = await res.json() as Agent;
+      if (agent?.id) onCreated(agent);
+      else toast.error("Error creando agente");
+    } catch {
+      toast.error("Error de red");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="max-w-lg mx-auto py-16 px-4 text-center space-y-6">
+      <div className="w-16 h-16 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl flex items-center justify-center mx-auto">
+        <Bot className="w-8 h-8 text-cyan-400" />
+      </div>
+      <div>
+        <h2 className="text-xl font-bold text-white font-mono mb-2">PolyArb no configurado</h2>
+        <p className="text-sm text-zinc-400">
+          El agente autónomo de Polymarket no tiene registro en la base de datos aún.
+          Haz clic para inicializarlo — las credenciales están almacenadas en Fly.io y Supabase.
+        </p>
+      </div>
+
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4 text-left space-y-2 text-xs">
+        <div className="flex items-center gap-2 text-zinc-300">
+          <span className="text-green-400">✓</span> Wallet MetaMask configurada en Fly secrets
+        </div>
+        <div className="flex items-center gap-2 text-zinc-300">
+          <span className="text-green-400">✓</span> Credenciales CLOB API encriptadas en Supabase
+        </div>
+        <div className="flex items-center gap-2 text-zinc-300">
+          <span className="text-green-400">✓</span> Modo LIVE activo (DRY_RUN removido)
+        </div>
+        <div className="flex items-center gap-2 text-zinc-400">
+          <span className="text-yellow-400">⚠</span> Falta row en <code className="text-cyan-400">polyarb_agents</code> → inicializar abajo
+        </div>
+      </div>
+
+      <button
+        onClick={createAgent}
+        disabled={creating}
+        className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-bold rounded-lg text-sm transition-colors"
+      >
+        {creating ? "Inicializando agente..." : "Inicializar PolyArb Agent"}
+      </button>
+
+      <p className="text-xs text-zinc-600">
+        Esto crea el registro del agente con configuración por defecto. El bot en Fly.io ya está corriendo.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PolyArbDashboard() {
@@ -978,12 +1050,7 @@ export default function PolyArbDashboard() {
   }
 
   if (agents.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <Activity className="w-12 h-12 text-zinc-500" />
-        <p className="text-zinc-400">No PolyArb agents configured yet.</p>
-      </div>
-    );
+    return <PolyArbSetup onCreated={(agent) => { setAgents([agent]); setActiveAgent(agent); }} />;
   }
 
   const pnl = telemetry?.total_pnl_usd ?? 0;

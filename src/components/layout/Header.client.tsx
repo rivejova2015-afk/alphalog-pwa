@@ -34,7 +34,7 @@ export function Header() {
       {/* Quick Status */}
       <div className="hidden sm:flex items-center gap-4 text-sm text-[#94a3b8] font-mono">
         <div>
-          <span className="text-[#34d399]">2.1</span>
+          <span className="text-[#34d399]">2.2</span>
         </div>
       </div>
 
