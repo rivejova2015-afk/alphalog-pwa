@@ -335,6 +335,7 @@ async function processMarket(
 
   if (!result.success) {
     metrics.errorCount1h++;
+    console.error(`[loop] Order failed (${orderbook.marketSlug}): ${result.error ?? 'unknown'}`);
     return;
   }
 
