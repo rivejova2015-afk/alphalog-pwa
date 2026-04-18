@@ -96,10 +96,10 @@ export class PolymarketFeed {
 
   async fetchCryptoMarkets(): Promise<PolymarketMarket[]> {
     try {
-      // Fetch up to 2000 markets sorted by soonest expiry first —
-      // short-term (5min/15min/1h/4h/daily) markets appear at the top
+      // Fetch active markets — gamma API doesn't support reliable sort params,
+      // so we fetch a large batch and sort client-side by endDate
       const res = await fetch(
-        `${GAMMA_BASE}/markets?active=true&closed=false&limit=2000&order=end_date_min&ascending=true`,
+        `${GAMMA_BASE}/markets?active=true&closed=false&limit=1000`,
         { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(15_000) }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
