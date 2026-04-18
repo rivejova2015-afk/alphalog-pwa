@@ -182,6 +182,19 @@ interface EquityPoint {
   snapshot_at: string;
 }
 
+interface Trade {
+  id: string;
+  market_slug: string;
+  outcome: string;
+  side: string;
+  price: number;
+  size_usd: number;
+  fee_usd: number;
+  pnl_usd: number | null;
+  status: string;
+  executed_at: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
@@ -886,6 +899,8 @@ export default function PolyArbDashboard() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [cbEvents, setCbEvents] = useState<CBEvent[]>([]);
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [tradesTotal, setTradesTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -902,17 +917,22 @@ export default function PolyArbDashboard() {
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!activeAgent) return;
     if (document.hidden) return; // no polling cuando el tab está en background
-    const [telRes, posRes, cbRes, eqRes] = await Promise.allSettled([
+    const [telRes, posRes, cbRes, eqRes, tradesRes] = await Promise.allSettled([
       fetch("/api/polyarb/telemetry", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/positions?status=open", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/circuit-breaker?limit=10", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/telemetry/history?days=7", { signal }).then((r) => r.json()),
+      fetch("/api/polyarb/trades?limit=50", { signal }).then((r) => r.json()),
     ]);
     if (signal?.aborted) return; // descartar respuesta si se desmontó
     if (telRes.status === "fulfilled") setTelemetry(telRes.value);
     if (posRes.status === "fulfilled") setPositions(posRes.value.data ?? []);
     if (cbRes.status === "fulfilled") setCbEvents(cbRes.value ?? []);
     if (eqRes.status === "fulfilled") setEquityCurve(eqRes.value ?? []);
+    if (tradesRes.status === "fulfilled") {
+      setTrades(tradesRes.value.data ?? []);
+      setTradesTotal(tradesRes.value.total ?? 0);
+    }
   }, [activeAgent]);
 
   useEffect(() => {
@@ -1025,16 +1045,16 @@ export default function PolyArbDashboard() {
 
       {/* ── Métricas principales ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard label="Equity" value={`$${fmt(telemetry?.equity_usd)}`} sub={null} />
-        <MetricCard label="P&L" value={fmtUsd(pnl)} sub={`${pnlPct >= 0 ? "+" : ""}${fmt(pnlPct, 1)}%`} positive={pnl >= 0} />
+        <MetricCard label="Balance USDC" value={`$${fmt(telemetry?.available_balance_usd)}`} sub="disponible" />
+        <MetricCard label="Equity Total" value={`$${fmt(telemetry?.equity_usd)}`} sub={null} />
+        <MetricCard label="P&L Neto" value={fmtUsd(pnl)} sub={`${pnlPct >= 0 ? "+" : ""}${fmt(pnlPct, 1)}%`} positive={pnl >= 0} />
         <MetricCard label="Win Rate" value={telemetry?.win_rate ? `${fmt(telemetry.win_rate, 1)}%` : "—"} sub={null} />
-        <MetricCard label="Max Drawdown" value={telemetry?.max_drawdown_pct ? `${fmt(telemetry.max_drawdown_pct, 1)}%` : "—"} sub={null} />
       </div>
 
       {/* ── Métricas secundarias ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Profit Factor" value={telemetry?.profit_factor ? fmt(telemetry.profit_factor) : "—"} sub={null} />
-        <MetricCard label="Sharpe Ratio" value={telemetry?.sharpe_ratio ? fmt(telemetry.sharpe_ratio) : "—"} sub={null} />
+        <MetricCard label="Max Drawdown" value={telemetry?.max_drawdown_pct ? `${fmt(telemetry.max_drawdown_pct, 1)}%` : "—"} sub={null} />
         <MetricCard label="Open Positions" value={String(telemetry?.open_positions_count ?? 0)} sub={null} />
         <MetricCard label="Errors (1h)" value={String(telemetry?.error_count_1h ?? 0)} sub={null} positive={(telemetry?.error_count_1h ?? 0) === 0} />
       </div>
@@ -1109,6 +1129,9 @@ export default function PolyArbDashboard() {
         )}
       </div>
 
+      {/* ── Trade History & P&L ─────────────────────────────────────────── */}
+      <TradeHistorySection trades={trades} tradesTotal={tradesTotal} />
+
       {/* ── Circuit Breaker Events ──────────────────────────────────────── */}
       {cbEvents.length > 0 && (
         <div className="bg-zinc-800/40 rounded-lg p-4">
@@ -1157,6 +1180,111 @@ export default function PolyArbDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Trade History Section ────────────────────────────────────────────────────
+
+function TradeHistorySection({ trades, tradesTotal }: { trades: Trade[]; tradesTotal: number }) {
+  const wins = trades.filter((t) => t.pnl_usd !== null && t.pnl_usd > 0);
+  const losses = trades.filter((t) => t.pnl_usd !== null && t.pnl_usd < 0);
+  const totalProfit = wins.reduce((s, t) => s + (t.pnl_usd ?? 0), 0);
+  const totalLoss = losses.reduce((s, t) => s + (t.pnl_usd ?? 0), 0);
+  const netPnl = totalProfit + totalLoss;
+  const totalFees = trades.reduce((s, t) => s + (t.fee_usd ?? 0), 0);
+  const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : null;
+
+  return (
+    <div className="bg-zinc-800/40 rounded-lg p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-cyan-400" /> Historial de Operaciones
+        </h2>
+        <span className="text-xs text-zinc-500">{tradesTotal} totales</span>
+      </div>
+
+      {/* P&L Summary mini-cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="bg-zinc-900/60 rounded-lg px-3 py-2">
+          <div className="text-[10px] text-zinc-500 mb-1">Profit Total</div>
+          <div className="text-sm font-bold text-green-400">+${totalProfit.toFixed(2)}</div>
+          <div className="text-[10px] text-zinc-600">{wins.length} operaciones ganadoras</div>
+        </div>
+        <div className="bg-zinc-900/60 rounded-lg px-3 py-2">
+          <div className="text-[10px] text-zinc-500 mb-1">Loss Total</div>
+          <div className="text-sm font-bold text-red-400">-${Math.abs(totalLoss).toFixed(2)}</div>
+          <div className="text-[10px] text-zinc-600">{losses.length} operaciones perdedoras</div>
+        </div>
+        <div className="bg-zinc-900/60 rounded-lg px-3 py-2">
+          <div className="text-[10px] text-zinc-500 mb-1">P&L Neto</div>
+          <div className={`text-sm font-bold ${netPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+            {netPnl >= 0 ? "+" : ""}{netPnl.toFixed(2)}$
+          </div>
+          <div className="text-[10px] text-zinc-600">Win rate: {winRate !== null ? `${winRate.toFixed(0)}%` : "—"}</div>
+        </div>
+        <div className="bg-zinc-900/60 rounded-lg px-3 py-2">
+          <div className="text-[10px] text-zinc-500 mb-1">Fees Pagados</div>
+          <div className="text-sm font-bold text-yellow-400">-${totalFees.toFixed(2)}</div>
+          <div className="text-[10px] text-zinc-600">{trades.length} trades</div>
+        </div>
+      </div>
+
+      {/* Trades table */}
+      {trades.length === 0 ? (
+        <p className="text-xs text-zinc-500 text-center py-2">Sin trades aún — el agente ejecutará su primera orden cuando detecte una oportunidad.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="text-zinc-500 border-b border-zinc-700">
+              <tr>
+                <th className="pb-2 pr-3">Fecha</th>
+                <th className="pb-2 pr-3">Mercado</th>
+                <th className="pb-2 pr-3">Lado</th>
+                <th className="pb-2 pr-3 text-right">Precio</th>
+                <th className="pb-2 pr-3 text-right">Tamaño</th>
+                <th className="pb-2 pr-3 text-right">P&L</th>
+                <th className="pb-2 pr-3 text-right">Fee</th>
+                <th className="pb-2 text-right">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="text-zinc-300">
+              {trades.map((t) => {
+                const isWin = t.pnl_usd !== null && t.pnl_usd > 0;
+                const isLoss = t.pnl_usd !== null && t.pnl_usd < 0;
+                return (
+                  <tr key={t.id} className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                    <td className="py-2 pr-3 whitespace-nowrap text-zinc-500">
+                      {new Date(t.executed_at).toLocaleDateString()} {new Date(t.executed_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="py-2 pr-3 truncate max-w-[160px]">{t.market_slug}</td>
+                    <td className="py-2 pr-3">
+                      <span className={t.side === "BUY" ? "text-green-400" : "text-red-400"}>{t.side}</span>
+                      {" "}<span className="text-zinc-500">{t.outcome}</span>
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono">{t.price.toFixed(4)}</td>
+                    <td className="py-2 pr-3 text-right font-mono">${t.size_usd.toFixed(2)}</td>
+                    <td className={`py-2 pr-3 text-right font-mono font-bold ${isWin ? "text-green-400" : isLoss ? "text-red-400" : "text-zinc-400"}`}>
+                      {t.pnl_usd !== null ? `${t.pnl_usd >= 0 ? "+" : ""}${t.pnl_usd.toFixed(2)}$` : "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-right font-mono text-yellow-600">-${t.fee_usd.toFixed(3)}</td>
+                    <td className="py-2 text-right">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        t.status === "FILLED" ? "bg-green-900/50 text-green-400"
+                        : t.status === "SIMULATED" ? "bg-blue-900/50 text-blue-400"
+                        : "bg-zinc-700 text-zinc-400"
+                      }`}>{t.status}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {tradesTotal > trades.length && (
+            <p className="text-center text-[10px] text-zinc-600 pt-2">Mostrando {trades.length} de {tradesTotal} operaciones</p>
+          )}
         </div>
       )}
     </div>

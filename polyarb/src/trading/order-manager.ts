@@ -8,8 +8,10 @@
  * Signing: EIP-712 via ClobSigner (ethers Wallet on Polygon)
  */
 
+import { ethers } from 'ethers';
 import { getSupabase } from '../supabase.js';
 import { ClobSigner, ClobL2Signer, Side, type SignedOrder } from './clob-signer.js';
+import { buildL2AuthHeaders } from './clob-auth.js';
 
 export interface OrderParams {
   conditionId: string;
@@ -43,6 +45,7 @@ export class OrderManager {
   private apiKey:       string;
   private apiSecret:    string;
   private apiPassphrase: string;
+  private walletAddress: string;
   private dryRun:       boolean;
 
   constructor(
@@ -56,27 +59,28 @@ export class OrderManager {
     this.apiKey        = apiKey;
     this.apiSecret     = apiSecret;
     this.apiPassphrase = apiPassphrase;
+    this.walletAddress = walletAddress ?? '';
     this.dryRun        = dryRun;
 
     if (dryRun) {
       this.signer = null;
       console.log('[order-manager] DRY_RUN mode — orders will be simulated');
     } else if (privateKey) {
-      // EOA: wallet private key available
-      this.signer = new ClobSigner(privateKey);
-      console.log(`[order-manager] EOA signer ready: ${(this.signer as ClobSigner).address}`);
-    } else if (walletAddress && apiSecret) {
-      // POLY_PROXY: sign with L2 api_secret, maker = wallet_address
-      try {
-        this.signer = new ClobL2Signer(walletAddress, apiSecret);
-        console.log(`[order-manager] POLY_PROXY signer ready — maker: ${walletAddress} signer: ${(this.signer as ClobL2Signer).signerAddress}`);
-      } catch (e) {
-        this.signer = null;
-        console.warn(`[order-manager] POLY_PROXY init failed (api_secret may not be a valid Ethereum key): ${e}`);
+      const derivedAddress = new ethers.Wallet(privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`).address;
+      const makerAddress   = walletAddress ?? derivedAddress;
+
+      if (makerAddress.toLowerCase() !== derivedAddress.toLowerCase()) {
+        // POLY_PROXY: private key is the MetaMask signer; maker is the Polymarket proxy wallet
+        this.signer = new ClobL2Signer(makerAddress, privateKey);
+        console.log(`[order-manager] POLY_PROXY signer ready — maker: ${makerAddress} signer: ${derivedAddress}`);
+      } else {
+        // EOA: private key owns the maker address directly
+        this.signer = new ClobSigner(privateKey);
+        console.log(`[order-manager] EOA signer ready: ${derivedAddress}`);
       }
     } else {
       this.signer = null;
-      console.warn('[order-manager] No signer available — set POLYARB_WALLET_PRIVATE_KEY or ensure api_secret is a valid L2 key');
+      console.warn('[order-manager] No signer available — set POLYARB_WALLET_PRIVATE_KEY');
     }
   }
 
@@ -173,16 +177,24 @@ export class OrderManager {
         feeRateBps: FEE_RATE_BPS,
       });
 
-      // Submit to CLOB
+      // Submit to CLOB — requires HMAC-signed L2 auth headers
+      const body = JSON.stringify(signed);
+      const authHeaders = buildL2AuthHeaders(
+        this.apiKey,
+        this.apiSecret,
+        this.apiPassphrase,
+        this.walletAddress,
+        'POST',
+        '/order',
+        body,
+      );
       const res = await fetch(`${CLOB_BASE}/order`, {
         method: 'POST',
         headers: {
-          'Content-Type':    'application/json',
-          'POLY-API-KEY':    this.apiKey,
-          'POLY-SECRET':     this.apiSecret,
-          'POLY-PASSPHRASE': this.apiPassphrase,
+          'Content-Type': 'application/json',
+          ...authHeaders,
         },
-        body: JSON.stringify(signed),
+        body,
         signal: AbortSignal.timeout(5_000),
       });
 
@@ -274,13 +286,19 @@ export class OrderManager {
       return true;
     }
     try {
-      const res = await fetch(`${CLOB_BASE}/order/${orderId}`, {
+      const path = `/order/${orderId}`;
+      const authHeaders = buildL2AuthHeaders(
+        this.apiKey,
+        this.apiSecret,
+        this.apiPassphrase,
+        this.walletAddress,
+        'DELETE',
+        path,
+        '',
+      );
+      const res = await fetch(`${CLOB_BASE}${path}`, {
         method: 'DELETE',
-        headers: {
-          'POLY-API-KEY':    this.apiKey,
-          'POLY-SECRET':     this.apiSecret,
-          'POLY-PASSPHRASE': this.apiPassphrase,
-        },
+        headers: authHeaders,
         signal: AbortSignal.timeout(5_000),
       });
       return res.ok;
