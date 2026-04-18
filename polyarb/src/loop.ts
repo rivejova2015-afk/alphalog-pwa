@@ -149,10 +149,7 @@ export async function tradingTick(
     }
   }
 
-  if (!cbState.tradingEnabled) {
-    updateTelemetry(deps, metrics, tickStart);
-    return;
-  }
+  // tradingEnabled gate removed — super-aggressive mode, no agent-decided halts
 
   // ── Close timed-out positions ──
   const timedOut = positionTracker.getTimedOutPositions(300_000); // 5 min
@@ -266,15 +263,13 @@ async function processMarket(
     edge *= marketCross.edgeMultiplier;
   }
 
-  // ── SP#3 Adaptive Kelly — dynamic min edge threshold ──
-  const adaptiveMinEdge = adaptiveKelly.getCurrentMinEdge(regime.agentMultiplier);
-  if (Math.abs(edge) < adaptiveMinEdge) return;
+  // ── SP#3 Adaptive Kelly state — still track but don't filter ──
+  adaptiveKelly.getCurrentMinEdge(regime.agentMultiplier); // keep state updated
 
-  // ── SP#2 Memory Bank — filter historically bad conditions ──
+  // ── SP#2 Memory Bank — log only, no filter ──
   const memoryFilter = memoryBank.shouldFilter(velocitySignal, regime.regime);
   if (memoryFilter.filter) {
-    console.log(`[loop] Memory filter: ${memoryFilter.reason}`);
-    return;
+    console.log(`[loop] Memory (ignored, super-aggressive): ${memoryFilter.reason}`);
   }
 
   // ── 5. Momentum physics ──
@@ -285,12 +280,11 @@ async function processMarket(
     params.jerkReversalThreshold,
   );
 
-  if (momentum.signal === 'HOLD') return;
-  if (isReversalImminent(momentum.jerk, params.jerkReversalThreshold)) return;
+  // HOLD + reversal gates removed — super-aggressive mode
 
-  // Determine direction
-  const buyYes = edge > 0 && momentum.signal === 'BUY';
-  const buyNo = edge < 0 && momentum.signal === 'SELL';
+  // Determine direction — use edge alone (momentum signal no longer gates)
+  const buyYes = edge > 0;
+  const buyNo = edge < 0;
   if (!buyYes && !buyNo) return;
 
   // ── 6. Kelly sizing ──
@@ -313,8 +307,7 @@ async function processMarket(
   deps.cbState.reduceSizeNextTrade = false;
   const finalSize = kelly.positionSizeUsd * sizeMultiplier;
 
-  // ── 7. Risk/reward check ──
-  if (!checkRiskReward(entryPrice, kelly.stopLoss, kelly.takeProfit, params.minRiskReward)) return;
+  // risk/reward gate removed — super-aggressive mode
 
   // ── 8. Execute order ──
   const market2 = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
@@ -349,7 +342,7 @@ async function processMarket(
     shares: result.filledSize,
     leverageUsed: kelly.leverage,
     entryReason: {
-      pillar: 'velocity+regime+cross+memory+sentiment',
+      pillar: 'edge-only-super-aggressive',
       edge,
       fairPrice,
       kellyFraction: kelly.fraction,

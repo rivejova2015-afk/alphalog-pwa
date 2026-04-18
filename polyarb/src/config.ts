@@ -38,16 +38,16 @@ export interface TradingParams {
 
 const DEFAULT_PARAMS: TradingParams = {
   loopIntervalMs: 250,
-  minEdgePercent: 0.005,
-  maxKellyFraction: 0.50,
-  maxLeverage: 3.0,
-  dailyDrawdownLimit: -0.35,
-  hourlyDrawdownLimit: -0.20,
-  consecutiveLossLimit: 7,
-  maxSlippage: 0.015,
-  maxLatencyMs: 100,
-  minRiskReward: 1.2,
-  winStreakBonus: 1.5,
+  minEdgePercent: 0.0001,      // near-zero: take any detectable edge
+  maxKellyFraction: 1.0,       // full Kelly — no cap
+  maxLeverage: 5.0,            // maximum leverage
+  dailyDrawdownLimit: -0.90,   // 90% daily loss before hard stop
+  hourlyDrawdownLimit: -0.60,  // 60% hourly
+  consecutiveLossLimit: 30,    // allow long losing streaks
+  maxSlippage: 0.05,           // tolerate high slippage
+  maxLatencyMs: 500,           // tolerate slower execution
+  minRiskReward: 0.5,          // accept any trade with any R:R
+  winStreakBonus: 2.0,         // bigger size on win streaks
   priceHistoryWindowMs: 60_000,
   accelerationThreshold: 0.00005,
   jerkReversalThreshold: -0.0001,
