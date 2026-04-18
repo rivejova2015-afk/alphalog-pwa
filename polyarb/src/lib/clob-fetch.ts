@@ -1,7 +1,11 @@
 /**
- * CLOB-specific fetch wrapper.
- * Routes requests through a residential proxy if POLYARB_PROXY_URL is set.
- * Only applies to Polymarket CLOB calls — Supabase and Binance are unaffected.
+ * CLOB fetch utilities.
+ *
+ * - clobFetch()        → goes through residential proxy (order placement, cancel, balance)
+ * - clobFetchDirect()  → direct fetch, no proxy (public orderbook reads — not geoblocked)
+ *
+ * Proxy bandwidth optimization: orderbooks account for ~99% of CLOB traffic.
+ * Routing them directly saves virtually all proxy GB while still unblocking orders.
  */
 
 import { ProxyAgent } from 'undici';
@@ -14,9 +18,10 @@ if (proxyUrl) {
   const masked = proxyUrl.replace(/:([^@:]+)@/, ':***@');
   console.log(`[clob-fetch] Proxy active: ${masked}`);
 } else {
-  console.log('[clob-fetch] No proxy configured (POLYARB_PROXY_URL not set)');
+  console.log('[clob-fetch] No proxy configured — orders will fail if geoblocked');
 }
 
+/** Authenticated CLOB calls: order placement, cancel, balance — go through proxy. */
 export async function clobFetch(
   url: string,
   init?: RequestInit & { signal?: AbortSignal },
@@ -24,7 +29,13 @@ export async function clobFetch(
   if (!dispatcher) {
     return fetch(url, init);
   }
-  // undici dispatcher is passed via the non-standard `dispatcher` option
-  // which native Node.js fetch (undici-based) accepts
   return fetch(url, { ...init, dispatcher } as RequestInit);
+}
+
+/** Public CLOB reads: orderbook polling — direct, no proxy bandwidth consumed. */
+export async function clobFetchDirect(
+  url: string,
+  init?: RequestInit & { signal?: AbortSignal },
+): Promise<Response> {
+  return fetch(url, init);
 }

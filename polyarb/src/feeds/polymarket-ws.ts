@@ -1,17 +1,20 @@
 /**
- * Polymarket CLOB WebSocket + REST feed.
+ * Polymarket CLOB REST feed — parallel orderbook polling.
  *
- * Connects to Polymarket's CLOB API for orderbook data.
- * REST polling as fallback when WebSocket is unavailable.
- *
- * CLOB API docs: https://docs.polymarket.com/
+ * Optimizations:
+ * - Orderbooks fetched in parallel (Promise.allSettled) — not sequentially
+ * - Polling lock prevents overlapping cycles
+ * - Dead market filter: skip markets with 0 liquidity for 5 consecutive polls
+ * - Stale cache: skip fetch if data is <1.5s old (prevents redundant polls on slow cycles)
+ * - Orderbook reads use direct fetch (no proxy) — public endpoint, not geoblocked
+ * - Proxy is reserved exclusively for order placement / cancel / balance
  */
 
 export interface PolymarketOrderbook {
   marketSlug: string;
   conditionId: string;
-  bidPrice: number;       // Best bid for YES
-  askPrice: number;       // Best ask for YES
+  bidPrice: number;
+  askPrice: number;
   midPrice: number;
   spread: number;
   bidSize: number;
@@ -26,15 +29,17 @@ export interface PolymarketMarket {
   question: string;
   endDate: string;
   active: boolean;
-  yesTokenId: string;   // ERC1155 token ID for YES outcome
-  noTokenId: string;    // ERC1155 token ID for NO outcome
+  yesTokenId: string;
+  noTokenId: string;
 }
 
-import { clobFetch } from '../lib/clob-fetch.js';
+import { clobFetchDirect } from '../lib/clob-fetch.js';
 
 const CLOB_REST_BASE = 'https://clob.polymarket.com';
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
-const POLL_INTERVAL_MS = 2_000; // Poll every 2s via REST
+const POLL_INTERVAL_MS = 3_000;        // poll every 3s — sufficient for prediction markets
+const STALE_THRESHOLD_MS = 1_500;      // skip if last fetch was <1.5s ago
+const DEAD_MARKET_THRESHOLD = 5;       // drop market after 5 consecutive empty orderbooks
 
 export class PolymarketFeed {
   private markets: Map<string, PolymarketMarket> = new Map();
@@ -42,12 +47,10 @@ export class PolymarketFeed {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private shouldRun = false;
   private trackedConditionIds: string[] = [];
-  private polling = false; // lock to prevent overlapping polls
+  private polling = false;
+  private lastFetchAt: Map<string, number> = new Map();
+  private emptyStreak: Map<string, number> = new Map();  // consecutive empty polls
 
-  /**
-   * Sentiment Pulse callback — called every time a new orderbook is fetched.
-   * Set this from the outside to hook in SentimentPulseTracker.record().
-   */
   onOrderbookUpdate: ((
     conditionId: string,
     bidSize: number,
@@ -60,39 +63,23 @@ export class PolymarketFeed {
     return this.shouldRun && this.orderbooks.size > 0;
   }
 
-  /**
-   * Get all tracked markets (includes question text for milestone parsing).
-   */
   getMarkets(): PolymarketMarket[] {
     return Array.from(this.markets.values());
   }
 
-  /**
-   * Get the latest orderbook for a condition.
-   */
   getOrderbook(conditionId: string): PolymarketOrderbook | null {
     return this.orderbooks.get(conditionId) ?? null;
   }
 
-  /**
-   * Get all tracked orderbooks.
-   */
   getAllOrderbooks(): PolymarketOrderbook[] {
     return Array.from(this.orderbooks.values());
   }
 
-  /**
-   * Start tracking specific markets by condition ID.
-   */
   start(conditionIds: string[]): void {
     this.trackedConditionIds = conditionIds;
     this.shouldRun = true;
     console.log(`[polymarket-ws] Starting REST poll for ${conditionIds.length} markets`);
-
-    // Initial fetch
     void this.pollOrderbooks();
-
-    // Poll on interval
     this.pollTimer = setInterval(() => {
       void this.pollOrderbooks();
     }, POLL_INTERVAL_MS);
@@ -107,23 +94,14 @@ export class PolymarketFeed {
     console.log('[polymarket-ws] Stopped');
   }
 
-  /**
-   * Fetch active crypto markets from Polymarket via gamma API.
-   * Finds any open binary market with crypto price relevance.
-   */
   async fetchCryptoMarkets(): Promise<PolymarketMarket[]> {
     try {
-      // Gamma API returns currently active, open markets with real token IDs.
-      // CLOB /markets only returns historical markets (mostly closed 2022-2023).
       const res = await fetch(
         `${GAMMA_BASE}/markets?active=true&closed=false&limit=500`,
-        {
-          headers: { 'Accept': 'application/json' },
-          signal: AbortSignal.timeout(8_000),
-        }
+        { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8_000) }
       );
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const raw = await res.json() as Array<{
         conditionId?: string;
         question?: string;
@@ -131,18 +109,14 @@ export class PolymarketFeed {
         active?: boolean;
         slug?: string;
         outcomes?: string[];
-        outcomePrices?: string[];
-        /** JSON-encoded array: [yesTokenId, noTokenId] */
         clobTokenIds?: string;
       }>;
 
       const data = Array.isArray(raw) ? raw : [];
-
       const cryptoMarkets: PolymarketMarket[] = [];
+
       for (const m of data) {
         const q = (m.question ?? '').toLowerCase();
-
-        // Crypto price / crypto-adjacent filter — broader than the old CLOB approach
         const isCrypto =
           q.includes('btc') || q.includes('bitcoin') ||
           q.includes('eth') || q.includes('ethereum') ||
@@ -154,21 +128,13 @@ export class PolymarketFeed {
 
         if (!isCrypto) continue;
 
-        // gamma API encodes outcomes and clobTokenIds as JSON strings, not arrays
         let outcomes: string[] = [];
         let tokenIds: string[] = [];
         try {
-          outcomes = typeof m.outcomes === 'string'
-            ? JSON.parse(m.outcomes) as string[]
-            : (m.outcomes ?? []);
-          tokenIds = typeof m.clobTokenIds === 'string'
-            ? JSON.parse(m.clobTokenIds) as string[]
-            : [];
-        } catch {
-          continue;
-        }
+          outcomes = typeof m.outcomes === 'string' ? JSON.parse(m.outcomes) as string[] : (m.outcomes ?? []);
+          tokenIds = typeof m.clobTokenIds === 'string' ? JSON.parse(m.clobTokenIds) as string[] : [];
+        } catch { continue; }
 
-        // Binary markets only (exactly 2 outcomes: Yes/No)
         if (outcomes.length !== 2) continue;
 
         const yesIdx = outcomes.findIndex(o => o.toLowerCase() === 'yes');
@@ -179,19 +145,20 @@ export class PolymarketFeed {
         if (!yesTokenId || !m.conditionId) continue;
 
         cryptoMarkets.push({
-          slug:        m.slug ?? '',
+          slug: m.slug ?? '',
           conditionId: m.conditionId,
-          question:    m.question ?? '',
-          endDate:     m.endDate ?? '',
-          active:      m.active ?? true,
+          question: m.question ?? '',
+          endDate: m.endDate ?? '',
+          active: m.active ?? true,
           yesTokenId,
           noTokenId,
         });
       }
 
-      // Cache locally
       for (const market of cryptoMarkets) {
         this.markets.set(market.conditionId, market);
+        // Reset dead market streak when rediscovered
+        this.emptyStreak.delete(market.conditionId);
       }
 
       console.log(`[polymarket-ws] Found ${cryptoMarkets.length} active crypto markets via gamma API`);
@@ -202,15 +169,18 @@ export class PolymarketFeed {
     }
   }
 
-  /**
-   * Poll orderbooks for all tracked conditions in parallel.
-   */
   private async pollOrderbooks(): Promise<void> {
-    if (this.polling) return; // skip if previous poll still running
+    if (this.polling) return;
     this.polling = true;
     try {
+      // Filter out dead markets (consistently empty) to save requests
+      const active = this.trackedConditionIds.filter(id => {
+        const streak = this.emptyStreak.get(id) ?? 0;
+        return streak < DEAD_MARKET_THRESHOLD;
+      });
+
       await Promise.allSettled(
-        this.trackedConditionIds.map(conditionId => this.fetchOneOrderbook(conditionId))
+        active.map(conditionId => this.fetchOneOrderbook(conditionId))
       );
     } finally {
       this.polling = false;
@@ -218,19 +188,24 @@ export class PolymarketFeed {
   }
 
   private async fetchOneOrderbook(conditionId: string): Promise<void> {
+    // Skip if data is fresh enough
+    const lastFetch = this.lastFetchAt.get(conditionId) ?? 0;
+    if (Date.now() - lastFetch < STALE_THRESHOLD_MS) return;
+
     try {
       const market = this.markets.get(conditionId);
       const tokenId = market?.yesTokenId || conditionId;
 
-      const res = await clobFetch(
+      // Direct fetch — orderbooks are public, no geoblock, no proxy needed
+      const res = await clobFetchDirect(
         `${CLOB_REST_BASE}/book?token_id=${tokenId}`,
-        {
-          headers: { 'Accept': 'application/json' },
-          signal: AbortSignal.timeout(4_000),
-        }
+        { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(4_000) }
       );
 
+      this.lastFetchAt.set(conditionId, Date.now());
+
       if (!res.ok) return;
+
       const book = await res.json() as {
         bids?: Array<{ price: string; size: string }>;
         asks?: Array<{ price: string; size: string }>;
@@ -238,30 +213,37 @@ export class PolymarketFeed {
 
       const bestBid = book.bids?.[0];
       const bestAsk = book.asks?.[0];
-      if (!bestBid || !bestAsk) return;
+
+      if (!bestBid || !bestAsk) {
+        // Track empty streak — dead markets get deprioritized
+        this.emptyStreak.set(conditionId, (this.emptyStreak.get(conditionId) ?? 0) + 1);
+        return;
+      }
+
+      // Reset dead streak on successful data
+      this.emptyStreak.set(conditionId, 0);
 
       const bidPrice = parseFloat(bestBid.price);
       const askPrice = parseFloat(bestAsk.price);
-      const midPrice = (bidPrice + askPrice) / 2;
-      const bidSize = parseFloat(bestBid.size);
-      const askSize = parseFloat(bestAsk.size);
+      const bidSize  = parseFloat(bestBid.size);
+      const askSize  = parseFloat(bestAsk.size);
 
       this.orderbooks.set(conditionId, {
         marketSlug: market?.slug ?? conditionId,
         conditionId,
         bidPrice,
         askPrice,
-        midPrice,
+        midPrice: (bidPrice + askPrice) / 2,
         spread: askPrice - bidPrice,
         bidSize,
         askSize,
-        lastTradePrice: midPrice,
+        lastTradePrice: (bidPrice + askPrice) / 2,
         timestamp: Date.now(),
       });
 
       this.onOrderbookUpdate?.(conditionId, bidSize, askSize, bidPrice, askPrice);
     } catch {
-      // skip failed fetches silently
+      // silent — network errors don't stop the loop
     }
   }
 }
