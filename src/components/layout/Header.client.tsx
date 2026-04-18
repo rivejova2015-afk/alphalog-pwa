@@ -11,11 +11,24 @@ export function Header() {
 
   const handleRefresh = async () => {
     setSpinning(true);
-    if ('serviceWorker' in navigator) {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) await reg.update();
+    try {
+      // 1. Borrar TODOS los caches del SW
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      // 2. Forzar actualización y skip waiting del SW
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(async r => {
+          await r.update();
+          r.waiting?.postMessage({ type: 'SKIP_WAITING' });
+        }));
+      }
+    } finally {
+      // 3. Hard reload sin caché
+      window.location.href = window.location.href.split('?')[0] + '?_r=' + Date.now();
     }
-    window.location.reload();
   };
 
   // Close on outside click
