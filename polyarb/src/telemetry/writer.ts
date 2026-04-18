@@ -116,6 +116,7 @@ export class TelemetryWriter {
           sentiment_snapshot: s.sentimentSnapshot ?? null,
           memory_bank_stats: s.memoryBankStats ?? null,
           last_heartbeat_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
         { onConflict: 'agent_id' }
       );
