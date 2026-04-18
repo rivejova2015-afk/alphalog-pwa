@@ -111,13 +111,12 @@ interface CrossMarketSignal {
 // SP#4 Sentiment Pulse
 interface SentimentPulse {
   conditionId: string;
-  bidFlowZScore: number;
-  askFlowZScore: number;
+  zScoreBid: number;
+  zScoreAsk: number;
+  anomalyScore: number;
   signal: "ACCUMULATION" | "DISTRIBUTION" | "NEUTRAL";
-  edgeMultiplier: number;
-  samplesInWindow: number;
-  lastBidSize: number;
-  lastAskSize: number;
+  samplesUsed: number;
+  priceMovedWithSignal: boolean;
 }
 
 // SP#2 Memory Bank stats
@@ -812,8 +811,9 @@ function SentimentPanel({ pulses }: { pulses: SentimentPulse[] }) {
             const isDist = p.signal === "DISTRIBUTION";
             const sigColor = isAcc ? "#34d399" : isDist ? "#f87171" : "#475569";
             const sigLabel = isAcc ? "ACC" : isDist ? "DIST" : "NEU";
-            const zBid = p.bidFlowZScore.toFixed(1);
-            const zAsk = p.askFlowZScore.toFixed(1);
+            const zBid = (p.zScoreBid ?? 0).toFixed(1);
+            const zAsk = (p.zScoreAsk ?? 0).toFixed(1);
+            const score = p.anomalyScore ?? 0;
             return (
               <div key={p.conditionId} className="flex items-center gap-2 text-[11px] bg-[#0d1424] rounded px-3 py-1.5">
                 <span
@@ -827,8 +827,8 @@ function SentimentPanel({ pulses }: { pulses: SentimentPulse[] }) {
                 </span>
                 <span className="text-[#475569] font-mono">bid z{zBid}</span>
                 <span className="text-[#475569] font-mono">ask z{zAsk}</span>
-                <span className="font-mono font-bold" style={{ color: p.edgeMultiplier >= 1.2 ? "#34d399" : p.edgeMultiplier <= 0.7 ? "#f87171" : "#64748b" }}>
-                  ×{p.edgeMultiplier.toFixed(2)}
+                <span className="font-mono font-bold" style={{ color: score >= 20 ? "#34d399" : score <= -20 ? "#f87171" : "#64748b" }}>
+                  {score >= 0 ? "+" : ""}{score.toFixed(0)}
                 </span>
               </div>
             );

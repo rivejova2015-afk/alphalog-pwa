@@ -127,7 +127,21 @@ async function main(): Promise<void> {
     sentimentPulse,
   };
 
-  // 8. Start main trading loop
+  // 8. Poll real CLOB balance every 30s and write to Supabase
+  const pollRealBalance = async () => {
+    const bal = await orderManager.fetchBalance();
+    if (bal !== null) {
+      await supabase
+        .from('polyarb_telemetry')
+        .update({ available_balance_usd: bal })
+        .eq('agent_id', config.agentId);
+      console.log(`[balance] Real CLOB balance: $${bal.toFixed(4)} USDC`);
+    }
+  };
+  void pollRealBalance();
+  setInterval(() => void pollRealBalance(), 30_000);
+
+  // 9. Start main trading loop
   running = true;
   console.log(`[main] Trading loop starting (${config.params.loopIntervalMs}ms interval)`);
 
@@ -141,7 +155,7 @@ async function main(): Promise<void> {
     }
   }, config.params.loopIntervalMs);
 
-  // 9. Poll for command changes (start/stop/pause) every 5s
+  // 10. Poll for command changes (start/stop/pause) every 5s
   commandPollInterval = setInterval(async () => {
     await pollCommands(config, deps, binanceFeed, polymarketFeed, telemetryWriter);
   }, 5_000);

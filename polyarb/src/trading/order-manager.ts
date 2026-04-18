@@ -321,4 +321,26 @@ export class OrderManager {
       return yesTokenId;
     }
   }
+
+  /**
+   * Fetch real USDC balance from the Polymarket CLOB.
+   * Returns null if unavailable (dry run, no auth, or network error).
+   */
+  async fetchBalance(): Promise<number | null> {
+    if (this.dryRun || !this.apiKey || !this.walletAddress) return null;
+    try {
+      const path = '/data/balance';
+      const headers = buildL2AuthHeaders(
+        this.apiKey, this.apiSecret, this.apiPassphrase,
+        this.walletAddress, 'GET', path,
+      );
+      const res = await fetch(`${CLOB_BASE}${path}`, { headers: headers as Record<string, string> });
+      if (!res.ok) return null;
+      const json = await res.json() as { balance?: string; USDC?: string };
+      const raw = json.balance ?? json.USDC;
+      return raw ? parseFloat(raw) : null;
+    } catch {
+      return null;
+    }
+  }
 }
