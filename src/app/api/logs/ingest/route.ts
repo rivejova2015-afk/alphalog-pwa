@@ -127,6 +127,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (body.logs.length > 50) {
+      return NextResponse.json(
+        { error: 'Too many logs in a single batch (max 50)' },
+        { status: 400 }
+      );
+    }
+
     const logs: LogEntry[] = body.logs as LogEntry[];
     const ingested: string[] = [];
     const failed: { index: number; error: string }[] = [];

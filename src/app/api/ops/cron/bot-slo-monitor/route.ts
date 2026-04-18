@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -8,12 +9,11 @@ const HEARTBEAT_THRESHOLD_SEC = 120;
 const ACK_THRESHOLD_SEC = 60;
 
 function validateCronSecret(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const expected = process.env.OPS_CRON_SECRET;
-  if (!expected) return { ok: false, status: 500, error: "OPS_CRON_SECRET not configured" };
-  if (!token || token !== expected) return { ok: false, status: 401, error: "Unauthorized" };
-  return { ok: true };
+  return validateBearerToken(
+    request.headers.get("authorization"),
+    process.env.OPS_CRON_SECRET,
+    "OPS_CRON_SECRET",
+  );
 }
 
 function getServiceClient() {

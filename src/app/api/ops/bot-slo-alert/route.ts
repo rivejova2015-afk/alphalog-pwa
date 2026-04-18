@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { captureException, captureMessage } from "@/lib/sentry";
+import { safeCompareTokens } from "@/lib/security/timing";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ function validateToken(request: NextRequest) {
   if (!expected) {
     return { ok: false, status: 500, error: "OPS_ALERT_TOKEN not configured" as const };
   }
-  if (!provided || provided !== expected) {
+  if (!safeCompareTokens(provided, expected)) {
     return { ok: false, status: 401, error: "Unauthorized" as const };
   }
   return { ok: true, status: 200 as const };

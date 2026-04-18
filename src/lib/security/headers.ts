@@ -70,11 +70,12 @@ export function getCSPHeader(): string {
     "default-src": ["'self'"],
     "script-src": [
       "'self'",
-      "'unsafe-inline'", // Required for Next.js
-      "'unsafe-eval'", // Required for Next.js dev
-      "https://cdn.jsdelivr.net", // Allow CDN scripts
-      "https://js.hcaptcha.com", // hCaptcha
-      "https://newassets.hcaptcha.com", // hCaptcha assets
+      "'unsafe-inline'", // Required for Next.js inline scripts
+      // 'unsafe-eval' only in development (React DevTools, HMR)
+      ...(process.env.NODE_ENV !== "production" ? ["'unsafe-eval'"] : []),
+      "https://cdn.jsdelivr.net",
+      "https://js.hcaptcha.com",
+      "https://newassets.hcaptcha.com",
     ],
     "style-src": [
       "'self'",
