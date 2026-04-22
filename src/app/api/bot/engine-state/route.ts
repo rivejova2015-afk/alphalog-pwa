@@ -65,8 +65,7 @@ export async function GET(request: Request) {
     const engineData = engineResult.data;
     const regimeData = regimeResult.data;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const qs = (engineData?.quantum_state ?? {}) as Record<string, any>;
+    const qs = (engineData?.quantum_state ?? {}) as Record<string, unknown>;
 
     return NextResponse.json(
       {
@@ -86,12 +85,12 @@ export async function GET(request: Request) {
               circuitBreakerReason: engineData.circuit_breaker_reason,
               regimeCode: engineData.regime_code,
               quantum: {
-                energy: qs.energy ?? null,
-                bullBias: qs.bullBias ?? null,
-                expectedMove: qs.expectedMove ?? null,
-                amplitudes: qs.amplitudes ?? null,
-                signalDirection: qs.signalDirection ?? null,
-                confidence: qs.confidence ?? null,
+                energy: (qs.energy as number | null) ?? null,
+                bullBias: (qs.bullBias as number | null) ?? null,
+                expectedMove: (qs.expectedMove as number | null) ?? null,
+                amplitudes: (qs.amplitudes as number[] | null) ?? null,
+                signalDirection: (qs.signalDirection as string | null) ?? null,
+                confidence: (qs.confidence as number | null) ?? null,
               },
             }
           : null,

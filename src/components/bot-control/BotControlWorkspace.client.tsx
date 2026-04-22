@@ -10,6 +10,7 @@ import { isOffline, getBotControlOfflineData, saveBotControlSnapshot } from "@/l
 import { BotMode, getBotProfileConfig } from "@/components/bot-control/profileConfig";
 import { IVSurfacePanel } from "@/components/bot-control/panels/IVSurfacePanel.client";
 import { EngineDevToolsPanel } from "@/components/bot-control/panels/EngineDevToolsPanel.client";
+import { SkillsPanel } from "@/components/bot-control/panels/SkillsPanel.client";
 
 interface Bot {
   id: string;
@@ -113,7 +114,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
   const [accounts, setAccounts] = useState<BotAccount[]>([]);
   const [appAccounts, setAppAccounts] = useState<AppAccount[]>([]);
   const [instances, setInstances] = useState<BotInstance[]>([]);
-  const [activeTab, setActiveTab] = useState<"controls" | "iv-surface" | "engine">("controls");
+  const [activeTab, setActiveTab] = useState<"controls" | "iv-surface" | "engine" | "skills">("controls");
   const [telemetry, setTelemetry] = useState<BotTelemetry[]>([]);
   const [commands, setCommands] = useState<BotCommand[]>([]);
   const [commandStatus, setCommandStatus] = useState<BotCommandStatus[]>([]);
@@ -740,11 +741,12 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
 
           {/* Tab bar */}
           <div className="flex gap-1 p-1 rounded-xl border border-white/10 bg-white/[0.03] w-fit">
-            {(["controls", "iv-surface", "engine"] as const).map((tab) => {
+            {(["controls", "iv-surface", "engine", "skills"] as const).map((tab) => {
               const labels: Record<string, string> = {
                 controls: "Controls",
                 "iv-surface": "IV Surface",
                 engine: "Engine DevTools",
+                skills: "Skills",
               };
               return (
                 <button
@@ -1545,6 +1547,10 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
                 ""
               }
             />
+          )}
+
+          {activeTab === "skills" && (
+            <SkillsPanel />
           )}
         </div>
       </div>
