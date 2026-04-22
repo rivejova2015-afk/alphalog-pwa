@@ -1,0 +1,308 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import crypto from "crypto";
+import { createClient } from "@/lib/supabase/server";
+import { safeCompareTokens } from "@/lib/security/timing";
+import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { logError } from "@/lib/log";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Schemas
+// ─────────────────────────────────────────────────────────────────────────────
+
+const closedTradeSchema = z.object({
+  ticket: z.number().int(),
+  direction: z.enum(["BUY", "SELL"]),
+  lots: z.number().positive(),
+  open_price: z.number().positive(),
+  close_price: z.number().positive(),
+  pnl: z.number(),
+  max_adverse_excursion: z.number().nonnegative(),
+  open_time: z.string(),
+  close_time: z.string(),
+});
+
+const webhookSchema = z.object({
+  symbol: z.literal("XAUUSD"),
+  platform: z.enum(["MT4", "MT5"]),
+  bid: z.number(),
+  ask: z.number(),
+  last: z.number(),
+  balance: z.number().nonnegative(),
+  equity: z.number().nonnegative(),
+  positions_total: z.number().int().min(0),
+  positions_buy: z.number().int().min(0),
+  positions_sell: z.number().int().min(0),
+  tick_volume: z.number().nonnegative(),
+  bot_instance_id: z.string().uuid(),
+  closed_trade: closedTradeSchema.optional(),
+});
+
+const responseSchema = z.object({
+  received: z.boolean(),
+  is_paper: z.boolean(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Replay protection (5 min window)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const replayCache = new Map<string, number>();
+const REPLAY_WINDOW_MS = 5 * 60 * 1000;
+
+function checkReplay(signature: string): boolean {
+  const now = Date.now();
+  const lastSeen = replayCache.get(signature);
+
+  if (lastSeen && now - lastSeen < REPLAY_WINDOW_MS) {
+    return false; // Replay detected
+  }
+
+  replayCache.set(signature, now);
+
+  // Cleanup old entries
+  for (const [sig, timestamp] of replayCache.entries()) {
+    if (now - timestamp > REPLAY_WINDOW_MS * 2) {
+      replayCache.delete(sig);
+    }
+  }
+
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/webhooks/mt
+// Unified webhook for MT4/MT5 telemetry and closed trade reporting
+// ─────────────────────────────────────────────────────────────────────────────
+export async function POST(request: NextRequest) {
+  try {
+    // ── Read body ───────────────────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    // ── 1. HMAC verification (Bearer token check via signature) ──────────────
+    const signature = request.headers.get("x-signature");
+    if (!signature) {
+      return NextResponse.json(
+        { error: "Missing X-Signature header" },
+        { status: 401 }
+      );
+    }
+
+    const webhookSecret = process.env.MT5_WEBHOOK_SECRET || "";
+    if (!webhookSecret) {
+      logError("WebhookMT", {
+        component: "api/webhooks/mt",
+        message: "MT5_WEBHOOK_SECRET not configured",
+      });
+      return NextResponse.json(
+        { error: "Server misconfiguration" },
+        { status: 500 }
+      );
+    }
+
+    const bodyJson = JSON.stringify(body);
+    const expectedSignature = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(bodyJson)
+      .digest("hex");
+
+    if (!safeCompareTokens(signature, expectedSignature)) {
+      return NextResponse.json(
+        { error: "Invalid signature" },
+        { status: 401 }
+      );
+    }
+
+    // ── 2. Replay protection ────────────────────────────────────────────────
+    if (!checkReplay(signature)) {
+      logError("WebhookMT", {
+        component: "api/webhooks/mt",
+        message: "Replay attack detected",
+      });
+      return NextResponse.json(
+        { error: "Request replay detected" },
+        { status: 429 }
+      );
+    }
+
+    // ── 3. Zod validation ───────────────────────────────────────────────────
+    const parsed = webhookSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", issues: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
+    const supabase = await createClient();
+
+    // ── 4. UPDATE bot_instances platform if needed ──────────────────────────
+    const { error: updateInstanceErr } = await supabase
+      .from("bot_instances")
+      .update({ platform: data.platform, last_heartbeat_at: new Date().toISOString() })
+      .eq("id", data.bot_instance_id);
+
+    if (updateInstanceErr) {
+      logError("WebhookMT", {
+        component: "api/webhooks/mt",
+        message: `Failed to update bot_instance: ${updateInstanceErr.message}`,
+      });
+    }
+
+    // ── 5. Get is_paper_mode from bot_instances ────────────────────────────
+    const { data: instance, error: getInstanceErr } = await supabase
+      .from("bot_instances")
+      .select("is_paper_mode, bot_account_id")
+      .eq("id", data.bot_instance_id)
+      .single();
+
+    if (getInstanceErr || !instance) {
+      return NextResponse.json(
+        { error: "Bot instance not found" },
+        { status: 404 }
+      );
+    }
+
+    const isPaperMode = instance.is_paper_mode ?? false;
+
+    // ── 6. UPDATE bot_telemetry ─────────────────────────────────────────────
+    const { error: telemetryErr } = await supabase
+      .from("bot_telemetry")
+      .upsert(
+        {
+          bot_account_id: instance.bot_account_id,
+          instance_id: data.bot_instance_id,
+          equity: data.equity,
+          balance: data.balance,
+          positions_total: data.positions_total,
+          positions_buy: data.positions_buy,
+          positions_sell: data.positions_sell,
+          last_heartbeat_ts: new Date().toISOString(),
+          payload: {
+            symbol: data.symbol,
+            bid: data.bid,
+            ask: data.ask,
+            last: data.last,
+            tick_volume: data.tick_volume,
+          },
+        },
+        { onConflict: "bot_account_id" }
+      );
+
+    if (telemetryErr) {
+      logError("WebhookMT", {
+        component: "api/webhooks/mt",
+        message: `Telemetry update warning: ${telemetryErr.message}`,
+      });
+    }
+
+    // ── 7. If closed_trade: INSERT into trades or paper_trades ─────────────
+    if (data.closed_trade) {
+      const tableName = isPaperMode ? "paper_trades" : "trades";
+
+      // Get user_id from bot_instances join chain
+      const { data: accountData } = await supabase
+        .from("bot_accounts")
+        .select("*")
+        .eq("id", instance.bot_account_id)
+        .single();
+
+      if (accountData) {
+        const { error: insertErr } = await supabase.from(tableName).insert({
+          user_id: accountData.user_id,
+          account_id: accountData.app_account_id,
+          symbol: "XAUUSD",
+          direction: data.closed_trade.direction,
+          status: "closed",
+          entry_price: data.closed_trade.open_price,
+          exit_price: data.closed_trade.close_price,
+          lots: data.closed_trade.lots,
+          pnl: data.closed_trade.pnl,
+          pnl_percent: data.closed_trade.pnl / (data.closed_trade.open_price * data.closed_trade.lots),
+          entry_date: data.closed_trade.open_time,
+          exit_date: data.closed_trade.close_time,
+          stop_loss_price: 0,
+          take_profit_price: 0,
+          notes: `Ticket: ${data.closed_trade.ticket}, MAE: ${data.closed_trade.max_adverse_excursion}, Platform: ${data.platform}`,
+        });
+
+        if (insertErr) {
+          logError("WebhookMT", {
+            component: "api/webhooks/mt",
+            message: `Trade insert warning: ${insertErr.message}`,
+          });
+        } else {
+          // For live trades: update current_equity in bot_signal_engine_state
+          if (!isPaperMode) {
+            const today = new Date().toISOString().split("T")[0];
+            try {
+              await supabase
+                .from("bot_signal_engine_state")
+                .update({ current_equity: data.equity })
+                .eq("bot_instance_id", data.bot_instance_id)
+                .eq("session_date", today);
+            } catch (err) {
+              logError("WebhookMT", {
+                component: "api/webhooks/mt",
+                message: `Equity update warning: ${err instanceof Error ? err.message : String(err)}`,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // ── 8. Response with contract guard ────────────────────────────────────
+    const responsePayload = {
+      received: true,
+      is_paper: isPaperMode,
+    };
+
+    const contractResult = enforceResponseContract(responseSchema, responsePayload);
+    if (!contractResult.ok) {
+      logError("WebhookMT", {
+        component: "api/webhooks/mt",
+        message: "Response contract violation",
+        error: JSON.stringify(contractResult.errors),
+      });
+    }
+
+    // ── 9. Audit log ────────────────────────────────────────────────────────
+    logAuditFromRequest(
+      {
+        userId: "mt-ea-system",
+        action: "webhook",
+        resourceType: "bot_signal_engine_state",
+        status: "success",
+        changes: {
+          platform: data.platform,
+          hasClosedTrade: !!data.closed_trade,
+          isPaperMode,
+        },
+      },
+      request
+    ).catch(() => undefined);
+
+    return NextResponse.json(responsePayload, { status: 200 });
+  } catch (error) {
+    logError("WebhookMT", {
+      component: "api/webhooks/mt",
+      action: "POST",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

@@ -68,19 +68,19 @@ interface VelocitySignal {
 // SP#5 Regime Detector
 interface RegimeState {
   regime: "CALM" | "TRENDING" | "VOLATILE" | "CRISIS";
-  volatilityPct: number;
+  volatilityPct: number | null;
   trend: string;
-  trendStrength: number;
-  agentMultiplier: number;
-  consistencyScore: number;
+  trendStrength: number | null;
+  agentMultiplier: number | null;
+  consistencyScore: number | null;
   computedAt: number;
 }
 
 // SP#3 Adaptive Kelly
 interface AdaptiveState {
-  baseMinEdge: number;
-  currentMinEdge: number;
-  multiplier: number;
+  baseMinEdge: number | null;
+  currentMinEdge: number | null;
+  multiplier: number | null;
   winRateRecent: number | null;
   samplesUsed: number;
   recentLosses: number;
@@ -91,7 +91,7 @@ interface AdaptiveState {
 // SP#6 Cross-Market
 interface AssetMomentum {
   symbol: string;
-  velocity5m: number;
+  velocity5m: number | null;
   direction: "UP" | "DOWN" | "FLAT";
   isAccelerating: boolean;
   samplesUsed: number;
@@ -104,7 +104,7 @@ interface CrossMarketSignal {
   agreementCount: number;
   strength: "STRONG" | "MODERATE" | "WEAK" | "DIVERGING";
   allAccelerating: boolean;
-  edgeMultiplier: number;
+  edgeMultiplier: number | null;
   computedAt: number;
 }
 
@@ -186,9 +186,9 @@ interface Trade {
   market_slug: string;
   outcome: string;
   side: string;
-  price: number;
-  size_usd: number;
-  fee_usd: number;
+  price: number | null;
+  size_usd: number | null;
+  fee_usd: number | null;
   pnl_usd: number | null;
   status: string;
   executed_at: string;
@@ -633,7 +633,7 @@ const REGIME_CONFIG: Record<string, { color: string; bg: string; label: string; 
 
 function RegimePanel({ regime }: { regime: RegimeState }) {
   const cfg = REGIME_CONFIG[regime.regime] ?? REGIME_CONFIG.CALM;
-  const volPct = regime.volatilityPct.toFixed(1);
+  const volPct = fmt(regime.volatilityPct, 1);
   return (
     <div className="bg-[#0c1220] border border-[#1e2a3a] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -653,7 +653,7 @@ function RegimePanel({ regime }: { regime: RegimeState }) {
         <div className="text-right space-y-1">
           <div className="text-[10px] text-[#475569]">Annualized Vol</div>
           <div className="text-lg font-mono font-bold" style={{ color: cfg.color }}>{volPct}%</div>
-          <div className="text-[10px] text-[#475569]">Kelly ×{regime.agentMultiplier.toFixed(2)}</div>
+          <div className="text-[10px] text-[#475569]">Kelly ×{fmt(regime.agentMultiplier, 2)}</div>
         </div>
       </div>
 
@@ -675,7 +675,7 @@ function RegimePanel({ regime }: { regime: RegimeState }) {
           <div
             className="absolute top-0 w-0.5 h-full rounded-full"
             style={{
-              left: `${Math.min(98, (regime.volatilityPct / 140) * 100)}%`,
+              left: `${Math.min(98, ((regime.volatilityPct ?? 0) / 140) * 100)}%`,
               backgroundColor: cfg.color,
               boxShadow: `0 0 6px ${cfg.color}`,
             }}
@@ -689,10 +689,10 @@ function RegimePanel({ regime }: { regime: RegimeState }) {
 // ─── SP#3 Adaptive Kelly Panel ────────────────────────────────────────────────
 
 function AdaptiveKellyPanel({ state }: { state: AdaptiveState }) {
-  const edgePct = (state.currentMinEdge * 100).toFixed(2);
-  const basePct = (state.baseMinEdge * 100).toFixed(2);
-  const winRateDisplay = state.winRateRecent !== null ? (state.winRateRecent * 100).toFixed(1) : null;
-  const mult = state.multiplier;
+  const edgePct = fmt(state.currentMinEdge != null ? state.currentMinEdge * 100 : null, 2);
+  const basePct = fmt(state.baseMinEdge != null ? state.baseMinEdge * 100 : null, 2);
+  const winRateDisplay = state.winRateRecent !== null ? fmt(state.winRateRecent != null ? state.winRateRecent * 100 : null, 1) : null;
+  const mult = state.multiplier ?? 1;
   const multColor = mult >= 1.0 ? "#34d399" : mult >= 0.7 ? "#fbbf24" : "#f87171";
 
   return (
@@ -767,7 +767,7 @@ function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
         <div className="text-right">
           <div className="text-[10px] text-[#475569] mb-0.5">edge ×</div>
           <div className="text-xl font-mono font-bold" style={{ color: cfg.color }}>
-            {signal.edgeMultiplier.toFixed(2)}
+            {fmt(signal.edgeMultiplier, 2)}
           </div>
         </div>
       </div>
@@ -780,7 +780,7 @@ function CrossMarketPanel({ signal }: { signal: CrossMarketSignal }) {
             <div key={d.symbol} className="bg-[#0d1424] rounded px-2 py-1.5 text-center">
               <div className="text-[10px] font-mono font-bold" style={{ color: c.text }}>{d.symbol}</div>
               <div className="text-[9px] font-mono mt-0.5" style={{ color: dirColor }}>
-                {d.direction === "UP" ? "↑" : d.direction === "DOWN" ? "↓" : "→"} {Math.abs(d.velocity5m).toFixed(0)}/h
+                {d.direction === "UP" ? "↑" : d.direction === "DOWN" ? "↓" : "→"} {d.velocity5m != null ? Math.abs(d.velocity5m).toFixed(0) : "—"}/h
               </div>
             </div>
           );
@@ -1332,12 +1332,12 @@ function TradeHistorySection({ trades, tradesTotal }: { trades: Trade[]; tradesT
                       <span className={t.side === "BUY" ? "text-green-400" : "text-red-400"}>{t.side}</span>
                       {" "}<span className="text-zinc-500">{t.outcome}</span>
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono">{t.price.toFixed(4)}</td>
-                    <td className="py-2 pr-3 text-right font-mono">${t.size_usd.toFixed(2)}</td>
+                    <td className="py-2 pr-3 text-right font-mono">{fmt(t.price, 4)}</td>
+                    <td className="py-2 pr-3 text-right font-mono">{t.size_usd != null ? `$${t.size_usd.toFixed(2)}` : "—"}</td>
                     <td className={`py-2 pr-3 text-right font-mono font-bold ${isWin ? "text-green-400" : isLoss ? "text-red-400" : "text-zinc-400"}`}>
                       {t.pnl_usd !== null ? `${t.pnl_usd >= 0 ? "+" : ""}${t.pnl_usd.toFixed(2)}$` : "—"}
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono text-yellow-600">-${t.fee_usd.toFixed(3)}</td>
+                    <td className="py-2 pr-3 text-right font-mono text-yellow-600">{t.fee_usd != null ? `-$${t.fee_usd.toFixed(3)}` : "—"}</td>
                     <td className="py-2 text-right">
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                         t.status === "FILLED" ? "bg-green-900/50 text-green-400"
