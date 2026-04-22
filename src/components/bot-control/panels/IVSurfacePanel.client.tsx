@@ -26,14 +26,10 @@ const EXPIRY_LABELS = ["1D", "1W", "2W", "1M", "3M", "6M", "1Y"];
 
 export function IVSurfacePanel({ botInstanceId }: IVSurfacePanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rendererRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sceneRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cameraRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meshRef = useRef<any>(null);
+  const rendererRef = useRef<{ dispose(): void; domElement: HTMLElement } | null>(null);
+  const sceneRef = useRef<{ add(obj: unknown): void } | null>(null);
+  const cameraRef = useRef<unknown>(null);
+  const meshRef = useRef<unknown>(null);
   const animFrameRef = useRef<number>(0);
   const [autoRotate, setAutoRotate] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -95,7 +91,6 @@ export function IVSurfacePanel({ botInstanceId }: IVSurfacePanelProps) {
     (async () => {
       const THREE = await import("three");
       const { OrbitControls } = await import(
-        // @ts-expect-error dynamic import path
         "three/examples/jsm/controls/OrbitControls.js"
       );
 
@@ -233,8 +228,7 @@ export function IVSurfacePanel({ botInstanceId }: IVSurfacePanelProps) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [surfaceData]);
+  }, [surfaceData]); // three.js scene is fully managed imperatively
 
   // Sync autoRotate to controls
   useEffect(() => {
@@ -254,8 +248,7 @@ export function IVSurfacePanel({ botInstanceId }: IVSurfacePanelProps) {
       }
       threeRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // mount-only: fetchLatest is stable, cleanup tears down three.js
 
   return (
     <div className="rounded-xl border border-white/10 bg-[#0a0a0f] overflow-hidden">

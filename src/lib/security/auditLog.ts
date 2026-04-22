@@ -17,7 +17,8 @@ export type AuditAction =
   | "device_trust"
   | "api_call"
   | "webhook"
-  | "report_generate";
+  | "report_generate"
+  | "bot_signal_generated";
 
 export type AuditResourceType =
   | "trade"
@@ -31,9 +32,10 @@ export type AuditResourceType =
   | "goal"
   | "progress"
   | "export"
-  | "webhook";
+  | "webhook"
+  | "bot_signal_engine_state";
 
-export type AuditStatus = "success" | "failure" | "partial";
+export type AuditStatus = "success" | "failure" | "partial" | "skipped";
 
 export interface AuditLogEntry {
   userId: string;
