@@ -66,6 +66,11 @@ async function main(): Promise<void> {
   // 4. Load existing positions
   await positionTracker.loadFromDb();
 
+  // Startup balance check — verifies HMAC auth and account funding
+  const balance = await orderManager.fetchBalance();
+  console.log(`[main] CLOB balance: ${balance !== null ? `$${balance.toFixed(4)} USDC` : 'null (dry-run or auth failed)'}`);
+
+
   // 5. Start feeds
   binanceFeed.start();
   console.log('[main] Binance WS feed started');

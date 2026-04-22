@@ -8,6 +8,8 @@ import { PushNotificationButton } from "@/components/push/PushNotificationButton
 import { createClient } from "@/lib/supabase/browser";
 import { isOffline, getBotControlOfflineData, saveBotControlSnapshot } from "@/lib/offline/snapshot";
 import { BotMode, getBotProfileConfig } from "@/components/bot-control/profileConfig";
+import { IVSurfacePanel } from "@/components/bot-control/panels/IVSurfacePanel.client";
+import { EngineDevToolsPanel } from "@/components/bot-control/panels/EngineDevToolsPanel.client";
 
 interface Bot {
   id: string;
@@ -28,6 +30,7 @@ interface AppAccount {
 }
 
 interface BotInstance {
+  id: string;
   bot_account_id: string;
   last_heartbeat_at: string | null;
 }
@@ -110,6 +113,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
   const [accounts, setAccounts] = useState<BotAccount[]>([]);
   const [appAccounts, setAppAccounts] = useState<AppAccount[]>([]);
   const [instances, setInstances] = useState<BotInstance[]>([]);
+  const [activeTab, setActiveTab] = useState<"controls" | "iv-surface" | "engine">("controls");
   const [telemetry, setTelemetry] = useState<BotTelemetry[]>([]);
   const [commands, setCommands] = useState<BotCommand[]>([]);
   const [commandStatus, setCommandStatus] = useState<BotCommandStatus[]>([]);
@@ -268,7 +272,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
           .eq("bot_id", botId)
           .order("created_at", { ascending: true }),
         supabase.from("accounts").select("id, name").order("created_at", { ascending: true }),
-        supabase.from("bot_instances").select("bot_account_id, last_heartbeat_at"),
+        supabase.from("bot_instances").select("id, bot_account_id, last_heartbeat_at"),
         supabase.from("bot_telemetry").select("bot_account_id, equity, balance, positions_total, positions_buy, positions_sell, basket_r, tier, last_signal_text, last_signal_ts, last_heartbeat_ts"),
         supabase
           .from("bot_commands")
@@ -734,6 +738,32 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
             </div>
           )}
 
+          {/* Tab bar */}
+          <div className="flex gap-1 p-1 rounded-xl border border-white/10 bg-white/[0.03] w-fit">
+            {(["controls", "iv-surface", "engine"] as const).map((tab) => {
+              const labels: Record<string, string> = {
+                controls: "Controls",
+                "iv-surface": "IV Surface",
+                engine: "Engine DevTools",
+              };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === tab
+                      ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {labels[tab]}
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTab === "controls" && (
+          <>
           <div className="rounded-3xl border border-slate-700/70 bg-slate-900/70 p-6 shadow-[0_18px_40px_rgba(2,4,10,0.45)] backdrop-blur">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
@@ -1494,6 +1524,28 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
               })}
             </div>
           </div>
+          </>
+          )}
+
+          {activeTab === "iv-surface" && (
+            <IVSurfacePanel
+              botInstanceId={
+                instances.find((i) => i.bot_account_id === selectedBotAccountId)?.id ??
+                instances[0]?.id ??
+                ""
+              }
+            />
+          )}
+
+          {activeTab === "engine" && (
+            <EngineDevToolsPanel
+              botInstanceId={
+                instances.find((i) => i.bot_account_id === selectedBotAccountId)?.id ??
+                instances[0]?.id ??
+                ""
+              }
+            />
+          )}
         </div>
       </div>
 

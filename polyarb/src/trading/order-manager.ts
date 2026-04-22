@@ -10,18 +10,21 @@
 
 import { ethers } from 'ethers';
 import { getSupabase } from '../supabase.js';
-import { ClobSigner, ClobL2Signer, Side, type SignedOrder } from './clob-signer.js';
+import { ClobSigner, ClobProxySigner, Side, type SignedOrder } from './clob-signer.js';
 import { buildL2AuthHeaders } from './clob-auth.js';
 import { clobFetch } from '../lib/clob-fetch.js';
 
 export interface OrderParams {
   conditionId: string;
   yesTokenId: string;    // ERC1155 token ID for the YES outcome
+  noTokenId: string;     // ERC1155 token ID for the NO outcome (from gamma API, NOT yesToken XOR 1)
   marketSlug: string;
   outcome: 'YES' | 'NO';
   side: 'BUY' | 'SELL';
   price: number;          // Limit price (0–1)
   sizeUsd: number;        // Size in USD
+  feeRateBps?: number;    // Maker fee rate required by this market (default 1000 for btc-updown-5m)
+  negRisk?: boolean;      // True for NEG_RISK markets (btc-updown-5m) — different EIP-712 contract
   agentId: string;
   userId: string;
 }
@@ -42,12 +45,13 @@ const CLOB_BASE = 'https://clob.polymarket.com';
 const FEE_RATE_BPS = 156; // Polymarket standard fee (Feb 2026)
 
 export class OrderManager {
-  private signer:   ClobSigner | ClobL2Signer | null;
-  private apiKey:       string;
-  private apiSecret:    string;
+  private signer:        ClobSigner | ClobProxySigner | null;
+  private apiKey:        string;
+  private apiSecret:     string;
   private apiPassphrase: string;
-  private walletAddress: string;
-  private dryRun:       boolean;
+  private walletAddress = '';  // POLY_ADDRESS used in HMAC auth headers
+  private signerAddress: string;  // address that signs EIP-712 orders (= API key owner)
+  private dryRun:        boolean;
 
   constructor(
     apiKey:       string,
@@ -60,29 +64,40 @@ export class OrderManager {
     this.apiKey        = apiKey;
     this.apiSecret     = apiSecret;
     this.apiPassphrase = apiPassphrase;
-    this.walletAddress = walletAddress ?? '';
     this.dryRun        = dryRun;
 
     if (dryRun) {
-      this.signer = null;
+      this.signer        = null;
+      this.signerAddress = '';
+      this.walletAddress = walletAddress ?? '';
       console.log('[order-manager] DRY_RUN mode — orders will be simulated');
-    } else if (privateKey) {
-      const derivedAddress = new ethers.Wallet(privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`).address;
-      const makerAddress   = walletAddress ?? derivedAddress;
-
-      if (makerAddress.toLowerCase() !== derivedAddress.toLowerCase()) {
-        // POLY_PROXY: private key is the MetaMask signer; maker is the Polymarket proxy wallet
-        this.signer = new ClobL2Signer(makerAddress, privateKey);
-        console.log(`[order-manager] POLY_PROXY signer ready — maker: ${makerAddress} signer: ${derivedAddress}`);
-      } else {
-        // EOA: private key owns the maker address directly
-        this.signer = new ClobSigner(privateKey);
-        console.log(`[order-manager] EOA signer ready: ${derivedAddress}`);
-      }
-    } else {
-      this.signer = null;
-      console.warn('[order-manager] No signer available — set POLYARB_WALLET_PRIVATE_KEY');
+      return;
     }
+
+    // POLY_ADDRESS = L1 wallet address (api_key owner) — used in HMAC auth headers.
+    // api_secret is ONLY for HMAC; EIP-712 orders are signed with the L1 private key.
+    const l1PK      = privateKey ? (privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`) : null;
+    const l1Address = l1PK ? new ethers.Wallet(l1PK).address : (walletAddress ?? '');
+    this.walletAddress = l1Address;  // POLY_ADDRESS for HMAC
+
+    if (l1PK) {
+      const makerAddress = walletAddress ?? l1Address;
+      if (walletAddress && walletAddress.toLowerCase() !== l1Address.toLowerCase()) {
+        this.signer        = new ClobProxySigner(l1PK, makerAddress);
+        this.signerAddress = l1Address;
+        this.walletAddress = l1Address;
+        console.log(`[order-manager] POLY_PROXY signer — maker: ${makerAddress} signer: ${l1Address}`);
+      } else {
+        this.signer        = new ClobSigner(l1PK);
+        this.signerAddress = l1Address;
+        console.log(`[order-manager] EOA signer (L1): ${l1Address}`);
+      }
+      return;
+    }
+
+    this.signer        = null;
+    this.signerAddress = '';
+    console.warn('[order-manager] No signer — set POLYARB_WALLET_PRIVATE_KEY');
   }
 
   /**
@@ -164,27 +179,39 @@ export class OrderManager {
     const startMs = Date.now();
 
     try {
-      // Select the correct token ID: YES or NO
-      const tokenId = params.outcome === 'YES'
-        ? params.yesTokenId
-        : this.deriveNoTokenId(params.yesTokenId);
+      // Select the correct token ID: YES or NO (both come directly from gamma API)
+      const tokenId = params.outcome === 'YES' ? params.yesTokenId : params.noTokenId;
 
-      // Sign the order
+      // Round price to 2 decimal places — Polymarket requires cent-level precision
+      const price = Math.round(params.price * 100) / 100;
+
+      // btc-updown-5m markets require feeRateBps=1000 in the EIP-712 struct.
       const signed: SignedOrder = await this.signer!.signOrder({
         tokenId,
         side:       params.side === 'BUY' ? Side.BUY : Side.SELL,
-        price:      params.price,
+        price,
         sizeUsd:    params.sizeUsd,
-        feeRateBps: FEE_RATE_BPS,
+        feeRateBps: params.feeRateBps ?? 1000,
+        negRisk:    params.negRisk ?? false,
       });
 
-      // Submit to CLOB — requires HMAC-signed L2 auth headers
-      const body = JSON.stringify(signed);
+      // Submit to CLOB — official @polymarket/clob-client format:
+      // { deferExec, order: { salt: INT, side: "BUY"|"SELL", ... }, owner, orderType }
+      const body = JSON.stringify({
+        deferExec: false,
+        order: {
+          ...signed,
+          salt: Number.parseInt(signed.salt, 10),   // must be integer in JSON
+          side: params.side === 'BUY' ? 'BUY' : 'SELL',  // must be string in JSON
+        },
+        owner:     this.apiKey,  // must equal creds.key (the api_key, not a wallet address)
+        orderType: 'GTC',
+      });
       const authHeaders = buildL2AuthHeaders(
         this.apiKey,
         this.apiSecret,
         this.apiPassphrase,
-        this.walletAddress,
+        this.walletAddress,  // POLY_ADDRESS = L1 signer wallet
         'POST',
         '/order',
         body,
@@ -196,7 +223,7 @@ export class OrderManager {
           ...authHeaders,
         },
         body,
-        signal: AbortSignal.timeout(5_000),
+        signal: AbortSignal.timeout(12_000),
       });
 
       const executionLatencyMs = Date.now() - startMs;
@@ -300,26 +327,11 @@ export class OrderManager {
       const res = await clobFetch(`${CLOB_BASE}${path}`, {
         method: 'DELETE',
         headers: authHeaders,
-        signal: AbortSignal.timeout(5_000),
+        signal: AbortSignal.timeout(12_000),
       });
       return res.ok;
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * Derive the NO token ID from the YES token ID.
-   * On Polymarket binary markets, NO token ID = YES token ID XOR 1
-   * (last bit flipped in the ERC1155 token ID space).
-   * If this heuristic fails, the order will be rejected by the CLOB.
-   */
-  private deriveNoTokenId(yesTokenId: string): string {
-    try {
-      const n = BigInt(yesTokenId);
-      return (n ^ 1n).toString();
-    } catch {
-      return yesTokenId;
     }
   }
 
@@ -330,16 +342,22 @@ export class OrderManager {
   async fetchBalance(): Promise<number | null> {
     if (this.dryRun || !this.apiKey || !this.walletAddress) return null;
     try {
-      const path = '/data/balance';
+      const path = '/balance-allowance';
+      const qs   = '?asset_type=COLLATERAL&signature_type=0';
       const headers = buildL2AuthHeaders(
         this.apiKey, this.apiSecret, this.apiPassphrase,
         this.walletAddress, 'GET', path,
       );
-      const res = await clobFetch(`${CLOB_BASE}${path}`, { headers: headers as Record<string, string> });
-      if (!res.ok) return null;
-      const json = await res.json() as { balance?: string; USDC?: string };
-      const raw = json.balance ?? json.USDC;
-      return raw ? parseFloat(raw) : null;
+      const res = await clobFetch(`${CLOB_BASE}${path}${qs}`, { headers: headers as Record<string, string> });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[order-manager] balance HTTP ${res.status}: ${errText.slice(0, 200)}`);
+        return null;
+      }
+      const json = await res.json() as { balance?: string; allowance?: string };
+      console.log(`[order-manager] balance raw: ${JSON.stringify(json)}`);
+      const raw = json.balance;
+      return raw ? parseFloat(raw) / 1e6 : null;  // CLOB balance is in micro-USDC (1e6)
     } catch {
       return null;
     }

@@ -39,8 +39,11 @@ export function buildL2AuthHeaders(
   const pathOnly  = path.split('?')[0];
   const message   = `${timestamp}${method}${pathOnly}${body}`;
 
-  const secretBytes = Buffer.from(apiSecret, 'base64');
-  const hmac        = crypto.createHmac('sha256', secretBytes);
+  // Convert base64url → base64 before decode (official clob-client does the same).
+  // api_secret may contain '-' and '_' (base64url chars) — normalize to standard base64.
+  const secretBase64 = apiSecret.replace(/-/g, '+').replace(/_/g, '/');
+  const secretBytes  = Buffer.from(secretBase64, 'base64');
+  const hmac         = crypto.createHmac('sha256', secretBytes);
   hmac.update(message);
   const signature   = hmac.digest('base64')
     .replace(/\+/g, '-')

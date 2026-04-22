@@ -81,6 +81,8 @@ interface LoopMetrics {
   lastCrossMarket: CrossMarketSignal | null;
   /** Latest sentiment pulses */
   lastSentimentPulses: SentimentPulse[];
+  /** Per-market timestamp of last order attempt (success or fail) — proxy cooldown */
+  lastOrderAttemptAt: Map<string, number>;
 }
 
 export function createLoopMetrics(startingEquity: number): LoopMetrics {
@@ -100,6 +102,7 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
     lastRegime: null,
     lastCrossMarket: null,
     lastSentimentPulses: [],
+    lastOrderAttemptAt: new Map(),
   };
 }
 
@@ -209,6 +212,11 @@ async function processMarket(
   const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse } = deps;
   const { params } = config;
 
+  // POLYARB_MARKET_SLUG_PREFIX: skip any market whose slug doesn't start with the prefix.
+  // Mirrors the fetch filter in polymarket-ws.ts — belt-and-suspenders guard.
+  const slugPrefix = process.env.POLYARB_MARKET_SLUG_PREFIX ?? 'btc-updown-5m-';
+  if (!orderbook.marketSlug.startsWith(slugPrefix)) return;
+
   const hasOpenPosition = positionTracker.open.some(p => p.conditionId === orderbook.conditionId);
   if (hasOpenPosition) return;
 
@@ -316,16 +324,23 @@ async function processMarket(
 
   // risk/reward gate removed — super-aggressive mode
 
-  // ── 8. Execute order ──
+  // ── 8. Execute order — 30s cooldown per market to avoid proxy hammering ──
+  const ORDER_COOLDOWN_MS = 30_000;
+  const lastAttempt = metrics.lastOrderAttemptAt.get(orderbook.conditionId) ?? 0;
+  if (Date.now() - lastAttempt < ORDER_COOLDOWN_MS) return;
+  metrics.lastOrderAttemptAt.set(orderbook.conditionId, Date.now());
+
   const market2 = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
   const result = await orderManager.placeOrder({
     conditionId: orderbook.conditionId,
     yesTokenId: market2?.yesTokenId ?? orderbook.conditionId,
+    noTokenId: market2?.noTokenId ?? '',
     marketSlug: orderbook.marketSlug,
     outcome: buyYes ? 'YES' : 'NO',
     side: 'BUY',
     price: entryPrice,
     sizeUsd: finalSize,
+    negRisk: market2?.negRisk ?? true,
     agentId: config.agentId,
     userId: config.userId,
   });

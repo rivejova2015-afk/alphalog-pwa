@@ -31,6 +31,7 @@ export interface PolymarketMarket {
   active: boolean;
   yesTokenId: string;
   noTokenId: string;
+  negRisk: boolean;
 }
 
 import { clobFetchDirect } from '../lib/clob-fetch.js';
@@ -95,93 +96,87 @@ export class PolymarketFeed {
   }
 
   async fetchCryptoMarkets(): Promise<PolymarketMarket[]> {
+    // POLYARB_MARKET_SLUG_PREFIX controls which event slugs to track.
+    // Default: "btc-updown-5m-" — only 5-minute BTC Up/Down markets.
+    // btc-updown-5m markets are events in the gamma events API, not the markets API.
+    const slugPrefix = process.env.POLYARB_MARKET_SLUG_PREFIX ?? 'btc-updown-5m-';
+
     try {
-      // Fetch active markets — gamma API doesn't support reliable sort params,
-      // so we fetch a large batch and sort client-side by endDate
       const res = await fetch(
-        `${GAMMA_BASE}/markets?active=true&closed=false&limit=1000`,
+        `${GAMMA_BASE}/events?active=true&closed=false&limit=500&tag_slug=bitcoin`,
         { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(15_000) }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const raw = await res.json() as Array<{
-        conditionId?: string;
-        question?: string;
+        slug?: string;
+        title?: string;
         endDate?: string;
         active?: boolean;
-        slug?: string;
-        outcomes?: string[];
-        clobTokenIds?: string;
+        closed?: boolean;
+        markets?: Array<{
+          slug?: string;
+          conditionId?: string;
+          clobTokenIds?: string;
+          active?: boolean;
+          closed?: boolean;
+          negRisk?: boolean;
+        }>;
       }>;
 
       const data = Array.isArray(raw) ? raw : [];
+      const now = Date.now();
       const cryptoMarkets: PolymarketMarket[] = [];
 
-      for (const m of data) {
-        const q = (m.question ?? '').toLowerCase();
+      for (const event of data) {
+        const eventSlug = event.slug ?? '';
+        if (!eventSlug.startsWith(slugPrefix)) continue;
+        if (event.closed) continue;
+        if (!event.markets || event.markets.length === 0) continue;
 
-        // Word-boundary regex — prevents false positives like:
-        // "Hegseth" matching \beth\b, "Solanke" matching \bsol\b,
-        // "Netherlands" matching \beth\b
-        const isCrypto =
-          /\bbtc\b/.test(q) || /\bbitcoin\b/.test(q) ||
-          /\beth\b/.test(q) || /\bethereum\b/.test(q) ||
-          /\bsol\b/.test(q) || /\bsolana\b/.test(q) ||
-          /\bdoge\b/.test(q) || /\bdogecoin\b/.test(q) ||
-          /\bxrp\b/.test(q) || /\bripple\b/.test(q) ||
-          /\bada\b/.test(q) || /\bcardano\b/.test(q) ||
-          /\bavax\b/.test(q) || /\bavalanche\b/.test(q) ||
-          /\bmatic\b/.test(q) || /\bpolygon\b/.test(q) ||
-          /\blink\b/.test(q) || /\bchainlink\b/.test(q) ||
-          /\bbnb\b/.test(q) || /\bshib\b/.test(q) ||
-          /\bcrypto\b/.test(q) || /\bcoinbase\b/.test(q) ||
-          /\bbinance\b/.test(q) || /\bstablecoin\b/.test(q) ||
-          /\bdefi\b/.test(q) || /\bnft\b/.test(q) ||
-          /\baltcoin\b/.test(q) || /\bblockchain\b/.test(q);
+        // For btc-updown-5m-<timestamp> slugs, use the slug timestamp as expiry.
+        // gamma API's event.endDate is the series end (far future), not the window close.
+        const slugTs = parseInt(eventSlug.split('-').pop() ?? '0', 10);
+        const endMs  = slugTs > 0 ? slugTs * 1000 : new Date(event.endDate ?? 0).getTime();
+        if (endMs <= now + 60_000) continue; // skip if expires in <60s or already past
 
-        if (!isCrypto) continue;
+        const m = event.markets[0];
+        if (!m?.conditionId) continue;
 
-        let outcomes: string[] = [];
         let tokenIds: string[] = [];
         try {
-          outcomes = typeof m.outcomes === 'string' ? JSON.parse(m.outcomes) as string[] : (m.outcomes ?? []);
-          tokenIds = typeof m.clobTokenIds === 'string' ? JSON.parse(m.clobTokenIds) as string[] : [];
+          tokenIds = typeof m.clobTokenIds === 'string'
+            ? JSON.parse(m.clobTokenIds) as string[]
+            : (m.clobTokenIds as unknown as string[] ?? []);
         } catch { continue; }
 
-        if (outcomes.length !== 2) continue;
-
-        const yesIdx = outcomes.findIndex(o => o.toLowerCase() === 'yes');
-        const noIdx  = outcomes.findIndex(o => o.toLowerCase() === 'no');
-        const yesTokenId = tokenIds[yesIdx >= 0 ? yesIdx : 0] ?? '';
-        const noTokenId  = tokenIds[noIdx  >= 0 ? noIdx  : 1] ?? '';
-
-        if (!yesTokenId || !m.conditionId) continue;
+        if (tokenIds.length < 2) continue;
 
         cryptoMarkets.push({
-          slug: m.slug ?? '',
+          slug:        eventSlug,
           conditionId: m.conditionId,
-          question: m.question ?? '',
-          endDate: m.endDate ?? '',
-          active: m.active ?? true,
-          yesTokenId,
-          noTokenId,
+          question:    event.title ?? eventSlug,
+          endDate:     event.endDate ?? '',
+          active:      event.active ?? true,
+          yesTokenId:  tokenIds[0],  // "Up" outcome
+          noTokenId:   tokenIds[1],  // "Down" outcome
+          negRisk:     m.negRisk === true,  // read from gamma API (NOT always negRisk)
         });
       }
 
-      // Sort by expiry: soonest first (5min > 15min > 1h > 4h > daily > weekly)
-      cryptoMarkets.sort((a, b) =>
-        new Date(a.endDate).getTime() - new Date(b.endDate).getTime()
-      );
+      // Sort by slug timestamp (= actual window close), soonest first.
+      const slugTs = (slug: string) => parseInt(slug.split('-').pop() ?? '0', 10) * 1000;
+      cryptoMarkets.sort((a, b) => slugTs(a.slug) - slugTs(b.slug));
 
-      // Cap at 60 markets — enough variety, avoids polling overload
-      const selected = cryptoMarkets.slice(0, 60);
+      // Cap at 20 — 5min markets refresh constantly, no need for large batch
+      const selected = cryptoMarkets.slice(0, 20);
 
       for (const market of selected) {
         this.markets.set(market.conditionId, market);
         this.emptyStreak.delete(market.conditionId);
       }
 
-      console.log(`[polymarket-ws] Found ${cryptoMarkets.length} crypto markets → tracking top ${selected.length} by soonest expiry`);
+      console.log(`[polymarket-ws] Found ${cryptoMarkets.length} ${slugPrefix} markets → tracking ${selected.length}`);
       return selected;
     } catch (err) {
       console.error('[polymarket-ws] Market fetch error:', err);
@@ -231,8 +226,12 @@ export class PolymarketFeed {
         asks?: Array<{ price: string; size: string }>;
       };
 
-      const bestBid = book.bids?.[0];
-      const bestAsk = book.asks?.[0];
+      // Polymarket CLOB /book returns bids sorted ASCENDING (worst=lowest first)
+      // and asks sorted DESCENDING (worst=highest first). Sort to get true best.
+      const sortedBids = (book.bids ?? []).sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+      const sortedAsks = (book.asks ?? []).sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+      const bestBid = sortedBids[0];
+      const bestAsk = sortedAsks[0];
 
       if (!bestBid || !bestAsk) {
         this.emptyStreak.set(conditionId, (this.emptyStreak.get(conditionId) ?? 0) + 1);
@@ -244,11 +243,10 @@ export class PolymarketFeed {
       const bidSize  = parseFloat(bestBid.size);
       const askSize  = parseFloat(bestAsk.size);
 
-      // Liquidity filter: require at least $5 on each side and spread < 30%
-      // Markets below this have no real arbitrage opportunity
-      const minLiquidityUsd = 5;
+      // Liquidity filter: min 1 share each side and spread < 30%
+      const minSizeShares = 1;
       const spreadPct = (askPrice - bidPrice) / ((bidPrice + askPrice) / 2);
-      if (bidSize < minLiquidityUsd || askSize < minLiquidityUsd || spreadPct > 0.30) {
+      if (bidSize < minSizeShares || askSize < minSizeShares || spreadPct > 0.30) {
         this.emptyStreak.set(conditionId, (this.emptyStreak.get(conditionId) ?? 0) + 1);
         return;
       }
