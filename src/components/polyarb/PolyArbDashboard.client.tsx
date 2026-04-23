@@ -34,8 +34,8 @@ interface Agent {
 
 interface VelocityWindow {
   label: "1m" | "5m" | "15m" | "1h";
-  velocity: number;
-  acceleration: number;
+  velocity: number | null;
+  acceleration: number | null;
   direction: "UP" | "DOWN" | "FLAT";
   samplesUsed: number;
 }
@@ -221,7 +221,8 @@ function fmtUsd(n: number | null | undefined): string {
   return `${prefix}${Math.abs(n).toFixed(2)}`;
 }
 
-function fmtVelocity(v: number): string {
+function fmtVelocity(v: number | null | undefined): string {
+  if (v == null || !isFinite(v)) return "—";
   const abs = Math.abs(v);
   if (abs >= 1000) return `${(v / 1000).toFixed(1)}K/h`;
   return `${v >= 0 ? "+" : ""}${v.toFixed(0)}/h`;
@@ -453,13 +454,14 @@ function VelocityGauges({ windows }: { windows: VelocityWindow[] }) {
   return (
     <div className="grid grid-cols-4 gap-2">
       {windows.map((w) => {
-        const absV = Math.abs(w.velocity);
+        const absV = Math.abs(w.velocity ?? 0);
         const maxV = 2000; // $/h scale
         const barPct = Math.min(100, (absV / maxV) * 100);
         const isUp = w.direction === "UP";
         const isFlat = w.direction === "FLAT";
         const color = isFlat ? "#475569" : isUp ? "#34d399" : "#f87171";
-        const accLabel = w.acceleration > 50 ? "↑↑" : w.acceleration < -50 ? "↓↓" : "";
+        const acc = w.acceleration ?? 0;
+        const accLabel = acc > 50 ? "↑↑" : acc < -50 ? "↓↓" : "";
 
         return (
           <div key={w.label} className="bg-[#0d1424] rounded-lg px-3 py-2.5 flex flex-col gap-1.5">
