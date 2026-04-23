@@ -99,7 +99,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json(normalized);
+    return NextResponse.json(normalized, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+    });
   } catch (error) {
     console.error("[Journal] GET error:", error);
     await recordBugFromRequest(request, {

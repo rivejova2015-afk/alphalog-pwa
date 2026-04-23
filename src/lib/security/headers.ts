@@ -60,23 +60,41 @@ export const SECURITY_HEADERS: Record<string, string> = {
 /**
  * Content Security Policy header
  * Strict policy to prevent XSS and data injection
+ * @param nonce Optional nonce for script-src; if provided, uses nonce-based CSP instead of unsafe-inline
  */
-export function getCSPHeader(): string {
+export function getCSPHeader(nonce?: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://alphalog.io";
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+
+  // Build script-src directive
+  // In nonce mode: use nonce + strict-dynamic. Explicit host allowlist is kept as fallback
+  // for browsers that don't support strict-dynamic (they ignore the nonce and use the host list).
+  const scriptSrc = nonce
+    ? [
+        "'self'",
+        `'nonce-${nonce}'`, // Allow scripts with matching nonce
+        "'strict-dynamic'", // Allow scripts dynamically loaded by nonced scripts
+        // 'unsafe-eval' only in development (React DevTools, HMR)
+        ...(process.env.NODE_ENV !== "production" ? ["'unsafe-eval'"] : []),
+        // Fallback allowlist for browsers without strict-dynamic support
+        "https://cdn.jsdelivr.net",
+        "https://js.hcaptcha.com",
+        "https://newassets.hcaptcha.com",
+      ]
+    : [
+        "'self'",
+        "'unsafe-inline'", // Fallback for static assets without nonce
+        // 'unsafe-eval' only in development (React DevTools, HMR)
+        ...(process.env.NODE_ENV !== "production" ? ["'unsafe-eval'"] : []),
+        "https://cdn.jsdelivr.net",
+        "https://js.hcaptcha.com",
+        "https://newassets.hcaptcha.com",
+      ];
 
   // Directives
   const directives = {
     "default-src": ["'self'"],
-    "script-src": [
-      "'self'",
-      "'unsafe-inline'", // Required for Next.js inline scripts
-      // 'unsafe-eval' only in development (React DevTools, HMR)
-      ...(process.env.NODE_ENV !== "production" ? ["'unsafe-eval'"] : []),
-      "https://cdn.jsdelivr.net",
-      "https://js.hcaptcha.com",
-      "https://newassets.hcaptcha.com",
-    ],
+    "script-src": scriptSrc,
     "style-src": [
       "'self'",
       "'unsafe-inline'", // Required for Tailwind
@@ -114,15 +132,17 @@ export function getCSPHeader(): string {
 
 /**
  * Apply security headers to a NextResponse
+ * @param response The NextResponse to update
+ * @param nonce Optional nonce for CSP; if provided, enables nonce-based CSP
  */
-export function applySecurityHeaders(response: NextResponse): NextResponse {
+export function applySecurityHeaders(response: NextResponse, nonce?: string): NextResponse {
   // Apply standard security headers
   Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
 
-  // Apply CSP header
-  response.headers.set("Content-Security-Policy", getCSPHeader());
+  // Apply CSP header (with optional nonce)
+  response.headers.set("Content-Security-Policy", getCSPHeader(nonce));
 
   // Remove powered-by header
   response.headers.delete("X-Powered-By");

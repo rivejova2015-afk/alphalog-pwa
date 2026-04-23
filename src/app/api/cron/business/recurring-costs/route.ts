@@ -23,6 +23,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { safeCompareTokens } from '@/lib/security/timing';
 
 function getMonthStr(): string {
   const now = new Date();
@@ -52,11 +53,11 @@ interface GenerationResult {
 
 export async function GET(request: NextRequest) {
   try {
-    // 1) Verify CRON_SECRET header
+    // 1) Verify CRON_SECRET header with timing-safe comparison
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret || !expectedSecret || cronSecret !== expectedSecret) {
+    if (!safeCompareTokens(cronSecret, expectedSecret)) {
       return NextResponse.json(
         { error: 'Unauthorized: Invalid or missing cron secret' },
         { status: 401 }

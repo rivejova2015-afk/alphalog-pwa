@@ -167,6 +167,24 @@ export const sendEmailResponseSchema = z.object({
  * Shape returned by GET /api/accounts (array of mapped account rows)
  * The `category` field is a flattened join of account_categories.
  */
+/**
+ * accountCreateSchema
+ * Validation schema for POST /api/accounts request body
+ * role, operation_state, phase_status are free-text in the DB (no enum constraint)
+ */
+export const accountCreateSchema = z.object({
+  name: z.string().min(1, { message: "name is required" }).max(100, { message: "name max 100 chars" }),
+  category_id: z.string().uuid({ message: "category_id must be a valid UUID" }),
+  account_size: z.number().positive().optional(),
+  current_balance: z.number().optional(),
+  operation_state: z.string().max(100).optional(),
+  phase_status: z.string().max(100).optional(),
+  role: z.string().max(50).optional(),          // free-text: "Demo", "Real", "Propfirm", "Practice", etc.
+  withdrawals_enabled: z.boolean().optional(),
+  currency: z.string().min(3).max(3, { message: "currency must be 3 chars (ISO 4217)" }).optional(),
+  status: z.string().max(50).optional(),         // free-text: "active", "archived", etc.
+});
+
 export const accountResponseSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),

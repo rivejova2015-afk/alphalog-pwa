@@ -32,6 +32,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "mailboxId is required" }, { status: 400 });
     }
 
+    // Verify mailbox ownership before querying messages (defense-in-depth vs IDOR)
+    const { data: mailbox } = await supabase
+      .from("secure_mailboxes")
+      .select("id")
+      .eq("id", mailboxId)
+      .eq("user_id", userData.user.id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (!mailbox) {
+      return NextResponse.json({ error: "Mailbox not found" }, { status: 404 });
+    }
+
     let query = supabase
       .from("secure_messages")
       .select("*")

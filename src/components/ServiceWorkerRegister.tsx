@@ -19,19 +19,23 @@ export default function ServiceWorkerRegister() {
       return;
     }
 
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
     navigator.serviceWorker
       .register("/sw.js")
       .then((reg) => {
         console.log("[SW] Registered successfully");
-
-        // Check for updates periodically
-        setInterval(() => {
+        intervalId = setInterval(() => {
           reg.update();
-        }, 60000); // Every minute
+        }, 60000);
       })
       .catch((err) => {
         console.warn("[SW] Registration failed:", err);
       });
+
+    return () => {
+      if (intervalId !== null) clearInterval(intervalId);
+    };
   }, []);
 
   return null;

@@ -239,8 +239,14 @@ export async function POST(request: NextRequest, { params }: Params) {
           return;
         }
 
+        if (!anthropicResponse.body) {
+          sendEvent(controller, { type: "error", message: "Empty response body from AI service" });
+          controller.close();
+          return;
+        }
+
         // Read the stream and forward chunks
-        const reader = anthropicResponse.body!.getReader();
+        const reader = anthropicResponse.body.getReader();
         const dec = new TextDecoder();
         let fullContent = "";
 

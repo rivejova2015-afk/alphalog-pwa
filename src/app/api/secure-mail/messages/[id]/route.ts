@@ -17,17 +17,16 @@ const safeDecrypt = (value?: string | null) => {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const { id } = params;
 
     const { data: message, error: messageError } = await supabase
       .from("secure_messages")
@@ -39,6 +38,13 @@ export async function GET(
     if (messageError || !message) {
       return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
+
+    // Audit log: record message access (fire-and-forget)
+    supabase.from("secure_message_access_audit").insert({
+      user_id: userData.user.id,
+      message_id: id,
+      event: "read",
+    }).then().catch(() => {});
 
     const { data: attachments, error: attachmentsError } = await supabase
       .from("secure_attachments")

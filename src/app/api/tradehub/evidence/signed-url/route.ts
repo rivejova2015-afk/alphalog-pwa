@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       .select("user_id, file_path")
       .eq("id", evidenceId)
       .eq("user_id", userId)
-      .eq("deleted_at", null)
+      .is("deleted_at", null)
       .single();
 
     if (tradeError && !isMissingTable(tradeError)) {
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       .select("user_id, image_path")
       .eq("id", evidenceId)
       .eq("user_id", userId)
-      .eq("deleted_at", null)
+      .is("deleted_at", null)
       .single();
 
     if (fetchError || !evidence) {

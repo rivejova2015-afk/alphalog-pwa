@@ -189,9 +189,17 @@ export class OutboxManager {
     const endpoint = this.buildEndpoint(entry);
     const method = this.buildMethod(entry.operation);
 
+    const csrfToken = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('al_csrf='))
+      ?.split('=')[1] ?? '';
+
     const response = await fetch(endpoint, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-csrf-token': csrfToken,
+      },
       body: JSON.stringify({
         payload: entry.payload,
         metadata: entry.metadata,

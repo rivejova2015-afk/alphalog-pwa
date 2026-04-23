@@ -18,7 +18,7 @@ export interface BugReportInput {
 }
 
 const MAX_ERROR_MESSAGE = 1000;
-const MAX_STACK = 4000;
+const MAX_STACK = 500; // Reduced from 4000 to prevent information disclosure in stack traces
 
 const safeString = (value: unknown, max: number) => {
   if (!value) return null;

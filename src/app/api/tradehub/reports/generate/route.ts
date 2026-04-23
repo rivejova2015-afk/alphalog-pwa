@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
+import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -51,8 +52,8 @@ export async function POST(request: NextRequest) {
       .eq("user_id", userId)
       .eq("week_start", weekStartStr)
       .eq("week_end", weekEndStr)
-      .eq("deleted_at", null)
-      .single();
+      .is("deleted_at", null)
+      .maybeSingle();
 
     if (existingReport) {
       return NextResponse.json({
@@ -62,6 +63,18 @@ export async function POST(request: NextRequest) {
           content_md: safeDecrypt(existingReport.content_md),
         },
       });
+    }
+
+    // Check AI rate limit (3 requests per hour) — only for new report generation
+    const { allowed, retryAfterSeconds } = await checkAiRateLimit(userId, "ai-tradehub");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "AI rate limit exceeded. Max 3 requests per hour." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSeconds ?? 3600) },
+        }
+      );
     }
 
     // Fetch closed trades for the week
@@ -321,47 +334,4 @@ function generateAlphaBriefMarkdown(
   md += `*Generado automáticamente por AlphaLog | ${new Date().toLocaleString("es-ES", { timeZone: "UTC" })} UTC*`;
 
   return md;
-}
-
-/**
- * GET /api/tradehub/reports
- * List user's reports
- */
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !userData?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: reports, error } = await supabase
-      .from("weekly_reports")
-      .select("*")
-      .eq("user_id", userData.user.id)
-      .eq("deleted_at", null)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching reports:", error);
-      return NextResponse.json(
-        { error: "Failed to fetch reports" },
-        { status: 500 }
-      );
-    }
-
-    const decryptedReports = (reports || []).map((report: any) => ({
-      ...report,
-      content_md: safeDecrypt(report.content_md),
-    }));
-
-    return NextResponse.json(decryptedReports);
-  } catch (err: unknown) {
-    console.error("Error in GET /api/tradehub/reports:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
-  }
 }

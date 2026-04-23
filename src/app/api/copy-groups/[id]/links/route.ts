@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { parent_account_id, child_account_id, copy_multiplier, link_type } = body || {};
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: link, error } = await supabase
       .from("copy_group_links")
       .insert({
-        copy_group_id: params.id,
+        copy_group_id: id,
         parent_account_id,
         child_account_id,
         copy_multiplier: copy_multiplier ?? 1,
@@ -37,13 +38,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Link added",
       eventPayload: { action: "link_added", link_id: link.id },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "link_added",
       link_id: link.id,
     });
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -64,6 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { link_id, copy_multiplier, link_type } = body || {};
 
@@ -79,7 +81,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .from("copy_group_links")
       .update(updates)
       .eq("id", link_id)
-      .eq("copy_group_id", params.id)
+      .eq("copy_group_id", id)
       .select()
       .single();
 
@@ -90,13 +92,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Link updated",
       eventPayload: { action: "link_updated", link_id },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "link_updated",
       link_id,
     });
@@ -108,7 +110,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -117,6 +119,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { link_id } = body || {};
 
@@ -128,7 +131,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       .from("copy_group_links")
       .delete()
       .eq("id", link_id)
-      .eq("copy_group_id", params.id);
+      .eq("copy_group_id", id);
 
     if (error) {
       console.error("Error deleting link:", error);
@@ -137,13 +140,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Link removed",
       eventPayload: { action: "link_removed", link_id },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "link_removed",
       link_id,
     });

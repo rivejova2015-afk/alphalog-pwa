@@ -110,9 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Dispatch alert if needed
     if (severity === "S1" || severity === "S2") {
-      const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
+      const baseUrl = process.env.ALPHALOG_WEB_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
       await fetch(`${baseUrl}/api/ops/bot-slo-alert`, {
         method: "POST",
         headers: {

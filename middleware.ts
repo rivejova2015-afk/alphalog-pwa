@@ -1,9 +1,29 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { proxy } from "./src/proxy";
 import { applySecurityHeaders } from "./src/lib/security/headers";
+import { triggerSecurityAlert } from "./src/lib/security/securityAlert";
+
+// Module-level constant to avoid re-allocation on every request
+const HONEYPOT_PATHS = [
+  "/api/v1/admin",
+  "/api/debug",
+  "/wp-admin",
+  "/wp-login.php",
+  "/admin/config",
+];
 
 export async function middleware(request: NextRequest) {
   const startMs = Date.now();
+  const pathname = request.nextUrl.pathname;
+  const isHoneypot = HONEYPOT_PATHS.some((hp) => pathname === hp || pathname.startsWith(hp + "/"));
+  if (isHoneypot) {
+    const ipHint = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    // Trigger security alert (fire-and-forget)
+    triggerSecurityAlert("honeypot_hit", { ip: ipHint, path: pathname }).catch(() => {});
+    // Return 404 to avoid revealing the honeypot
+    return new NextResponse("Not Found", { status: 404 });
+  }
+
   // Canonical domain redirect (production only)
   try {
     const host = request.headers.get("host") || "";
@@ -24,7 +44,6 @@ export async function middleware(request: NextRequest) {
     // Fail open: do not block requests if redirect logic errors
   }
 
-  const pathname = request.nextUrl.pathname;
   const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/map");
   const isApi = pathname.startsWith("/api");
 
@@ -39,7 +58,6 @@ export async function middleware(request: NextRequest) {
     "/api/push/notify-user",
     "/api/outbound/email/send",
     "/api/treasury/export",
-    "/api/treasury/calendar-events",
   ];
 
   const isPublicApi = isApi && publicApiPrefixes.some((prefix) => pathname.startsWith(prefix));
@@ -49,9 +67,16 @@ export async function middleware(request: NextRequest) {
   const isMutating = ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
   const hasAuthHeader = Boolean(request.headers.get("authorization"));
 
-  if (csrfCookie && isApi && isMutating && !isPublicApi && !hasAuthHeader) {
+  // Always resolve CSRF token: use existing cookie or generate new UUID
+  const csrfToken = csrfCookie || crypto.randomUUID();
+
+  // Always enforce CSRF on API mutations (unless machine-to-machine with auth header)
+  if (isApi && isMutating && !isPublicApi && !hasAuthHeader) {
     const csrfHeader = request.headers.get("x-csrf-token");
-    if (csrfHeader !== csrfCookie) {
+    if (csrfHeader !== csrfToken) {
+      const ipHint = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+      // Trigger security alert (fire-and-forget)
+      triggerSecurityAlert("csrf_failure", { ip: ipHint, path: pathname });
       return NextResponse.json(
         { error: "CSRF token missing or invalid" },
         { status: 403 }
@@ -65,13 +90,17 @@ export async function middleware(request: NextRequest) {
     apiUnauthorized: isApi,
   });
 
+  // Generate nonce for CSP (one per request for XSS protection)
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  response.headers.set("x-nonce", nonce);
+
   if (isApi) {
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
     response.headers.set("x-request-id", requestId);
   }
 
   if (!csrfCookie) {
-    response.cookies.set("al_csrf", crypto.randomUUID(), {
+    response.cookies.set("al_csrf", csrfToken, {
       path: "/",
       sameSite: "lax",
       secure: process.env.VERCEL_ENV === "production",
@@ -87,8 +116,8 @@ export async function middleware(request: NextRequest) {
     console.warn(`[perf] slow request ${request.method} ${request.nextUrl.pathname} took ${latencyMs}ms`);
   }
 
-  // Apply security headers to all responses
-  return applySecurityHeaders(response);
+  // Apply security headers to all responses (with nonce for CSP)
+  return applySecurityHeaders(response, nonce);
 }
 
 // Aplica middleware a todas las rutas excepto assets estáticos

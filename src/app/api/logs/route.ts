@@ -5,15 +5,26 @@ import { decryptText, encryptText } from "@/lib/security/encryption";
 
 const pageSize = 50;
 
+// Validate log type: sanitize to alphanumeric+hyphens, max 50 chars
+// (Supabase parameterizes queries so no SQL injection risk, but we sanitize for safety)
+const sanitizeLogType = (raw: string): string => {
+  if (!raw) return "";
+  const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 50);
+  return cleaned;
+};
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const query = searchParams.get("q") || "";
     const categoryId = searchParams.get("categoryId") || "";
-    const type = searchParams.get("type") || "";
+    const rawType = searchParams.get("type") || "";
     const tagNames = searchParams.get("tagNames") || "";
     const trash = searchParams.get("trash") === "1";
+
+    // Sanitize type to safe chars (DB is free-text, no enum constraint)
+    const type = sanitizeLogType(rawType);
 
     const offset = (page - 1) * pageSize;
 

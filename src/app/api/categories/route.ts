@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", userId)
       .eq("name_lower", trimmedName.toLowerCase())
       .is("deleted_at", null)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       return NextResponse.json(

@@ -7,6 +7,7 @@ import { dedupeNews } from "@/lib/news/dedupe";
 import { scoreImpact } from "@/lib/news/impactScore";
 import { buildReportBase } from "@/lib/reports/buildBase";
 import { reportLog } from "@/lib/logging/reportLogs";
+import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
 
 const allowedAssets: Asset[] = ["XAUUSD"];
 
@@ -56,6 +57,18 @@ export async function POST(request: NextRequest) {
 
     if (userError || !userData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check AI rate limit (3 requests per hour)
+    const { allowed, retryAfterSeconds } = await checkAiRateLimit(userData.user.id, "ai-evidence");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "AI rate limit exceeded. Max 3 requests per hour." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSeconds ?? 3600) },
+        }
+      );
     }
 
     const body = await request.json();

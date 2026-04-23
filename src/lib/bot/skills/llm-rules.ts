@@ -1,3 +1,4 @@
+import "server-only";
 import { decryptText } from "@/lib/security/encryption";
 import type { PaperTrade, TradingRule, LLMExtractionResult } from "./types";
 
@@ -8,14 +9,12 @@ export async function extractTradingRules(
   // Prepare trade summary (last 50 trades, max to avoid token bloat)
   const tradesSample = paperTrades.slice(-50);
 
-  const tradeSummary = await Promise.all(
-    tradesSample.map(async (t) => {
+  const tradeSummary = tradesSample.map((t) => {
       let notesDecrypted = "";
       if (t.notes) {
-        if (t.notes.startsWith("enc:v1:")) {
+        if (t.notes.startsWith("enc:v")) {
           try {
-            const decrypted = await decryptText(t.notes);
-            notesDecrypted = decrypted ?? "";
+            notesDecrypted = decryptText(t.notes) ?? "";
           } catch {
             notesDecrypted = "";
           }
@@ -35,8 +34,7 @@ export async function extractTradingRules(
         session: t.session ?? "CLOSED",
         notes: notesDecrypted,
       };
-    })
-  );
+    });
 
   const currentRulesConditions = currentRules.map((r) => ({
     condition: r.condition,

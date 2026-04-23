@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { Asset } from "@/lib/news/sources";
 import { runReportPipeline } from "@/lib/reports/runReport";
+import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
 
 const allowedAssets: Asset[] = ["US500", "XAUUSD"];
 
@@ -15,6 +16,18 @@ export async function POST(request: NextRequest) {
 
     if (userError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check AI rate limit (3 requests per hour)
+    const { allowed, retryAfterSeconds } = await checkAiRateLimit(user.id, "ai-reports");
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "AI rate limit exceeded. Max 3 requests per hour." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSeconds ?? 3600) },
+        }
+      );
     }
 
     const body = await request.json();

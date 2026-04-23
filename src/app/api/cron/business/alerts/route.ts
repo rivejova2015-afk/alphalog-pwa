@@ -189,8 +189,7 @@ export async function GET(request: NextRequest) {
         const { data: subscriptions, error: subsError } = await supabase
           .from('push_subscriptions')
           .select('subscription')
-          .eq('user_id', userId)
-          .is('deleted_at', null);
+          .eq('user_id', userId);
 
         if (subsError) {
           console.warn(`Error fetching subscriptions for user ${userId}:`, subsError);

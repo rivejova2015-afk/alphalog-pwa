@@ -31,6 +31,14 @@ const REQUIRED_TABLES = [
   "bot_commands",
   "bot_command_status",
   "bot_telemetry",
+  // New tables from migrations 047-053
+  "bot_signal_engine_state",
+  "bot_regime_states",
+  "bot_skills",
+  "bot_skill_audit_log",
+  "bot_active_skill",
+  "iv_surface_snapshots",
+  "paper_trades",
 ];
 
 function loadEnvFile(filePath) {

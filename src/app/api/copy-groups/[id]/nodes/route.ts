@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { account_id, role, status, risk_pct } = body || {};
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: node, error } = await supabase
       .from("copy_group_nodes")
       .insert({
-        copy_group_id: params.id,
+        copy_group_id: id,
         account_id,
         role,
         status: status || "active",
@@ -37,13 +38,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Node added",
       eventPayload: { action: "node_added", node_id: node.id, account_id },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "node_added",
       node_id: node.id,
       account_id,
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -65,6 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { node_id, risk_pct, status, role } = body || {};
 
@@ -81,7 +83,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .from("copy_group_nodes")
       .update(updates)
       .eq("id", node_id)
-      .eq("copy_group_id", params.id)
+      .eq("copy_group_id", id)
       .select()
       .single();
 
@@ -92,13 +94,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Node updated",
       eventPayload: { action: "node_updated", node_id },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "node_updated",
       node_id,
     });
@@ -110,7 +112,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -119,6 +121,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { node_id } = body || {};
 
@@ -130,7 +133,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       .from("copy_group_nodes")
       .delete()
       .eq("id", node_id)
-      .eq("copy_group_id", params.id);
+      .eq("copy_group_id", id);
 
     if (error) {
       console.error("Error deleting node:", error);
@@ -139,13 +142,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Node removed",
       eventPayload: { action: "node_removed", node_id },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "node_removed",
       node_id,
     });

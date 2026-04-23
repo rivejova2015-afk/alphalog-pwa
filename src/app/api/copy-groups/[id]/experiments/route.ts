@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -11,13 +11,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const flags = body?.flags && typeof body.flags === "object" ? body.flags : {};
 
     const { error } = await supabase
       .from("copy_group_experiments")
       .upsert({
-        copy_group_id: params.id,
+        copy_group_id: id,
         flags_json: flags,
       }, { onConflict: "copy_group_id" });
 
@@ -28,13 +29,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: "Experiments updated",
       eventPayload: { action: "experiments_updated" },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "CONFIG_CHANGED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "CONFIG_CHANGED", userData.user.id, {
       action: "experiments_updated",
     });
 

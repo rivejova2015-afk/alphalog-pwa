@@ -9,9 +9,10 @@ import { randomUUID } from "crypto";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -19,14 +20,12 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
-
     // Verify report ownership
     const { data: report } = await supabase
       .from("terminal_evidence_reports")
       .select("user_id")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (!report || report.user_id !== userData.user.id) {
       return NextResponse.json(
@@ -71,9 +70,10 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -81,14 +81,12 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = params;
-
     // Verify report ownership
     const { data: report } = await supabase
       .from("terminal_evidence_reports")
       .select("user_id")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (!report || report.user_id !== userData.user.id) {
       return NextResponse.json(
@@ -116,19 +114,20 @@ export async function POST(
       );
     }
 
-    // Block dangerous extensions
-    const ext = "." + file.name.split(".").pop()?.toLowerCase();
-    const blockedExts = [".exe", ".bat"];
-    if (blockedExts.includes(ext)) {
+    // Whitelist allowed MIME types
+    const ALLOWED_MIMETYPES = new Set([
+      "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
+    ]);
+    if (!ALLOWED_MIMETYPES.has(file.type)) {
       return NextResponse.json(
-        { error: `Extension ${ext} not allowed` },
+        { error: "File type not allowed. Allowed: JPEG, PNG, GIF, WebP, PDF" },
         { status: 400 }
       );
     }
 
-    // Generate path: ${userId}/terminal/evidence/${reportId}/${uuid}_${filename}
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     const uuid = randomUUID();
-    const safePath = `${userData.user.id}/terminal/evidence/${id}/${uuid}_${file.name}`;
+    const safePath = `${userData.user.id}/terminal/evidence/${id}/${uuid}_${safeFilename}`;
 
     // Upload to storage (reuse existing bucket)
     const { error: uploadError } = await supabase.storage

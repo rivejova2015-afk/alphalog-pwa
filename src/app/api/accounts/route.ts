@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
-import { accountResponseSchema } from "@/lib/validation/schemas";
+import { accountResponseSchema, accountCreateSchema } from "@/lib/validation/schemas";
 
 /**
  * GET /api/accounts?trash=false
@@ -160,25 +160,6 @@ export async function GET(request: NextRequest) {
  * Body: {name, category_id, account_size?, current_balance?, ...}
  * Returns: {id, name, ...}
  */
-type CreateAccountBody = {
-  name: string;
-  category_id: string;
-  account_size?: number | string | null;
-  current_balance?: number | string | null;
-  operation_state?: string | null;
-  phase_status?: string | null;
-  role?: string | null;
-  withdrawals_enabled?: boolean | null;
-  currency?: string;
-  status?: string;
-};
-
-function isCreateAccountBody(body: unknown): body is CreateAccountBody {
-  if (!body || typeof body !== "object") return false;
-  const b = body as Record<string, unknown>;
-  return typeof b.name === "string" && typeof b.category_id === "string";
-}
-
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -189,12 +170,16 @@ export async function POST(request: NextRequest) {
     }
 
     const rawBody = await request.json();
-    if (!isCreateAccountBody(rawBody)) {
+
+    // Validate request body against schema
+    const validationResult = accountCreateSchema.safeParse(rawBody);
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: "Invalid body" },
+        { error: "Validation failed", issues: validationResult.error.issues },
         { status: 400 }
       );
     }
+
     const {
       name,
       category_id,
@@ -206,14 +191,7 @@ export async function POST(request: NextRequest) {
       withdrawals_enabled,
       currency,
       status,
-    } = rawBody;
-
-    if (!name || !name.trim() || !category_id) {
-      return NextResponse.json(
-        { error: "Name and category_id are required" },
-        { status: 400 }
-      );
-    }
+    } = validationResult.data;
 
     // Verify category exists for this user
     const { data: category, error: catError } = await supabase
@@ -238,14 +216,14 @@ export async function POST(request: NextRequest) {
         user_id: userData.user.id,
         name: name.trim(),
         category_id,
-        account_size: typeof account_size === 'number' ? account_size : (typeof account_size === 'string' && account_size ? parseFloat(account_size) : null),
-        current_balance: typeof current_balance === 'number' ? current_balance : (typeof current_balance === 'string' && current_balance ? parseFloat(current_balance) : null),
-        operation_state: operation_state || null,
-        phase_status: phase_status || null,
-        role: role || null,
+        account_size: account_size ?? null,
+        current_balance: current_balance ?? null,
+        operation_state: operation_state?.trim() || null,
+        phase_status: phase_status?.trim() || null,
+        role: role?.trim() || null,
         withdrawals_enabled: withdrawals_enabled ?? true,
-        currency: typeof currency === "string" && currency.trim() ? currency.trim() : "USD",
-        status: typeof status === "string" && status.trim() ? status.trim() : "active",
+        currency: currency?.trim() || "USD",
+        status: status?.trim() || "active",
       })
       .select("*")
       .single();

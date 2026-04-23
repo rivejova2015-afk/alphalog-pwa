@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const versionInt = Number(body?.version_int);
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const { data: snapshotRow, error: snapshotError } = await supabase
       .from("copy_group_snapshots")
       .select("snapshot_json")
-      .eq("copy_group_id", params.id)
+      .eq("copy_group_id", id)
       .eq("version_int", versionInt)
       .single();
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const serviceClient = createServiceClient();
     const { error: applyError } = await serviceClient.rpc("copy_group_apply_snapshot", {
-      p_copy_group_id: params.id,
+      p_copy_group_id: id,
       p_snapshot: snapshotRow.snapshot_json,
     });
 
@@ -42,13 +43,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const newVersion = await createSnapshotVersion({
       supabase,
-      copyGroupId: params.id,
+      copyGroupId: id,
       actorId: userData.user.id,
       message: `Rollback from v${versionInt}`,
       eventPayload: { action: "rollback", from: versionInt },
     });
 
-    await recordCopyGroupEvent(supabase, params.id, "ROLLBACK_APPLIED", userData.user.id, {
+    await recordCopyGroupEvent(supabase, id, "ROLLBACK_APPLIED", userData.user.id, {
       from: versionInt,
       to: newVersion,
     });

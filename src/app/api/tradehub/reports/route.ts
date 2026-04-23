@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       .from("weekly_reports")
       .select("*")
       .eq("user_id", userId)
-      .eq("deleted_at", null)
+      .is("deleted_at", null)
       .order("week_start", { ascending: false });
 
     if (reportsError) {

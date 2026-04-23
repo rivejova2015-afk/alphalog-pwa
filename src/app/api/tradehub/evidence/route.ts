@@ -296,12 +296,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Block dangerous extensions
-    const ext = "." + file.name.split(".").pop()?.toLowerCase();
-    const blockedExts = [".exe", ".bat"];
-    if (blockedExts.includes(ext)) {
+    // Whitelist allowed MIME types for evidence uploads
+    const ALLOWED_MIMETYPES = new Set([
+      "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
+    ]);
+    if (!ALLOWED_MIMETYPES.has(file.type)) {
       return NextResponse.json(
-        { error: `Extension ${ext} not allowed` },
+        { error: "File type not allowed. Allowed: JPEG, PNG, GIF, WebP, PDF" },
         { status: 400 }
       );
     }
@@ -339,9 +340,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate path: ${userId}/tradehub/evidence/${uuid}_${filename}
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     const uuid = randomUUID();
-    const safePath = `${userData.user.id}/tradehub/evidence/${uuid}_${file.name}`;
+    const safePath = `${userData.user.id}/tradehub/evidence/${uuid}_${safeFilename}`;
 
     // Upload to storage
     const { error: uploadError } = await supabase.storage
@@ -434,7 +435,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: getDbInsertMessage(insertError),
-          details: insertError.message,
         },
         { status: 500 }
       );

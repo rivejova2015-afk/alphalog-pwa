@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 const hashFingerprint = (value: string) =>
@@ -24,6 +25,38 @@ const getIpHint = (request: Request) => {
 
 export async function POST(request: Request) {
   try {
+    // Rate limit by IP: 10 requests per minute
+    const ipHint = getIpHint(request);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (supabaseUrl && supabaseServiceKey) {
+      try {
+        const serviceClient = createServiceClient(supabaseUrl, supabaseServiceKey, {
+          auth: { persistSession: false },
+        });
+
+        const minuteWindow = new Date(Math.floor(Date.now() / 60000) * 60000).toISOString();
+        const rateKey = `device-verify-ip:${ipHint}`;
+
+        const { data: rateData } = await serviceClient.rpc("increment_api_rate_limit", {
+          p_key: rateKey,
+          p_window_start: minuteWindow,
+        });
+
+        const hits = typeof rateData === "number" ? rateData : 0;
+        if (hits > 10) {
+          return NextResponse.json(
+            { error: "Rate limit exceeded" },
+            { status: 429, headers: { "Retry-After": "60" } }
+          );
+        }
+      } catch (rateLimitError) {
+        // Fail open on rate limit error
+        console.warn("[Device Verify] Rate limit check failed:", rateLimitError);
+      }
+    }
+
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -32,7 +65,6 @@ export async function POST(request: Request) {
     }
 
     const userAgent = request.headers.get("user-agent") || "";
-    const ipHint = getIpHint(request);
     // Must match the fingerprint logic in proxy.ts (userAgent only, no IP)
     const fingerprintHash = hashFingerprint(userAgent);
 

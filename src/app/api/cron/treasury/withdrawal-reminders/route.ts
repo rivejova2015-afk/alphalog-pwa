@@ -16,6 +16,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { computeCycleStart } from '@/lib/treasury/payoutEngine';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
+import { safeCompareTokens } from '@/lib/security/timing';
 
 // Type for push subscription
 type PushSubscription = {
@@ -67,11 +68,11 @@ interface CalendarEvent {
 
 export async function GET(request: NextRequest) {
   try {
-    // 1) Verify CRON_SECRET header
+    // 1) Verify CRON_SECRET header with timing-safe comparison
     const cronSecret = request.headers.get('x-cron-secret');
     const expectedSecret = process.env.CRON_SECRET;
 
-    if (!cronSecret || !expectedSecret || cronSecret !== expectedSecret) {
+    if (!safeCompareTokens(cronSecret, expectedSecret)) {
       return NextResponse.json(
         { error: 'Unauthorized: Invalid or missing cron secret' },
         { status: 401 }
@@ -103,7 +104,6 @@ export async function GET(request: NextRequest) {
     const { data: usersWithPush, error: userError } = await supabase
       .from('push_subscriptions')
       .select('user_id, auth.users!inner(id, email)', { count: 'exact' })
-      .eq('deleted_at', null)
       .returns<{ user_id: string; auth: { users: { id: string; email?: string } } }[]>();
 
     if (userError) {
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
           `
           )
           .eq('user_id', userId)
-          .eq('deleted_at', null)
+          .is('deleted_at', null)
           .returns<AccountConfig[]>();
 
         if (configError) {
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
           )
           .eq('user_id', userId)
           .eq('event_date', todayUTC)
-          .eq('deleted_at', null)
+          .is('deleted_at', null)
           .returns<CalendarEvent[]>();
 
         if (eventError) {
@@ -251,7 +251,6 @@ export async function GET(request: NextRequest) {
               .from('push_subscriptions')
               .select('subscription_json')
               .eq('user_id', userId)
-              .eq('deleted_at', null)
               .returns<{ subscription_json: Record<string, unknown> }[]>();
 
             if (subError) {
@@ -295,7 +294,7 @@ export async function GET(request: NextRequest) {
                 .update({ last_withdrawal_push_cycle_start: notification.cycleStart })
                 .eq('user_id', userId)
                 .eq('account_id', notification.accountId)
-                .eq('deleted_at', null);
+                .is('deleted_at', null);
 
               if (updateError) {
                 console.error(

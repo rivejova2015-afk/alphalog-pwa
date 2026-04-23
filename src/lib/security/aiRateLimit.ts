@@ -41,11 +41,10 @@ export async function checkAiRateLimit(
     // Build rate limit key: separate limit per endpoint
     const rateLimitKey = `ai-limit:${endpointKey}:${userId}`;
 
-    // Call the increment_api_rate_limit RPC
+    // Call the increment_api_rate_limit RPC (returns int directly)
     const { data, error } = await supabase.rpc("increment_api_rate_limit", {
       p_key: rateLimitKey,
       p_window_start: windowStartStr,
-      p_limit: 3, // 3 requests per hour
     });
 
     if (error) {
@@ -54,9 +53,10 @@ export async function checkAiRateLimit(
       return { allowed: true };
     }
 
-    const hits = (data as { hits: number })?.hits ?? 0;
+    const hits = typeof data === "number" ? data : 0;
+    const AI_LIMIT = 3;
 
-    if (hits > 3) {
+    if (hits > AI_LIMIT) {
       // Rate limit exceeded, calculate retry-after
       const nextHourMs = Math.ceil(now.getTime() / 3_600_000) * 3_600_000;
       const retryAfterSeconds = Math.ceil((nextHourMs - now.getTime()) / 1000);

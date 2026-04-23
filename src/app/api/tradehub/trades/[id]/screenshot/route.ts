@@ -62,19 +62,21 @@ export async function POST(
       );
     }
 
-    // Block dangerous extensions
-    const ext = "." + file.name.split(".").pop()?.toLowerCase();
-    const blockedExts = [".exe", ".bat"];
-    if (blockedExts.includes(ext)) {
+    // Whitelist allowed MIME types for screenshots
+    const ALLOWED_MIMETYPES = new Set([
+      "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf",
+    ]);
+    if (!ALLOWED_MIMETYPES.has(file.type)) {
       return NextResponse.json(
-        { error: `Extension ${ext} not allowed` },
+        { error: "File type not allowed. Allowed: JPEG, PNG, GIF, WebP, PDF" },
         { status: 400 }
       );
     }
 
-    // Generate path: ${userId}/tradehub/trades/${tradeId}/${uuid}_${filename}
+    // Sanitize filename to prevent path traversal
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     const uuid = randomUUID();
-    const safePath = `${userData.user.id}/tradehub/trades/${id}/${uuid}_${file.name}`;
+    const safePath = `${userData.user.id}/tradehub/trades/${id}/${uuid}_${safeFilename}`;
 
     // Upload to storage (reuse existing bucket)
     const { error: uploadError } = await supabase.storage
