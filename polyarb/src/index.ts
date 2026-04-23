@@ -19,9 +19,12 @@ import { parseMilestonePrice } from './skills/velocity-detector.js';
 import { AdaptiveKelly } from './skills/adaptive-kelly.js';
 import { MemoryBank } from './skills/memory-bank.js';
 import { SentimentPulseTracker } from './skills/sentiment-pulse.js';
+import { FundamentalEngine } from './analysis/fundamental-engine.js';
 
 let loopInterval: ReturnType<typeof setInterval> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
+let marketRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let balancePollInterval: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
 async function main(): Promise<void> {
@@ -113,6 +116,10 @@ async function main(): Promise<void> {
   // SP#4 Sentiment Pulse tracker
   const sentimentPulse = new SentimentPulseTracker();
 
+  // Fundamental Analysis Engine — starts background refresh loops
+  const fundamentalEngine = new FundamentalEngine();
+  fundamentalEngine.start();
+
   // Wire Sentiment Pulse into Polymarket feed (hook on every orderbook poll)
   polymarketFeed.onOrderbookUpdate = (conditionId, bidSize, askSize, bidPrice, askPrice) => {
     sentimentPulse.record(conditionId, bidSize, askSize, bidPrice, askPrice);
@@ -130,6 +137,7 @@ async function main(): Promise<void> {
     adaptiveKelly,
     memoryBank,
     sentimentPulse,
+    fundamentalEngine,
   };
 
   // 8. Refresh crypto market list every 5 min — catches new short-term markets
@@ -151,7 +159,7 @@ async function main(): Promise<void> {
       console.error('[markets] Refresh error:', err);
     }
   };
-  setInterval(() => void refreshMarkets(), 5 * 60_000);
+  marketRefreshInterval = setInterval(() => void refreshMarkets(), 5 * 60_000);
 
   // Poll real CLOB balance every 30s and write to Supabase
   const pollRealBalance = async () => {
@@ -165,7 +173,7 @@ async function main(): Promise<void> {
     }
   };
   void pollRealBalance();
-  setInterval(() => void pollRealBalance(), 30_000);
+  balancePollInterval = setInterval(() => void pollRealBalance(), 30_000);
 
   // 9. Start main trading loop
   running = true;
@@ -183,12 +191,12 @@ async function main(): Promise<void> {
 
   // 10. Poll for command changes (start/stop/pause) every 5s
   commandPollInterval = setInterval(async () => {
-    await pollCommands(config, deps, binanceFeed, polymarketFeed, telemetryWriter);
+    await pollCommands(config, deps, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine);
   }, 5_000);
 
   // 10. Graceful shutdown
-  process.on('SIGINT', () => shutdown(config, binanceFeed, polymarketFeed, telemetryWriter));
-  process.on('SIGTERM', () => shutdown(config, binanceFeed, polymarketFeed, telemetryWriter));
+  process.on('SIGINT', () => shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine));
+  process.on('SIGTERM', () => shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine));
 
   console.log('[main] PolyArb engine running. Press Ctrl+C to stop.');
 }
@@ -198,7 +206,8 @@ async function pollCommands(
   deps: LoopDeps,
   binanceFeed: BinanceFeed,
   polymarketFeed: PolymarketFeed,
-  telemetryWriter: TelemetryWriter
+  telemetryWriter: TelemetryWriter,
+  fundamentalEngine: FundamentalEngine,
 ): Promise<void> {
   const supabase = getSupabase();
   const { data } = await supabase
@@ -215,7 +224,7 @@ async function pollCommands(
     console.log('[main] Received STOP command');
     running = false;
     deps.cbState.tradingEnabled = false;
-    shutdown(config, binanceFeed, polymarketFeed, telemetryWriter);
+    shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine);
   } else if (status === 'PAUSED' && deps.cbState.tradingEnabled) {
     console.log('[main] Received PAUSE command');
     deps.cbState.tradingEnabled = false;
@@ -232,17 +241,21 @@ function shutdown(
   config: AgentConfig,
   binanceFeed: BinanceFeed,
   polymarketFeed: PolymarketFeed,
-  telemetryWriter: TelemetryWriter
+  telemetryWriter: TelemetryWriter,
+  fundamentalEngine: FundamentalEngine,
 ): void {
   console.log('[main] Shutting down...');
   running = false;
 
   if (loopInterval) { clearInterval(loopInterval); loopInterval = null; }
   if (commandPollInterval) { clearInterval(commandPollInterval); commandPollInterval = null; }
+  if (marketRefreshInterval) { clearInterval(marketRefreshInterval); marketRefreshInterval = null; }
+  if (balancePollInterval) { clearInterval(balancePollInterval); balancePollInterval = null; }
 
   binanceFeed.stop();
   polymarketFeed.stop();
   telemetryWriter.stop();
+  fundamentalEngine.stop();
 
   // Update status
   const supabase = getSupabase();

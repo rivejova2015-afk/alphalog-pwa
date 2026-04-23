@@ -44,6 +44,8 @@ import { AdaptiveKelly } from './skills/adaptive-kelly.js';
 import { type MemoryBank } from './skills/memory-bank.js';
 import { computeCrossMarketSignal, type CrossMarketSignal } from './skills/cross-market.js';
 import { type SentimentPulseTracker, type SentimentPulse } from './skills/sentiment-pulse.js';
+import { type FundamentalEngine, compositeEdgeMultiplier } from './analysis/fundamental-engine.js';
+import type { FundamentalSignal } from './analysis/types.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -59,6 +61,7 @@ export interface LoopDeps {
   adaptiveKelly: AdaptiveKelly;
   memoryBank: MemoryBank;
   sentimentPulse: SentimentPulseTracker;
+  fundamentalEngine: FundamentalEngine;
 }
 
 interface LoopMetrics {
@@ -83,6 +86,8 @@ interface LoopMetrics {
   lastSentimentPulses: SentimentPulse[];
   /** Per-market timestamp of last order attempt (success or fail) — proxy cooldown */
   lastOrderAttemptAt: Map<string, number>;
+  /** Latest fundamental signal — written to telemetry */
+  lastFundamentalSignal: FundamentalSignal | null;
 }
 
 export function createLoopMetrics(startingEquity: number): LoopMetrics {
@@ -103,6 +108,7 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
     lastCrossMarket: null,
     lastSentimentPulses: [],
     lastOrderAttemptAt: new Map(),
+    lastFundamentalSignal: null,
   };
 }
 
@@ -188,9 +194,21 @@ export async function tradingTick(
   // ── SP#4 Sentiment Pulses — computed once per tick ──
   metrics.lastSentimentPulses = deps.sentimentPulse.computeAll();
 
+  // ── Fundamental Engine — sync (cached), never blocks the loop ──
+  const fundamental = deps.fundamentalEngine.getSignal();
+  metrics.lastFundamentalSignal = fundamental;
+
+  // Macro guard veto: block ALL markets if a high-impact event is near
+  if (fundamental.vetoed) {
+    console.log(`[loop] Macro veto — ${fundamental.vetoReason ?? 'macro event'}`);
+    drainEvents(cbState);
+    updateTelemetry(deps, metrics, tickStart);
+    return;
+  }
+
   // ── Process each market ──
   for (const orderbook of orderbooks) {
-    await processMarket(deps, metrics, orderbook, btcPrice.last, regime, crossMarket);
+    await processMarket(deps, metrics, orderbook, btcPrice.last, regime, crossMarket, fundamental);
   }
 
   // ── Evolve Heston vol ──
@@ -208,6 +226,7 @@ async function processMarket(
   btcSpotPrice: number,
   regime: RegimeState,
   crossMarket: CrossMarketSignal,
+  fundamental: FundamentalSignal,
 ): Promise<void> {
   const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse } = deps;
   const { params } = config;
@@ -274,6 +293,10 @@ async function processMarket(
     );
     edge *= marketCross.edgeMultiplier;
   }
+
+  // ── Fundamental Engine — apply directional multiplier (capa 3) ──
+  const fundamentalMultiplier = compositeEdgeMultiplier(fundamental.compositeScore, tradingBullish);
+  edge *= fundamentalMultiplier;
 
   // ── SP#3 Adaptive Kelly state — still track but don't filter ──
   adaptiveKelly.getCurrentMinEdge(regime.agentMultiplier); // keep state updated
@@ -381,6 +404,8 @@ async function processMarket(
       crossMarketStrength: crossMarket.strength,
       velocityHuntStrength: velocitySignal.huntStrength,
       sentimentMultiplier,
+      fundamentalMultiplier,
+      fundamentalScore: fundamental.compositeScore,
     },
   });
 
