@@ -217,6 +217,10 @@ async function processMarket(
   const slugPrefix = process.env.POLYARB_MARKET_SLUG_PREFIX ?? 'btc-updown-5m-';
   if (!orderbook.marketSlug.startsWith(slugPrefix)) return;
 
+  // Skip markets expiring in <3min — orderbook may already be closed on CLOB
+  const slugTs = parseInt(orderbook.marketSlug.split('-').pop() ?? '0', 10);
+  if (slugTs > 0 && slugTs * 1000 <= Date.now() + 180_000) return;
+
   const hasOpenPosition = positionTracker.open.some(p => p.conditionId === orderbook.conditionId);
   if (hasOpenPosition) return;
 

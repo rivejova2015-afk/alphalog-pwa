@@ -138,7 +138,7 @@ export class PolymarketFeed {
         // gamma API's event.endDate is the series end (far future), not the window close.
         const slugTs = parseInt(eventSlug.split('-').pop() ?? '0', 10);
         const endMs  = slugTs > 0 ? slugTs * 1000 : new Date(event.endDate ?? 0).getTime();
-        if (endMs <= now + 60_000) continue; // skip if expires in <60s or already past
+        if (endMs <= now + 180_000) continue; // skip if expires in <3min or already past
 
         const m = event.markets[0];
         if (!m?.conditionId) continue;
