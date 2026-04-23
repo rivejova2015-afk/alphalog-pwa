@@ -1,11 +1,11 @@
 //+------------------------------------------------------------------+
-//| GoldRangeBasketR EA v1.1                                         |
+//| GoldRangeBasketR EA v1.2                                         |
 //| MT4 Expert Advisor - AlphaLog Integration                        |
-//| Integrated with: Heston IV Surface, RL + LLM Skill Learning      |
+//| Pairing: 1 token → auto-configura todo (secrets + instance ID)  |
 //+------------------------------------------------------------------+
 #property copyright "AlphaLog"
 #property link      "https://alphalog.io"
-#property version   "1.1"
+#property version   "1.2"
 #property strict
 
 //+------------------------------------------------------------------+
@@ -29,11 +29,14 @@ const int    NY_CLOSE                 = 22;
 //| Inputs                                                           |
 //+------------------------------------------------------------------+
 
-extern string InpSignalSecret  = "";     // Bot Signal Secret
-extern string InpWebhookSecret = "";     // MT4 Webhook Secret
-extern string InpBotInstanceId = "";     // Bot Instance UUID
-extern double InpMaxLotSize    = 10.0;   // Maximum lot size
-extern bool   InpEnableLogging = true;   // Enable logging
+// ── ÚNICO PARÁMETRO REQUERIDO ─────────────────────────────────────
+// Genera tu token en AlphaLog → Bot Control → Generar Token de Emparejamiento
+// Formato: GOLD-XXXX-XXXX
+extern string InpPairingToken  = "";     // Token de Emparejamiento (ej: GOLD-A1B2-C3D4)
+
+// ── OPCIONALES ───────────────────────────────────────────────────
+extern double InpMaxLotSize    = 10.0;   // Tamaño máximo de lote
+extern bool   InpEnableLogging = true;   // Logging detallado
 
 //+------------------------------------------------------------------+
 //| Structures                                                       |
@@ -88,6 +91,16 @@ double   g_session_equity     = 0.0;
 // Track last reported ticket to avoid duplicate webhooks
 int g_last_reported_ticket = 0;
 
+// Credenciales obtenidas automáticamente vía pairing
+string g_signal_secret   = "";
+string g_webhook_secret  = "";
+string g_bot_instance_id = "";
+bool   g_is_paper_mode   = false;
+bool   g_paired          = false;
+
+// Archivo local para cachear credenciales entre reinicios
+const string CACHE_FILE = "alphalog_credentials.ini";
+
 //+------------------------------------------------------------------+
 //| Logging                                                          |
 //+------------------------------------------------------------------+
@@ -104,6 +117,94 @@ void Log(const string msg) {
         FileWrite(fh, line);
         FileClose(fh);
     }
+}
+
+//+------------------------------------------------------------------+
+//| Cache helpers                                                    |
+//+------------------------------------------------------------------+
+
+bool LoadCachedCredentials() {
+    int fh = FileOpen(CACHE_FILE, FILE_READ | FILE_TXT);
+    if (fh == INVALID_HANDLE) return false;
+    g_signal_secret   = FileReadString(fh);
+    g_webhook_secret  = FileReadString(fh);
+    g_bot_instance_id = FileReadString(fh);
+    g_is_paper_mode   = (FileReadString(fh) == "true");
+    FileClose(fh);
+    return g_signal_secret != "" && g_bot_instance_id != "";
+}
+
+void SaveCachedCredentials() {
+    int fh = FileOpen(CACHE_FILE, FILE_WRITE | FILE_TXT);
+    if (fh == INVALID_HANDLE) return;
+    FileWrite(fh, g_signal_secret);
+    FileWrite(fh, g_webhook_secret);
+    FileWrite(fh, g_bot_instance_id);
+    FileWrite(fh, (g_is_paper_mode ? "true" : "false"));
+    FileClose(fh);
+}
+
+//+------------------------------------------------------------------+
+//| HTTP POST helper (MT4 WebRequest - build 950+)                   |
+//+------------------------------------------------------------------+
+
+bool HttpPost(const string url, const string body, string &out) {
+    char  data[];
+    char  result[];
+    string headers_out;
+    int   len = StringLen(body);
+    ArrayResize(data, len);
+    for (int i = 0; i < len; i++)
+        data[i] = (char)StringGetChar(body, i);
+
+    int status = WebRequest("POST", url,
+                            "Content-Type: application/json\r\n",
+                            "", 10000, data, len, result, headers_out);
+    if (status != 200) {
+        Log("HTTP POST falló: " + url + " status=" + IntegerToString(status));
+        return false;
+    }
+    out = CharArrayToString(result);
+    return true;
+}
+
+//+------------------------------------------------------------------+
+//| Pairing: exchange token for credentials                          |
+//+------------------------------------------------------------------+
+
+bool PairWithAlphaLog() {
+    int    account_number = AccountInfoInteger(ACCOUNT_LOGIN);
+    string broker         = AccountInfoString(ACCOUNT_COMPANY);
+    string body = "{\"pairing_token\":\""  + InpPairingToken + "\""
+                + ",\"account_number\":"   + IntegerToString(account_number)
+                + ",\"broker_name\":\""    + broker + "\""
+                + ",\"platform\":\"MT4\"}";
+
+    string url = API_URL + "/bot/pair";
+    string response;
+
+    Log("Emparejando con AlphaLog... cuenta=" + IntegerToString(account_number));
+
+    if (!HttpPost(url, body, response)) {
+        Log("ERROR: Pairing HTTP falló");
+        return false;
+    }
+
+    g_signal_secret   = JsonGetString(response, "signal_secret");
+    g_webhook_secret  = JsonGetString(response, "webhook_secret");
+    g_bot_instance_id = JsonGetString(response, "instance_id");
+    string paper      = JsonGetString(response, "is_paper_mode");
+    g_is_paper_mode   = (paper == "true");
+
+    if (g_signal_secret == "" || g_bot_instance_id == "") {
+        Log("ERROR: Pairing incompleto. Respuesta: " + response);
+        return false;
+    }
+
+    SaveCachedCredentials();
+    Log("Emparejado OK. Instancia=" + g_bot_instance_id +
+        " Paper=" + (g_is_paper_mode ? "SI" : "NO"));
+    return true;
 }
 
 //+------------------------------------------------------------------+
@@ -236,7 +337,7 @@ string BuildWebhookJson(int ticket, const string direction, double lots,
            ",\"positions_buy\":"    + IntegerToString(m.positions_buy) +
            ",\"positions_sell\":"   + IntegerToString(m.positions_sell) +
            ",\"tick_volume\":"      + IntegerToString((int)m.tick_volume) +
-           ",\"bot_instance_id\":\"" + InpBotInstanceId + "\"" +
+           ",\"bot_instance_id\":\"" + g_bot_instance_id + "\"" +
            ",\"closed_trade\":{"
            "\"ticket\":"   + IntegerToString(ticket) +
            ",\"direction\":\"" + direction + "\"" +
@@ -446,8 +547,24 @@ void LogDailyResults() {
 //+------------------------------------------------------------------+
 
 int init() {
-    if (InpSignalSecret == "" || InpWebhookSecret == "" || InpBotInstanceId == "") {
-        Alert("GoldRangeBasketR: credenciales faltantes en inputs.");
+    // 1. Intentar cargar credenciales cacheadas de sesión anterior
+    if (LoadCachedCredentials()) {
+        g_paired = true;
+        Log("Credenciales cargadas del cache. Instancia=" + g_bot_instance_id);
+    }
+    // 2. Si no hay cache, emparejar con el token
+    else if (InpPairingToken != "") {
+        if (!PairWithAlphaLog()) {
+            Alert("GoldRangeBasketR: Pairing falló. Verifica el token en AlphaLog.");
+            return 1;
+        }
+        g_paired = true;
+    }
+    // 3. Sin cache ni token → error
+    else {
+        Alert("GoldRangeBasketR: Sin credenciales ni token.\n"
+              "Genera un token en AlphaLog → Bot Control → Generar Token\n"
+              "e ingrésalo en InpPairingToken.");
         return 1;
     }
 
@@ -456,7 +573,8 @@ int init() {
 
     FetchRegime();
 
-    Log("EA iniciado (MT4). Instancia: " + InpBotInstanceId);
+    Log("EA iniciado (MT4). Instancia=" + g_bot_instance_id +
+        " Paper=" + (g_is_paper_mode ? "SI" : "NO"));
     return 0;
 }
 

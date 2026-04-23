@@ -1,11 +1,11 @@
 //+------------------------------------------------------------------+
-//| GoldRangeBasketR EA v1.1                                         |
+//| GoldRangeBasketR EA v1.2                                         |
 //| MT5 Expert Advisor - AlphaLog Integration                        |
-//| Integrated with: Heston IV Surface, RL + LLM Skill Learning      |
+//| Pairing: 1 token → auto-configura todo (secrets + instance ID)  |
 //+------------------------------------------------------------------+
 #property copyright "AlphaLog"
 #property link      "https://alphalog.io"
-#property version   "1.1"
+#property version   "1.2"
 
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh>
@@ -32,12 +32,14 @@ const int    NY_CLOSE                = 22;
 //| Input Parameters                                                 |
 //+------------------------------------------------------------------+
 
-input string InpSignalSecret    = "";     // Bot Signal Secret
-input string InpWebhookSecret   = "";     // MT5 Webhook Secret
-input string InpBotInstanceId   = "";     // Bot Instance UUID
-input double InpMaxLotSize      = 10.0;   // Maximum lot size
-input bool   InpEnableLogging   = true;   // Enable logging
-input bool   InpPaperMode       = false;  // Paper mode (server-side)
+// ── ÚNICO PARÁMETRO REQUERIDO ─────────────────────────────────────
+// Genera tu token en AlphaLog → Bot Control → Generar Token de Emparejamiento
+// Formato: GOLD-XXXX-XXXX
+input string InpPairingToken  = "";     // Token de Emparejamiento (ej: GOLD-A1B2-C3D4)
+
+// ── OPCIONALES ───────────────────────────────────────────────────
+input double InpMaxLotSize    = 10.0;   // Tamaño máximo de lote
+input bool   InpEnableLogging = true;   // Logging detallado
 
 //+------------------------------------------------------------------+
 //| Structures                                                       |
@@ -91,6 +93,16 @@ datetime g_last_regime_update = 0;
 datetime g_last_signal_time   = 0;
 datetime g_session_start      = 0;
 double   g_session_equity     = 0.0;
+
+// Credenciales obtenidas automáticamente vía pairing
+string g_signal_secret   = "";
+string g_webhook_secret  = "";
+string g_bot_instance_id = "";
+bool   g_is_paper_mode   = false;
+bool   g_paired          = false;
+
+// Archivo local para cachear credenciales entre reinicios
+const string CACHE_FILE = "alphalog_credentials.ini";
 
 //+------------------------------------------------------------------+
 //| Utility: build uchar array from string                           |
@@ -192,24 +204,106 @@ void Log(const string msg) {
 }
 
 //+------------------------------------------------------------------+
+//| Cache helpers                                                    |
+//+------------------------------------------------------------------+
+
+bool LoadCachedCredentials() {
+    int fh = FileOpen(CACHE_FILE, FILE_READ | FILE_TXT | FILE_ANSI);
+    if (fh == INVALID_HANDLE) return false;
+    g_signal_secret   = FileReadString(fh);
+    g_webhook_secret  = FileReadString(fh);
+    g_bot_instance_id = FileReadString(fh);
+    g_is_paper_mode   = (FileReadString(fh) == "true");
+    FileClose(fh);
+    return g_signal_secret != "" && g_bot_instance_id != "";
+}
+
+void SaveCachedCredentials() {
+    int fh = FileOpen(CACHE_FILE, FILE_WRITE | FILE_TXT | FILE_ANSI);
+    if (fh == INVALID_HANDLE) return;
+    FileWriteString(fh, g_signal_secret   + "\n");
+    FileWriteString(fh, g_webhook_secret  + "\n");
+    FileWriteString(fh, g_bot_instance_id + "\n");
+    FileWriteString(fh, (g_is_paper_mode ? "true" : "false") + "\n");
+    FileClose(fh);
+}
+
+void ClearCachedCredentials() {
+    FileDelete(CACHE_FILE);
+}
+
+//+------------------------------------------------------------------+
+//| Pairing: exchange token for credentials                          |
+//+------------------------------------------------------------------+
+
+bool PairWithAlphaLog() {
+    long   account_number = AccountInfoInteger(ACCOUNT_LOGIN);
+    string broker         = AccountInfoString(ACCOUNT_COMPANY);
+    string body = "{\"pairing_token\":\""  + InpPairingToken + "\""
+                + ",\"account_number\":"   + IntegerToString((int)account_number)
+                + ",\"broker_name\":\""    + broker + "\""
+                + ",\"platform\":\"MT5\"}";
+
+    string url     = API_URL + "/bot/pair";
+    string headers = "Content-Type: application/json\r\n";
+    string response;
+
+    Log("Emparejando con AlphaLog... cuenta=" + IntegerToString((int)account_number) + " broker=" + broker);
+
+    if (!HttpPost(url, headers, body, 15000, response)) {
+        Log("ERROR: Pairing falló. Verifica el token y la conexión a internet.");
+        return false;
+    }
+
+    string ok = JsonString(response, "ok");
+    if (ok != "true") {
+        string errMsg = JsonString(response, "error");
+        Log("ERROR Pairing: " + errMsg);
+        Alert("AlphaLog Pairing Error: " + errMsg);
+        return false;
+    }
+
+    g_signal_secret   = JsonString(response, "signal_secret");
+    g_webhook_secret  = JsonString(response, "webhook_secret");
+    g_bot_instance_id = JsonString(response, "instance_id");
+    g_is_paper_mode   = (JsonString(response, "is_paper_mode") == "true");
+
+    SaveCachedCredentials();
+
+    string msg = JsonString(response, "message");
+    Log("Emparejado OK: " + msg);
+    Log("Instancia: " + g_bot_instance_id + " | Paper: " + (g_is_paper_mode ? "SI" : "NO"));
+    return true;
+}
+
+//+------------------------------------------------------------------+
 //| EA Init                                                          |
 //+------------------------------------------------------------------+
 
 int OnInit() {
-    if (InpSignalSecret == "" || InpWebhookSecret == "" || InpBotInstanceId == "") {
-        Alert("GoldRangeBasketR: credenciales faltantes en inputs.");
-        return INIT_PARAMETERS_INCORRECT;
-    }
-
     g_trade.SetExpertMagicNumber(MAGIC_NUMBER);
     g_sym.Name(Symbol());
-
     g_telemetry.connected_since = TimeCurrent();
     g_telemetry.highest_equity  = AccountInfoDouble(ACCOUNT_EQUITY);
 
-    FetchRegime();
+    // 1. Intentar cargar credenciales cacheadas (reinicio sin token)
+    if (LoadCachedCredentials()) {
+        g_paired = true;
+        Log("Credenciales cargadas desde caché. Instancia: " + g_bot_instance_id);
+    }
+    // 2. Si hay token nuevo, emparejar aunque haya caché
+    else if (InpPairingToken != "") {
+        if (!PairWithAlphaLog()) return INIT_FAILED;
+        g_paired = true;
+    }
+    else {
+        Alert("GoldRangeBasketR: Ingresa tu token en 'InpPairingToken'.\n"
+              "Genera uno en AlphaLog → Bot Control → Generar Token.");
+        return INIT_PARAMETERS_INCORRECT;
+    }
 
-    Log("EA iniciado. Instancia: " + InpBotInstanceId);
+    FetchRegime();
+    Log("EA listo. Modo: " + (g_is_paper_mode ? "PAPER" : "LIVE"));
     return INIT_SUCCEEDED;
 }
 
@@ -272,7 +366,7 @@ void FetchRegime() {
     string url = API_URL + "/bot/regime/current";
     string body;
 
-    if (!HttpGet(url, InpSignalSecret, body)) {
+    if (!HttpGet(url, g_signal_secret, body)) {
         g_regime.regime = "SIDEWAYS_LOW_VOL";
         g_regime.confidence = 0.5;
         g_regime.kelly_fraction = INITIAL_KELLY_FRACTION;
@@ -301,7 +395,7 @@ void FetchSignal() {
     TradeMetrics m = GetMetrics();
     string body_str = BuildSignalJson(m);
     string url     = API_URL + "/bot/signal";
-    string headers = "Authorization: Bearer " + InpSignalSecret + "\r\n"
+    string headers = "Authorization: Bearer " + g_signal_secret + "\r\n"
                    + "Content-Type: application/json\r\n";
     string response;
 
@@ -586,7 +680,7 @@ string BuildWebhookJson(ulong ticket, const string direction, double lots,
            ",\"positions_buy\":"    + IntegerToString(m.positions_buy) +
            ",\"positions_sell\":"   + IntegerToString(m.positions_sell) +
            ",\"tick_volume\":"      + IntegerToString((int)m.tick_volume) +
-           ",\"bot_instance_id\":\"" + InpBotInstanceId + "\"" +
+           ",\"bot_instance_id\":\"" + g_bot_instance_id + "\"" +
            ",\"closed_trade\":{"
            "\"ticket\":"            + IntegerToString((int)ticket) +
            ",\"direction\":\""      + direction + "\"" +
