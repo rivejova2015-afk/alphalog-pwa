@@ -137,10 +137,11 @@ bool LoadCachedCredentials() {
 void SaveCachedCredentials() {
     int fh = FileOpen(CACHE_FILE, FILE_WRITE | FILE_TXT);
     if (fh == INVALID_HANDLE) return;
-    FileWrite(fh, g_signal_secret);
-    FileWrite(fh, g_webhook_secret);
-    FileWrite(fh, g_bot_instance_id);
-    FileWrite(fh, (g_is_paper_mode ? "true" : "false"));
+    // Use FileWriteString to avoid FileWrite's implicit CRLF that breaks FileReadString on reload
+    FileWriteString(fh, g_signal_secret   + "\n");
+    FileWriteString(fh, g_webhook_secret  + "\n");
+    FileWriteString(fh, g_bot_instance_id + "\n");
+    FileWriteString(fh, (g_is_paper_mode ? "true" : "false") + "\n");
     FileClose(fh);
 }
 
@@ -159,7 +160,7 @@ bool HttpPost(const string url, const string body, string &out) {
 
     int status = WebRequest("POST", url,
                             "Content-Type: application/json\r\n",
-                            "", 10000, data, len, result, headers_out);
+                            10000, data, result, headers_out);
     if (status != 200) {
         Log("HTTP POST falló: " + url + " status=" + IntegerToString(status));
         return false;
@@ -173,10 +174,10 @@ bool HttpPost(const string url, const string body, string &out) {
 //+------------------------------------------------------------------+
 
 bool PairWithAlphaLog() {
-    int    account_number = AccountInfoInteger(ACCOUNT_LOGIN);
+    long   account_number = AccountInfoInteger(ACCOUNT_LOGIN);
     string broker         = AccountInfoString(ACCOUNT_COMPANY);
     string body = "{\"pairing_token\":\""  + InpPairingToken + "\""
-                + ",\"account_number\":"   + IntegerToString(account_number)
+                + ",\"account_number\":"   + IntegerToString((int)account_number)
                 + ",\"broker_name\":\""    + broker + "\""
                 + ",\"platform\":\"MT4\"}";
 
@@ -547,18 +548,18 @@ void LogDailyResults() {
 //+------------------------------------------------------------------+
 
 int init() {
-    // 1. Intentar cargar credenciales cacheadas de sesión anterior
-    if (LoadCachedCredentials()) {
-        g_paired = true;
-        Log("Credenciales cargadas del cache. Instancia=" + g_bot_instance_id);
-    }
-    // 2. Si no hay cache, emparejar con el token
-    else if (InpPairingToken != "") {
+    // 1. Token explícito tiene prioridad — siempre re-emparejar si se proporcionó
+    if (InpPairingToken != "") {
         if (!PairWithAlphaLog()) {
             Alert("GoldRangeBasketR: Pairing falló. Verifica el token en AlphaLog.");
             return 1;
         }
         g_paired = true;
+    }
+    // 2. Sin token, intentar cargar credenciales cacheadas
+    else if (LoadCachedCredentials()) {
+        g_paired = true;
+        Log("Credenciales cargadas del cache. Instancia=" + g_bot_instance_id);
     }
     // 3. Sin cache ni token → error
     else {

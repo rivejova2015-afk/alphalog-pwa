@@ -7,6 +7,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { retryAsync, isRetryableError } from '@/lib/security/retry';
+import { createServiceClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
@@ -58,18 +59,51 @@ function validateMt5Signature(body: string, signature: string | null, timestamp:
   return valid ? { ok: true } : { ok: false, status: 401, error: 'Invalid signature' };
 }
 
+async function validatePairingSecret(rawBody: string, secret: string | null): Promise<{ ok: boolean; status?: number; error?: string }> {
+  if (!secret) return { ok: false, status: 401, error: 'Missing x-webhook-secret' };
+  try {
+    const payload = JSON.parse(rawBody) as { bot_instance_id?: string };
+    const instanceId = payload.bot_instance_id;
+    if (!instanceId) return { ok: false, status: 401, error: 'Missing bot_instance_id in payload' };
+
+    const svc = createServiceClient();
+    const { data } = await svc
+      .from('bot_instances')
+      .select('webhook_secret')
+      .eq('id', instanceId)
+      .maybeSingle();
+
+    if (!data?.webhook_secret) return { ok: false, status: 401, error: 'Instance not found or not paired' };
+
+    const a = Buffer.from(secret);
+    const b = Buffer.from(data.webhook_secret);
+    if (a.length !== b.length) return { ok: false, status: 401, error: 'Invalid secret' };
+    const valid = crypto.timingSafeEqual(a, b);
+    return valid ? { ok: true } : { ok: false, status: 401, error: 'Invalid secret' };
+  } catch {
+    return { ok: false, status: 401, error: 'Auth error' };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
-    const signature = request.headers.get('x-mt5-signature');
-    const timestamp = request.headers.get('x-mt5-timestamp');
-    const signatureResult = validateMt5Signature(rawBody, signature, timestamp);
 
-    if (!signatureResult.ok) {
-      return NextResponse.json(
-        { error: signatureResult.error || 'Unauthorized' },
-        { status: signatureResult.status || 401 }
-      );
+    // Pairing-based auth: EA sends raw webhook_secret in header
+    const pairingSecret = request.headers.get('x-webhook-secret');
+    if (pairingSecret) {
+      const result = await validatePairingSecret(rawBody, pairingSecret);
+      if (!result.ok) {
+        return NextResponse.json({ error: result.error || 'Unauthorized' }, { status: result.status || 401 });
+      }
+    } else {
+      // Legacy HMAC auth: env-var-based setup
+      const signature = request.headers.get('x-mt5-signature');
+      const timestamp = request.headers.get('x-mt5-timestamp');
+      const signatureResult = validateMt5Signature(rawBody, signature, timestamp);
+      if (!signatureResult.ok) {
+        return NextResponse.json({ error: signatureResult.error || 'Unauthorized' }, { status: signatureResult.status || 401 });
+      }
     }
 
     const body = JSON.parse(rawBody) as MT5Payload;

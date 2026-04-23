@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -32,29 +32,25 @@ export async function POST(request: NextRequest) {
 
     const { pairing_token, account_number, broker_name, platform } = parsed.data;
 
-    const supabase = await createClient();
+    // POST from EA has no user session — use service client; token hash IS the auth
+    const svc = createServiceClient();
 
-    // 1. Find the pairing token in bot_instances (stored as pairing_token column)
-    const { data: instance, error: findErr } = await supabase
+    // 1. Find the pairing token in bot_instances
+    const { data: instance, error: findErr } = await svc
       .from("bot_instances")
       .select("id, bot_account_id, instance_secret, is_paper_mode, status, pairing_token_hash, pairing_token_used_at")
       .eq("pairing_token_hash", hashToken(pairing_token))
-      .is("deleted_at", null)
       .maybeSingle();
 
     if (findErr || !instance) {
       return NextResponse.json({ error: "Token de emparejamiento inválido o no encontrado" }, { status: 401 });
     }
 
-    // 2. Prevent token reuse after 24h of first pairing (tokens are one-time-usable for security)
+    // 2. One-time use: reject if token was already used at all
     if (instance.pairing_token_used_at) {
-      const usedAt = new Date(instance.pairing_token_used_at).getTime();
-      const hoursSince = (Date.now() - usedAt) / (1000 * 60 * 60);
-      if (hoursSince > 24) {
-        return NextResponse.json({
-          error: "Token ya usado. Genera uno nuevo en AlphaLog → Bot Control → Configuración"
-        }, { status: 401 });
-      }
+      return NextResponse.json({
+        error: "Token ya usado. Genera uno nuevo en AlphaLog → Bot Control → Configuración"
+      }, { status: 401 });
     }
 
     // 3. Generate session secrets for this EA session
@@ -62,7 +58,7 @@ export async function POST(request: NextRequest) {
     const webhookSecret = crypto.randomBytes(32).toString("hex");
 
     // 4. Mark token as used + update instance with broker info + store secrets
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await svc
       .from("bot_instances")
       .update({
         platform,
@@ -70,7 +66,7 @@ export async function POST(request: NextRequest) {
         pairing_token_used_at: new Date().toISOString(),
         last_heartbeat_at: new Date().toISOString(),
         signal_secret_hash: hashToken(signalSecret),
-        webhook_secret: webhookSecret,  // stored for HMAC verification server-side
+        webhook_secret: webhookSecret,
       })
       .eq("id", instance.id);
 
@@ -80,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Update bot_accounts with real broker account number
-    await supabase
+    await svc
       .from("bot_accounts")
       .update({ account_id: String(account_number), label: `${broker_name} #${account_number}` })
       .eq("id", instance.bot_account_id);
@@ -117,11 +113,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "instance_id requerido" }, { status: 400 });
     }
 
-    // Verify ownership via join chain
+    // Verify ownership via RLS (anon client with user session) + exclude deleted
     const { data: instance, error: findErr } = await supabase
       .from("bot_instances")
       .select("id, bot_account_id")
       .eq("id", instanceId)
+      .is("deleted_at", null)
       .maybeSingle();
 
     if (findErr || !instance) {

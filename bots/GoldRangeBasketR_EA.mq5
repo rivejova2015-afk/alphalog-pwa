@@ -286,15 +286,15 @@ int OnInit() {
     g_telemetry.connected_since = TimeCurrent();
     g_telemetry.highest_equity  = AccountInfoDouble(ACCOUNT_EQUITY);
 
-    // 1. Intentar cargar credenciales cacheadas (reinicio sin token)
-    if (LoadCachedCredentials()) {
-        g_paired = true;
-        Log("Credenciales cargadas desde caché. Instancia: " + g_bot_instance_id);
-    }
-    // 2. Si hay token nuevo, emparejar aunque haya caché
-    else if (InpPairingToken != "") {
+    // 1. Token explícito tiene prioridad — siempre re-emparejar si se proporcionó
+    if (InpPairingToken != "") {
         if (!PairWithAlphaLog()) return INIT_FAILED;
         g_paired = true;
+    }
+    // 2. Sin token, intentar cargar credenciales cacheadas de sesión anterior
+    else if (LoadCachedCredentials()) {
+        g_paired = true;
+        Log("Credenciales cargadas desde caché. Instancia: " + g_bot_instance_id);
     }
     else {
         Alert("GoldRangeBasketR: Ingresa tu token en 'InpPairingToken'.\n"
@@ -501,9 +501,9 @@ bool ReportTrade(ulong ticket, const string direction, double lots,
     string body_str = BuildWebhookJson(ticket, direction, lots, open_price,
                                        close_price, pnl, mae, open_time, close_time);
 
-    string headers = "x-signature: placeholder\r\n"
+    string headers = "x-webhook-secret: " + g_webhook_secret + "\r\n"
                    + "Content-Type: application/json\r\n";
-    string url = API_URL + "/webhooks/mt";
+    string url = API_URL + "/webhooks/mt5";
 
     for (int i = 1; i <= WEBHOOK_RETRY_MAX; i++) {
         string response;
@@ -605,7 +605,14 @@ bool IsSessionActive() {
 }
 
 double CalcVol15m() {
-    double atr = iATR(Symbol(), PERIOD_M1, 14);
+    int handle = iATR(Symbol(), PERIOD_M1, 14);
+    double atr_buf[];
+    if (handle == INVALID_HANDLE || CopyBuffer(handle, 0, 0, 1, atr_buf) <= 0) {
+        IndicatorRelease(handle);
+        return 0.01;
+    }
+    double atr = atr_buf[0];
+    IndicatorRelease(handle);
     double price = (SymbolInfoDouble(Symbol(), SYMBOL_BID) +
                     SymbolInfoDouble(Symbol(), SYMBOL_ASK)) / 2.0;
     if (price <= 0) return 0.01;
