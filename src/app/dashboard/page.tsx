@@ -55,6 +55,21 @@ export default async function Dashboard() {
 
         <DashboardPerformancePanel metrics={metrics} />
 
+        {/* Quick links */}
+        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { href: "/dashboard/tradehub",   label: "TradeHub",   emoji: "📊" },
+            { href: "/dashboard/bot-control", label: "Bot Control", emoji: "🤖" },
+            { href: "/dashboard/algorithms",  label: "Algoritmos", emoji: "⚡" },
+            { href: "/dashboard/terminal",   label: "Terminal",   emoji: "📡" },
+          ].map(({ href, label, emoji }) => (
+            <a key={href} href={href}
+              className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 text-sm font-medium text-slate-300 hover:border-slate-600 hover:text-slate-100 transition-all">
+              <span>{emoji}</span>{label}
+            </a>
+          ))}
+        </div>
+
         <footer className="mt-12 border-t border-slate-700/60 pt-6 text-center text-sm text-slate-400">
           <p>AlphaLog © 2024 | Trading & Analysis Platform</p>
           <p className="mt-2">Powered by Next.js, Supabase, and Tailwind CSS</p>
