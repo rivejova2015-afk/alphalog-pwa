@@ -144,7 +144,7 @@ export async function tradingTick(
   // ── Check circuit breakers ──
   const cbEvents = checkCircuitBreakers(
     cbState,
-    config.startingCapitalUsd + metrics.totalPnlUsd,
+    metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd),
     metrics.consecutiveLosses,
     metrics.lastLatencyMs,
     metrics.lastSlippage,
@@ -331,7 +331,9 @@ async function processMarket(
   if (!buyYes && !buyNo) return;
 
   // ── 6. Kelly sizing ──
-  const accountValue = config.startingCapitalUsd + metrics.totalPnlUsd;
+  // Usar balance real del CLOB si está disponible; fallback a capital inicial + P&L acumulado.
+  // Esto garantiza que el bot no intente operar más de lo que tiene en CLOB después de ganancias/pérdidas.
+  const accountValue = metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd);
   const entryPrice = buyYes ? orderbook.askPrice : orderbook.bidPrice;
 
   const kelly = aggressiveKelly(
