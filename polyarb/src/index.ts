@@ -15,6 +15,7 @@ import { TelemetryWriter } from './telemetry/writer.js';
 import { logCompliance } from './telemetry/compliance.js';
 import { createCircuitBreakerState } from './trading/circuit-breaker.js';
 import { tradingTick, createLoopMetrics, type LoopDeps } from './loop.js';
+import { sweepUnsettledPositions } from './skills/settlement-engine.js';
 import { parseMilestonePrice } from './skills/velocity-detector.js';
 import { AdaptiveKelly } from './skills/adaptive-kelly.js';
 import { MemoryBank } from './skills/memory-bank.js';
@@ -69,9 +70,14 @@ async function main(): Promise<void> {
   // 4. Load existing positions
   await positionTracker.loadFromDb();
 
-  // Startup balance check — verifies HMAC auth and account funding
-  const balance = await orderManager.fetchBalance();
-  console.log(`[main] CLOB balance: ${balance !== null ? `$${balance.toFixed(4)} USDC` : 'null (dry-run or auth failed)'}`);
+  // Liquidar posiciones pasadas que nunca tuvieron P&L confirmado
+  await sweepUnsettledPositions(supabase);
+
+  // Startup balance check — shows CLOB-approved + on-chain wallet balance
+  const balances = await orderManager.fetchOnChainBalance();
+  console.log(`[main] CLOB balance:   ${balances.clob   !== null ? `$${balances.clob.toFixed(4)} USDC`   : 'N/A'}`);
+  console.log(`[main] Wallet balance: ${balances.wallet !== null ? `$${balances.wallet.toFixed(4)} USDC` : 'N/A'}`);
+  console.log(`[main] Total balance:  ${balances.total  !== null ? `$${balances.total.toFixed(4)} USDC`  : 'N/A'}`);
 
 
   // 5. Start feeds
@@ -161,12 +167,12 @@ async function main(): Promise<void> {
   };
   marketRefreshInterval = setInterval(() => void refreshMarkets(), 5 * 60_000);
 
-  // Poll real CLOB balance every 30s — stores in metrics so TelemetryWriter picks it up
+  // Poll real balance every 30s (CLOB + on-chain wallet) — stored in metrics for TelemetryWriter
   const pollRealBalance = async () => {
-    const bal = await orderManager.fetchBalance();
-    if (bal !== null) {
-      metrics.realClobBalance = bal;
-      console.log(`[balance] Real CLOB balance: $${bal.toFixed(4)} USDC`);
+    const { clob, wallet, total } = await orderManager.fetchOnChainBalance();
+    if (total !== null) {
+      metrics.realClobBalance = total;
+      console.log(`[balance] CLOB=$${(clob ?? 0).toFixed(4)} Wallet=$${(wallet ?? 0).toFixed(4)} Total=$${total.toFixed(4)} USDC`);
     }
   };
   void pollRealBalance();

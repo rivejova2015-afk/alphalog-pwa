@@ -43,6 +43,8 @@ export interface OrderResult {
 
 const CLOB_BASE = 'https://clob.polymarket.com';
 const FEE_RATE_BPS = 156; // Polymarket standard fee (Feb 2026)
+const USDC_POLYGON = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const USDC_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
 export class OrderManager {
   private signer:        ClobSigner | ClobProxySigner | null;
@@ -363,5 +365,34 @@ export class OrderManager {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Fetch combined balance: CLOB-approved USDC + on-chain wallet USDC.
+   * The on-chain balance covers funds not yet deposited into the CLOB
+   * and any CTF winnings already redeemed back to the wallet.
+   */
+  async fetchOnChainBalance(): Promise<{ clob: number | null; wallet: number | null; total: number | null }> {
+    const clob = await this.fetchBalance();
+    let wallet: number | null = null;
+
+    if (this.walletAddress) {
+      try {
+        const provider = new ethers.JsonRpcProvider(
+          process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com',
+        );
+        const usdc = new ethers.Contract(USDC_POLYGON, USDC_ABI, provider);
+        const raw = BigInt(await usdc.balanceOf(this.walletAddress));
+        wallet = Number(raw) / 1e6;
+      } catch (err) {
+        console.warn('[order-manager] on-chain balance fetch failed:', err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    const total = clob !== null || wallet !== null
+      ? (clob ?? 0) + (wallet ?? 0)
+      : null;
+
+    return { clob, wallet, total };
   }
 }

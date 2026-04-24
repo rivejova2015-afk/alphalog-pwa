@@ -46,6 +46,8 @@ import { computeCrossMarketSignal, type CrossMarketSignal } from './skills/cross
 import { type SentimentPulseTracker, type SentimentPulse } from './skills/sentiment-pulse.js';
 import { type FundamentalEngine, compositeEdgeMultiplier } from './analysis/fundamental-engine.js';
 import type { FundamentalSignal } from './analysis/types.js';
+import { settleTimedOutPosition } from './skills/settlement-engine.js';
+import { getSupabase } from './supabase.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -181,6 +183,9 @@ export async function tradingTick(
       });
       void deps.memoryBank.recordOutcome(pos.id, closed.pnlUsd);
       void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
+
+      // Trigger settlement: poll gamma for winner, wait for CLOB credit, update real P&L
+      settleTimedOutPosition(pos, deps.orderManager, getSupabase());
     }
   }
 

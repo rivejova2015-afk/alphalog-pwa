@@ -160,11 +160,16 @@ interface Position {
   outcome: string;
   side: string;
   entry_price: number;
+  exit_price: number | null;
   size_usd: number;
   pnl_usd: number | null;
   pnl_percent: number | null;
   status: string;
+  exit_reason: string | null;
   opened_at: string;
+  closed_at: string | null;
+  redeemed: boolean | null;
+  redeemed_usd: number | null;
 }
 
 interface CBEvent {
@@ -973,6 +978,7 @@ export default function PolyArbDashboard() {
   const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [closedPositions, setClosedPositions] = useState<Position[]>([]);
   const [cbEvents, setCbEvents] = useState<CBEvent[]>([]);
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -994,9 +1000,10 @@ export default function PolyArbDashboard() {
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!activeAgent) return;
     if (document.hidden) return; // no polling cuando el tab está en background
-    const [telRes, posRes, cbRes, eqRes, tradesRes] = await Promise.allSettled([
+    const [telRes, posRes, closedRes, cbRes, eqRes, tradesRes] = await Promise.allSettled([
       fetch("/api/polyarb/telemetry", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/positions?status=open", { signal }).then((r) => r.json()),
+      fetch("/api/polyarb/positions?status=closed&limit=20", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/circuit-breaker?limit=10", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/telemetry/history?days=7", { signal }).then((r) => r.json()),
       fetch("/api/polyarb/trades?limit=50", { signal }).then((r) => r.json()),
@@ -1004,6 +1011,7 @@ export default function PolyArbDashboard() {
     if (signal?.aborted) return; // descartar respuesta si se desmontó
     if (telRes.status === "fulfilled") setTelemetry(telRes.value);
     if (posRes.status === "fulfilled") setPositions(posRes.value.data ?? []);
+    if (closedRes.status === "fulfilled") setClosedPositions(closedRes.value.data ?? []);
     if (cbRes.status === "fulfilled") setCbEvents(cbRes.value ?? []);
     if (eqRes.status === "fulfilled") setEquityCurve(eqRes.value ?? []);
     if (tradesRes.status === "fulfilled") {
@@ -1045,7 +1053,7 @@ export default function PolyArbDashboard() {
           }
         }
       )
-      // Open positions — refresh list whenever a position is opened or closed
+      // Positions — refresh both open and closed whenever any position changes
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'polyarb_positions', filter: `agent_id=eq.${agentId}` },
@@ -1053,6 +1061,10 @@ export default function PolyArbDashboard() {
           fetch('/api/polyarb/positions?status=open')
             .then(r => r.json())
             .then((d: { data?: unknown[] }) => setPositions((d.data ?? []) as Position[]))
+            .catch(() => {});
+          fetch('/api/polyarb/positions?status=closed&limit=20')
+            .then(r => r.json())
+            .then((d: { data?: unknown[] }) => setClosedPositions((d.data ?? []) as Position[]))
             .catch(() => {});
         }
       )
@@ -1166,7 +1178,7 @@ export default function PolyArbDashboard() {
 
       {/* ── Métricas principales ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard label="Balance USDC" value={`$${fmt(telemetry?.available_balance_usd)}`} sub="disponible" />
+        <MetricCard label="Balance Total" value={`$${fmt(telemetry?.available_balance_usd)}`} sub="CLOB + wallet" />
         <MetricCard label="Equity Total" value={`$${fmt(telemetry?.equity_usd)}`} sub={null} />
         <MetricCard label="P&L Neto" value={fmtUsd(pnl)} sub={`${pnlPct >= 0 ? "+" : ""}${fmt(pnlPct, 1)}%`} positive={pnl >= 0} />
         <MetricCard label="Win Rate" value={telemetry?.win_rate ? `${fmt(telemetry.win_rate, 1)}%` : "—"} sub={null} />
@@ -1250,6 +1262,9 @@ export default function PolyArbDashboard() {
         )}
       </div>
 
+      {/* ── Historial de posiciones cerradas ───────────────────────────── */}
+      <ClosedPositionsSection positions={closedPositions} onSettled={() => void fetchData()} />
+
       {/* ── Trade History & P&L ─────────────────────────────────────────── */}
       <TradeHistorySection trades={trades} tradesTotal={tradesTotal} />
 
@@ -1303,6 +1318,111 @@ export default function PolyArbDashboard() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Closed Positions Section ────────────────────────────────────────────────
+
+function ClosedPositionsSection({ positions, onSettled }: { positions: Position[]; onSettled: () => void }) {
+  const [sweeping, setSweeping] = useState(false);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch('/api/polyarb/settlement')
+      .then(r => r.json())
+      .then((d: { pending?: number }) => setPendingCount(d.pending ?? 0))
+      .catch(() => {});
+  }, [positions]);
+
+  const runSweep = async () => {
+    setSweeping(true);
+    try {
+      const res = await fetch('/api/polyarb/settlement', { method: 'POST' });
+      const d = await res.json() as { swept?: number; wins?: number; losses?: number; totalPnlUsd?: number };
+      if ((d.swept ?? 0) > 0) {
+        toast.success(`${d.swept} operaciones liquidadas: ${d.wins} ganadas, ${d.losses} perdidas | P&L: ${fmtUsd(d.totalPnlUsd ?? 0)}`);
+        onSettled();
+      } else {
+        toast.info('Sin operaciones pendientes de liquidar');
+      }
+      setPendingCount(0);
+    } catch {
+      toast.error('Error al liquidar historial');
+    } finally {
+      setSweeping(false);
+    }
+  };
+
+  return (
+    <div className="bg-zinc-800/40 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+          <Activity className="w-4 h-4 text-zinc-400" /> Historial de Operaciones ({positions.length})
+        </h2>
+        {(pendingCount ?? 0) > 0 && (
+          <button
+            onClick={() => void runSweep()}
+            disabled={sweeping}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded bg-cyan-700 hover:bg-cyan-600 text-white disabled:opacity-50"
+          >
+            {sweeping ? <span className="animate-spin">⟳</span> : <Zap className="w-3 h-3" />}
+            {sweeping ? 'Liquidando...' : `Liquidar ${pendingCount} pendientes`}
+          </button>
+        )}
+      </div>
+      {positions.length === 0 && (pendingCount ?? 0) === 0 && (
+        <p className="text-xs text-zinc-500">Sin operaciones cerradas aún.</p>
+      )}
+      {positions.length > 0 && <div className="overflow-x-auto">
+        <table className="w-full text-xs text-left">
+          <thead className="text-zinc-500 border-b border-zinc-700">
+            <tr>
+              <th className="pb-2 pr-3">Mercado</th>
+              <th className="pb-2 pr-3">Resultado</th>
+              <th className="pb-2 pr-3">Entrada</th>
+              <th className="pb-2 pr-3">Salida</th>
+              <th className="pb-2 pr-3">P&L</th>
+              <th className="pb-2 pr-3">Canjeado</th>
+              <th className="pb-2">Cerrado</th>
+            </tr>
+          </thead>
+          <tbody className="text-zinc-300">
+            {positions.map((p) => {
+              const won = p.exit_reason?.includes('win') ?? (p.pnl_usd !== null ? p.pnl_usd > 0 : null);
+              return (
+                <tr key={p.id} className="border-b border-zinc-800">
+                  <td className="py-2 pr-3 truncate max-w-[160px] font-mono text-[10px]">{p.market_slug.split('-').slice(-1)[0] ? `…-${p.market_slug.split('-').slice(-1)[0]}` : p.market_slug}</td>
+                  <td className="py-2 pr-3">
+                    {won === true ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-900/50 text-green-400 font-medium">✓ GANÓ</span>
+                    ) : won === false ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-900/50 text-red-400 font-medium">✗ PERDIÓ</span>
+                    ) : (
+                      <span className="text-zinc-500">—</span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 font-mono">{fmt(p.entry_price, 3)}</td>
+                  <td className="py-2 pr-3 font-mono">{p.exit_price != null ? fmt(p.exit_price, 3) : '—'}</td>
+                  <td className="py-2 pr-3">
+                    {p.pnl_usd !== null ? (
+                      <span className={p.pnl_usd >= 0 ? "text-green-400 font-medium" : "text-red-400 font-medium"}>{fmtUsd(p.pnl_usd)}</span>
+                    ) : '—'}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {p.redeemed ? (
+                      <span className="text-cyan-400">✓ ${fmt(p.redeemed_usd)}</span>
+                    ) : (
+                      <span className="text-zinc-600">pendiente</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-zinc-500">{p.closed_at ? timeAgo(p.closed_at) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>}
     </div>
   );
 }
