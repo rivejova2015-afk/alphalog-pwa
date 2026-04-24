@@ -70,8 +70,8 @@ async function main(): Promise<void> {
   // 4. Load existing positions
   await positionTracker.loadFromDb();
 
-  // Liquidar posiciones pasadas que nunca tuvieron P&L confirmado
-  await sweepUnsettledPositions(supabase);
+  // Liquidar posiciones pasadas que nunca tuvieron P&L confirmado (con redemption automático)
+  await sweepUnsettledPositions(supabase, orderManager);
 
   // Startup balance check — shows CLOB-approved + on-chain wallet balance
   const balances = await orderManager.fetchOnChainBalance();

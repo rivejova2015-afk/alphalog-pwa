@@ -368,6 +368,50 @@ export class OrderManager {
   }
 
   /**
+   * Redeem winning outcome tokens via Polymarket CLOB API (gasless — no MATIC needed).
+   *
+   * The CLOB acts as a meta-transaction relayer: it processes the on-chain CTF redemption
+   * on behalf of the user, crediting USDC back to the CLOB balance automatically.
+   *
+   * @param tokenId   - ERC1155 token ID of the winning outcome (from gamma API clobTokenIds)
+   * @param amountMicro - Amount in micro-USDC (shares × 1e6)
+   */
+  async redeemWinningPosition(tokenId: string, amountMicro: string): Promise<void> {
+    if (this.dryRun) {
+      console.log(`[order-manager] [DRY_RUN] Redeem ${tokenId.slice(0, 12)}... amount=${amountMicro}`);
+      return;
+    }
+    if (!this.apiKey) throw new Error('No API key for redemption');
+
+    const body = JSON.stringify({
+      positions: [{ asset_id: tokenId, amount: amountMicro }],
+    });
+    const authHeaders = buildL2AuthHeaders(
+      this.apiKey,
+      this.apiSecret,
+      this.apiPassphrase,
+      this.walletAddress,
+      'POST',
+      '/redeem-positions',
+      body,
+    );
+    const res = await clobFetch(`${CLOB_BASE}/redeem-positions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`CLOB redeem HTTP ${res.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const result = await res.json() as { status?: string; transactionHash?: string };
+    console.log(`[order-manager] Redeem response: status=${result.status ?? 'ok'} tx=${result.transactionHash ?? 'N/A'}`);
+  }
+
+  /**
    * Fetch combined balance: CLOB-approved USDC + on-chain wallet USDC.
    * The on-chain balance covers funds not yet deposited into the CLOB
    * and any CTF winnings already redeemed back to the wallet.
