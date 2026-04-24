@@ -252,6 +252,7 @@ export async function sweepUnsettledPositions(
         try {
           await triggerClobRedemption(orderManager, market, pos.outcome, shares);
           redeemed = true;
+          await supabase.from('polyarb_positions').update({ redeemed: true, redeemed_at: new Date().toISOString() }).eq('id', pos.id);
         } catch {
           // non-fatal
         }
@@ -268,4 +269,55 @@ export async function sweepUnsettledPositions(
 
   console.log(`[settlement] Sweep completado: ${results.filter(r => !r.skipped).length} liquidadas`);
   return results;
+}
+
+// ─── Redemption de wins ya liquidadas en DB pero sin canjear en CLOB ─────────
+
+/**
+ * Busca posiciones settled_win que aún no han sido canjeadas (redeemed=false),
+ * llama al CLOB /redeem-positions y marca como redeemed en DB.
+ *
+ * Esto resuelve el caso donde el settlement ya está registrado en la DB pero
+ * Polymarket todavía no acreditó el USDC porque faltaba llamar al CLOB.
+ */
+export async function redeemPendingWins(
+  supabase: SupabaseClient,
+  orderManager: OrderManager,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from('polyarb_positions')
+    .select('id, market_slug, outcome, shares')
+    .eq('exit_reason', 'settled_win')
+    .eq('redeemed', false)
+    .limit(50);
+
+  if (error || !data || data.length === 0) {
+    if (!error) console.log('[settlement] redeemPendingWins: sin wins pendientes de canjear');
+    return;
+  }
+
+  console.log(`[settlement] redeemPendingWins: procesando ${data.length} wins sin canjear...`);
+
+  for (const pos of data as Array<{ id: string; market_slug: string; outcome: 'YES' | 'NO'; shares: number | string }>) {
+    const shares = Number(pos.shares);
+    try {
+      const market = await fetchGammaMarket(pos.market_slug);
+      if (!market?.clobTokenIds) {
+        console.warn(`[settlement] redeemPendingWins: sin clobTokenIds para ${pos.market_slug}`);
+        continue;
+      }
+
+      await triggerClobRedemption(orderManager, market, pos.outcome, shares);
+
+      await supabase
+        .from('polyarb_positions')
+        .update({ redeemed: true, redeemed_at: new Date().toISOString() })
+        .eq('id', pos.id);
+
+      console.log(`[settlement] redeemPendingWins: ${pos.market_slug} canjeado ✓`);
+    } catch (err) {
+      console.warn(`[settlement] redeemPendingWins error ${pos.market_slug}:`, err instanceof Error ? err.message : String(err));
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
 }

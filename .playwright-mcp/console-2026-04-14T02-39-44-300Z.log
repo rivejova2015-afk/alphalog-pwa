@@ -1,0 +1,42 @@
+[    1579ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://www.alphalog.io/api/polyarb/agents:0
+[  563196ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ https://www.alphalog.io/auth:0
+[  563508ms] [WARNING] [hCaptcha] should not render before js api is fully loaded. `render=explicit` should be used in combination with `onload`. @ https://js.hcaptcha.com/1/api.js?render=explicit:3
+[  606743ms] Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at rX (https://www.alphalog.io/_next/static/chunks/4bd1b696-87b4c68b84796d7d.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:1:36677)
+    at is (https://www.alphalog.io/_next/static/chunks/4bd1b696-87b4c68b84796d7d.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:1:87587)
+    at sp (https://www.alphalog.io/_next/static/chunks/4bd1b696-87b4c68b84796d7d.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:1:128058)
+    at https://www.alphalog.io/_next/static/chunks/4bd1b696-87b4c68b84796d7d.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:1:122948
+    at sn (https://www.alphalog.io/_next/static/chunks/4bd1b696-87b4c68b84796d7d.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:1:123049)
+    at sQ (https://www.alphalog.io/_next/static/chunks/4bd1b696-87b4c68b84796d7d.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:1:149437)
+    at MessagePort.M (https://www.alphalog.io/_next/static/chunks/9826-030c14135e94a0ac.js?dpl=dpl_5UD8xMGDdDmMFg34Q1JSZu4GvXEA:2:147403)
+[  614320ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  624246ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  633654ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  643655ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  653543ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  663703ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  673522ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  683616ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  693885ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  703574ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  713520ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  723480ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  733760ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  743498ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  753525ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  763571ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  773525ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  783584ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  793507ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  803492ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  813626ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  823571ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  833606ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  843984ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  853866ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  863562ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  873550ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  883534ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  893534ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  903586ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0
+[  913583ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.alphalog.io/api/polyarb/positions?status=open:0

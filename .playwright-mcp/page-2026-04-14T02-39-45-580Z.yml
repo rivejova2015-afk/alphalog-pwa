@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - link "AL AlphaLog" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e6]: AL
+        - generic [ref=e7]: AlphaLog
+      - generic [ref=e9]: "2.1"
+      - button "Settings" [ref=e11]:
+        - img [ref=e12]
+    - generic [ref=e15]:
+      - main [ref=e16]:
+        - generic [ref=e19]: Loading PolyArb...
+      - complementary [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - button "Intelligence Suite" [expanded] [ref=e23]:
+              - generic [ref=e24]: Intelligence Suite
+              - img [ref=e25]
+            - generic [ref=e27]:
+              - link "Agents Dashboard" [ref=e28] [cursor=pointer]:
+                - /url: /intelligence/agents
+              - link "Algorithmic Trading" [ref=e29] [cursor=pointer]:
+                - /url: /intelligence/algorithms
+              - link "Market Intelligence" [ref=e30] [cursor=pointer]:
+                - /url: /intelligence
+              - link "Signal Hub" [ref=e31] [cursor=pointer]:
+                - /url: /intelligence
+          - button "Business" [ref=e33]:
+            - generic [ref=e34]: Business
+            - img [ref=e35]
+          - button "Map Hot" [ref=e38]:
+            - generic [ref=e39]: Map Hot
+            - img [ref=e40]
+  - generic [ref=e42]:
+    - button "Atras" [ref=e43]:
+      - img [ref=e44]
+      - text: Atras
+    - link "Vuelta al dashboard" [ref=e46] [cursor=pointer]:
+      - /url: /dashboard
+      - img [ref=e47]
+      - text: Vuelta al dashboard
+  - region "Notifications alt+T"
+  - alert [ref=e52]

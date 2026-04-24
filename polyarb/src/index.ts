@@ -15,7 +15,7 @@ import { TelemetryWriter } from './telemetry/writer.js';
 import { logCompliance } from './telemetry/compliance.js';
 import { createCircuitBreakerState } from './trading/circuit-breaker.js';
 import { tradingTick, createLoopMetrics, type LoopDeps } from './loop.js';
-import { sweepUnsettledPositions } from './skills/settlement-engine.js';
+import { sweepUnsettledPositions, redeemPendingWins } from './skills/settlement-engine.js';
 import { parseMilestonePrice } from './skills/velocity-detector.js';
 import { AdaptiveKelly } from './skills/adaptive-kelly.js';
 import { MemoryBank } from './skills/memory-bank.js';
@@ -72,6 +72,9 @@ async function main(): Promise<void> {
 
   // Liquidar posiciones pasadas que nunca tuvieron P&L confirmado (con redemption automático)
   await sweepUnsettledPositions(supabase, orderManager);
+
+  // Canjear wins ya liquidadas en DB que aún no se han canjeado en CLOB
+  await redeemPendingWins(supabase, orderManager);
 
   // Startup balance check — shows CLOB-approved + on-chain wallet balance
   const balances = await orderManager.fetchOnChainBalance();

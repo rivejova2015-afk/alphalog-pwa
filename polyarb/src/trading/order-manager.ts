@@ -423,7 +423,7 @@ export class OrderManager {
     if (this.walletAddress) {
       try {
         const provider = new ethers.JsonRpcProvider(
-          process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com',
+          process.env.POLYGON_RPC_URL ?? 'https://rpc.ankr.com/polygon',
         );
         const usdc = new ethers.Contract(USDC_POLYGON, USDC_ABI, provider);
         const raw = BigInt(await usdc.balanceOf(this.walletAddress));
