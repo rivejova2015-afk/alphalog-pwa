@@ -1337,7 +1337,7 @@ function TradeHistorySection({ trades, tradesTotal }: { trades: Trade[]; tradesT
                     <td className="py-2 pr-3 text-right font-mono">{fmt(t.price, 4)}</td>
                     <td className="py-2 pr-3 text-right font-mono">{t.size_usd != null ? `$${t.size_usd.toFixed(2)}` : "—"}</td>
                     <td className={`py-2 pr-3 text-right font-mono font-bold ${isWin ? "text-green-400" : isLoss ? "text-red-400" : "text-zinc-400"}`}>
-                      {t.pnl_usd !== null ? `${t.pnl_usd >= 0 ? "+" : ""}${t.pnl_usd.toFixed(2)}$` : "—"}
+                      {t.pnl_usd != null ? `${t.pnl_usd >= 0 ? "+" : ""}${t.pnl_usd.toFixed(2)}$` : "—"}
                     </td>
                     <td className="py-2 pr-3 text-right font-mono text-yellow-600">{t.fee_usd != null ? `-$${t.fee_usd.toFixed(3)}` : "—"}</td>
                     <td className="py-2 text-right">

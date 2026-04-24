@@ -88,6 +88,8 @@ interface LoopMetrics {
   lastOrderAttemptAt: Map<string, number>;
   /** Latest fundamental signal — written to telemetry */
   lastFundamentalSignal: FundamentalSignal | null;
+  /** Real CLOB balance from last successful fetchBalance() */
+  realClobBalance: number | null;
 }
 
 export function createLoopMetrics(startingEquity: number): LoopMetrics {
@@ -109,6 +111,7 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
     lastSentimentPulses: [],
     lastOrderAttemptAt: new Map(),
     lastFundamentalSignal: null,
+    realClobBalance: null,
   };
 }
 
@@ -453,7 +456,7 @@ function updateTelemetry(deps: LoopDeps, metrics: LoopMetrics, tickStart: number
     agentId: config.agentId,
     userId: config.userId,
     equityUsd: equity,
-    availableBalanceUsd: equity - positionTracker.open.reduce((s, p) => s + p.sizeUsd, 0),
+    availableBalanceUsd: metrics.realClobBalance ?? (equity - positionTracker.open.reduce((s, p) => s + p.sizeUsd, 0)),
     openPositionsCount: positionTracker.openCount,
     totalPnlUsd: metrics.totalPnlUsd,
     winRate: totalTrades > 0 ? (metrics.wins / totalTrades) * 100 : null,

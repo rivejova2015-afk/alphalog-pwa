@@ -161,14 +161,11 @@ async function main(): Promise<void> {
   };
   marketRefreshInterval = setInterval(() => void refreshMarkets(), 5 * 60_000);
 
-  // Poll real CLOB balance every 30s and write to Supabase
+  // Poll real CLOB balance every 30s — stores in metrics so TelemetryWriter picks it up
   const pollRealBalance = async () => {
     const bal = await orderManager.fetchBalance();
     if (bal !== null) {
-      await supabase
-        .from('polyarb_telemetry')
-        .update({ available_balance_usd: bal })
-        .eq('agent_id', config.agentId);
+      metrics.realClobBalance = bal;
       console.log(`[balance] Real CLOB balance: $${bal.toFixed(4)} USDC`);
     }
   };
