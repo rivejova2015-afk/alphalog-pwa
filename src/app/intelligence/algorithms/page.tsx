@@ -1,6 +1,7 @@
-import { TrendingUp, Plus } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AlgoAccordion } from "@/components/intelligence/algorithms/AlgoAccordion.client";
+import { NewStrategyButton } from "@/components/intelligence/algorithms/NewStrategyButton.client";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -55,10 +56,7 @@ export default async function AlgorithmsPage() {
           </h1>
           <p className="text-sm text-[#94a3b8] mt-1">Forex and futures algorithm strategies</p>
         </div>
-        <button className="flex items-center gap-2 px-3 py-2 bg-[#34d399] hover:bg-[#2ba88b] text-[#0a0e1a] text-sm font-bold rounded transition-colors">
-          <Plus size={16} />
-          New Strategy
-        </button>
+        <NewStrategyButton />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
