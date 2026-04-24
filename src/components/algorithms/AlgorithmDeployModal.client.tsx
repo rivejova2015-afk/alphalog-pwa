@@ -19,6 +19,7 @@ export default function AlgorithmDeployModal({ algo, onClose, onDeployed }: Prop
   const [notes, setNotes]             = useState("");
   const [loading, setLoading]         = useState(false);
   const [fetching, setFetching]       = useState(true);
+  const [fetchError, setFetchError]   = useState<string | null>(null);
 
   const activeIds = (algo.deployments ?? [])
     .filter((d) => d.status === "active")
@@ -29,8 +30,9 @@ export default function AlgorithmDeployModal({ algo, onClose, onDeployed }: Prop
     supabase
       .from("bot_accounts")
       .select("id, label, account_id")
-      .then(({ data }) => {
-        setAccounts(data ?? []);
+      .then(({ data, error }) => {
+        if (error) { setFetchError("Error al cargar cuentas bot"); }
+        else { setAccounts(data ?? []); }
         setFetching(false);
       });
   }, []);
@@ -73,6 +75,8 @@ export default function AlgorithmDeployModal({ algo, onClose, onDeployed }: Prop
 
           {fetching ? (
             <div className="text-xs text-slate-500 text-center py-4">Cargando cuentas...</div>
+          ) : fetchError ? (
+            <div className="text-xs text-red-400 text-center py-4 bg-red-950/30 rounded-lg border border-red-900/40 px-3">{fetchError}</div>
           ) : accounts.length === 0 ? (
             <div className="text-xs text-slate-500 text-center py-4">
               No hay cuentas bot configuradas. Ve a Bot Control para agregar una.

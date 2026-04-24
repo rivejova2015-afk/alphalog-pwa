@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("platform", platform)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .neq("status", "archived");
 
     if ((count ?? 0) >= 50) return NextResponse.json({ error: "Límite de 50 algoritmos por plataforma alcanzado" }, { status: 409 });
 

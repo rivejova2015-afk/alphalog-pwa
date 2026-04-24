@@ -137,7 +137,7 @@ export default function AlgorithmsHub() {
 
   useEffect(() => { void fetchAlgorithms(); }, [fetchAlgorithms]);
 
-  const usedSlots    = algorithms.map((a) => a.slot_number);
+  const usedSlots    = algorithms.filter((a) => a.status !== "archived").map((a) => a.slot_number);
   const totalUsed    = algorithms.filter((a) => a.status !== "archived").length;
   const canAddMore   = totalUsed < MAX_ALGORITHMS_PER_PLATFORM;
 

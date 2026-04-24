@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { Zap, Grid3x3, ArrowLeftRight, Play, CheckCircle, Rocket, Pause, Trash2, MoreHorizontal, TrendingUp, TrendingDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Zap, Grid3x3, ArrowLeftRight, Play, CheckCircle, Rocket, Pause, Trash2, MoreHorizontal, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { TradingAlgorithm, AlgoType } from "@/types/algorithms";
 import { ALGO_STATUS_LABELS, ALGO_STATUS_COLORS, ALGO_TYPE_LABELS, ALGO_TYPE_COLORS } from "@/types/algorithms";
@@ -18,8 +18,21 @@ interface Props {
 }
 
 export default function AlgorithmCard({ algo, onRefresh, onDeploy }: Props) {
-  const [menu, setMenu]       = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [menu, setMenu]             = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menu) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menu]);
 
   async function transition(toStatus: string) {
     setLoading(true);
@@ -53,7 +66,12 @@ export default function AlgorithmCard({ algo, onRefresh, onDeploy }: Props) {
   }
 
   async function handleDelete() {
-    if (!confirm(`¿Eliminar "${algo.name}"? Se detendrán todos los deploys activos.`)) return;
+    setMenu(false);
+    setConfirmDelete(true);
+  }
+
+  async function confirmDeleteAction() {
+    setConfirmDelete(false);
     setLoading(true);
     try {
       const res = await fetch(`/api/algorithms/${algo.id}`, { method: "DELETE" });
@@ -91,13 +109,33 @@ export default function AlgorithmCard({ algo, onRefresh, onDeploy }: Props) {
       </button>
 
       {menu && (
-        <div className="absolute top-8 right-3 z-10 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden min-w-[140px]">
+        <div ref={menuRef} className="absolute top-8 right-3 z-10 bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden min-w-[140px]">
           {algo.status === "draft"    && <MenuItem label="Iniciar Paper Test" icon={<Play className="w-3 h-3" />} onClick={() => transition("paper")} />}
           {algo.status === "paper"    && <MenuItem label="Aprobar"     icon={<CheckCircle className="w-3 h-3" />} onClick={() => transition("approved")} />}
           {algo.status === "approved" && <MenuItem label="Deploy Live" icon={<Rocket className="w-3 h-3" />}     onClick={() => { setMenu(false); onDeploy(algo); }} />}
           {algo.status === "live"     && <MenuItem label="Pausar"      icon={<Pause className="w-3 h-3" />}      onClick={() => transition("paused")} />}
           {algo.status === "paused"   && <MenuItem label="Reanudar"    icon={<Play className="w-3 h-3" />}       onClick={() => transition("approved")} />}
           <MenuItem label="Eliminar" icon={<Trash2 className="w-3 h-3" />} onClick={handleDelete} danger />
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-slate-900/95 backdrop-blur-sm border border-red-800/60 p-4">
+          <AlertTriangle className="w-6 h-6 text-red-400" />
+          <p className="text-xs text-slate-300 text-center font-medium">
+            ¿Eliminar <span className="text-slate-100 font-semibold">"{algo.name}"</span>?<br />
+            <span className="text-slate-500">Se detendrán todos los deploys activos.</span>
+          </p>
+          <div className="flex gap-2 w-full">
+            <button onClick={() => setConfirmDelete(false)}
+              className="flex-1 py-1.5 rounded-lg border border-slate-700 text-slate-400 text-xs hover:border-slate-500 transition-all">
+              Cancelar
+            </button>
+            <button onClick={confirmDeleteAction} disabled={loading}
+              className="flex-1 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-semibold transition-all disabled:opacity-50">
+              Eliminar
+            </button>
+          </div>
         </div>
       )}
 

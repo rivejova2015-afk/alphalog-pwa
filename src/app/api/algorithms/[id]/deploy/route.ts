@@ -41,6 +41,19 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "El algoritmo debe estar Aprobado antes de desplegarse" }, { status: 409 });
     }
 
+    // Verify user owns all requested bot_accounts
+    const { data: ownedAccounts } = await supabase
+      .from("bot_accounts")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("id", parsed.data.bot_account_ids);
+
+    const ownedIds = new Set((ownedAccounts ?? []).map((a) => a.id));
+    const unauthorized = parsed.data.bot_account_ids.filter((id) => !ownedIds.has(id));
+    if (unauthorized.length > 0) {
+      return NextResponse.json({ error: "Una o más cuentas no pertenecen al usuario" }, { status: 403 });
+    }
+
     const rows = parsed.data.bot_account_ids.map((bot_account_id) => ({
       user_id: user.id,
       algorithm_id: id,
