@@ -418,25 +418,8 @@ export class OrderManager {
    */
   async fetchOnChainBalance(): Promise<{ clob: number | null; wallet: number | null; total: number | null }> {
     const clob = await this.fetchBalance();
-    let wallet: number | null = null;
-
-    if (this.walletAddress) {
-      try {
-        const provider = new ethers.JsonRpcProvider(
-          process.env.POLYGON_RPC_URL ?? 'https://rpc.ankr.com/polygon',
-        );
-        const usdc = new ethers.Contract(USDC_POLYGON, USDC_ABI, provider);
-        const raw = BigInt(await usdc.balanceOf(this.walletAddress));
-        wallet = Number(raw) / 1e6;
-      } catch (err) {
-        console.warn('[order-manager] on-chain balance fetch failed:', err instanceof Error ? err.message : String(err));
-      }
-    }
-
-    const total = clob !== null || wallet !== null
-      ? (clob ?? 0) + (wallet ?? 0)
-      : null;
-
-    return { clob, wallet, total };
+    // On-chain wallet check desactivado — requiere RPC con API key (no disponible en Fly.io).
+    // El CLOB balance es suficiente: es el capital operativo real del bot.
+    return { clob, wallet: null, total: clob };
   }
 }
