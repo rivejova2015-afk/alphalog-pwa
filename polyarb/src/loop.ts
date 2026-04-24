@@ -163,8 +163,8 @@ export async function tradingTick(
 
   // tradingEnabled gate removed — super-aggressive mode, no agent-decided halts
 
-  // ── Close timed-out positions ──
-  const timedOut = positionTracker.getTimedOutPositions(90_000); // 90s — matches 5-min markets
+  // ── Close timed-out positions — uses slug expiry timestamp internally ──
+  const timedOut = positionTracker.getTimedOutPositions();
   for (const pos of timedOut) {
     const ob = polymarketFeed.getOrderbook(pos.conditionId);
     const exitPrice = ob?.midPrice ?? pos.entryPrice;

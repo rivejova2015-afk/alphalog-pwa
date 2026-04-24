@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/browser";
 import {
   Activity,
   AlertTriangle,
@@ -183,6 +184,7 @@ interface EquityPoint {
 
 interface Trade {
   id: string;
+  trade_type: string;   // 'ENTRY' | 'EXIT' | 'SIMULATED'
   market_slug: string;
   outcome: string;
   side: string;
@@ -1010,11 +1012,11 @@ export default function PolyArbDashboard() {
     }
   }, [activeAgent]);
 
+  // ── Polling fallback (30s) — Realtime handles the hot path ──────────────────
   useEffect(() => {
     const controller = new AbortController();
     void fetchData(controller.signal);
-    const interval = setInterval(() => void fetchData(controller.signal), 10_000);
-    // Reanudar al volver al tab
+    const interval = setInterval(() => void fetchData(controller.signal), 30_000);
     const onVisible = () => { if (!document.hidden) void fetchData(controller.signal); };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -1023,6 +1025,55 @@ export default function PolyArbDashboard() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [fetchData]);
+
+  // ── Supabase Realtime — instant updates for telemetry, positions, trades ──
+  useEffect(() => {
+    if (!activeAgent) return;
+    const agentId = activeAgent.id;
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel(`polyarb:${agentId}`)
+      // Balance & metrics — telemetry row is upserted every 5s by the bot
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'polyarb_telemetry', filter: `agent_id=eq.${agentId}` },
+        (payload) => {
+          const row = payload.new;
+          if (row && typeof row === 'object' && !('error' in row)) {
+            setTelemetry(row as Telemetry);
+          }
+        }
+      )
+      // Open positions — refresh list whenever a position is opened or closed
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'polyarb_positions', filter: `agent_id=eq.${agentId}` },
+        () => {
+          fetch('/api/polyarb/positions?status=open')
+            .then(r => r.json())
+            .then((d: { data?: unknown[] }) => setPositions((d.data ?? []) as Position[]))
+            .catch(() => {});
+        }
+      )
+      // New trade records (ENTRY or EXIT) — refresh history
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'polyarb_trades', filter: `agent_id=eq.${agentId}` },
+        () => {
+          fetch('/api/polyarb/trades?limit=50')
+            .then(r => r.json())
+            .then((d: { data?: unknown[]; total?: number }) => {
+              setTrades((d.data ?? []) as Trade[]);
+              setTradesTotal(d.total ?? 0);
+            })
+            .catch(() => {});
+        }
+      )
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  }, [activeAgent?.id]);
 
   const sendCommand = async (action: "start" | "stop" | "pause" | "resume") => {
     if (!activeAgent) return;
@@ -1259,13 +1310,15 @@ export default function PolyArbDashboard() {
 // ─── Trade History Section ────────────────────────────────────────────────────
 
 function TradeHistorySection({ trades, tradesTotal }: { trades: Trade[]; tradesTotal: number }) {
-  const wins = trades.filter((t) => t.pnl_usd !== null && t.pnl_usd > 0);
-  const losses = trades.filter((t) => t.pnl_usd !== null && t.pnl_usd < 0);
+  // P&L stats come from EXIT trades only (ENTRY trades have null pnl_usd)
+  const exitTrades = trades.filter(t => t.trade_type === 'EXIT' || (t.trade_type === 'SIMULATED' && t.pnl_usd != null));
+  const wins = exitTrades.filter((t) => t.pnl_usd != null && t.pnl_usd > 0);
+  const losses = exitTrades.filter((t) => t.pnl_usd != null && t.pnl_usd < 0);
   const totalProfit = wins.reduce((s, t) => s + (t.pnl_usd ?? 0), 0);
   const totalLoss = losses.reduce((s, t) => s + (t.pnl_usd ?? 0), 0);
   const netPnl = totalProfit + totalLoss;
   const totalFees = trades.reduce((s, t) => s + (t.fee_usd ?? 0), 0);
-  const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : null;
+  const winRate = exitTrades.length > 0 ? (wins.length / exitTrades.length) * 100 : null;
 
   return (
     <div className="bg-zinc-800/40 rounded-lg p-4 space-y-4">
@@ -1311,6 +1364,7 @@ function TradeHistorySection({ trades, tradesTotal }: { trades: Trade[]; tradesT
             <thead className="text-zinc-500 border-b border-zinc-700">
               <tr>
                 <th className="pb-2 pr-3">Fecha</th>
+                <th className="pb-2 pr-3">Tipo</th>
                 <th className="pb-2 pr-3">Mercado</th>
                 <th className="pb-2 pr-3">Lado</th>
                 <th className="pb-2 pr-3 text-right">Precio</th>
@@ -1322,14 +1376,21 @@ function TradeHistorySection({ trades, tradesTotal }: { trades: Trade[]; tradesT
             </thead>
             <tbody className="text-zinc-300">
               {trades.map((t) => {
-                const isWin = t.pnl_usd !== null && t.pnl_usd > 0;
-                const isLoss = t.pnl_usd !== null && t.pnl_usd < 0;
+                const isWin = t.pnl_usd != null && t.pnl_usd > 0;
+                const isLoss = t.pnl_usd != null && t.pnl_usd < 0;
+                const typeBadge =
+                  t.trade_type === 'EXIT' ? { label: 'EXIT', cls: 'bg-purple-900/50 text-purple-300' }
+                  : t.trade_type === 'SIMULATED' ? { label: 'SIM', cls: 'bg-blue-900/50 text-blue-300' }
+                  : { label: 'BUY', cls: 'bg-cyan-900/50 text-cyan-300' };
                 return (
                   <tr key={t.id} className="border-b border-zinc-800 hover:bg-zinc-800/30">
                     <td className="py-2 pr-3 whitespace-nowrap text-zinc-500">
                       {new Date(t.executed_at).toLocaleDateString()} {new Date(t.executed_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </td>
-                    <td className="py-2 pr-3 truncate max-w-[160px]">{t.market_slug}</td>
+                    <td className="py-2 pr-3">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${typeBadge.cls}`}>{typeBadge.label}</span>
+                    </td>
+                    <td className="py-2 pr-3 truncate max-w-[140px]">{t.market_slug}</td>
                     <td className="py-2 pr-3">
                       <span className={t.side === "BUY" ? "text-green-400" : "text-red-400"}>{t.side}</span>
                       {" "}<span className="text-zinc-500">{t.outcome}</span>

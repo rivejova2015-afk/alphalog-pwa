@@ -142,7 +142,7 @@ export class PositionTracker {
   }
 
   /**
-   * Close a position. Updates Supabase and removes from memory.
+   * Close a position. Updates Supabase, creates an EXIT trade record, removes from memory.
    */
   async closePosition(
     positionId: string,
@@ -158,6 +158,8 @@ export class PositionTracker {
       : 0;
 
     const supabase = getSupabase();
+    const closedAt = new Date().toISOString();
+
     const { error } = await supabase
       .from('polyarb_positions')
       .update({
@@ -166,13 +168,38 @@ export class PositionTracker {
         pnl_usd: pnlUsd,
         pnl_percent: pnlPercent,
         exit_reason: exitReason,
-        closed_at: new Date().toISOString(),
+        closed_at: closedAt,
       })
       .eq('id', positionId);
 
     if (error) {
       console.error('[position-tracker] Close error:', error.message);
       return null;
+    }
+
+    // Create EXIT trade record — this is the record the dashboard uses for P&L history
+    const { error: tradeError } = await supabase
+      .from('polyarb_trades')
+      .insert({
+        user_id:      position.userId,
+        agent_id:     position.agentId,
+        position_id:  positionId,
+        market_slug:  position.marketSlug,
+        condition_id: position.conditionId,
+        outcome:      position.outcome,
+        side:         position.side === 'BUY' ? 'SELL' : 'BUY',
+        price:        exitPrice,
+        size:         position.shares,
+        size_usd:     position.sizeUsd,
+        fee_usd:      0,
+        pnl_usd:      pnlUsd,
+        trade_type:   'EXIT',
+        status:       'FILLED',
+        executed_at:  closedAt,
+      });
+
+    if (tradeError) {
+      console.warn('[position-tracker] EXIT trade insert error:', tradeError.message);
     }
 
     this.openPositions.delete(positionId);
@@ -201,10 +228,21 @@ export class PositionTracker {
   }
 
   /**
-   * Check if any position has exceeded the timeout (5 minutes).
+   * Returns positions whose market has expired.
+   * For btc-updown-5m-TIMESTAMP slugs, uses the embedded expiry timestamp.
+   * Falls back to a 6-minute wall-clock timeout for other slug formats.
    */
-  getTimedOutPositions(timeoutMs: number = 300_000): Position[] {
+  getTimedOutPositions(): Position[] {
     const now = Date.now();
-    return this.open.filter(p => (now - p.openedAt) > timeoutMs);
+    return this.open.filter(p => {
+      const slugParts = p.marketSlug.split('-');
+      const slugTs = parseInt(slugParts[slugParts.length - 1] ?? '0', 10);
+      if (slugTs > 1_000_000_000) {
+        // Close 30s after market expiry to allow orderbook to settle
+        return now > slugTs * 1_000 + 30_000;
+      }
+      // Fallback: 6-minute wall-clock timeout
+      return (now - p.openedAt) > 360_000;
+    });
   }
 }
