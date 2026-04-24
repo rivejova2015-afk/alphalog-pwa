@@ -40,11 +40,11 @@ export async function GET(
     }
 
     // Audit log: record message access (fire-and-forget)
-    supabase.from("secure_message_access_audit").insert({
+    void supabase.from("secure_message_access_audit").insert({
       user_id: userData.user.id,
       message_id: id,
       event: "read",
-    }).then().catch(() => {});
+    });
 
     const { data: attachments, error: attachmentsError } = await supabase
       .from("secure_attachments")
