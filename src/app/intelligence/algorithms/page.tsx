@@ -24,12 +24,17 @@ export default async function AlgorithmsPage() {
     : 0;
   const totalTrades = algorithms.reduce((sum, a) => sum + (a.trade_count ?? 0), 0);
 
+  type MarketType = 'forex' | 'futures' | 'options';
+  type Direction  = 'long' | 'short' | 'both';
+
   // Map DB rows to AlgoAccordion shape
   const algos = algorithms.map((a) => ({
     id: a.id as string,
     name: a.name as string,
-    marketType: "forex" as const,
+    marketType: (["forex","futures","options"].includes(a.market_type as string) ? a.market_type : "forex") as MarketType,
     instrument: a.instrument as string ?? "XAUUSD",
+    direction: (["long","short","both"].includes(a.direction as string) ? a.direction : "both") as Direction,
+    parameters: (a.parameters as Record<string, unknown>) ?? {},
     status: a.status === "running" ? "ACTIVE" as const : a.status === "paused" ? "PAUSED" as const : "ERROR" as const,
     pnlToday: a.pnl_today as number ?? 0,
     pnlTotal: a.pnl_total as number ?? 0,

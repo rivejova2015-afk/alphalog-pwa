@@ -1,10 +1,15 @@
 import { Badge } from '@/components/shared/Badge';
 
+type MarketType = 'forex' | 'futures' | 'options';
+type Direction  = 'long' | 'short' | 'both';
+
 interface AlgoCardProps {
   id: string;
   name: string;
-  marketType: 'forex' | 'futures' | 'options';
+  marketType: MarketType;
   instrument: string;
+  direction?: Direction;
+  parameters?: Record<string, unknown>;
   status: 'ACTIVE' | 'PAUSED' | 'ERROR';
   pnlToday: number;
   pnlTotal: number;
@@ -15,10 +20,24 @@ interface AlgoCardProps {
   onClick?: () => void;
 }
 
+const MARKET_STYLE: Record<MarketType, { label: string; color: string }> = {
+  forex:   { label: 'Forex/MT',  color: '#34d399' },
+  futures: { label: 'Futures',   color: '#f59e0b' },
+  options: { label: 'Options',   color: '#a78bfa' },
+};
+
+const DIRECTION_LABEL: Record<Direction, string> = {
+  long:  'Long bias',
+  short: 'Short bias',
+  both:  'Both',
+};
+
 export function AlgoCard({
   name,
   marketType,
   instrument,
+  direction = 'both',
+  parameters = {},
   status,
   pnlToday,
   pnlTotal,
@@ -31,6 +50,14 @@ export function AlgoCard({
   const statusVariant =
     status === 'ACTIVE' ? 'success' : status === 'ERROR' ? 'error' : 'warning';
 
+  const mStyle = MARKET_STYLE[marketType];
+
+  const subLine = marketType === 'futures'
+    ? `${instrument} · ${DIRECTION_LABEL[direction]}`
+    : marketType === 'options'
+    ? `${instrument} · ${String(parameters?.options_strategy ?? '').replace(/_/g, ' ')} · ${DIRECTION_LABEL[direction]}`
+    : `${instrument} → ${String(parameters?.leg_b_instrument ?? '—')} · ${DIRECTION_LABEL[direction]}`;
+
   return (
     <div
       className={`bg-[#151b28] border rounded-lg p-4 transition-colors ${
@@ -41,14 +68,18 @@ export function AlgoCard({
       onClick={onClick}
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-bold text-[#e2e8f0]">{name}</h3>
-          <p className="text-xs text-[#94a3b8] mt-0.5">
-            {marketType.toUpperCase()} · {instrument}
-          </p>
+      <div className="flex items-start justify-between mb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-[#e2e8f0] truncate">{name}</h3>
+          <p className="text-xs text-[#475569] mt-0.5 truncate capitalize">{subLine}</p>
         </div>
-        <Badge variant={statusVariant}>{status}</Badge>
+        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold"
+            style={{ color: mStyle.color, background: `${mStyle.color}15`, border: `1px solid ${mStyle.color}30` }}>
+            {mStyle.label}
+          </span>
+          <Badge variant={statusVariant}>{status}</Badge>
+        </div>
       </div>
 
       {/* P&L Today — prominent */}

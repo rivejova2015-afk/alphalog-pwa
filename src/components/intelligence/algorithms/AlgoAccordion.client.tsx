@@ -6,13 +6,19 @@ import { AlgoCard } from './AlgoCard';
 import { TradesTable } from './TradesTable';
 import { EquityCurve } from './EquityCurve';
 import { ControlPanel } from './ControlPanel.client';
+import { QuantModelsPanel } from './QuantModelsPanel';
 import { Badge } from '@/components/shared/Badge';
+
+type MarketType = 'forex' | 'futures' | 'options';
+type Direction  = 'long' | 'short' | 'both';
 
 interface AlgoData {
   id: string;
   name: string;
-  marketType: 'forex' | 'futures' | 'options';
+  marketType: MarketType;
   instrument: string;
+  direction?: Direction;
+  parameters?: Record<string, unknown>;
   status: 'ACTIVE' | 'PAUSED' | 'ERROR';
   pnlToday: number;
   pnlTotal: number;
@@ -59,12 +65,21 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
             >
               <div className="flex items-center gap-3 text-left">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-[#e2e8f0]">{algo.name}</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold"
+                      style={
+                        algo.marketType === 'futures' ? { color: '#f59e0b', background: '#f59e0b15', border: '1px solid #f59e0b30' } :
+                        algo.marketType === 'options' ? { color: '#a78bfa', background: '#a78bfa15', border: '1px solid #a78bfa30' } :
+                        { color: '#34d399', background: '#34d39915', border: '1px solid #34d39930' }
+                      }>
+                      {algo.marketType === 'forex' ? 'Forex' : algo.marketType === 'futures' ? 'Futures' : 'Options'}
+                    </span>
                     <Badge variant={statusVariant}>{currentStatus}</Badge>
                   </div>
-                  <span className="text-xs text-[#94a3b8]">
-                    {algo.marketType.toUpperCase()} · {algo.instrument}
+                  <span className="text-xs text-[#475569]">
+                    {algo.instrument}
+                    {algo.direction && algo.direction !== 'both' && ` · ${algo.direction === 'long' ? 'Long bias' : 'Short bias'}`}
                   </span>
                 </div>
               </div>
@@ -106,6 +121,18 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   status={currentStatus}
                   onStatusChange={handleStatusChange}
                 />
+
+                {/* Quant models */}
+                <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4">
+                  <p className="text-xs text-[#475569] mb-1 uppercase tracking-wider font-medium">
+                    Quantitative Engine State
+                  </p>
+                  <QuantModelsPanel
+                    marketType={algo.marketType}
+                    algoId={algo.id}
+                    parameters={algo.parameters}
+                  />
+                </div>
 
                 {/* Recent trades */}
                 <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4">
