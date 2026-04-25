@@ -30,8 +30,8 @@ import {
 } from './trading/circuit-breaker.js';
 import { logCircuitBreakerEvents, logCompliance } from './telemetry/compliance.js';
 import { estimateBeliefVolatility, computeFairPrice, computeEdge } from './math/jump-diffusion.js';
-import { calculateMomentumVector, isReversalImminent } from './math/momentum-physics.js';
-import { aggressiveKelly, checkRiskReward } from './math/kelly-sizer.js';
+import { calculateMomentumVector } from './math/momentum-physics.js';
+import { aggressiveKelly } from './math/kelly-sizer.js';
 import { hestonStep, type HestonState } from './math/heston-vol.js';
 
 // ── Superpowers ──────────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ import { type FundamentalEngine, compositeEdgeMultiplier } from './analysis/fund
 import type { FundamentalSignal } from './analysis/types.js';
 import { settleTimedOutPosition } from './skills/settlement-engine.js';
 import { getSupabase } from './supabase.js';
+import { WindowGate, extractWindowInfo, isInEntryWindow, isNearExpiry } from './trading/window-gate.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -64,6 +65,7 @@ export interface LoopDeps {
   memoryBank: MemoryBank;
   sentimentPulse: SentimentPulseTracker;
   fundamentalEngine: FundamentalEngine;
+  windowGate: WindowGate;
 }
 
 interface LoopMetrics {
@@ -155,12 +157,7 @@ export async function tradingTick(
 
   if (cbEvents.length > 0) {
     void logCircuitBreakerEvents(config.agentId, config.userId, cbEvents);
-    const closeAllEvent = cbEvents.find(e => e.actionTaken === 'CLOSE_ALL');
-    if (closeAllEvent && positionTracker.openCount > 0) {
-      const prices = new Map<string, number>();
-      for (const ob of orderbooks) prices.set(ob.conditionId, ob.midPrice);
-      await positionTracker.closeAll(prices);
-    }
+    // Circuit breaker close-all removed — Kelly sizing manages position risk dynamically
   }
 
   // tradingEnabled gate removed — super-aggressive mode, no agent-decided halts
@@ -227,6 +224,88 @@ export async function tradingTick(
   updateTelemetry(deps, metrics, tickStart);
 }
 
+// ─── Engine voting ────────────────────────────────────────────────────────────
+
+interface EngineVote {
+  engine: string;
+  direction: 'YES' | 'NO';
+  confidence: number; // 0-1
+}
+
+function computeEngineVotes(
+  velocitySignal: VelocitySignal,
+  sentimentMultiplier: number,
+  fundamental: FundamentalSignal,
+  edge: number,
+  kellyMinEdge: number,
+): EngineVote[] {
+  const votes: EngineVote[] = [];
+
+  // Velocity: 5m window direction — strength derived from normalised velocity magnitude
+  const vel5m = velocitySignal.windows.find(w => w.label === '5m');
+  if (vel5m && vel5m.direction !== 'FLAT') {
+    // Normalize velocity to confidence (0-1), cap at 1
+    const confidence = Math.min(Math.abs(vel5m.velocity) / 500, 1.0);
+    votes.push({ engine: 'velocity', direction: vel5m.direction === 'UP' ? 'YES' : 'NO', confidence: Math.max(confidence, 0.1) });
+  }
+
+  // Sentiment: multiplier deviation from 1 signals conviction
+  if (sentimentMultiplier !== 1.0) {
+    const confidence = Math.min(Math.abs(sentimentMultiplier - 1) * 2, 1.0);
+    votes.push({ engine: 'sentiment', direction: sentimentMultiplier > 1 ? 'YES' : 'NO', confidence });
+  }
+
+  // Fundamental: compositeScore range is ±95; normalise to 0-1 confidence
+  if (fundamental.compositeScore !== 0) {
+    const confidence = Math.min(Math.abs(fundamental.compositeScore) / 60, 1.0);
+    votes.push({ engine: 'fundamental', direction: fundamental.compositeScore > 0 ? 'YES' : 'NO', confidence });
+  }
+
+  // Adaptive Kelly: votes in edge direction if edge clears the adaptive threshold
+  if (Math.abs(edge) >= kellyMinEdge) {
+    const confidence = Math.min(Math.abs(edge) * 10, 1.0);
+    votes.push({ engine: 'kelly', direction: edge > 0 ? 'YES' : 'NO', confidence });
+  }
+
+  return votes;
+}
+
+async function logSkippedTrade(
+  deps: LoopDeps,
+  orderbook: PolymarketOrderbook,
+  direction: 'YES' | 'NO',
+  reason: string,
+  votes: EngineVote[],
+  yesScore: number,
+  noScore: number,
+): Promise<void> {
+  try {
+    const supabase = getSupabase();
+    await supabase.from('polyarb_trades').insert({
+      user_id:              deps.config.userId,
+      agent_id:             deps.config.agentId,
+      order_id:             null,
+      condition_id:         orderbook.conditionId,
+      market_slug:          orderbook.marketSlug,
+      outcome:              direction,
+      side:                 'BUY',
+      price:                orderbook.midPrice,
+      size:                 0,
+      size_usd:             0,
+      fee_usd:              0,
+      fee_rate_bps:         0,
+      slippage_bps:         0,
+      execution_latency_ms: 0,
+      trade_type:           'SKIPPED',
+      status:               'SKIPPED',
+      raw_response:         { reason, yesScore, noScore, votes },
+      executed_at:          new Date().toISOString(),
+    });
+  } catch {
+    // Non-critical — don't let logging failures interrupt the loop
+  }
+}
+
 async function processMarket(
   deps: LoopDeps,
   metrics: LoopMetrics,
@@ -239,28 +318,41 @@ async function processMarket(
   const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse } = deps;
   const { params } = config;
 
-  // POLYARB_MARKET_SLUG_PREFIX: skip any market whose slug doesn't start with the prefix.
-  // Mirrors the fetch filter in polymarket-ws.ts — belt-and-suspenders guard.
-  const slugPrefix = process.env.POLYARB_MARKET_SLUG_PREFIX ?? 'btc-updown-5m-';
-  if (!orderbook.marketSlug.startsWith(slugPrefix)) return;
+  // ── Market scope filter — BTC + ETH updown-5m ──
+  const prefixes = (process.env.POLYARB_MARKET_SLUG_PREFIXES ?? 'btc-updown-5m-,eth-updown-5m-').split(',');
+  if (!prefixes.some(p => orderbook.marketSlug.startsWith(p.trim()))) return;
 
-  // Skip markets expiring in <3min — orderbook may already be closed on CLOB
-  const slugTs = parseInt(orderbook.marketSlug.split('-').pop() ?? '0', 10);
-  if (slugTs > 0 && slugTs * 1000 <= Date.now() + 180_000) return;
+  // ── Window timing gate ──
+  const windowInfo = extractWindowInfo(orderbook.marketSlug);
+  if (!windowInfo) return;
 
+  const now = Date.now();
+
+  // Never enter within 60s of expiry
+  if (isNearExpiry(windowInfo, now, 60_000)) return;
+
+  // Already entered this specific window instance for this market
+  if (deps.windowGate.hasEnteredWindow(orderbook.conditionId, orderbook.marketSlug)) return;
+
+  // Entry allowed only during the first 60s of the 5-min window
+  if (!isInEntryWindow(windowInfo, now, 60_000)) return;
+
+  // Skip if already have an open position on this market
   const hasOpenPosition = positionTracker.open.some(p => p.conditionId === orderbook.conditionId);
   if (hasOpenPosition) return;
 
-  // ── 2. Compute belief volatility ──
+  // Max 2 simultaneous positions
+  if (positionTracker.openCount >= 2) return;
+
+  // ── Price history warmup — skip if insufficient data ──
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
 
+  // ── Belief volatility + fair price ──
   const sigma = estimateBeliefVolatility(priceHistory, orderbook.bidPrice, orderbook.askPrice);
-
-  // ── 3. Compute base fair price ──
   const baseFairPrice = computeFairPrice(orderbook.midPrice, sigma);
 
-  // ── SP#1 Velocity Detector — adjust fair price with momentum ──
+  // ── SP#1 Velocity Detector ──
   const market = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
   const milestonePrice = milestoneMap.get(orderbook.conditionId) ?? null;
   const velocitySignal = computeVelocitySignal(
@@ -273,22 +365,20 @@ async function processMarket(
     milestonePrice,
   );
 
-  // Store for telemetry
   const vsIdx = metrics.lastVelocitySignals.findIndex(s => s.conditionId === orderbook.conditionId);
   if (vsIdx >= 0) metrics.lastVelocitySignals[vsIdx] = velocitySignal;
   else metrics.lastVelocitySignals.push(velocitySignal);
 
-  // ── 4. Detect edge with velocity-adjusted fair price ──
+  // ── Edge computation ──
   const fairPrice = velocitySignal.adjustedFairProb;
   let edge = computeEdge(fairPrice, orderbook.midPrice);
 
-  // ── SP#4 Sentiment Pulse — apply edge multiplier ──
+  // SP#4 Sentiment multiplier
   const tradingBullish = edge > 0;
   const sentimentMultiplier = sentimentPulse.getEdgeMultiplier(orderbook.conditionId, tradingBullish);
   edge *= sentimentMultiplier;
 
-  // ── SP#6 Cross-Market — apply confirmation multiplier ──
-  // Re-compute with correct direction for this market's velocity signal
+  // SP#6 Cross-market multiplier
   const marketVelDirection = velocitySignal.windows.find(w => w.label === '5m')?.direction;
   const primaryDir = marketVelDirection === 'UP' ? 'UP' : marketVelDirection === 'DOWN' ? 'DOWN' : null;
   if (primaryDir) {
@@ -302,20 +392,43 @@ async function processMarket(
     edge *= marketCross.edgeMultiplier;
   }
 
-  // ── Fundamental Engine — apply directional multiplier (capa 3) ──
+  // Fundamental multiplier
   const fundamentalMultiplier = compositeEdgeMultiplier(fundamental.compositeScore, tradingBullish);
   edge *= fundamentalMultiplier;
 
-  // ── SP#3 Adaptive Kelly state — still track but don't filter ──
-  adaptiveKelly.getCurrentMinEdge(regime.agentMultiplier); // keep state updated
+  // SP#3 Adaptive Kelly — keep state updated
+  const kellyMinEdge = adaptiveKelly.getCurrentMinEdge(regime.agentMultiplier);
 
-  // ── SP#2 Memory Bank — log only, no filter ──
+  // SP#2 Memory Bank — log only
   const memoryFilter = memoryBank.shouldFilter(velocitySignal, regime.regime);
   if (memoryFilter.filter) {
-    console.log(`[loop] Memory (ignored, super-aggressive): ${memoryFilter.reason}`);
+    console.log(`[loop] Memory Bank note: ${memoryFilter.reason}`);
   }
 
-  // ── 5. Momentum physics ──
+  // ── 4-Engine Consensus Voting ──
+  const votes = computeEngineVotes(velocitySignal, sentimentMultiplier, fundamental, edge, kellyMinEdge);
+  const yesScore = votes.filter(v => v.direction === 'YES').reduce((s, v) => s + v.confidence, 0);
+  const noScore  = votes.filter(v => v.direction === 'NO').reduce((s, v) => s + v.confidence, 0);
+
+  let buyYes: boolean;
+  let forcedEntry = false;
+
+  if (yesScore > noScore) {
+    buyYes = true;
+  } else if (noScore > yesScore) {
+    buyYes = false;
+  } else {
+    // Tie or no votes — Fundamental Engine as tiebreaker
+    buyYes = fundamental.compositeScore >= 0;
+    forcedEntry = true;
+  }
+
+  console.log(
+    `[loop] ${orderbook.marketSlug} votes YES=${yesScore.toFixed(2)} NO=${noScore.toFixed(2)}` +
+    ` → ${buyYes ? 'YES' : 'NO'}${forcedEntry ? ' (forced/tiebreak)' : ''} edge=${edge.toFixed(4)}`
+  );
+
+  // ── Momentum (kept for entryReason metadata only) ──
   const momentum = calculateMomentumVector(
     priceHistory,
     params.loopIntervalMs / 1000,
@@ -323,17 +436,9 @@ async function processMarket(
     params.jerkReversalThreshold,
   );
 
-  // HOLD + reversal gates removed — super-aggressive mode
-
-  // Determine direction — use edge alone (momentum signal no longer gates)
-  const buyYes = edge > 0;
-  const buyNo = edge < 0;
-  if (!buyYes && !buyNo) return;
-
-  // ── 6. Kelly sizing ──
-  // Usar balance real del CLOB si está disponible; fallback a capital inicial + P&L acumulado.
-  // Esto garantiza que el bot no intente operar más de lo que tiene en CLOB después de ganancias/pérdidas.
+  // ── Kelly sizing — capped at 10% of balance ──
   const accountValue = metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd);
+  const maxSizeUsd = accountValue * params.maxKellyFraction; // 10% cap
   const entryPrice = buyYes ? orderbook.askPrice : orderbook.bidPrice;
 
   const kelly = aggressiveKelly(
@@ -344,29 +449,24 @@ async function processMarket(
     entryPrice,
     fairPrice,
     params.maxKellyFraction,
-    Math.min(params.maxLeverage, metrics.hestonState.leverage),
-    params.winStreakBonus,
+    1.0, // no leverage in binary markets
+    1.0, // no win-streak bonus
   );
 
-  // Consecutive loss risk reduction: after N losses, reduce Kelly until recovery
   const lossStreakMult = metrics.consecutiveLosses >= params.lossStreakThreshold
     ? params.lossStreakRiskReduction
     : 1.0;
 
-  const sizeMultiplier = (deps.cbState.reduceSizeNextTrade ? 0.8 : 1.0) * lossStreakMult;
   deps.cbState.reduceSizeNextTrade = false;
+  const finalSize = Math.min(kelly.positionSizeUsd * lossStreakMult, maxSizeUsd);
 
-  // Enforce minimum position size ($5) — Kelly may produce tiny sizes with small account
-  const finalSize = Math.max(params.minPositionSizeUsd, kelly.positionSizeUsd * sizeMultiplier);
+  if (finalSize < 0.01) {
+    void logSkippedTrade(deps, orderbook, buyYes ? 'YES' : 'NO', 'kelly_size_negligible', votes, yesScore, noScore);
+    deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
+    return;
+  }
 
-  // risk/reward gate removed — super-aggressive mode
-
-  // ── 8. Execute order — 30s cooldown per market to avoid proxy hammering ──
-  const ORDER_COOLDOWN_MS = 30_000;
-  const lastAttempt = metrics.lastOrderAttemptAt.get(orderbook.conditionId) ?? 0;
-  if (Date.now() - lastAttempt < ORDER_COOLDOWN_MS) return;
-  metrics.lastOrderAttemptAt.set(orderbook.conditionId, Date.now());
-
+  // ── Execute order ──
   const market2 = deps.polymarketFeed.getMarkets().find(m => m.conditionId === orderbook.conditionId);
   const result = await orderManager.placeOrder({
     conditionId: orderbook.conditionId,
@@ -382,12 +482,16 @@ async function processMarket(
     userId: config.userId,
   });
 
+  // Mark window as entered regardless of order success — one attempt per window
+  deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
+
   metrics.lastLatencyMs = result.executionLatencyMs;
   metrics.lastSlippage = result.slippageBps / 10_000;
 
   if (!result.success) {
     metrics.errorCount1h++;
     console.error(`[loop] Order failed (${orderbook.marketSlug}): ${result.error ?? 'unknown'}`);
+    void logSkippedTrade(deps, orderbook, buyYes ? 'YES' : 'NO', `order_failed: ${result.error ?? 'unknown'}`, votes, yesScore, noScore);
     return;
   }
 
@@ -402,7 +506,7 @@ async function processMarket(
     shares: result.filledSize,
     leverageUsed: kelly.leverage,
     entryReason: {
-      pillar: 'edge-only-super-aggressive',
+      pillar: 'consensus-voting-v2',
       edge,
       fairPrice,
       kellyFraction: kelly.fraction,
@@ -416,12 +520,15 @@ async function processMarket(
       sentimentMultiplier,
       fundamentalMultiplier,
       fundamentalScore: fundamental.compositeScore,
+      votes,
+      yesScore,
+      noScore,
+      forcedEntry,
     },
   });
 
   if (position) {
     metrics.totalTrades++;
-    // SP#2: record entry in Memory Bank
     memoryBank.recordEntry(position.id, velocitySignal, regime.regime, edge);
     void logCompliance(
       config.agentId,
@@ -430,7 +537,7 @@ async function processMarket(
       position.id,
       'polyarb_positions',
       undefined,
-      { price: result.filledPrice, size: finalSize, edge, kelly: kelly.fraction, regime: regime.regime },
+      { price: result.filledPrice, size: finalSize, edge, kelly: kelly.fraction, regime: regime.regime, votes, forcedEntry },
     );
   }
 }

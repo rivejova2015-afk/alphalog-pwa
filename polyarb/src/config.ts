@@ -41,20 +41,20 @@ export interface TradingParams {
 
 const DEFAULT_PARAMS: TradingParams = {
   loopIntervalMs: 250,
-  minEdgePercent: 0.0001,      // near-zero: take any detectable edge
-  maxKellyFraction: 1.0,       // full Kelly — no cap
-  maxLeverage: 5.0,            // maximum leverage
+  minEdgePercent: 0.001,       // require at least 0.1% detectable edge
+  maxKellyFraction: 0.10,      // cap at 10% of balance per trade
+  maxLeverage: 1.0,            // no leverage in binary markets
   dailyDrawdownLimit: -0.90,   // 90% daily loss before hard stop
   hourlyDrawdownLimit: -0.60,  // 60% hourly
   consecutiveLossLimit: 30,    // allow long losing streaks
   maxSlippage: 0.05,           // tolerate high slippage
   maxLatencyMs: 500,           // tolerate slower execution
-  minRiskReward: 0.5,          // accept any trade with any R:R
-  winStreakBonus: 2.0,         // bigger size on win streaks
+  minRiskReward: 0.0,          // Kelly manages R:R implicitly — no separate floor
+  winStreakBonus: 1.0,         // no win-streak size bonus (Kelly handles sizing)
   priceHistoryWindowMs: 60_000,
   accelerationThreshold: 0.00005,
   jerkReversalThreshold: -0.0001,
-  minPositionSizeUsd: 5.0,    // never bet less than $5
+  minPositionSizeUsd: 0.01,   // effectively no floor — Kelly determines exact size
   lossStreakRiskReduction: 0.4, // reduce Kelly to 40% after streak
   lossStreakThreshold: 10,    // trigger after 10 consecutive losses
 };

@@ -22,6 +22,7 @@ import { AdaptiveKelly } from './skills/adaptive-kelly.js';
 import { MemoryBank } from './skills/memory-bank.js';
 import { SentimentPulseTracker } from './skills/sentiment-pulse.js';
 import { FundamentalEngine } from './analysis/fundamental-engine.js';
+import { WindowGate } from './trading/window-gate.js';
 
 let loopInterval: ReturnType<typeof setInterval> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
@@ -136,6 +137,8 @@ async function main(): Promise<void> {
     sentimentPulse.record(conditionId, bidSize, askSize, bidPrice, askPrice);
   };
 
+  const windowGate = new WindowGate();
+
   const deps: LoopDeps = {
     config,
     binanceFeed,
@@ -149,6 +152,7 @@ async function main(): Promise<void> {
     memoryBank,
     sentimentPulse,
     fundamentalEngine,
+    windowGate,
   };
 
   // 8. Refresh crypto market list every 5 min — catches new short-term markets
