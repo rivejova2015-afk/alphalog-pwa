@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Play, Pause, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface StrategyParam {
   key: string;
@@ -41,15 +42,16 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
   const handleSave = async () => {
     const payload = Object.fromEntries(params.map((p) => [p.key, p.value]));
     try {
-      await fetch(`/api/algorithms/${algoId}`, {
+      const res = await fetch(`/api/algorithms/${algoId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (!res.ok) { toast.error('Error al guardar parámetros'); return; }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      // silently ignore
+      toast.error('Error de conexión');
     }
   };
 
@@ -61,14 +63,15 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
   const toggleStatus = async () => {
     const next = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
     try {
-      await fetch(`/api/algorithms/${algoId}`, {
+      const res = await fetch(`/api/algorithms/${algoId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: next === 'ACTIVE' ? 'running' : 'paused' }),
       });
+      if (!res.ok) { toast.error('Error al cambiar estado'); return; }
       onStatusChange?.(algoId, next);
     } catch {
-      // silently ignore
+      toast.error('Error de conexión');
     }
   };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { AlgoCard } from './AlgoCard';
 import { TradesTable } from './TradesTable';
@@ -37,6 +37,15 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
   const [statuses, setStatuses] = useState<Record<string, AlgoData['status']>>(
     Object.fromEntries(algos.map((a) => [a.id, a.status]))
   );
+
+  // Sync statuses when algos prop changes (e.g. after router.refresh() adds a new entry)
+  useEffect(() => {
+    setStatuses((prev) => {
+      const updated = { ...prev };
+      algos.forEach((a) => { if (!(a.id in updated)) updated[a.id] = a.status; });
+      return updated;
+    });
+  }, [algos]);
 
   const handleStatusChange = (id: string, newStatus: 'ACTIVE' | 'PAUSED') => {
     setStatuses((prev) => ({ ...prev, [id]: newStatus }));

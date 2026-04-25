@@ -36,12 +36,12 @@ export default async function AlgorithmsPage() {
     direction: (["long","short","both"].includes(a.direction as string) ? a.direction : "both") as Direction,
     parameters: (a.parameters as Record<string, unknown>) ?? {},
     status: a.status === "running" ? "ACTIVE" as const : a.status === "paused" ? "PAUSED" as const : "ERROR" as const,
-    pnlToday: a.pnl_today as number ?? 0,
-    pnlTotal: a.pnl_total as number ?? 0,
-    winRate: a.win_rate as number ?? 0,
-    totalTrades: a.trade_count as number ?? 0,
-    profitFactor: a.profit_factor as number ?? 0,
-    maxDrawdown: -(a.max_drawdown_pct as number ?? 0),
+    pnlToday: (a.pnl_today ?? 0) as number,
+    pnlTotal: (a.pnl_total ?? 0) as number,
+    winRate: (a.win_rate ?? 0) as number,
+    totalTrades: (a.trade_count ?? 0) as number,
+    profitFactor: (a.profit_factor ?? 0) as number,
+    maxDrawdown: -((a.max_drawdown_pct ?? 0) as number),
   }));
 
   const stats = [

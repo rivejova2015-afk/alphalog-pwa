@@ -486,6 +486,9 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
 
   async function handleCreate() {
     if (!name.trim()) { toast.error('El nombre es obligatorio'); setStepIdx(0); return; }
+    if (marketType === 'forex' && legA === legB) {
+      toast.error('Leg A y Leg B deben ser instrumentos diferentes'); setStepIdx(0); return;
+    }
     setSaving(true);
     try {
       const supabase = createClient();
@@ -517,11 +520,24 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         parameters.options_direction = optionsDirection;
       }
 
-      // Normalize direction for DB (options uses 4 values, DB only stores 3 — map neutral/bearish/bullish to both/short/long)
+      // Normalize direction for DB (options 4-value → 3-value DB enum)
       const dbDirection: Direction =
         marketType === 'options'
           ? optionsDirection === 'bullish' ? 'long' : optionsDirection === 'bearish' ? 'short' : 'both'
           : direction;
+
+      // Map DB columns by market type — use the relevant override key per market
+      const lotSize =
+        marketType === 'forex'   ? (engineOverrides.lot_per_leg      ?? 0.01) :
+        marketType === 'futures' ? (engineOverrides.contracts_per_trade ?? 1)  :
+                                   (engineOverrides.max_contracts     ?? 5);
+      const maxTrades =
+        marketType === 'forex'   ? (engineOverrides.max_concurrent    ?? 5) :
+                                   (engineOverrides.contracts_per_trade ?? 1);
+      const riskPercent =
+        marketType === 'forex'   ? (engineOverrides.max_daily_loss_pct ?? 3.0)  :
+        marketType === 'futures' ? (engineOverrides.max_daily_loss_usd ?? 500)  :
+                                   (engineOverrides.max_premium_usd   ?? 200);
 
       const { error } = await supabase.from('algorithms').insert({
         user_id:               user.id,
@@ -530,12 +546,12 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         market_type:           marketType,
         direction:             dbDirection,
         linked_bot_account_id: marketType === 'forex' ? (botAccountId || null) : null,
-        lot_size:              engineOverrides.lot_per_leg       ?? 0.01,
-        max_trades:            engineOverrides.max_concurrent    ?? 5,
-        risk_percent:          engineOverrides.max_daily_loss_pct ?? 3.0,
+        lot_size:              lotSize,
+        max_trades:            maxTrades,
+        risk_percent:          riskPercent,
         parameters,
         scan_config: {},
-        status: 'stopped',
+        status: 'paused',
       });
 
       if (error) { toast.error(error.message); return; }
@@ -604,7 +620,14 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
           {stepIdx === 0 && marketType === 'futures' && (
             <StepFutures
               name={name} setName={setName}
-              contract={contract} setContract={setContract}
+              contract={contract}
+              setContract={(v) => {
+                setContract(v);
+                if (hedgeContract === v) {
+                  const fallback = FUTURES_CONTRACTS.find((c) => c.symbol !== v);
+                  setHedgeContract(fallback?.symbol ?? '');
+                }
+              }}
               direction={direction} setDirection={setDirection}
               hedgeEnabled={hedgeEnabled} setHedgeEnabled={setHedgeEnabled}
               hedgeContract={hedgeContract} setHedgeContract={setHedgeContract}
