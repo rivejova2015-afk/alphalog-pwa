@@ -344,6 +344,11 @@ async function processMarket(
   // Max 2 simultaneous positions
   if (positionTracker.openCount >= 2) return;
 
+  // ── Claim this window SYNCHRONOUSLY before any await ──
+  // setInterval fires concurrent ticks when each tick takes > loopIntervalMs.
+  // Marking here (before any DB call) ensures only ONE tick can proceed per window.
+  deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
+
   // ── Price history warmup — skip if insufficient data ──
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
@@ -462,7 +467,6 @@ async function processMarket(
 
   if (finalSize < 0.01) {
     void logSkippedTrade(deps, orderbook, buyYes ? 'YES' : 'NO', 'kelly_size_negligible', votes, yesScore, noScore);
-    deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
     return;
   }
 
@@ -481,9 +485,6 @@ async function processMarket(
     agentId: config.agentId,
     userId: config.userId,
   });
-
-  // Mark window as entered regardless of order success — one attempt per window
-  deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
 
   metrics.lastLatencyMs = result.executionLatencyMs;
   metrics.lastSlippage = result.slippageBps / 10_000;
