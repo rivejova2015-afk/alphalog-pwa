@@ -190,7 +190,7 @@ function StepFutures({ name, setName, contract, setContract, direction, setDirec
     <div className="space-y-4">
       <Field label="Nombre de la estrategia *">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="ES Mean Reversion v1" autoFocus
+          placeholder="ES Mean Reversion v1"
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
@@ -259,7 +259,7 @@ function StepOptions({ name, setName, underlying, setUnderlying, strategy, setSt
     <div className="space-y-4">
       <Field label="Nombre de la estrategia *">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="SPX Iron Condor v1" autoFocus
+          placeholder="SPX Iron Condor v1"
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
