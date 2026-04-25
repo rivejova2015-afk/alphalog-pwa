@@ -185,7 +185,7 @@ export async function tradingTick(
       void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
 
       // Trigger settlement: poll gamma for winner, wait for CLOB credit, update real P&L
-      settleTimedOutPosition(pos, deps.orderManager, getSupabase());
+      settleTimedOutPosition(pos, getSupabase());
     }
   }
 

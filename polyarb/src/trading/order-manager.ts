@@ -43,7 +43,10 @@ export interface OrderResult {
 
 const CLOB_BASE = 'https://clob.polymarket.com';
 const FEE_RATE_BPS = 156; // Polymarket standard fee (Feb 2026)
-const USDC_POLYGON = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const USDC_NATIVE  = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'; // Native USDC on Polygon (2024+)
+const USDC_E       = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'; // USDC.e bridged (legacy)
+const PUSD         = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB'; // Polymarket USD (newest)
+const POLYGON_RPC  = process.env.POLYGON_RPC_URL ?? 'https://polygon.api.onfinality.io/public';
 const USDC_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
 export class OrderManager {
@@ -87,8 +90,8 @@ export class OrderManager {
       if (walletAddress && walletAddress.toLowerCase() !== l1Address.toLowerCase()) {
         this.signer        = new ClobProxySigner(l1PK, makerAddress);
         this.signerAddress = l1Address;
-        this.walletAddress = l1Address;
-        console.log(`[order-manager] POLY_PROXY signer — maker: ${makerAddress} signer: ${l1Address}`);
+        this.walletAddress = makerAddress;  // POLY_ADDRESS = proxy (API key owner), not signer
+        console.log(`[order-manager] POLY_PROXY signer — maker: ${makerAddress} signer: ${l1Address} POLY_ADDRESS: ${makerAddress}`);
       } else {
         this.signer        = new ClobSigner(l1PK);
         this.signerAddress = l1Address;
@@ -368,58 +371,35 @@ export class OrderManager {
   }
 
   /**
-   * Redeem winning outcome tokens via Polymarket CLOB API (gasless — no MATIC needed).
-   *
-   * The CLOB acts as a meta-transaction relayer: it processes the on-chain CTF redemption
-   * on behalf of the user, crediting USDC back to the CLOB balance automatically.
-   *
-   * @param tokenId   - ERC1155 token ID of the winning outcome (from gamma API clobTokenIds)
-   * @param amountMicro - Amount in micro-USDC (shares × 1e6)
-   */
-  async redeemWinningPosition(tokenId: string, amountMicro: string): Promise<void> {
-    if (this.dryRun) {
-      console.log(`[order-manager] [DRY_RUN] Redeem ${tokenId.slice(0, 12)}... amount=${amountMicro}`);
-      return;
-    }
-    if (!this.apiKey) throw new Error('No API key for redemption');
-
-    const body = JSON.stringify({
-      positions: [{ asset_id: tokenId, amount: amountMicro }],
-    });
-    const authHeaders = buildL2AuthHeaders(
-      this.apiKey,
-      this.apiSecret,
-      this.apiPassphrase,
-      this.walletAddress,
-      'POST',
-      '/redeem-positions',
-      body,
-    );
-    const res = await clobFetch(`${CLOB_BASE}/redeem-positions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body,
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`CLOB redeem HTTP ${res.status}: ${errText.slice(0, 200)}`);
-    }
-
-    const result = await res.json() as { status?: string; transactionHash?: string };
-    console.log(`[order-manager] Redeem response: status=${result.status ?? 'ok'} tx=${result.transactionHash ?? 'N/A'}`);
-  }
-
-  /**
-   * Fetch combined balance: CLOB-approved USDC + on-chain wallet USDC.
-   * The on-chain balance covers funds not yet deposited into the CLOB
-   * and any CTF winnings already redeemed back to the wallet.
+   * Fetch combined balance: CLOB-approved USDC + on-chain wallet USDC (all variants).
+   * Polymarket has used 3 collateral tokens on Polygon: pUSD, native USDC, USDC.e.
+   * On-chain wallet check ensures redeemed tokens are visible even before CLOB deposit.
    */
   async fetchOnChainBalance(): Promise<{ clob: number | null; wallet: number | null; total: number | null }> {
     const clob = await this.fetchBalance();
-    // On-chain wallet check desactivado — requiere RPC con API key (no disponible en Fly.io).
-    // El CLOB balance es suficiente: es el capital operativo real del bot.
-    return { clob, wallet: null, total: clob };
+
+    // Check on-chain wallet balance if we have an address
+    let wallet: number | null = null;
+    if (this.walletAddress) {
+      try {
+        const provider = new ethers.JsonRpcProvider(POLYGON_RPC, 137, { staticNetwork: ethers.Network.from(137) });
+        const [bPusd, bUsdc, bUsdce]: [bigint, bigint, bigint] = await Promise.all([
+          (new ethers.Contract(PUSD,       USDC_ABI, provider).balanceOf(this.walletAddress) as Promise<bigint>),
+          (new ethers.Contract(USDC_NATIVE, USDC_ABI, provider).balanceOf(this.walletAddress) as Promise<bigint>),
+          (new ethers.Contract(USDC_E,     USDC_ABI, provider).balanceOf(this.walletAddress) as Promise<bigint>),
+        ]);
+        wallet = Number(bPusd + bUsdc + bUsdce) / 1e6;
+        if (wallet > 0) {
+          console.log(`[order-manager] Wallet breakdown — pUSD: $${(Number(bPusd)/1e6).toFixed(4)} | USDC: $${(Number(bUsdc)/1e6).toFixed(4)} | USDC.e: $${(Number(bUsdce)/1e6).toFixed(4)}`);
+        }
+      } catch {
+        wallet = null;
+      }
+    }
+
+    const total = clob !== null && wallet !== null ? clob + wallet
+                : clob  !== null ? clob
+                : wallet;
+    return { clob, wallet, total };
   }
 }

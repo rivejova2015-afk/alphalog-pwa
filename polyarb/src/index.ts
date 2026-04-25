@@ -16,6 +16,7 @@ import { logCompliance } from './telemetry/compliance.js';
 import { createCircuitBreakerState } from './trading/circuit-breaker.js';
 import { tradingTick, createLoopMetrics, type LoopDeps } from './loop.js';
 import { sweepUnsettledPositions, redeemPendingWins } from './skills/settlement-engine.js';
+import { CtfRedeemer } from './trading/ctf-redeemer.js';
 import { parseMilestonePrice } from './skills/velocity-detector.js';
 import { AdaptiveKelly } from './skills/adaptive-kelly.js';
 import { MemoryBank } from './skills/memory-bank.js';
@@ -66,15 +67,16 @@ async function main(): Promise<void> {
   const positionTracker = new PositionTracker(config.agentId, config.userId);
   const orderManager = new OrderManager(config.apiKey, config.apiSecret, config.apiPassphrase, config.walletPrivateKey, config.dryRun, config.walletAddress);
   const telemetryWriter = new TelemetryWriter();
+  const ctfRedeemer = new CtfRedeemer(config.walletPrivateKey, config.dryRun);
 
   // 4. Load existing positions
   await positionTracker.loadFromDb();
 
-  // Liquidar posiciones pasadas que nunca tuvieron P&L confirmado (con redemption automático)
-  await sweepUnsettledPositions(supabase, orderManager);
+  // Liquidar P&L en DB para posiciones pasadas sin resultado confirmado
+  await sweepUnsettledPositions(supabase);
 
-  // Canjear wins ya liquidadas en DB que aún no se han canjeado en CLOB
-  await redeemPendingWins(supabase, orderManager);
+  // Redimir tokens ganadores on-chain vía NegRiskAdapter (requiere MATIC en wallet)
+  await redeemPendingWins(supabase, ctfRedeemer);
 
   // Startup balance check — shows CLOB-approved + on-chain wallet balance
   const balances = await orderManager.fetchOnChainBalance();

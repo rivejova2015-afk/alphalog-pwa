@@ -1,18 +1,18 @@
 /**
  * Settlement Engine — detecta resolución de mercados, registra P&L real,
- * y ejecuta redemption automático via CLOB API (sin MATIC).
+ * y ejecuta on-chain redemption via CtfRedeemer (requiere MATIC para gas).
  *
- * Flujo completo tras expirar una posición:
+ * Flujo tras expirar una posición:
  *  1. Espera 30s para que gamma API registre la resolución
  *  2. Consulta gamma API → outcomePrices determina ganador
  *  3. Calcula P&L real (shares − sizeUsd si ganó, −sizeUsd si perdió)
- *  4. Si ganó → llama CLOB /redeem-positions para acreditar USDC automáticamente
+ *  4. Si ganó → CtfRedeemer.redeemNegRisk() → USDC a wallet on-chain
  *  5. Actualiza polyarb_positions y polyarb_trades en Supabase
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { OrderManager } from '../trading/order-manager.js';
 import type { Position } from '../trading/position-tracker.js';
+import type { CtfRedeemer } from '../trading/ctf-redeemer.js';
 import { clobFetch } from '../lib/clob-fetch.js';
 
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
@@ -87,50 +87,10 @@ async function persistSettlement(
     .eq('trade_type', 'EXIT');
 }
 
-// ─── Redemption via CLOB API ──────────────────────────────────────────────────
-
-/**
- * Trigger gasless redemption via Polymarket CLOB API.
- * The CLOB acts as a relayer — no MATIC needed from the user.
- *
- * Flow: winning token → CLOB processes on-chain redemption → USDC credited to balance.
- */
-async function triggerClobRedemption(
-  orderManager: OrderManager,
-  market: GammaMarket,
-  outcome: 'YES' | 'NO',
-  shares: number,
-): Promise<boolean> {
-  try {
-    let tokenIds: string[];
-    try {
-      tokenIds = JSON.parse(market.clobTokenIds) as string[];
-    } catch {
-      console.warn('[settlement] clobTokenIds parse failed — skipping redemption');
-      return false;
-    }
-
-    const tokenId = outcome === 'YES' ? tokenIds[0] : tokenIds[1];
-    if (!tokenId) {
-      console.warn('[settlement] tokenId not found — skipping redemption');
-      return false;
-    }
-
-    const amountMicro = Math.round(shares * 1e6).toString();
-    await orderManager.redeemWinningPosition(tokenId, amountMicro);
-    console.log(`[settlement] Redemption OK: ${shares.toFixed(4)} shares → $${shares.toFixed(4)} USDC (token ${tokenId.slice(0, 12)}...)`);
-    return true;
-  } catch (err) {
-    console.warn('[settlement] Redemption call failed:', err instanceof Error ? err.message : String(err));
-    return false;
-  }
-}
-
 // ─── Modo tiempo real — posición recién expirada ──────────────────────────────
 
 async function settleWithRetry(
   position: Position,
-  orderManager: OrderManager,
   supabase: SupabaseClient,
   attempt = 1,
   maxAttempts = 8,
@@ -145,28 +105,22 @@ async function settleWithRetry(
       return;
     }
     console.log(`[settlement] ${position.marketSlug} no resolvió aún (intento ${attempt}/${maxAttempts})`);
-    setTimeout(() => void settleWithRetry(position, orderManager, supabase, attempt + 1, maxAttempts), 30_000);
+    setTimeout(() => void settleWithRetry(position, supabase, attempt + 1, maxAttempts), 30_000);
     return;
   }
 
   const pnlUsd = calcPnl(won, position.shares, position.sizeUsd);
   await persistSettlement(supabase, position.id, pnlUsd, won ? 'settled_win' : 'settled_loss', won ? 1 : 0);
-  console.log(`[settlement] ${position.marketSlug} → ${won ? 'GANÓ' : 'PERDIÓ'} pnl=$${pnlUsd.toFixed(4)}`);
-
-  // Trigger CLOB redemption if won — acredita USDC automáticamente al balance
-  if (won && market) {
-    await triggerClobRedemption(orderManager, market, position.outcome, position.shares);
-  }
+  console.log(`[settlement] ${position.marketSlug} → ${won ? 'GANÓ (+$' + pnlUsd.toFixed(4) + ')' : 'PERDIÓ (-$' + Math.abs(pnlUsd).toFixed(4) + ')'} [Polymarket auto-liquida el USDC al balance CLOB]`);
 }
 
 export function settleTimedOutPosition(
   position: Position,
-  orderManager: OrderManager,
   supabase: SupabaseClient,
 ): void {
   // 30s delay para que gamma API registre la resolución
   setTimeout(
-    () => settleWithRetry(position, orderManager, supabase).catch(err =>
+    () => settleWithRetry(position, supabase).catch(err =>
       console.error('[settlement] Error:', err instanceof Error ? err.message : String(err))
     ),
     30_000,
@@ -183,7 +137,6 @@ export interface SweepResult {
   pnlUsd: number;
   skipped: boolean;
   reason: string;
-  redeemed?: boolean;
 }
 
 interface DbPosition {
@@ -198,7 +151,6 @@ interface DbPosition {
 
 export async function sweepUnsettledPositions(
   supabase: SupabaseClient,
-  orderManager?: OrderManager,
 ): Promise<SweepResult[]> {
   const { data, error } = await supabase
     .from('polyarb_positions')
@@ -243,18 +195,8 @@ export async function sweepUnsettledPositions(
       const pnlUsd = calcPnl(won, shares, sizeUsd);
       await persistSettlement(supabase, pos.id, pnlUsd, won ? 'settled_win' : 'settled_loss', won ? 1 : 0);
 
-      // Trigger CLOB redemption automáticamente si ganó
-      let redeemed = false;
-      if (won && orderManager) {
-        const redeemOk = await triggerClobRedemption(orderManager, market, pos.outcome, shares);
-        if (redeemOk) {
-          redeemed = true;
-          await supabase.from('polyarb_positions').update({ redeemed: true, redeemed_at: new Date().toISOString() }).eq('id', pos.id);
-        }
-      }
-
-      results.push({ positionId: pos.id, marketSlug: pos.market_slug, outcome: pos.outcome, won, pnlUsd, skipped: false, reason: won ? 'settled_win' : 'settled_loss', redeemed });
-      console.log(`[settlement] sweep: ${pos.market_slug} → ${won ? 'GANÓ' : 'PERDIÓ'} pnl=$${pnlUsd.toFixed(4)}${redeemed ? ' [redeemed]' : ''}`);
+      results.push({ positionId: pos.id, marketSlug: pos.market_slug, outcome: pos.outcome, won, pnlUsd, skipped: false, reason: won ? 'settled_win' : 'settled_loss' });
+      console.log(`[settlement] sweep: ${pos.market_slug} → ${won ? 'GANÓ' : 'PERDIÓ'} pnl=$${pnlUsd.toFixed(4)}`);
     } catch (err) {
       results.push({ positionId: pos.id, marketSlug: pos.market_slug, outcome: pos.outcome, won: null, pnlUsd: 0, skipped: true, reason: `error: ${err instanceof Error ? err.message : String(err)}` });
     }
@@ -266,35 +208,44 @@ export async function sweepUnsettledPositions(
   return results;
 }
 
-// ─── Redemption de wins ya liquidadas en DB pero sin canjear en CLOB ─────────
+// ─── On-chain redemption de wins ya liquidadas en DB ─────────────────────────
 
 /**
- * Busca posiciones settled_win que aún no han sido canjeadas (redeemed=false),
- * llama al CLOB /redeem-positions y marca como redeemed en DB.
+ * Busca posiciones settled_win con redeemed=false y llama CtfRedeemer
+ * para redimir los tokens on-chain en Polygon (requiere MATIC para gas).
  *
- * Esto resuelve el caso donde el settlement ya está registrado en la DB pero
- * Polymarket todavía no acreditó el USDC porque faltaba llamar al CLOB.
+ * Para NegRisk (btc-updown-5m): llama NegRiskAdapter.redeemPositions().
+ * Los clobTokenIds (YES/NO token IDs) se obtienen via gamma API.
  */
 export async function redeemPendingWins(
   supabase: SupabaseClient,
-  orderManager: OrderManager,
+  redeemer: CtfRedeemer,
 ): Promise<void> {
+  if (!redeemer.walletAddress) {
+    console.log('[settlement] redeemPendingWins: sin wallet — se omite on-chain redemption');
+    return;
+  }
+
   const { data, error } = await supabase
     .from('polyarb_positions')
-    .select('id, market_slug, outcome, shares')
+    .select('id, market_slug, condition_id, outcome')
     .eq('exit_reason', 'settled_win')
     .eq('redeemed', false)
     .limit(50);
 
   if (error || !data || data.length === 0) {
-    if (!error) console.log('[settlement] redeemPendingWins: sin wins pendientes de canjear');
+    if (!error) console.log('[settlement] redeemPendingWins: sin wins pendientes de redimir');
     return;
   }
 
-  console.log(`[settlement] redeemPendingWins: procesando ${data.length} wins sin canjear...`);
+  console.log(`[settlement] redeemPendingWins: ${data.length} wins sin redimir en wallet ${redeemer.walletAddress}`);
 
-  for (const pos of data as Array<{ id: string; market_slug: string; outcome: 'YES' | 'NO'; shares: number | string }>) {
-    const shares = Number(pos.shares);
+  for (const pos of data as Array<{ id: string; market_slug: string; condition_id: string | null; outcome: 'YES' | 'NO' }>) {
+    if (!pos.condition_id) {
+      console.warn(`[settlement] redeemPendingWins: sin conditionId para ${pos.market_slug}`);
+      continue;
+    }
+
     try {
       const market = await fetchGammaMarket(pos.market_slug);
       if (!market?.clobTokenIds) {
@@ -302,20 +253,37 @@ export async function redeemPendingWins(
         continue;
       }
 
-      const redeemOk = await triggerClobRedemption(orderManager, market, pos.outcome, shares);
+      let tokenIds: string[];
+      try {
+        tokenIds = JSON.parse(market.clobTokenIds) as string[];
+      } catch {
+        console.warn(`[settlement] redeemPendingWins: clobTokenIds parse error ${pos.market_slug}`);
+        continue;
+      }
 
-      if (redeemOk) {
-        await supabase
-          .from('polyarb_positions')
-          .update({ redeemed: true, redeemed_at: new Date().toISOString() })
-          .eq('id', pos.id);
-        console.log(`[settlement] redeemPendingWins: ${pos.market_slug} canjeado ✓`);
+      // clobTokenIds: [YES_token_id, NO_token_id] — pick based on outcome
+      const tokenId = pos.outcome === 'YES' ? tokenIds[0] : tokenIds[1];
+      if (!tokenId) {
+        console.warn(`[settlement] redeemPendingWins: tokenId incompleto ${pos.market_slug} outcome=${pos.outcome}`);
+        continue;
+      }
+
+      const result = await redeemer.redeemPosition({
+        conditionId: pos.condition_id,
+        outcome: pos.outcome,
+        tokenId,
+        positionId: pos.id,
+      });
+
+      if (result.redeemed) {
+        console.log(`[settlement] redeemPendingWins: ${pos.market_slug} ✓ $${result.amountUsd.toFixed(4)} USDC${result.txHash ? ` tx=${result.txHash.slice(0, 16)}...` : ''}`);
       } else {
-        console.warn(`[settlement] redeemPendingWins: ${pos.market_slug} redemption falló — se reintentará al próximo arranque`);
+        console.warn(`[settlement] redeemPendingWins: ${pos.market_slug} falló — ${result.error}`);
       }
     } catch (err) {
       console.warn(`[settlement] redeemPendingWins error ${pos.market_slug}:`, err instanceof Error ? err.message : String(err));
     }
-    await new Promise(r => setTimeout(r, 500));
+
+    await new Promise(r => setTimeout(r, 1_000));
   }
 }
