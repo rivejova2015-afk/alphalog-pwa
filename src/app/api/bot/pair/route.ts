@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         pairing_token_used_at: new Date().toISOString(),
         last_heartbeat_at: new Date().toISOString(),
         signal_secret_hash: hashToken(signalSecret),
-        webhook_secret: webhookSecret,
+        webhook_secret_hash: hashToken(webhookSecret),
       })
       .eq("id", instance.id);
 

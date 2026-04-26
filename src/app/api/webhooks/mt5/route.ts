@@ -69,14 +69,15 @@ async function validatePairingSecret(rawBody: string, secret: string | null): Pr
     const svc = createServiceClient();
     const { data } = await svc
       .from('bot_instances')
-      .select('webhook_secret')
+      .select('webhook_secret_hash')
       .eq('id', instanceId)
       .maybeSingle();
 
-    if (!data?.webhook_secret) return { ok: false, status: 401, error: 'Instance not found or not paired' };
+    if (!data?.webhook_secret_hash) return { ok: false, status: 401, error: 'Instance not found or not paired' };
 
-    const a = Buffer.from(secret);
-    const b = Buffer.from(data.webhook_secret);
+    const incomingHash = crypto.createHash('sha256').update(secret).digest('hex');
+    const a = Buffer.from(incomingHash);
+    const b = Buffer.from(data.webhook_secret_hash);
     if (a.length !== b.length) return { ok: false, status: 401, error: 'Invalid secret' };
     const valid = crypto.timingSafeEqual(a, b);
     return valid ? { ok: true } : { ok: false, status: 401, error: 'Invalid secret' };
