@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 import { Activity, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -47,7 +47,7 @@ export function OpenPositionsPanel({ algoId, linkedBotAccountId }: Props) {
   const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchPositions = useCallback(async () => {
     const [openRes, closedRes] = await Promise.all([
@@ -55,12 +55,14 @@ export function OpenPositionsPanel({ algoId, linkedBotAccountId }: Props) {
         .from('bot_open_positions')
         .select('*')
         .eq('algorithm_id', algoId)
+        .eq('bot_account_id', linkedBotAccountId!)
         .eq('status', 'open')
         .order('open_time', { ascending: true }),
       supabase
         .from('bot_open_positions')
         .select('*')
         .eq('algorithm_id', algoId)
+        .eq('bot_account_id', linkedBotAccountId!)
         .eq('status', 'closed')
         .gte('closed_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
         .order('closed_at', { ascending: false })
@@ -70,7 +72,7 @@ export function OpenPositionsPanel({ algoId, linkedBotAccountId }: Props) {
     setOpen((openRes.data as OpenPosition[]) ?? []);
     setClosedToday((closedRes.data as ClosedPosition[]) ?? []);
     setLoading(false);
-  }, [algoId, supabase]);
+  }, [algoId, linkedBotAccountId, supabase]);
 
   // Poll every 5s; also tick elapsed timers every second
   useEffect(() => {

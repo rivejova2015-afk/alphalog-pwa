@@ -94,10 +94,12 @@ function checkReplay(signature: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    // ── Read body ───────────────────────────────────────────────────────────
+    // ── Read body — use raw text so HMAC matches EA's signed bytes ─────────
+    let rawBody: string;
     let body: unknown;
     try {
-      body = await request.json();
+      rawBody = await request.text();
+      body = JSON.parse(rawBody);
     } catch {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
@@ -123,10 +125,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bodyJson = JSON.stringify(body);
     const expectedSignature = crypto
       .createHmac("sha256", webhookSecret)
-      .update(bodyJson)
+      .update(rawBody)
       .digest("hex");
 
     if (!safeCompareTokens(signature, expectedSignature)) {
@@ -242,11 +243,11 @@ export async function POST(request: NextRequest) {
           exit_price: data.closed_trade.close_price,
           lots: data.closed_trade.lots,
           pnl: data.closed_trade.pnl,
-          pnl_percent: data.closed_trade.pnl / (data.closed_trade.open_price * data.closed_trade.lots),
+          pnl_percent: data.balance > 0 ? data.closed_trade.pnl / data.balance : 0,
           entry_date: data.closed_trade.open_time,
           exit_date: data.closed_trade.close_time,
-          stop_loss_price: 0,
-          take_profit_price: 0,
+          stop_loss_price: null,
+          take_profit_price: null,
           notes: `Ticket: ${data.closed_trade.ticket}, MAE: ${data.closed_trade.max_adverse_excursion}, Platform: ${data.platform}`,
         });
 

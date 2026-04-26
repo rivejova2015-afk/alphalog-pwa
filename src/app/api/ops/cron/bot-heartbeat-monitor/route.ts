@@ -61,9 +61,11 @@ export async function POST(request: NextRequest) {
 
   const results: { instanceId: string; action: string }[] = [];
 
+  const RE_ALERT_MS = 10 * 60 * 1000; // re-alert every 10 min while still down
+
   for (const inst of instances ?? []) {
     const account = accountMap[inst.bot_account_id];
-    if (!account) continue;
+    if (!account?.user_id) continue; // skip if no user_id to push to
 
     const ageSec = inst.last_heartbeat_at
       ? (now - new Date(inst.last_heartbeat_at).getTime()) / 1000
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest) {
     const isStale = ageSec > STALE_THRESHOLD_SEC;
     const state = stateMap[inst.id];
     const wasDown = state?.is_down ?? false;
+    const nowIso = new Date().toISOString();
 
     // Transition: UP → DOWN
     if (isStale && !wasDown) {
@@ -79,10 +82,10 @@ export async function POST(request: NextRequest) {
       await supabase.from("bot_monitor_state").upsert({
         bot_instance_id: inst.id,
         is_down: true,
-        down_since: new Date().toISOString(),
-        last_alerted_at: new Date().toISOString(),
+        down_since: nowIso,
+        last_alerted_at: nowIso,
         recovery_cmd_id: cmdId,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       }, { onConflict: "bot_instance_id" });
 
       await sendPush(
@@ -100,9 +103,9 @@ export async function POST(request: NextRequest) {
         bot_instance_id: inst.id,
         is_down: false,
         down_since: null,
-        last_alerted_at: new Date().toISOString(),
+        last_alerted_at: nowIso,
         recovery_cmd_id: null,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       }, { onConflict: "bot_instance_id" });
 
       await sendPush(
@@ -114,9 +117,27 @@ export async function POST(request: NextRequest) {
       results.push({ instanceId: inst.id, action: "alerted_recovered" });
     }
 
-    // No transition — keep existing state
+    // Still down — re-alert every 10 min
+    else if (isStale && wasDown) {
+      const lastAlertMs = state?.last_alerted_at ? new Date(state.last_alerted_at).getTime() : 0;
+      if (now - lastAlertMs > RE_ALERT_MS) {
+        await supabase.from("bot_monitor_state")
+          .update({ last_alerted_at: nowIso, updated_at: nowIso })
+          .eq("bot_instance_id", inst.id);
+        await sendPush(
+          account.user_id,
+          "⚠️ Bot sigue caído",
+          `GoldRangeBasketR sin heartbeat por ${Math.round(ageSec / 60)}min. Verificar MT5.`,
+          `bot-still-down-${inst.id}`,
+        );
+        results.push({ instanceId: inst.id, action: "re_alerted_still_down" });
+      } else {
+        results.push({ instanceId: inst.id, action: "still_down" });
+      }
+    }
+
     else {
-      results.push({ instanceId: inst.id, action: isStale ? "still_down" : "healthy" });
+      results.push({ instanceId: inst.id, action: "healthy" });
     }
   }
 
