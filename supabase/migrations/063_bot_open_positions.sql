@@ -2,7 +2,7 @@ CREATE TABLE public.bot_open_positions (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id          uuid NOT NULL REFERENCES auth.users ON DELETE CASCADE,
   bot_account_id   uuid NOT NULL REFERENCES public.bot_accounts ON DELETE CASCADE,
-  algorithm_id     uuid REFERENCES public.algorithms ON DELETE SET NULL,
+  algorithm_id     uuid REFERENCES public.trading_algorithms ON DELETE SET NULL,
   ticket           bigint NOT NULL,
   symbol           text NOT NULL,
   direction        text NOT NULL CHECK (direction IN ('BUY','SELL')),
