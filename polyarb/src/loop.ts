@@ -147,7 +147,7 @@ async function checkProfitTakeExits(
 
     if (!config.dryRun) {
       const market = polymarketFeed.getMarkets().find(m => m.conditionId === pos.conditionId);
-      await orderManager.placeOrder({
+      const sellResult = await orderManager.placeOrder({
         conditionId: pos.conditionId,
         yesTokenId:  market?.yesTokenId ?? pos.conditionId,
         noTokenId:   market?.noTokenId ?? '',
@@ -160,6 +160,10 @@ async function checkProfitTakeExits(
         agentId:     config.agentId,
         userId:      config.userId,
       });
+      if (!sellResult.success) {
+        console.error(`[loop] Profit-take SELL failed for ${pos.marketSlug}: ${sellResult.error ?? 'unknown'} — keeping position open`);
+        continue;
+      }
     }
 
     const closed = await positionTracker.closePosition(pos.id, exitPrice, 'profit_take');
@@ -407,11 +411,6 @@ async function processMarket(
   // Max 2 simultaneous positions
   if (positionTracker.openCount >= 2) return;
 
-  // ── Claim this window SYNCHRONOUSLY before any await ──
-  // setInterval fires concurrent ticks when each tick takes > loopIntervalMs.
-  // Marking here (before any DB call) ensures only ONE tick can proceed per window.
-  deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
-
   // ── Price history warmup — skip if insufficient data ──
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
@@ -498,6 +497,12 @@ async function processMarket(
   }
 
   const buyYes = buyYesMajority;
+
+  // ── Claim window SYNCHRONOUSLY — no await between here and placeOrder ──
+  // Moved AFTER consensus gate: failed consensus no longer wastes the window.
+  // Race-condition safety preserved: JS single-thread guarantees no interleave
+  // between this line and the first await below.
+  deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
 
   console.log(
     `[loop] ${orderbook.marketSlug} votes YES=${yesScore.toFixed(2)}(${yesVotes.length}) NO=${noScore.toFixed(2)}(${noVotes.length})` +
