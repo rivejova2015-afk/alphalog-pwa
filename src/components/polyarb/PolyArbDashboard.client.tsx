@@ -563,9 +563,15 @@ function VelocityPanel({ signals }: { signals: VelocitySignal[] }) {
         )}
       </div>
 
-      {/* Per-market table */}
+      {/* Per-market table — top 10 by hunt strength */}
       {signals.length > 0 && (
         <div className="overflow-x-auto">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] text-[#475569] font-mono">top mercados</span>
+            {signals.length > 10 && (
+              <span className="text-[10px] text-[#334155] font-mono">{signals.length - 10} ocultos</span>
+            )}
+          </div>
           <table className="w-full text-[11px]">
             <thead>
               <tr className="text-[#334155] border-b border-[#1e2a3a]">
@@ -579,6 +585,7 @@ function VelocityPanel({ signals }: { signals: VelocitySignal[] }) {
             <tbody>
               {signals
                 .sort((a, b) => b.huntStrength - a.huntStrength)
+                .slice(0, 10)
                 .map((sig) => {
                   const colors = SYMBOL_COLORS[sig.symbol] ?? SYMBOL_COLORS.CRYPTO;
                   const delta = sig.velocityProbDelta;
