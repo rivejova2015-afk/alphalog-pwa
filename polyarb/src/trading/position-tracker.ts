@@ -152,6 +152,10 @@ export class PositionTracker {
     const position = this.openPositions.get(positionId);
     if (!position) return null;
 
+    // Optimistic delete — remove from memory immediately so no concurrent tick
+    // or retry can close the same position again, even if the DB write fails.
+    this.openPositions.delete(positionId);
+
     const pnlUsd = (exitPrice - position.entryPrice) * position.shares;
     const pnlPercent = position.entryPrice > 0
       ? ((exitPrice - position.entryPrice) / position.entryPrice) * 100
@@ -170,7 +174,8 @@ export class PositionTracker {
         exit_reason: exitReason,
         closed_at: closedAt,
       })
-      .eq('id', positionId);
+      .eq('id', positionId)
+      .eq('status', 'OPEN'); // idempotency guard: only close if still open in DB
 
     if (error) {
       console.error('[position-tracker] Close error:', error.message);
@@ -201,8 +206,6 @@ export class PositionTracker {
     if (tradeError) {
       console.warn('[position-tracker] EXIT trade insert error:', tradeError.message);
     }
-
-    this.openPositions.delete(positionId);
 
     return {
       ...position,
