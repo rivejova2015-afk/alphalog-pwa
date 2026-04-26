@@ -4,7 +4,8 @@
  *
  * Flujo tras expirar una posición:
  *  1. Espera 30s para que gamma API registre la resolución
- *  2. Consulta gamma API → outcomePrices determina ganador
+ *  2. Consulta CLOB API por conditionId (más fiable que slug en eventos pasados)
+ *     Fallback: Gamma API por slug
  *  3. Calcula P&L real (shares − sizeUsd si ganó, −sizeUsd si perdió)
  *  4. Si ganó → CtfRedeemer.redeemNegRisk() → USDC a wallet on-chain
  *  5. Actualiza polyarb_positions y polyarb_trades en Supabase
@@ -16,6 +17,7 @@ import type { CtfRedeemer } from '../trading/ctf-redeemer.js';
 import { clobFetch } from '../lib/clob-fetch.js';
 
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
+const CLOB_BASE  = 'https://clob.polymarket.com';
 
 interface GammaMarket {
   outcomePrices: string;  // JSON string: '["1","0"]'
@@ -28,7 +30,46 @@ interface GammaEvent {
   markets?: GammaMarket[];
 }
 
-async function fetchGammaMarket(marketSlug: string): Promise<GammaMarket | null> {
+interface ClobMarket {
+  condition_id: string;
+  tokens: Array<{ outcome: string; price: string }>;
+  closed: boolean;
+}
+
+/**
+ * Primary: CLOB API by conditionId — works for past and active markets.
+ * Maps token outcomes to outcomePrices format: index 0 = YES (Up), index 1 = NO (Down).
+ */
+async function fetchByClobConditionId(conditionId: string): Promise<GammaMarket | null> {
+  try {
+    const url = `${CLOB_BASE}/markets/${conditionId}`;
+    const res = await clobFetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const m = await res.json() as ClobMarket;
+    if (!m?.tokens?.length) return null;
+
+    // CLOB tokens are ordered: tokens[0] = outcome="Yes", tokens[1] = outcome="No"
+    // outcomePrices[0] = YES price, outcomePrices[1] = NO price
+    const yesPrice = m.tokens.find(t => t.outcome === 'Yes')?.price
+      ?? m.tokens[0]?.price ?? '0.5';
+    const noPrice  = m.tokens.find(t => t.outcome === 'No')?.price
+      ?? m.tokens[1]?.price ?? '0.5';
+
+    return {
+      conditionId: m.condition_id,
+      closed: m.closed,
+      outcomePrices: JSON.stringify([yesPrice, noPrice]),
+      clobTokenIds: '[]',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fallback: Gamma API by event slug.
+ */
+async function fetchByGammaSlug(marketSlug: string): Promise<GammaMarket | null> {
   try {
     const url = `${GAMMA_BASE}/events?slug=${encodeURIComponent(marketSlug)}`;
     const res = await clobFetch(url, { signal: AbortSignal.timeout(10_000) });
@@ -38,6 +79,17 @@ async function fetchGammaMarket(marketSlug: string): Promise<GammaMarket | null>
   } catch {
     return null;
   }
+}
+
+async function fetchMarketResolution(
+  conditionId: string | null,
+  marketSlug: string,
+): Promise<GammaMarket | null> {
+  if (conditionId) {
+    const byId = await fetchByClobConditionId(conditionId);
+    if (byId) return byId;
+  }
+  return fetchByGammaSlug(marketSlug);
 }
 
 /**
@@ -72,7 +124,7 @@ async function persistSettlement(
   supabase: SupabaseClient,
   positionId: string,
   pnlUsd: number,
-  exitReason: 'settled_win' | 'settled_loss',
+  exitReason: 'settled_win' | 'settled_loss' | 'settlement_timeout',
   exitPrice: 1 | 0,
 ): Promise<void> {
   await supabase
@@ -93,15 +145,16 @@ async function settleWithRetry(
   position: Position,
   supabase: SupabaseClient,
   attempt = 1,
-  maxAttempts = 8,
+  maxAttempts = 20,  // 20 × 30s = 10 min — Polymarket can take up to 8 min to resolve
 ): Promise<void> {
-  const market = await fetchGammaMarket(position.marketSlug);
+  const market = await fetchMarketResolution(position.conditionId, position.marketSlug);
   const won = market ? parseWinner(market.outcomePrices, position.outcome) : null;
 
   if (won === null) {
     if (attempt >= maxAttempts) {
-      console.warn(`[settlement] Max retries para ${position.marketSlug} — registrando pérdida`);
-      await persistSettlement(supabase, position.id, -position.sizeUsd, 'settled_loss', 0);
+      // Mark as settlement_timeout — NOT as a loss. The sweep will retry on next restart.
+      console.warn(`[settlement] Max retries para ${position.marketSlug} — marcando settlement_timeout (no es pérdida confirmada)`);
+      await persistSettlement(supabase, position.id, 0, 'settlement_timeout', 0);
       return;
     }
     console.log(`[settlement] ${position.marketSlug} no resolvió aún (intento ${attempt}/${maxAttempts})`);
@@ -118,7 +171,7 @@ export function settleTimedOutPosition(
   position: Position,
   supabase: SupabaseClient,
 ): void {
-  // 30s delay para que gamma API registre la resolución
+  // 30s delay para que la CLOB/Gamma API registre la resolución
   setTimeout(
     () => settleWithRetry(position, supabase).catch(err =>
       console.error('[settlement] Error:', err instanceof Error ? err.message : String(err))
@@ -152,11 +205,12 @@ interface DbPosition {
 export async function sweepUnsettledPositions(
   supabase: SupabaseClient,
 ): Promise<SweepResult[]> {
+  // Include settlement_timeout — these were previously unresolvable and should be retried
   const { data, error } = await supabase
     .from('polyarb_positions')
     .select('id, market_slug, condition_id, outcome, shares, size_usd, exit_reason')
     .in('status', ['CLOSED', 'LIQUIDATED'])
-    .not('exit_reason', 'in', '("settled_win","settled_loss","settlement_timeout")')
+    .not('exit_reason', 'in', '("settled_win","settled_loss")')
     .limit(200);
 
   if (error) {
@@ -178,10 +232,10 @@ export async function sweepUnsettledPositions(
     const sizeUsd = Number(pos.size_usd);
 
     try {
-      const market = await fetchGammaMarket(pos.market_slug);
+      const market = await fetchMarketResolution(pos.condition_id, pos.market_slug);
 
       if (!market) {
-        results.push({ positionId: pos.id, marketSlug: pos.market_slug, outcome: pos.outcome, won: null, pnlUsd: 0, skipped: true, reason: 'gamma_unavailable' });
+        results.push({ positionId: pos.id, marketSlug: pos.market_slug, outcome: pos.outcome, won: null, pnlUsd: 0, skipped: true, reason: 'api_unavailable' });
         continue;
       }
 
@@ -247,7 +301,7 @@ export async function redeemPendingWins(
     }
 
     try {
-      const market = await fetchGammaMarket(pos.market_slug);
+      const market = await fetchByGammaSlug(pos.market_slug);
       if (!market?.clobTokenIds) {
         console.warn(`[settlement] redeemPendingWins: sin clobTokenIds para ${pos.market_slug}`);
         continue;
