@@ -7,18 +7,6 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/ops/cron/bot-daily-verify",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/ops/cron/bot-slo-monitor",
-      "schedule": "*/15 8-22 * * 1-5"
-    },
-    {
-      "path": "/api/ops/cron/bot-auto-recovery",
-      "schedule": "*/5 8-22 * * 1-5"
-    },
-    {
       "path": "/api/cron/terminal/news-fetch",
       "schedule": "0 */2 * * *"
     },
