@@ -41,7 +41,7 @@ export interface TradingParams {
 
 const DEFAULT_PARAMS: TradingParams = {
   loopIntervalMs: 250,
-  minEdgePercent: 0.001,       // require at least 0.1% detectable edge
+  minEdgePercent: 0.03,        // require at least 3% detectable edge — filters spread noise
   maxKellyFraction: 0.10,      // cap at 10% of balance per trade
   maxLeverage: 1.0,            // no leverage in binary markets
   dailyDrawdownLimit: -0.90,   // 90% daily loss before hard stop

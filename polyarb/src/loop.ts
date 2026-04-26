@@ -119,6 +119,66 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
   };
 }
 
+// ─── Profit-take exit ────────────────────────────────────────────────────────
+
+const PROFIT_TAKE_PCT = 0.70; // close when unrealized P&L ≥ 70% of max gain
+
+async function checkProfitTakeExits(
+  deps: LoopDeps,
+  metrics: LoopMetrics,
+): Promise<void> {
+  const { positionTracker, polymarketFeed, orderManager, config } = deps;
+
+  for (const pos of [...positionTracker.open]) {
+    const ob = polymarketFeed.getOrderbook(pos.conditionId);
+    if (!ob) continue;
+
+    // Sell at bid (YES tokens) or ask (NO tokens) — conservative exit price
+    const exitPrice = pos.outcome === 'YES' ? ob.bidPrice : ob.askPrice;
+    const unrealizedPnl = (exitPrice - pos.entryPrice) * pos.shares;
+    const maxGain = (1 - pos.entryPrice) * pos.shares;
+
+    if (maxGain <= 0 || unrealizedPnl < PROFIT_TAKE_PCT * maxGain) continue;
+
+    console.log(
+      `[loop] PROFIT TAKE ${pos.marketSlug} ${pos.outcome}` +
+      ` pnl=+$${unrealizedPnl.toFixed(4)} (${(unrealizedPnl / maxGain * 100).toFixed(1)}% of max)`
+    );
+
+    if (!config.dryRun) {
+      const market = polymarketFeed.getMarkets().find(m => m.conditionId === pos.conditionId);
+      await orderManager.placeOrder({
+        conditionId: pos.conditionId,
+        yesTokenId:  market?.yesTokenId ?? pos.conditionId,
+        noTokenId:   market?.noTokenId ?? '',
+        marketSlug:  pos.marketSlug,
+        outcome:     pos.outcome,
+        side:        'SELL',
+        price:       exitPrice,
+        sizeUsd:     pos.shares * exitPrice,
+        negRisk:     market?.negRisk ?? true,
+        agentId:     config.agentId,
+        userId:      config.userId,
+      });
+    }
+
+    const closed = await positionTracker.closePosition(pos.id, exitPrice, 'profit_take');
+    if (closed) {
+      recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd);
+      deps.adaptiveKelly.recordOutcome({
+        conditionId: pos.conditionId,
+        edge:        0,
+        pnlUsd:      closed.pnlUsd,
+        won:         closed.pnlUsd > 0,
+        symbol:      pos.marketSlug.startsWith('eth') ? 'ETH' : 'BTC',
+        computedAt:  Date.now(),
+      });
+      void deps.memoryBank.recordOutcome(pos.id, closed.pnlUsd);
+      void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
+    }
+  }
+}
+
 /**
  * Single tick of the trading loop.
  */
@@ -185,6 +245,9 @@ export async function tradingTick(
       settleTimedOutPosition(pos, getSupabase());
     }
   }
+
+  // ── Profit-take exits ──
+  await checkProfitTakeExits(deps, metrics);
 
   // ── SP#6 Cross-Market Confirmation — computed once per tick ──
   const crossMarket = computeCrossMarketSignal(
@@ -412,25 +475,33 @@ async function processMarket(
 
   // ── 4-Engine Consensus Voting ──
   const votes = computeEngineVotes(velocitySignal, sentimentMultiplier, fundamental, edge, kellyMinEdge);
-  const yesScore = votes.filter(v => v.direction === 'YES').reduce((s, v) => s + v.confidence, 0);
-  const noScore  = votes.filter(v => v.direction === 'NO').reduce((s, v) => s + v.confidence, 0);
+  const yesVotes = votes.filter(v => v.direction === 'YES');
+  const noVotes  = votes.filter(v => v.direction === 'NO');
+  const yesScore = yesVotes.reduce((s, v) => s + v.confidence, 0);
+  const noScore  = noVotes.reduce((s, v) => s + v.confidence, 0);
 
-  let buyYes: boolean;
-  let forcedEntry = false;
+  // Strict gate: at least 3 engines in agreement AND a clear score margin
+  const MIN_ENGINE_VOTES = 3;
+  const MIN_SCORE_MARGIN = 0.6;
 
-  if (yesScore > noScore) {
-    buyYes = true;
-  } else if (noScore > yesScore) {
-    buyYes = false;
-  } else {
-    // Tie or no votes — Fundamental Engine as tiebreaker
-    buyYes = fundamental.compositeScore >= 0;
-    forcedEntry = true;
+  const buyYesMajority = yesScore > noScore
+    && yesVotes.length >= MIN_ENGINE_VOTES
+    && (yesScore - noScore) >= MIN_SCORE_MARGIN;
+  const buyNoMajority = noScore > yesScore
+    && noVotes.length >= MIN_ENGINE_VOTES
+    && (noScore - yesScore) >= MIN_SCORE_MARGIN;
+
+  if (!buyYesMajority && !buyNoMajority) {
+    const direction = yesScore >= noScore ? 'YES' : 'NO' as const;
+    void logSkippedTrade(deps, orderbook, direction, 'consensus_insufficient', votes, yesScore, noScore);
+    return;
   }
 
+  const buyYes = buyYesMajority;
+
   console.log(
-    `[loop] ${orderbook.marketSlug} votes YES=${yesScore.toFixed(2)} NO=${noScore.toFixed(2)}` +
-    ` → ${buyYes ? 'YES' : 'NO'}${forcedEntry ? ' (forced/tiebreak)' : ''} edge=${edge.toFixed(4)}`
+    `[loop] ${orderbook.marketSlug} votes YES=${yesScore.toFixed(2)}(${yesVotes.length}) NO=${noScore.toFixed(2)}(${noVotes.length})` +
+    ` → ${buyYes ? 'YES' : 'NO'} edge=${edge.toFixed(4)}`
   );
 
   // ── Momentum (kept for entryReason metadata only) ──
@@ -524,7 +595,6 @@ async function processMarket(
       votes,
       yesScore,
       noScore,
-      forcedEntry,
     },
   });
 
@@ -538,7 +608,7 @@ async function processMarket(
       position.id,
       'polyarb_positions',
       undefined,
-      { price: result.filledPrice, size: finalSize, edge, kelly: kelly.fraction, regime: regime.regime, votes, forcedEntry },
+      { price: result.filledPrice, size: finalSize, edge, kelly: kelly.fraction, regime: regime.regime, votes },
     );
   }
 }
