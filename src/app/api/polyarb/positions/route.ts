@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('polyarb_positions')
-    .select('id, market_slug, condition_id, outcome, side, entry_price, exit_price, size_usd, pnl_usd, pnl_percent, status, exit_reason, opened_at, closed_at, redeemed, redeemed_usd', { count: 'exact' })
+    .select('id, market_slug, condition_id, outcome, side, entry_price, exit_price, size_usd, shares, pnl_usd, pnl_percent, status, exit_reason, opened_at, closed_at, created_at, order_id, redeemed, redeemed_usd', { count: 'exact' })
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .range(offset, offset + limit - 1);

@@ -157,19 +157,29 @@ interface Telemetry {
 interface Position {
   id: string;
   market_slug: string;
+  condition_id: string | null;
   outcome: string;
   side: string;
   entry_price: number;
   exit_price: number | null;
   size_usd: number;
+  shares: number | null;
   pnl_usd: number | null;
   pnl_percent: number | null;
   status: string;
   exit_reason: string | null;
   opened_at: string;
   closed_at: string | null;
+  created_at: string;
+  order_id: string | null;
   redeemed: boolean | null;
   redeemed_usd: number | null;
+}
+
+interface LivePrice {
+  yesPrice: number;
+  noPrice: number;
+  timestamp: number;
 }
 
 interface CBEvent {
@@ -971,6 +981,110 @@ function PolyArbSetup({ onCreated }: { onCreated: (agent: Agent) => void }) {
   );
 }
 
+// ─── Live Positions Panel ─────────────────────────────────────────────────────
+
+function NextWindowCountdown() {
+  const [timeToNext, setTimeToNext] = useState(0);
+  useEffect(() => {
+    const calc = () => {
+      const now = Date.now();
+      const msIntoWindow = now % 300_000;
+      setTimeToNext(msIntoWindow === 0 ? 300_000 : 300_000 - msIntoWindow);
+    };
+    calc();
+    const t = setInterval(calc, 1000);
+    return () => clearInterval(t);
+  }, []);
+  const m = Math.floor(timeToNext / 60_000);
+  const s = Math.floor((timeToNext % 60_000) / 1000);
+  return (
+    <div className="text-center py-6 text-zinc-500">
+      <div className="text-sm">Sin posiciones abiertas</div>
+      <div className="text-xs mt-1">Próxima ventana en {m}m {s}s</div>
+    </div>
+  );
+}
+
+function LivePositionCard({ position, livePrice }: { position: Position; livePrice: LivePrice | null }) {
+  const isDryRun = position.order_id?.startsWith('sim_') ?? false;
+  const entryPrice = Number(position.entry_price);
+  const shares = Number(position.shares ?? 0);
+  const midPrice = livePrice ? (position.outcome === 'YES' ? livePrice.yesPrice : livePrice.noPrice) : null;
+  const unrealizedPnl = midPrice !== null ? (midPrice - entryPrice) * shares : null;
+  const maxGain = (1 - entryPrice) * shares;
+  const progressPct = unrealizedPnl !== null && maxGain > 0
+    ? Math.max(0, Math.min(100, (unrealizedPnl / maxGain) * 100))
+    : 0;
+
+  const slugTs = parseInt(position.market_slug.split('-').pop() ?? '0', 10);
+  const expiresAt = Number.isFinite(slugTs) && slugTs > 1_000_000_000 ? slugTs * 1000 : null;
+  const [timeLeft, setTimeLeft] = useState(expiresAt ? Math.max(0, expiresAt - Date.now()) : null);
+  useEffect(() => {
+    if (!expiresAt) return;
+    const t = setInterval(() => setTimeLeft(Math.max(0, expiresAt - Date.now())), 1000);
+    return () => clearInterval(t);
+  }, [expiresAt]);
+
+  const symbol = position.market_slug.startsWith('eth') ? 'ETH' : 'BTC';
+  const direction = position.outcome === 'YES' ? '↑' : '↓';
+  const openTime = new Date(position.opened_at ?? position.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+  const sizeUsd = Number(position.size_usd);
+  const isPositive = (unrealizedPnl ?? 0) >= 0;
+  const minutes = timeLeft !== null ? Math.floor(timeLeft / 60_000) : null;
+  const seconds = timeLeft !== null ? Math.floor((timeLeft % 60_000) / 1000) : null;
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-white">{symbol} {direction} 5m · {openTime}</span>
+        {isDryRun && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">SIM</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 mb-2 text-xs text-zinc-400">
+        <span className={position.outcome === 'YES' ? 'text-green-400' : 'text-red-400'}>
+          {position.side} {position.outcome}
+        </span>
+        <span>·</span>
+        <span>${Number(position.size_usd).toFixed(2)}</span>
+        <span>@ {entryPrice.toFixed(4)}</span>
+      </div>
+      <div className={`text-base font-bold mb-2 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+        {unrealizedPnl !== null
+          ? `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(3)}${sizeUsd > 0 ? ` (${((unrealizedPnl / sizeUsd) * 100).toFixed(1)}%)` : ''}`
+          : '— cargando...'}
+      </div>
+      <div className="h-1.5 rounded-full bg-white/10 mb-2">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${isPositive ? 'bg-green-500' : 'bg-red-500'}`}
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+      <div className="text-[11px] text-zinc-500">
+        {timeLeft !== null
+          ? `⏱ ${timeLeft > 0 ? `${minutes}m ${seconds}s restantes` : 'Expirando...'}`
+          : ''}
+      </div>
+    </div>
+  );
+}
+
+function LivePositionsPanel({ positions, livePrices }: { positions: Position[]; livePrices: Map<string, LivePrice> }) {
+  const open = positions.filter(p => !p.exit_reason);
+  if (open.length === 0) return <NextWindowCountdown />;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {open.map(pos => (
+        <LivePositionCard
+          key={pos.id}
+          position={pos}
+          livePrice={pos.condition_id ? (livePrices.get(pos.condition_id) ?? null) : null}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function PolyArbDashboard() {
@@ -984,6 +1098,8 @@ export default function PolyArbDashboard() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradesTotal, setTradesTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [livePrices, setLivePrices] = useState<Map<string, LivePrice>>(new Map());
+  const prevOpenIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/polyarb/agents")
@@ -1019,6 +1135,53 @@ export default function PolyArbDashboard() {
       setTradesTotal(tradesRes.value.total ?? 0);
     }
   }, [activeAgent]);
+
+  // ── Live price polling every 1s for open positions ───────────────────────────
+  useEffect(() => {
+    const openConditionIds = positions
+      .filter(p => !p.exit_reason && p.condition_id)
+      .map(p => p.condition_id as string);
+    if (openConditionIds.length === 0) return;
+
+    const fetchLivePrices = async () => {
+      try {
+        const res = await fetch(`/api/polyarb/live-prices?conditionIds=${openConditionIds.join(',')}`);
+        if (!res.ok) return;
+        const data = await res.json() as Record<string, LivePrice | null>;
+        setLivePrices(prev => {
+          const next = new Map(prev);
+          for (const [id, price] of Object.entries(data)) {
+            if (price !== null) next.set(id, price);
+          }
+          return next;
+        });
+      } catch { /* silent — UI shows "cargando..." */ }
+    };
+
+    void fetchLivePrices();
+    const interval = setInterval(() => void fetchLivePrices(), 1_000);
+    return () => clearInterval(interval);
+  }, [positions]);
+
+  // ── Closed position detection → toast ────────────────────────────────────────
+  useEffect(() => {
+    const currentIds = new Set(positions.filter(p => !p.exit_reason).map(p => p.id));
+    const closedNow = [...prevOpenIds.current].filter(id => !currentIds.has(id));
+    for (const closedId of closedNow) {
+      const closed = closedPositions.find(p => p.id === closedId);
+      if (closed) {
+        const pnl = closed.pnl_usd ?? 0;
+        const symbol = closed.market_slug.startsWith('eth') ? 'ETH' : 'BTC';
+        const dir = closed.outcome === 'YES' ? '↑' : '↓';
+        toast[pnl >= 0 ? 'success' : 'error'](
+          `${pnl >= 0 ? '✓' : '✗'} ${symbol} ${dir} cerrada: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`
+        );
+      } else {
+        toast.info('Posición cerrada');
+      }
+    }
+    prevOpenIds.current = currentIds;
+  }, [positions, closedPositions]);
 
   // ── Polling fallback (30s) — Realtime handles the hot path ──────────────────
   useEffect(() => {
@@ -1224,42 +1387,9 @@ export default function PolyArbDashboard() {
       {/* ── Open Positions ──────────────────────────────────────────────── */}
       <div className="bg-zinc-800/40 rounded-lg p-4">
         <h2 className="text-sm font-medium text-zinc-300 mb-3">
-          Open Positions ({positions.length})
+          Open Positions ({positions.filter(p => !p.exit_reason).length})
         </h2>
-        {positions.length === 0 ? (
-          <p className="text-xs text-zinc-500">No open positions — el agente está en paper trading observando mercados.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="text-zinc-500 border-b border-zinc-700">
-                <tr>
-                  <th className="pb-2 pr-4">Market</th>
-                  <th className="pb-2 pr-4">Side</th>
-                  <th className="pb-2 pr-4">Entry</th>
-                  <th className="pb-2 pr-4">Size</th>
-                  <th className="pb-2">P&L</th>
-                </tr>
-              </thead>
-              <tbody className="text-zinc-300">
-                {positions.map((p) => (
-                  <tr key={p.id} className="border-b border-zinc-800">
-                    <td className="py-2 pr-4 truncate max-w-[200px]">{p.market_slug}</td>
-                    <td className="py-2 pr-4">
-                      <span className={p.outcome === "YES" ? "text-green-400" : "text-red-400"}>{p.outcome}</span>
-                    </td>
-                    <td className="py-2 pr-4">{fmt(p.entry_price, 4)}</td>
-                    <td className="py-2 pr-4">${fmt(p.size_usd)}</td>
-                    <td className="py-2">
-                      {p.pnl_usd !== null ? (
-                        <span className={p.pnl_usd >= 0 ? "text-green-400" : "text-red-400"}>{fmtUsd(p.pnl_usd)}</span>
-                      ) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <LivePositionsPanel positions={positions} livePrices={livePrices} />
       </div>
 
       {/* ── Historial de posiciones cerradas ───────────────────────────── */}
