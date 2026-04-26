@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { proxy } from "./src/proxy";
 import { applySecurityHeaders } from "./src/lib/security/headers";
 import { triggerSecurityAlert } from "./src/lib/security/securityAlert";
+import nodeCrypto from "node:crypto";
 
 // Module-level constant to avoid re-allocation on every request
 const HONEYPOT_PATHS = [
@@ -75,7 +76,7 @@ export async function middleware(request: NextRequest) {
     const csrfHeader = request.headers.get("x-csrf-token");
     const csrfA = Buffer.from(csrfHeader || "");
     const csrfB = Buffer.from(csrfToken);
-    const csrfValid = csrfA.length === csrfB.length && crypto.timingSafeEqual(csrfA, csrfB);
+    const csrfValid = csrfA.length === csrfB.length && nodeCrypto.timingSafeEqual(csrfA, csrfB);
     if (!csrfValid) {
       const ipHint = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
       // Trigger security alert (fire-and-forget)
