@@ -7,8 +7,8 @@ import { NextResponse } from "next/server";
  */
 
 export const SECURITY_HEADERS: Record<string, string> = {
-  // Enforce HTTPS for all future requests (1 year, includeSubdomains)
-  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+  // Enforce HTTPS for all future requests (2 years for HSTS preload list)
+  "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
 
   // Prevent MIME type sniffing
   "X-Content-Type-Options": "nosniff",

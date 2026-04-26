@@ -6,6 +6,8 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { checkAiRateLimit } from '@/lib/security/aiRateLimit';
+import { computeIntegrityHash } from '@/lib/security/integrity';
 
 interface CreatePayoutRequest {
   accountId: string; // UUID
@@ -48,6 +50,16 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const userId = sessionData.session.user.id;
+
+    // Rate limit: 10 payout creates per hour (prevents spam)
+    const { allowed, retryAfterSeconds } = await checkAiRateLimit(userId, 'treasury-payout-create', 10);
+    if (!allowed) {
+      return Response.json(
+        { success: false, error: 'Rate limit exceeded. Max 10 payout creates per hour.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSeconds ?? 3600) } }
+      );
+    }
+
     const body = (await request.json()) as CreatePayoutRequest;
     const { accountId, note } = body;
 
@@ -229,6 +241,17 @@ export async function POST(request: Request): Promise<Response> {
       ? existingPayouts[0].version + 1
       : 1;
 
+    const integrityHash = computeIntegrityHash({
+      user_id: userId,
+      account_id: accountId,
+      amount: cashPayoutAmount,
+      cash_payout_amount: cashPayoutAmount,
+      tax_reserve_amount: taxReserveAmount,
+      bonus_vault_amount: bonusVaultAmount,
+      cycle_start: cycleStartStr,
+      version: nextVersion,
+    });
+
     // Create payout record
     const { data: newPayout, error: insertError } = await supabase
       .from('treasury_payouts')
@@ -247,7 +270,8 @@ export async function POST(request: Request): Promise<Response> {
         cash_payout_amount: cashPayoutAmount,
         tax_reserve_amount: taxReserveAmount,
         bonus_vault_amount: bonusVaultAmount,
-        blocked_reasons: [], // Empty since we already checked blocks
+        blocked_reasons: [],
+        _integrity_hash: integrityHash,
       })
       .select('id')
       .single();

@@ -1,5 +1,6 @@
 // src/proxy.ts
 import { NextResponse, type NextRequest } from "next/server";
+import { triggerSecurityAlert } from "@/lib/security/securityAlert";
 
 /**
  * Lightweight proxy for middleware
@@ -85,6 +86,26 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
     const { data, error } = await supabase.auth.getUser();
 
     if (options.requireAuth && (error || !data?.user)) {
+      // Track repeated auth failures per IP (Level 10.1)
+      const failIp = getIpHint(request) || "unknown";
+      const failKey = `auth-fail:${failIp}`;
+      const supabaseUrl401 = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const serviceKey401 = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (supabaseUrl401 && serviceKey401) {
+        const svc401 = createServerClient(supabaseUrl401, serviceKey401, {
+          cookies: { getAll: () => [], setAll: () => {} },
+        });
+        const fiveMinWindow = new Date(Math.floor(Date.now() / 300_000) * 300_000).toISOString();
+        void Promise.resolve(svc401.rpc("increment_api_rate_limit", {
+          p_key: failKey,
+          p_window_start: fiveMinWindow,
+        })).then(({ data: failHits }) => {
+          if (typeof failHits === "number" && failHits > 5) {
+            void triggerSecurityAlert("repeated_401", { ip: failIp, path: pathname });
+          }
+        }).catch(() => {});
+      }
+
       if (options.apiUnauthorized) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }

@@ -16,7 +16,8 @@ import { createClient } from "@supabase/supabase-js";
  */
 export async function checkAiRateLimit(
   userId: string,
-  endpointKey: string
+  endpointKey: string,
+  maxPerHour = 3
 ): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
   try {
     // Initialize service-role Supabase client for rate limit increment
@@ -54,7 +55,7 @@ export async function checkAiRateLimit(
     }
 
     const hits = typeof data === "number" ? data : 0;
-    const AI_LIMIT = 3;
+    const AI_LIMIT = maxPerHour;
 
     if (hits > AI_LIMIT) {
       // Rate limit exceeded, calculate retry-after

@@ -9,7 +9,11 @@ export type SecurityEventType =
   | "csrf_failure"
   | "rate_limit_exceeded"
   | "honeypot_hit"
-  | "repeated_401";
+  | "repeated_401"
+  | "ip_blocked"
+  | "scraping_detected"
+  | "db_tampering_detected"
+  | "canary_modified";
 
 export interface SecurityAlertContext {
   ip?: string;
