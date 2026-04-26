@@ -10,6 +10,11 @@
  * - Proxy is reserved exclusively for order placement / cancel / balance
  */
 
+export interface DepthLevel {
+  price: number;
+  size: number;
+}
+
 export interface PolymarketOrderbook {
   marketSlug: string;
   conditionId: string;
@@ -21,6 +26,10 @@ export interface PolymarketOrderbook {
   askSize: number;
   lastTradePrice: number;
   timestamp: number;
+  /** Top 5 bid levels (best first) — used by A2 OrderbookDepth + D1 Spoofing */
+  bidLevels: DepthLevel[];
+  /** Top 5 ask levels (best first) — used by A2 OrderbookDepth + D1 Spoofing */
+  askLevels: DepthLevel[];
 }
 
 export interface PolymarketMarket {
@@ -42,6 +51,8 @@ const POLL_INTERVAL_MS = 3_000;        // poll every 3s — sufficient for predi
 const STALE_THRESHOLD_MS = 1_500;      // skip if last fetch was <1.5s ago
 const DEAD_MARKET_THRESHOLD = 5;       // drop market after 5 consecutive empty orderbooks
 
+const ORDERBOOK_HISTORY_SIZE = 10; // 10 snapshots × 3s poll = 30s of history
+
 export class PolymarketFeed {
   private markets: Map<string, PolymarketMarket> = new Map();
   private orderbooks: Map<string, PolymarketOrderbook> = new Map();
@@ -51,6 +62,8 @@ export class PolymarketFeed {
   private polling = false;
   private lastFetchAt: Map<string, number> = new Map();
   private emptyStreak: Map<string, number> = new Map();  // consecutive empty polls
+  /** Circular buffer of recent snapshots per market — used by D1 Spoofing Detector */
+  private orderbookHistory: Map<string, PolymarketOrderbook[]> = new Map();
 
   onOrderbookUpdate: ((
     conditionId: string,
@@ -74,6 +87,18 @@ export class PolymarketFeed {
 
   getAllOrderbooks(): PolymarketOrderbook[] {
     return Array.from(this.orderbooks.values());
+  }
+
+  /** Returns last N orderbook snapshots for spoofing detection (D1). */
+  getOrderbookHistory(conditionId: string): PolymarketOrderbook[] {
+    return this.orderbookHistory.get(conditionId) ?? [];
+  }
+
+  private pushSnapshot(conditionId: string, ob: PolymarketOrderbook): void {
+    const history = this.orderbookHistory.get(conditionId) ?? [];
+    history.push(ob);
+    if (history.length > ORDERBOOK_HISTORY_SIZE) history.shift();
+    this.orderbookHistory.set(conditionId, history);
   }
 
   start(conditionIds: string[]): void {
@@ -254,7 +279,17 @@ export class PolymarketFeed {
       // Reset dead streak — market has real liquidity
       this.emptyStreak.set(conditionId, 0);
 
-      this.orderbooks.set(conditionId, {
+      // Parse top 5 depth levels for A2 OrderbookDepth + D1 Spoofing
+      const bidLevels: DepthLevel[] = sortedBids.slice(0, 5).map(l => ({
+        price: parseFloat(l.price),
+        size: parseFloat(l.size),
+      }));
+      const askLevels: DepthLevel[] = sortedAsks.slice(0, 5).map(l => ({
+        price: parseFloat(l.price),
+        size: parseFloat(l.size),
+      }));
+
+      const snapshot: PolymarketOrderbook = {
         marketSlug: market?.slug ?? conditionId,
         conditionId,
         bidPrice,
@@ -265,7 +300,12 @@ export class PolymarketFeed {
         askSize,
         lastTradePrice: (bidPrice + askPrice) / 2,
         timestamp: Date.now(),
-      });
+        bidLevels,
+        askLevels,
+      };
+
+      this.orderbooks.set(conditionId, snapshot);
+      this.pushSnapshot(conditionId, snapshot);
 
       this.onOrderbookUpdate?.(conditionId, bidSize, askSize, bidPrice, askPrice);
     } catch {

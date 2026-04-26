@@ -31,7 +31,7 @@ import {
 import { logCircuitBreakerEvents, logCompliance } from './telemetry/compliance.js';
 import { estimateBeliefVolatility, computeFairPrice, computeEdge } from './math/jump-diffusion.js';
 import { calculateMomentumVector } from './math/momentum-physics.js';
-import { aggressiveKelly } from './math/kelly-sizer.js';
+
 import { hestonStep, type HestonState } from './math/heston-vol.js';
 
 // ── Superpowers ──────────────────────────────────────────────────────────────
@@ -50,6 +50,22 @@ import { settleTimedOutPosition } from './skills/settlement-engine.js';
 import { getSupabase } from './supabase.js';
 import { WindowGate, extractWindowInfo, isInEntryWindow, isNearExpiry } from './trading/window-gate.js';
 
+// ── Level-150 Engine Imports ──────────────────────────────────────────────────
+import { asymmetricKelly } from './math/asymmetric-kelly.js';
+import { computeDepthSignal, type DepthSignal } from './skills/orderbook-depth.js';
+import { updateStasisBuffer, computeStasisSignal, type StasisSignal } from './skills/stasis-breakout.js';
+import { computeEntropySignal, type EntropySignal } from './skills/entropy-detector.js';
+import { computeReversalSignal, type ReversalSignal } from './skills/reversal-radar.js';
+import { computeDivergenceSignal, type DivergenceSignal } from './skills/sentiment-divergence.js';
+import { computeConsensusThresholds, recentWinRate as computeRecentWinRate } from './skills/adaptive-consensus.js';
+import { computeProfitTakePct } from './skills/adaptive-profit-take.js';
+import { spoofingDetector } from './skills/spoofing-detector.js';
+import { type BayesianWinRate, type BayesianEstimate } from './skills/bayesian-winrate.js';
+import { type SessionClock, type SessionSignal } from './skills/session-clock.js';
+import { type ReplaySimilarity, type ReplaySignal } from './skills/replay-similarity.js';
+import { type CalibrationTracker } from './skills/calibration-tracker.js';
+import type { FundingMomentumSignal } from './analysis/providers/funding-momentum.js';
+
 export interface LoopDeps {
   config: AgentConfig;
   binanceFeed: BinanceFeed;
@@ -66,6 +82,11 @@ export interface LoopDeps {
   sentimentPulse: SentimentPulseTracker;
   fundamentalEngine: FundamentalEngine;
   windowGate: WindowGate;
+  // Level-150 engines
+  bayesianWinRate: BayesianWinRate;
+  sessionClock: SessionClock;
+  replaySimilarity: ReplaySimilarity;
+  calibrationTracker: CalibrationTracker;
 }
 
 interface LoopMetrics {
@@ -121,13 +142,19 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
 
 // ─── Profit-take exit ────────────────────────────────────────────────────────
 
-const PROFIT_TAKE_PCT = 0.70; // close when unrealized P&L ≥ 70% of max gain
-
 async function checkProfitTakeExits(
   deps: LoopDeps,
   metrics: LoopMetrics,
 ): Promise<void> {
-  const { positionTracker, polymarketFeed, orderManager, config } = deps;
+  const { positionTracker, polymarketFeed, orderManager, config, binanceFeed } = deps;
+
+  // Compute shared signals once for all open positions
+  const priceHistory = binanceFeed.history;
+  const vel5mDir = metrics.lastVelocitySignals[0]?.windows.find(w => w.label === '5m')?.direction ?? 'FLAT';
+  const exitEntropySignal  = priceHistory.length >= 10
+    ? computeEntropySignal(priceHistory, vel5mDir as 'UP' | 'DOWN' | 'FLAT')
+    : null;
+  const exitReversalSignal = priceHistory.length >= 10 ? computeReversalSignal(priceHistory) : null;
 
   for (const pos of [...positionTracker.open]) {
     const ob = polymarketFeed.getOrderbook(pos.conditionId);
@@ -137,12 +164,20 @@ async function checkProfitTakeExits(
     const exitPrice = pos.outcome === 'YES' ? ob.bidPrice : ob.askPrice;
     const unrealizedPnl = (exitPrice - pos.entryPrice) * pos.shares;
     const maxGain = (1 - pos.entryPrice) * pos.shares;
+    if (maxGain <= 0) continue;
 
-    if (maxGain <= 0 || unrealizedPnl < PROFIT_TAKE_PCT * maxGain) continue;
+    // E3 Adaptive Profit-Take: dynamic 60-85% threshold based on market conditions
+    const windowInfo = extractWindowInfo(pos.marketSlug);
+    const exitNow = Date.now();
+    const msLeftInWindow = (windowInfo && isNearExpiry(windowInfo, exitNow, 90_000)) ? 45_000 : 300_000;
+    const ptResult = computeProfitTakePct(exitEntropySignal, exitReversalSignal, msLeftInWindow, metrics.lastRegime);
+
+    if (unrealizedPnl < ptResult.threshold * maxGain) continue;
 
     console.log(
-      `[loop] PROFIT TAKE ${pos.marketSlug} ${pos.outcome}` +
-      ` pnl=+$${unrealizedPnl.toFixed(4)} (${(unrealizedPnl / maxGain * 100).toFixed(1)}% of max)`
+      `[loop] PROFIT TAKE adaptive ${pos.marketSlug} ${pos.outcome}` +
+      ` pnl=+$${unrealizedPnl.toFixed(4)} (${(unrealizedPnl / maxGain * 100).toFixed(1)}% of max)` +
+      ` threshold=${(ptResult.threshold * 100).toFixed(0)}% [${ptResult.reason}]`
     );
 
     if (!config.dryRun) {
@@ -299,19 +334,37 @@ interface EngineVote {
   confidence: number; // 0-1
 }
 
+interface ExtendedSignals {
+  depth: DepthSignal | null;
+  stasis: StasisSignal | null;
+  entropy: EntropySignal | null;
+  reversal: ReversalSignal | null;
+  divergence: DivergenceSignal | null;
+  fundingMomentum: FundingMomentumSignal | null;
+  session: SessionSignal | null;
+  bayesian: BayesianEstimate | null;
+  replay: ReplaySignal | null;
+  velocityDirection: 'UP' | 'DOWN' | 'FLAT';
+}
+
 function computeEngineVotes(
   velocitySignal: VelocitySignal,
   sentimentMultiplier: number,
   fundamental: FundamentalSignal,
   edge: number,
   kellyMinEdge: number,
+  ext: ExtendedSignals,
 ): EngineVote[] {
   const votes: EngineVote[] = [];
+  const velDir = ext.velocityDirection;
+  const velYes: 'YES' | 'NO' = velDir === 'UP' ? 'YES' : 'NO';
+  const velNo:  'YES' | 'NO' = velDir === 'UP' ? 'NO'  : 'YES';
+
+  // Original 4 ──────────────────────────────────────────────────────────────
 
   // Velocity: 5m window direction — strength derived from normalised velocity magnitude
   const vel5m = velocitySignal.windows.find(w => w.label === '5m');
   if (vel5m && vel5m.direction !== 'FLAT') {
-    // Normalize velocity to confidence (0-1), cap at 1
     const confidence = Math.min(Math.abs(vel5m.velocity) / 500, 1.0);
     votes.push({ engine: 'velocity', direction: vel5m.direction === 'UP' ? 'YES' : 'NO', confidence: Math.max(confidence, 0.1) });
   }
@@ -322,7 +375,7 @@ function computeEngineVotes(
     votes.push({ engine: 'sentiment', direction: sentimentMultiplier > 1 ? 'YES' : 'NO', confidence });
   }
 
-  // Fundamental: compositeScore range is ±95; normalise to 0-1 confidence
+  // Fundamental (includes B1 funding momentum + B2 news decay in compositeScore)
   if (fundamental.compositeScore !== 0) {
     const confidence = Math.min(Math.abs(fundamental.compositeScore) / 60, 1.0);
     votes.push({ engine: 'fundamental', direction: fundamental.compositeScore > 0 ? 'YES' : 'NO', confidence });
@@ -332,6 +385,63 @@ function computeEngineVotes(
   if (Math.abs(edge) >= kellyMinEdge) {
     const confidence = Math.min(Math.abs(edge) * 10, 1.0);
     votes.push({ engine: 'kelly', direction: edge > 0 ? 'YES' : 'NO', confidence });
+  }
+
+  // Group A — Market microstructure ─────────────────────────────────────────
+
+  // A2 Orderbook Depth: bid/ask imbalance
+  if (ext.depth && ext.depth.signal !== 'NEUTRAL') {
+    votes.push({ engine: 'depth', direction: ext.depth.signal === 'BUY_PRESSURE' ? 'YES' : 'NO', confidence: ext.depth.confidence });
+  }
+
+  // A3 Stasis Breakout: post-consolidation directional move
+  if (ext.stasis?.breakoutDetected && ext.stasis.breakoutDirection) {
+    const confidence = Math.min(ext.stasis.stasisMinutes / 8, 1.0);
+    votes.push({ engine: 'stasis', direction: ext.stasis.breakoutDirection === 'UP' ? 'YES' : 'NO', confidence });
+  }
+
+  // A4 Entropy: DIRECTIONAL = ride trend, NOISY = fade
+  if (ext.entropy && ext.entropy.regime !== 'NEUTRAL' && ext.entropy.confidence > 0.3 && velDir !== 'FLAT') {
+    const dir = ext.entropy.regime === 'DIRECTIONAL' ? velYes : velNo;
+    votes.push({ engine: 'entropy', direction: dir, confidence: ext.entropy.confidence });
+  }
+
+  // Group B — Macro & Session ───────────────────────────────────────────────
+
+  // B1 Funding Momentum: separate vote on cascade liquidation risk
+  if (ext.fundingMomentum && ext.fundingMomentum.signal !== 'NEUTRAL') {
+    votes.push({ engine: 'funding_momentum', direction: ext.fundingMomentum.signal === 'BULLISH' ? 'YES' : 'NO', confidence: ext.fundingMomentum.confidence });
+  }
+
+  // B3 Session Clock: win-rate by UTC trading session
+  if (ext.session && ext.session.signal !== 'NEUTRAL' && ext.session.confidence > 0 && velDir !== 'FLAT') {
+    const dir = ext.session.signal === 'FAVORABLE' ? velYes : velNo;
+    votes.push({ engine: 'session', direction: dir, confidence: ext.session.confidence });
+  }
+
+  // B4 Sentiment vs Price Divergence: contrarian signals
+  if (ext.divergence?.divergenceActive && ext.divergence.direction) {
+    votes.push({ engine: 'divergence', direction: ext.divergence.direction === 'CONTRARIAN_BULLISH' ? 'YES' : 'NO', confidence: ext.divergence.strength });
+  }
+
+  // Group C — Predictive ────────────────────────────────────────────────────
+
+  // C3 Reversal Radar: jerk-based reversal detection
+  if (ext.reversal?.reversalImminent && ext.reversal.signal) {
+    const dir: 'YES' | 'NO' = ext.reversal.signal === 'REVERSE_SHORT' ? 'YES' : 'NO';
+    votes.push({ engine: 'reversal', direction: dir, confidence: ext.reversal.confidence });
+  }
+
+  // C4 Bayesian Win Rate: posterior from historical outcomes
+  if (ext.bayesian && ext.bayesian.signal !== 'NEUTRAL') {
+    votes.push({ engine: 'bayesian', direction: ext.bayesian.signal === 'BULLISH' ? 'YES' : 'NO', confidence: ext.bayesian.confidence });
+  }
+
+  // Group E — Memory ────────────────────────────────────────────────────────
+
+  // E2 Replay Similarity: similar past situations
+  if (ext.replay && ext.replay.signal !== 'NEUTRAL' && ext.replay.sampleCount >= 2) {
+    votes.push({ engine: 'replay', direction: ext.replay.signal === 'BULLISH' ? 'YES' : 'NO', confidence: ext.replay.voteConfidence });
   }
 
   return votes;
@@ -382,7 +492,8 @@ async function processMarket(
   crossMarket: CrossMarketSignal,
   fundamental: FundamentalSignal,
 ): Promise<void> {
-  const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse } = deps;
+  const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse,
+          bayesianWinRate, sessionClock, replaySimilarity, calibrationTracker } = deps;
   const { params } = config;
 
   // ── Market scope filter — BTC + ETH updown-5m ──
@@ -415,6 +526,17 @@ async function processMarket(
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
 
+  // A3 Stasis Breakout — feed midPrice to circular buffer each tick
+  updateStasisBuffer(orderbook.conditionId, orderbook.midPrice);
+
+  // D1 Spoofing Detector — hard VETO if fake orders detected on this market
+  const obHistory = deps.polymarketFeed.getOrderbookHistory(orderbook.conditionId);
+  const spoofState = spoofingDetector.analyze(orderbook.conditionId, obHistory);
+  if (spoofState.vetoActive) {
+    console.log(`[loop] SPOOFING VETO ${orderbook.marketSlug} — skipping`);
+    return;
+  }
+
   // ── Belief volatility + fair price ──
   const sigma = estimateBeliefVolatility(priceHistory, orderbook.bidPrice, orderbook.askPrice);
   const baseFairPrice = computeFairPrice(orderbook.midPrice, sigma);
@@ -437,7 +559,9 @@ async function processMarket(
   else metrics.lastVelocitySignals.push(velocitySignal);
 
   // ── Edge computation ──
-  const fairPrice = velocitySignal.adjustedFairProb;
+  // E1 Calibration bias — correct systematic Polymarket over/under-estimation
+  const calibration = calibrationTracker.getSignal(velocitySignal.symbol, orderbook.midPrice);
+  const fairPrice = Math.max(0.01, Math.min(0.99, velocitySignal.adjustedFairProb + calibration.biasCorrection));
   let edge = computeEdge(fairPrice, orderbook.midPrice);
 
   // SP#4 Sentiment multiplier
@@ -472,23 +596,60 @@ async function processMarket(
     console.log(`[loop] Memory Bank note: ${memoryFilter.reason}`);
   }
 
-  // ── 4-Engine Consensus Voting ──
-  const votes = computeEngineVotes(velocitySignal, sentimentMultiplier, fundamental, edge, kellyMinEdge);
+  // ── Level-150: Compute extended engine signals ──
+  const vel5mDir = velocitySignal.windows.find(w => w.label === '5m')?.direction ?? 'FLAT';
+
+  const depthSignal    = computeDepthSignal(orderbook.bidLevels ?? [], orderbook.askLevels ?? []);
+  const stasisSignal   = computeStasisSignal(orderbook.conditionId);
+  const entropySignal  = computeEntropySignal(priceHistory, vel5mDir as 'UP' | 'DOWN' | 'FLAT');
+  const reversalSignal = computeReversalSignal(priceHistory);
+  const divergenceSignal = computeDivergenceSignal(fundamental.components.fearGreed, priceHistory);
+  const fundingMomSignal = deps.fundamentalEngine.fundingMomentum.get();
+
+  // Async signals run in parallel — any failure returns null (engine omitted from pool)
+  const [bayesianEstimate, sessionSignal, replaySignal] = await Promise.all([
+    bayesianWinRate.estimate(velocitySignal, regime.regime).catch(() => null),
+    sessionClock.getSignal(velocitySignal.symbol).catch(() => null),
+    replaySimilarity.getSignal(
+      velocitySignal.symbol,
+      regime.regime,
+      velocitySignal.huntStrength,
+      new Date().getUTCHours(),
+    ).catch(() => null),
+  ]);
+
+  const extSignals: ExtendedSignals = {
+    depth: depthSignal,
+    stasis: stasisSignal,
+    entropy: entropySignal,
+    reversal: reversalSignal,
+    divergence: divergenceSignal,
+    fundingMomentum: fundingMomSignal,
+    session: sessionSignal,
+    bayesian: bayesianEstimate,
+    replay: replaySignal,
+    velocityDirection: vel5mDir as 'UP' | 'DOWN' | 'FLAT',
+  };
+
+  // ── Engine Consensus Voting (Level 150 — up to 13 voters) ──
+  const votes = computeEngineVotes(velocitySignal, sentimentMultiplier, fundamental, edge, kellyMinEdge, extSignals);
   const yesVotes = votes.filter(v => v.direction === 'YES');
   const noVotes  = votes.filter(v => v.direction === 'NO');
   const yesScore = yesVotes.reduce((s, v) => s + v.confidence, 0);
   const noScore  = noVotes.reduce((s, v) => s + v.confidence, 0);
 
-  // Strict gate: at least 3 engines in agreement AND a clear score margin
-  const MIN_ENGINE_VOTES = 3;
-  const MIN_SCORE_MARGIN = 0.6;
+  // C1 Adaptive Consensus: dynamic gate based on recent win rate + active voter pool
+  const { winRate: recentWR, sampleCount: wrSamples } = computeRecentWinRate({
+    wins: metrics.wins, losses: metrics.losses, totalTrades: metrics.totalTrades,
+  });
+  const consensusThresholds = computeConsensusThresholds(recentWR, wrSamples, votes.length);
 
   const buyYesMajority = yesScore > noScore
-    && yesVotes.length >= MIN_ENGINE_VOTES
-    && (yesScore - noScore) >= MIN_SCORE_MARGIN;
+    && yesVotes.length >= consensusThresholds.minEngineVotes
+    && (yesScore - noScore) >= consensusThresholds.minScoreMargin;
   const buyNoMajority = noScore > yesScore
-    && noVotes.length >= MIN_ENGINE_VOTES
-    && (noScore - yesScore) >= MIN_SCORE_MARGIN;
+    && noVotes.length >= consensusThresholds.minEngineVotes
+    && (noScore - yesScore) >= consensusThresholds.minScoreMargin;
 
   if (!buyYesMajority && !buyNoMajority) {
     const direction = yesScore >= noScore ? 'YES' : 'NO' as const;
@@ -505,7 +666,8 @@ async function processMarket(
   deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
 
   console.log(
-    `[loop] ${orderbook.marketSlug} votes YES=${yesScore.toFixed(2)}(${yesVotes.length}) NO=${noScore.toFixed(2)}(${noVotes.length})` +
+    `[loop] ENGINE VOTES ${orderbook.marketSlug} YES=${yesScore.toFixed(2)}(${yesVotes.length}) NO=${noScore.toFixed(2)}(${noVotes.length})` +
+    ` gate=${consensusThresholds.minEngineVotes}v/${consensusThresholds.minScoreMargin.toFixed(2)}m [${consensusThresholds.mode}]` +
     ` → ${buyYes ? 'YES' : 'NO'} edge=${edge.toFixed(4)}`
   );
 
@@ -522,17 +684,9 @@ async function processMarket(
   const maxSizeUsd = accountValue * params.maxKellyFraction; // 10% cap
   const entryPrice = buyYes ? orderbook.askPrice : orderbook.bidPrice;
 
-  const kelly = aggressiveKelly(
-    edge,
-    sigma,
-    metrics.consecutiveWins,
-    accountValue,
-    entryPrice,
-    fairPrice,
-    params.maxKellyFraction,
-    1.0, // no leverage in binary markets
-    1.0, // no win-streak bonus
-  );
+  // C2 Asymmetric Kelly — true binary reward/risk ratio b = (1-p)/p instead of fixed 1.5
+  const kellyResult = asymmetricKelly(edge, entryPrice, params.maxKellyFraction, accountValue);
+  const kelly = { ...kellyResult, leverage: 1.0 };
 
   const lossStreakMult = metrics.consecutiveLosses >= params.lossStreakThreshold
     ? params.lossStreakRiskReduction
@@ -583,10 +737,12 @@ async function processMarket(
     shares: result.filledSize,
     leverageUsed: kelly.leverage,
     entryReason: {
-      pillar: 'consensus-voting-v2',
+      pillar: 'consensus-voting-v3',
       edge,
       fairPrice,
+      calibrationBias: calibration.biasCorrection,
       kellyFraction: kelly.fraction,
+      kellyRewardRisk: kelly.rewardRiskRatio,
       momentum: momentum.signal,
       confidence: momentum.confidence,
       sigma,
@@ -597,6 +753,16 @@ async function processMarket(
       sentimentMultiplier,
       fundamentalMultiplier,
       fundamentalScore: fundamental.compositeScore,
+      consensusMode: consensusThresholds.mode,
+      consensusGate: { votes: consensusThresholds.minEngineVotes, margin: consensusThresholds.minScoreMargin },
+      depthSignal: extSignals.depth?.signal ?? null,
+      stasisBreakout: extSignals.stasis?.breakoutDetected ?? false,
+      entropyRegime: extSignals.entropy?.regime ?? null,
+      reversalImminent: extSignals.reversal?.reversalImminent ?? false,
+      fundingMomentumSignal: extSignals.fundingMomentum?.signal ?? null,
+      sessionSignal: extSignals.session?.signal ?? null,
+      bayesianPosterior: extSignals.bayesian?.posteriorMean ?? null,
+      replaySamples: extSignals.replay?.sampleCount ?? 0,
       votes,
       yesScore,
       noScore,

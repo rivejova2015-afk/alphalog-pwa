@@ -35,6 +35,8 @@ import { FearGreedProvider } from './providers/fear-greed.js';
 import { DerivativesProvider } from './providers/derivatives.js';
 import { NewsScannerProvider } from './providers/news-scanner.js';
 import { MacroGuardProvider } from './providers/macro-guard.js';
+import { FundingMomentumProvider } from './providers/funding-momentum.js';
+import { NewsImpactDecayProvider } from './providers/news-impact-decay.js';
 import type {
   FundamentalSignal,
   FearGreedComponent,
@@ -42,6 +44,8 @@ import type {
   NewsComponent,
   MacroGuardComponent,
 } from './types.js';
+
+export type { FundingMomentumProvider, NewsImpactDecayProvider };
 
 // Refresh intervals for HTTP providers
 const FEAR_GREED_INTERVAL_MS  = 10 * 60_000;   // 10 minutes
@@ -71,10 +75,12 @@ export function compositeEdgeMultiplier(compositeScore: number, tradingBullish: 
 }
 
 export class FundamentalEngine {
-  private fearGreed   = new FearGreedProvider();
-  private derivatives = new DerivativesProvider();
-  private newsScanner = new NewsScannerProvider();
-  private macroGuard  = new MacroGuardProvider();
+  private fearGreed       = new FearGreedProvider();
+  private derivatives     = new DerivativesProvider();
+  private newsScanner     = new NewsScannerProvider();
+  private macroGuard      = new MacroGuardProvider();
+  readonly fundingMomentum = new FundingMomentumProvider();
+  readonly newsDecay       = new NewsImpactDecayProvider();
 
   private timers: ReturnType<typeof setInterval>[] = [];
 
@@ -88,11 +94,17 @@ export class FundamentalEngine {
 
     this.timers.push(
       setInterval(() => { void this.fearGreed.refresh(); }, FEAR_GREED_INTERVAL_MS),
-      setInterval(() => { void this.derivatives.refresh(); }, DERIVATIVES_INTERVAL_MS),
+      setInterval(() => {
+        void this.derivatives.refresh().then(() => {
+          // Feed funding rate to B1 FundingMomentum after each derivatives refresh
+          const d = this.derivatives.get();
+          if (d) this.fundingMomentum.recordFundingRate(d.fundingRate);
+        });
+      }, DERIVATIVES_INTERVAL_MS),
       setInterval(() => { void this.newsScanner.refresh(); }, NEWS_INTERVAL_MS),
     );
 
-    console.log('[fundamental-engine] Started (F&G + Derivatives + News + MacroGuard)');
+    console.log('[fundamental-engine] Started (F&G + Derivatives + News + MacroGuard + FundingMomentum + NewsDecay)');
   }
 
   /** Stop all background timers. Call on shutdown. */
@@ -114,12 +126,23 @@ export class FundamentalEngine {
     // MacroGuard always called inline — zero I/O, pure time arithmetic, never stale
     const macro = this.macroGuard.check();
 
-    const fgScore    = fg?.score    ?? 0;
-    const derivScore = deriv?.score ?? 0;
-    const newsScore  = news?.score  ?? 0;
+    const fgScore           = fg?.score    ?? 0;
+    const derivScore        = deriv?.score ?? 0;
+    const newsScore         = news?.score  ?? 0;
+    const fundingMomScore   = this.fundingMomentum.get()?.score ?? 0;
+
+    // Apply personalized decay to news headlines if available
+    const newsHeadlines = news?.headlines?.map(h => ({
+      title: h.title,
+      score: h.score,
+      ageMs: h.ageMs,
+    })) ?? [];
+    const adjustedNewsScore = newsHeadlines.length > 0
+      ? this.newsDecay.applyPersonalizedDecay(newsHeadlines)
+      : newsScore;
 
     const compositeScore = Math.max(-95, Math.min(95,
-      fgScore + derivScore + newsScore
+      fgScore + derivScore + adjustedNewsScore + fundingMomScore
     ));
 
     // Confidence: how many HTTP providers have fresh data

@@ -23,6 +23,10 @@ import { MemoryBank } from './skills/memory-bank.js';
 import { SentimentPulseTracker } from './skills/sentiment-pulse.js';
 import { FundamentalEngine } from './analysis/fundamental-engine.js';
 import { WindowGate } from './trading/window-gate.js';
+import { BayesianWinRate } from './skills/bayesian-winrate.js';
+import { SessionClock } from './skills/session-clock.js';
+import { ReplaySimilarity } from './skills/replay-similarity.js';
+import { CalibrationTracker } from './skills/calibration-tracker.js';
 
 let loopInterval: ReturnType<typeof setInterval> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
@@ -139,6 +143,19 @@ async function main(): Promise<void> {
 
   const windowGate = new WindowGate();
 
+  // Level-150 engines
+  const bayesianWinRate  = new BayesianWinRate();
+  const sessionClock     = new SessionClock();
+  const replaySimilarity = new ReplaySimilarity(config.agentId);
+  const calibrationTracker = new CalibrationTracker(config.agentId, config.userId);
+
+  // Load calibration bias history from DB (non-blocking — bot runs with empty data if it fails)
+  void calibrationTracker.loadFromDb().then(() => {
+    console.log('[main] Calibration Tracker loaded');
+  }).catch((err: unknown) => {
+    console.warn('[main] Calibration Tracker load failed (non-critical):', err);
+  });
+
   const deps: LoopDeps = {
     config,
     binanceFeed,
@@ -153,6 +170,10 @@ async function main(): Promise<void> {
     sentimentPulse,
     fundamentalEngine,
     windowGate,
+    bayesianWinRate,
+    sessionClock,
+    replaySimilarity,
+    calibrationTracker,
   };
 
   // 8. Refresh crypto market list every 5 min — catches new short-term markets
