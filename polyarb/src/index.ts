@@ -28,7 +28,7 @@ import { SessionClock } from './skills/session-clock.js';
 import { ReplaySimilarity } from './skills/replay-similarity.js';
 import { CalibrationTracker } from './skills/calibration-tracker.js';
 
-let loopInterval: ReturnType<typeof setInterval> | null = null;
+let loopTimeout: ReturnType<typeof setTimeout> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
 let marketRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let balancePollInterval: ReturnType<typeof setInterval> | null = null;
@@ -208,19 +208,25 @@ async function main(): Promise<void> {
   void pollRealBalance();
   balancePollInterval = setInterval(() => void pollRealBalance(), 30_000);
 
-  // 9. Start main trading loop
+  // 9. Start main trading loop (sequential — each tick fully completes before the next)
   running = true;
   console.log(`[main] Trading loop starting (${config.params.loopIntervalMs}ms interval)`);
 
-  loopInterval = setInterval(async () => {
+  const runLoop = async (): Promise<void> => {
     if (!running) return;
+    const tickStart = Date.now();
     try {
       await tradingTick(deps, metrics);
     } catch (err) {
       console.error('[main] Loop error:', err);
       metrics.errorCount1h++;
     }
-  }, config.params.loopIntervalMs);
+    if (!running) return;
+    const elapsed = Date.now() - tickStart;
+    const delay = Math.max(0, config.params.loopIntervalMs - elapsed);
+    loopTimeout = setTimeout(() => void runLoop(), delay);
+  };
+  void runLoop();
 
   // 10. Poll for command changes (start/stop/pause) every 5s
   commandPollInterval = setInterval(async () => {
@@ -280,7 +286,7 @@ function shutdown(
   console.log('[main] Shutting down...');
   running = false;
 
-  if (loopInterval) { clearInterval(loopInterval); loopInterval = null; }
+  if (loopTimeout) { clearTimeout(loopTimeout); loopTimeout = null; }
   if (commandPollInterval) { clearInterval(commandPollInterval); commandPollInterval = null; }
   if (marketRefreshInterval) { clearInterval(marketRefreshInterval); marketRefreshInterval = null; }
   if (balancePollInterval) { clearInterval(balancePollInterval); balancePollInterval = null; }
