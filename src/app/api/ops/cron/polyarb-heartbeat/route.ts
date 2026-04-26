@@ -18,7 +18,7 @@ const STALE_THRESHOLD_SEC = 60;
 function validateCronSecret(request: NextRequest) {
   return validateBearerToken(
     request.headers.get('authorization'),
-    process.env.OPS_CRON_SECRET,
+    process.env.CRON_SECRET,
     'OPS_CRON_SECRET',
   );
 }
