@@ -8,7 +8,7 @@ param(
   [string]$LogFile
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "SilentlyContinue"
 
 if (-not (Test-Path $ProjectPath)) {
   throw "ProjectPath not found: $ProjectPath"
@@ -23,38 +23,18 @@ $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 "[$timestamp] START task=$Task args=$TaskArgs" | Out-File -FilePath $LogFile -Append -Encoding utf8
 
 $command = if ([string]::IsNullOrWhiteSpace($TaskArgs)) {
-  "npm run $Task"
+  "cd /d `"$ProjectPath`" && npm run $Task"
 } else {
-  "npm run $Task $TaskArgs"
+  "cd /d `"$ProjectPath`" && npm run $Task $TaskArgs"
 }
 
-$exitCode = 0
-try {
-  $proc = Start-Process -FilePath "cmd.exe" `
-    -ArgumentList @("/d", "/c", "cd /d `"$ProjectPath`" && $command") `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput "$LogFile.stdout.tmp" `
-    -RedirectStandardError  "$LogFile.stderr.tmp" `
-    -Wait -PassThru
+# Run cmd.exe directly inside this already-hidden PS process — no new window created
+$output = & cmd.exe /d /c $command 2>&1
+$exitCode = $LASTEXITCODE
 
-  $exitCode = $proc.ExitCode
-
-  if (Test-Path "$LogFile.stdout.tmp") {
-    Get-Content "$LogFile.stdout.tmp" | Out-File -FilePath $LogFile -Append -Encoding utf8
-    Remove-Item "$LogFile.stdout.tmp" -Force
-  }
-  if (Test-Path "$LogFile.stderr.tmp") {
-    Get-Content "$LogFile.stderr.tmp" | Out-File -FilePath $LogFile -Append -Encoding utf8
-    Remove-Item "$LogFile.stderr.tmp" -Force
-  }
-} catch {
-  "ERROR: $_" | Out-File -FilePath $LogFile -Append -Encoding utf8
-  $exitCode = 1
-}
+$output | Out-File -FilePath $LogFile -Append -Encoding utf8
 
 $end = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 "[$end] END task=$Task exit=$exitCode" | Out-File -FilePath $LogFile -Append -Encoding utf8
 
-if ($exitCode -ne 0) {
-  exit $exitCode
-}
+if ($exitCode -ne 0) { exit $exitCode }
