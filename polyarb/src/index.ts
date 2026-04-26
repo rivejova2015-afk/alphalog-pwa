@@ -27,6 +27,7 @@ import { BayesianWinRate } from './skills/bayesian-winrate.js';
 import { SessionClock } from './skills/session-clock.js';
 import { ReplaySimilarity } from './skills/replay-similarity.js';
 import { CalibrationTracker } from './skills/calibration-tracker.js';
+import { createStatCBState } from './trading/statistical-circuit-breaker.js';
 
 let loopTimeout: ReturnType<typeof setTimeout> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
@@ -174,6 +175,7 @@ async function main(): Promise<void> {
     sessionClock,
     replaySimilarity,
     calibrationTracker,
+    statCB: createStatCBState(),
   };
 
   // 8. Refresh crypto market list every 5 min — catches new short-term markets

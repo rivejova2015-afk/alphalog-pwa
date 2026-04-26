@@ -65,6 +65,12 @@ import { type SessionClock, type SessionSignal } from './skills/session-clock.js
 import { type ReplaySimilarity, type ReplaySignal } from './skills/replay-similarity.js';
 import { type CalibrationTracker } from './skills/calibration-tracker.js';
 import type { FundingMomentumSignal } from './analysis/providers/funding-momentum.js';
+import {
+  createStatCBState,
+  recordExit,
+  runStatisticalChecks,
+  type StatCBState,
+} from './trading/statistical-circuit-breaker.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -87,6 +93,8 @@ export interface LoopDeps {
   sessionClock: SessionClock;
   replaySimilarity: ReplaySimilarity;
   calibrationTracker: CalibrationTracker;
+  // Observability
+  statCB: StatCBState;
 }
 
 interface LoopMetrics {
@@ -203,6 +211,7 @@ async function checkProfitTakeExits(
 
     const closed = await positionTracker.closePosition(pos.id, exitPrice, 'profit_take');
     if (closed) {
+      recordExit(deps.statCB, pos.conditionId);
       recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd);
       deps.adaptiveKelly.recordOutcome({
         conditionId: pos.conditionId,
@@ -228,6 +237,14 @@ export async function tradingTick(
   const { config, binanceFeed, polymarketFeed, positionTracker, orderManager, telemetryWriter, cbState } = deps;
   const { params } = config;
   const tickStart = Date.now();
+
+  // ── Statistical Circuit Breaker — DB check every 5 min, blocks trading if triggered ──
+  await runStatisticalChecks(deps.statCB, config.agentId);
+  if (deps.statCB.paused) {
+    console.warn(`[stat-cb] Trading bloqueado: ${deps.statCB.reason}`);
+    updateTelemetry(deps, metrics, tickStart);
+    return;
+  }
 
   // ── 1. Read feeds ──
   const btcPrice = binanceFeed.price;
@@ -268,6 +285,7 @@ export async function tradingTick(
     const exitPrice = ob?.midPrice ?? pos.entryPrice;
     const closed = await positionTracker.closePosition(pos.id, exitPrice, 'timeout');
     if (closed) {
+      recordExit(deps.statCB, pos.conditionId);
       recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd);
       deps.adaptiveKelly.recordOutcome({
         conditionId: pos.conditionId,

@@ -11,6 +11,7 @@
  *  5. Actualiza polyarb_positions y polyarb_trades en Supabase
  */
 
+import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Position } from '../trading/position-tracker.js';
 import type { CtfRedeemer } from '../trading/ctf-redeemer.js';
@@ -19,21 +20,35 @@ import { clobFetch } from '../lib/clob-fetch.js';
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
 const CLOB_BASE  = 'https://clob.polymarket.com';
 
+// ─── Zod schemas — catch API shape changes before they corrupt data ────────────
+
+const ClobMarketSchema = z.object({
+  condition_id: z.string(),
+  closed: z.boolean(),
+  tokens: z.array(z.object({
+    outcome: z.string(),
+    price:   z.string(),
+  })).min(2),
+});
+
+const GammaMarketSchema = z.object({
+  outcomePrices: z.string(),
+  closed:        z.boolean(),
+  clobTokenIds:  z.string().default('[]'),
+  conditionId:   z.string().optional(),
+});
+
+const GammaEventSchema = z.object({
+  markets: z.array(GammaMarketSchema).optional(),
+});
+
+// ─── Internal shape ────────────────────────────────────────────────────────────
+
 interface GammaMarket {
-  outcomePrices: string;  // JSON string: '["1","0"]'
+  outcomePrices: string;
   closed: boolean;
-  clobTokenIds: string;   // JSON string: '["YES_TOKEN_ID","NO_TOKEN_ID"]'
+  clobTokenIds: string;
   conditionId: string;
-}
-
-interface GammaEvent {
-  markets?: GammaMarket[];
-}
-
-interface ClobMarket {
-  condition_id: string;
-  tokens: Array<{ outcome: string; price: string }>;
-  closed: boolean;
 }
 
 /**
@@ -45,15 +60,17 @@ async function fetchByClobConditionId(conditionId: string): Promise<GammaMarket 
     const url = `${CLOB_BASE}/markets/${conditionId}`;
     const res = await clobFetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
-    const m = await res.json() as ClobMarket;
-    if (!m?.tokens?.length) return null;
 
-    // CLOB tokens are ordered: tokens[0] = outcome="Yes", tokens[1] = outcome="No"
-    // outcomePrices[0] = YES price, outcomePrices[1] = NO price
-    const yesPrice = m.tokens.find(t => t.outcome === 'Yes')?.price
-      ?? m.tokens[0]?.price ?? '0.5';
-    const noPrice  = m.tokens.find(t => t.outcome === 'No')?.price
-      ?? m.tokens[1]?.price ?? '0.5';
+    const raw = await res.json();
+    const parsed = ClobMarketSchema.safeParse(raw);
+    if (!parsed.success) {
+      console.warn('[settlement] CLOB API shape inesperado:', parsed.error.issues[0]?.message);
+      return null;
+    }
+    const m = parsed.data;
+
+    const yesPrice = m.tokens.find(t => t.outcome === 'Yes')?.price ?? m.tokens[0]?.price ?? '0.5';
+    const noPrice  = m.tokens.find(t => t.outcome === 'No')?.price  ?? m.tokens[1]?.price ?? '0.5';
 
     return {
       conditionId: m.condition_id,
@@ -74,8 +91,16 @@ async function fetchByGammaSlug(marketSlug: string): Promise<GammaMarket | null>
     const url = `${GAMMA_BASE}/events?slug=${encodeURIComponent(marketSlug)}`;
     const res = await clobFetch(url, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
-    const events = await res.json() as GammaEvent[];
-    return events[0]?.markets?.[0] ?? null;
+
+    const raw = await res.json();
+    const parsed = z.array(GammaEventSchema).safeParse(raw);
+    if (!parsed.success) {
+      console.warn('[settlement] Gamma API shape inesperado:', parsed.error.issues[0]?.message);
+      return null;
+    }
+    const market = parsed.data[0]?.markets?.[0];
+    if (!market) return null;
+    return { ...market, conditionId: market.conditionId ?? '' };
   } catch {
     return null;
   }
