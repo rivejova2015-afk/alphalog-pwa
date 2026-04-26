@@ -137,13 +137,13 @@ export class BayesianWinRate {
       const [symbol, regime, distanceZone, alignment, huntBucket] = key.split(':');
 
       const { data } = await supabase
-        .from('polyarb_memory_entries')
+        .from('polyarb_signal_memory')
         .select('outcome')
         .eq('symbol', symbol)
         .eq('regime', regime)
         .eq('distance_zone', distanceZone)
         .eq('velocity_alignment', alignment)
-        .eq('hunt_strength_bucket', huntBucket)
+        .eq('hunt_bucket', huntBucket)
         .not('outcome', 'is', null);
 
       if (!data) return null;

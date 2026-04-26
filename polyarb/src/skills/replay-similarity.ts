@@ -76,8 +76,8 @@ export class ReplaySimilarity {
 
       // Fetch last 200 memory entries for symbol+regime
       const { data } = await supabase
-        .from('polyarb_memory_entries')
-        .select('hunt_strength_bucket, outcome, entered_at')
+        .from('polyarb_signal_memory')
+        .select('hunt_bucket, outcome, entered_at')
         .eq('agent_id', this.agentId)
         .eq('symbol', symbol)
         .eq('regime', regime)
@@ -96,7 +96,7 @@ export class ReplaySimilarity {
 
       // Filter by session (UTC ±2h)
       const sessionMatches = data.filter(r => {
-        if (!neighborBuckets.has(r.hunt_strength_bucket)) return false;
+        if (!neighborBuckets.has(r.hunt_bucket)) return false;
         if (!r.entered_at) return true;
         const h = new Date(r.entered_at).getUTCHours();
         const diff = Math.abs(h - utcHour);
