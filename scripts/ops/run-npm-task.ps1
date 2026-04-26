@@ -22,18 +22,34 @@ if ($logDir -and -not (Test-Path $logDir)) {
 $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 "[$timestamp] START task=$Task args=$TaskArgs" | Out-File -FilePath $LogFile -Append -Encoding utf8
 
-Push-Location $ProjectPath
-try {
-  $command = if ([string]::IsNullOrWhiteSpace($TaskArgs)) {
-    "npm run $Task"
-  } else {
-    "npm run $Task $TaskArgs"
-  }
+$command = if ([string]::IsNullOrWhiteSpace($TaskArgs)) {
+  "npm run $Task"
+} else {
+  "npm run $Task $TaskArgs"
+}
 
-  cmd.exe /d /c $command 2>&1 | Out-File -FilePath $LogFile -Append -Encoding utf8
-  $exitCode = $LASTEXITCODE
-} finally {
-  Pop-Location
+$exitCode = 0
+try {
+  $proc = Start-Process -FilePath "cmd.exe" `
+    -ArgumentList @("/d", "/c", "cd /d `"$ProjectPath`" && $command") `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput "$LogFile.stdout.tmp" `
+    -RedirectStandardError  "$LogFile.stderr.tmp" `
+    -Wait -PassThru
+
+  $exitCode = $proc.ExitCode
+
+  if (Test-Path "$LogFile.stdout.tmp") {
+    Get-Content "$LogFile.stdout.tmp" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    Remove-Item "$LogFile.stdout.tmp" -Force
+  }
+  if (Test-Path "$LogFile.stderr.tmp") {
+    Get-Content "$LogFile.stderr.tmp" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    Remove-Item "$LogFile.stderr.tmp" -Force
+  }
+} catch {
+  "ERROR: $_" | Out-File -FilePath $LogFile -Append -Encoding utf8
+  $exitCode = 1
 }
 
 $end = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
