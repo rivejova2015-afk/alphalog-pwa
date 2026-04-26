@@ -38,6 +38,8 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.5",
+    "@simplewebauthn/browser": "^11.0.0",
+    "@simplewebauthn/server": "^11.0.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "@types/three": "^0.184.0",
