@@ -290,6 +290,8 @@ async function checkAppLogsWritable(): Promise<HealthCheck> {
 }
 
 export async function GET() {
+  const isProduction = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+
   const runtime = checkRuntimeEnv();
   const [supabase, botRuntime, botFunctions, appLogs] = await Promise.all([
     checkSupabaseReadiness(),
@@ -302,6 +304,13 @@ export async function GET() {
   const checks = [runtime, supabase, botRemote, botRuntime, botFunctions, appLogs];
   const status = summarizeStatus(checks);
   const ok = status !== "error";
+
+  if (isProduction) {
+    return NextResponse.json(
+      { ok, status },
+      { status: ok ? 200 : 503, headers: NO_STORE_HEADERS }
+    );
+  }
 
   return NextResponse.json(
     {

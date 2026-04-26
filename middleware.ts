@@ -73,7 +73,10 @@ export async function middleware(request: NextRequest) {
   // Always enforce CSRF on API mutations (unless machine-to-machine with auth header)
   if (isApi && isMutating && !isPublicApi && !hasAuthHeader) {
     const csrfHeader = request.headers.get("x-csrf-token");
-    if (csrfHeader !== csrfToken) {
+    const csrfA = Buffer.from(csrfHeader || "");
+    const csrfB = Buffer.from(csrfToken);
+    const csrfValid = csrfA.length === csrfB.length && crypto.timingSafeEqual(csrfA, csrfB);
+    if (!csrfValid) {
       const ipHint = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
       // Trigger security alert (fire-and-forget)
       triggerSecurityAlert("csrf_failure", { ip: ipHint, path: pathname });
@@ -81,6 +84,16 @@ export async function middleware(request: NextRequest) {
         { error: "CSRF token missing or invalid" },
         { status: 403 }
       );
+    }
+  }
+
+  // Content-Type validation for API mutations (Level 9.1)
+  if (isApi && isMutating && !isPublicApi) {
+    const ct = request.headers.get("content-type") || "";
+    const isJson = ct.includes("application/json");
+    const isFormData = ct.includes("multipart/form-data") || ct.includes("application/x-www-form-urlencoded");
+    if (!isJson && !isFormData) {
+      return NextResponse.json({ error: "Invalid Content-Type" }, { status: 415 });
     }
   }
 
