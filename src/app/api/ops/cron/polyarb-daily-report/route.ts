@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 function validateCronSecret(request: NextRequest) {
   return validateBearerToken(
     request.headers.get('authorization'),
-    process.env.CRON_SECRET,
+    process.env.OPS_CRON_SECRET,
     'OPS_CRON_SECRET',
   );
 }
