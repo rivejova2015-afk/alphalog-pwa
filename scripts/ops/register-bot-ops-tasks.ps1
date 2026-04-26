@@ -36,9 +36,9 @@ $monitorTaskScript = (Join-Path $ProjectPath "scripts\ops\task-slo-monitor.ps1")
 $recoveryTaskScript = (Join-Path $ProjectPath "scripts\ops\task-auto-recovery.ps1").Replace('"', '\"')
 $summaryTaskScript = (Join-Path $ProjectPath "scripts\ops\task-daily-verify.ps1").Replace('"', '\"')
 
-$monitorCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$monitorTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
-$recoveryCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$recoveryTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
-$summaryCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$summaryTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
+$monitorCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$monitorTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
+$recoveryCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$recoveryTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
+$summaryCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$summaryTaskScript`" -ProjectPath `"$escapedProjectPath`" -BaseUrl `"$BaseUrl`""
 
 $tasks = @(
   @{

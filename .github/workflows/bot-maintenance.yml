@@ -1,8 +1,6 @@
 name: Bot Maintenance
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 jobs:

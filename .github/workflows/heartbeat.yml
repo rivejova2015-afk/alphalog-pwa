@@ -1,9 +1,6 @@
 name: Dead Man's Switch — Heartbeat
 
 on:
-  schedule:
-    # Every 15 minutes
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:
