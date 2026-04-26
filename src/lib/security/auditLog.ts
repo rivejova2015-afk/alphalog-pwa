@@ -68,6 +68,39 @@ export const hashUserAgent = (userAgent: string): string => {
   return crypto.createHash("sha256").update(userAgent).digest("hex");
 };
 
+async function computeChainHash(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string,
+  action: string,
+  resourceId: string | undefined,
+  timestamp: string
+): Promise<{ prevHash: string; chainHash: string }> {
+  const chainSecret = process.env.AUDIT_CHAIN_SECRET;
+  if (!chainSecret) {
+    return { prevHash: "NO_CHAIN_SECRET", chainHash: "NO_CHAIN_SECRET" };
+  }
+
+  const { data: last } = await supabase
+    .from("audit_logs")
+    .select("chain_hash")
+    .eq("user_id", userId)
+    .not("chain_hash", "is", null)
+    .neq("chain_hash", "LEGACY")
+    .neq("chain_hash", "NO_CHAIN_SECRET")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const prevHash = last?.chain_hash ?? "GENESIS";
+  const chainInput = `${prevHash}:${action}:${resourceId ?? ""}:${timestamp}`;
+  const chainHash = crypto
+    .createHmac("sha256", chainSecret)
+    .update(chainInput)
+    .digest("hex");
+
+  return { prevHash, chainHash };
+}
+
 /**
  * Log an audit event to the database
  * Uses service role to bypass RLS
@@ -90,6 +123,15 @@ export async function logAuditEvent(
         setAll: () => {},
       },
     });
+
+    const timestamp = new Date().toISOString();
+    const { prevHash, chainHash } = await computeChainHash(
+      supabase,
+      entry.userId,
+      entry.action,
+      entry.resourceId,
+      timestamp
+    );
 
     const { data, error } = await supabase.rpc("log_audit_event", {
       p_user_id: entry.userId,
@@ -115,6 +157,8 @@ export async function logAuditEvent(
           user_agent_hash: entry.userAgentHash || null,
           status: entry.status || "success",
           error_message: entry.errorMessage || null,
+          prev_hash: prevHash,
+          chain_hash: chainHash,
         };
 
         const { data: fallbackData, error: fallbackError } = await supabase
