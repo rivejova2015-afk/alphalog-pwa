@@ -7,6 +7,7 @@ import { TradesTable } from './TradesTable';
 import { EquityCurve } from './EquityCurve';
 import { ControlPanel } from './ControlPanel.client';
 import { QuantModelsPanel } from './QuantModelsPanel';
+import { OpenPositionsPanel } from './OpenPositionsPanel.client';
 import { Badge } from '@/components/shared/Badge';
 
 type MarketType = 'forex' | 'futures' | 'options';
@@ -20,6 +21,7 @@ interface AlgoData {
   direction?: Direction;
   parameters?: Record<string, unknown>;
   status: 'ACTIVE' | 'PAUSED' | 'ERROR';
+  linkedBotAccountId?: string | null;
   pnlToday: number;
   pnlTotal: number;
   winRate: number;
@@ -129,6 +131,12 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   algoName={algo.name}
                   status={currentStatus}
                   onStatusChange={handleStatusChange}
+                />
+
+                {/* Open positions — live P&L */}
+                <OpenPositionsPanel
+                  algoId={algo.id}
+                  linkedBotAccountId={algo.linkedBotAccountId ?? null}
                 />
 
                 {/* Quant models */}

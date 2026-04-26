@@ -26,6 +26,19 @@ const closedTradeSchema = z.object({
   close_time: z.string(),
 });
 
+const openPositionSchema = z.object({
+  ticket: z.number().int(),
+  symbol: z.string().min(1),
+  direction: z.enum(["BUY", "SELL"]),
+  lots: z.number().positive(),
+  open_price: z.number().positive(),
+  current_price: z.number().positive(),
+  profit: z.number(),
+  sl: z.number().optional(),
+  tp: z.number().optional(),
+  open_time: z.string(),
+});
+
 const webhookSchema = z.object({
   symbol: z.literal("XAUUSD"),
   platform: z.enum(["MT4", "MT5"]),
@@ -40,6 +53,7 @@ const webhookSchema = z.object({
   tick_volume: z.number().nonnegative(),
   bot_instance_id: z.string().uuid(),
   closed_trade: closedTradeSchema.optional(),
+  open_positions: z.array(openPositionSchema).optional(),
 });
 
 const responseSchema = z.object({
@@ -258,6 +272,89 @@ export async function POST(request: NextRequest) {
               });
             }
           }
+        }
+
+        // Mark specific closed_trade ticket as closed in bot_open_positions
+        const ct = data.closed_trade;
+        await supabase
+          .from("bot_open_positions")
+          .update({
+            status: "closed",
+            close_price: ct.close_price,
+            profit: ct.pnl,
+            closed_at: ct.close_time,
+            last_updated_at: new Date().toISOString(),
+          })
+          .eq("bot_account_id", instance.bot_account_id)
+          .eq("ticket", ct.ticket);
+      }
+    }
+
+    // ── 7b. Upsert open_positions if provided ──────────────────────────────
+    if (data.open_positions !== undefined) {
+      const { data: accountData } = await supabase
+        .from("bot_accounts")
+        .select("user_id")
+        .eq("id", instance.bot_account_id)
+        .single();
+
+      if (accountData) {
+        // Lookup linked algorithm_id
+        const { data: algoRow } = await supabase
+          .from("algorithms")
+          .select("id")
+          .eq("linked_bot_account_id", instance.bot_account_id)
+          .is("deleted_at", null)
+          .maybeSingle();
+
+        const now = new Date().toISOString();
+
+        if (data.open_positions.length > 0) {
+          const { error: upsertErr } = await supabase
+            .from("bot_open_positions")
+            .upsert(
+              data.open_positions.map((p) => ({
+                user_id: accountData.user_id,
+                bot_account_id: instance.bot_account_id,
+                algorithm_id: algoRow?.id ?? null,
+                ticket: p.ticket,
+                symbol: p.symbol,
+                direction: p.direction,
+                lots: p.lots,
+                open_price: p.open_price,
+                current_price: p.current_price,
+                profit: p.profit,
+                sl: p.sl ?? null,
+                tp: p.tp ?? null,
+                open_time: p.open_time,
+                status: "open",
+                last_updated_at: now,
+              })),
+              { onConflict: "bot_account_id,ticket" }
+            );
+
+          if (upsertErr) {
+            logError("WebhookMT", {
+              component: "api/webhooks/mt",
+              message: `Open positions upsert warning: ${upsertErr.message}`,
+            });
+          }
+
+          // Mark positions that are no longer open as closed
+          const openTickets = data.open_positions.map((p) => p.ticket);
+          await supabase
+            .from("bot_open_positions")
+            .update({ status: "closed", closed_at: now, last_updated_at: now })
+            .eq("bot_account_id", instance.bot_account_id)
+            .eq("status", "open")
+            .not("ticket", "in", `(${openTickets.join(",")})`);
+        } else {
+          // Empty array = all positions closed
+          await supabase
+            .from("bot_open_positions")
+            .update({ status: "closed", closed_at: now, last_updated_at: now })
+            .eq("bot_account_id", instance.bot_account_id)
+            .eq("status", "open");
         }
       }
     }
