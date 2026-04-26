@@ -1,7 +1,7 @@
 // src/app/api/tradehub/trades/export/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { decryptText } from "@/lib/security/encryption";
+import { decryptText, decryptNumeric } from "@/lib/security/encryption";
 import { asString } from "@/lib/validation/nullGuards";
 
 const CSV_HEADERS = [
@@ -93,13 +93,13 @@ export async function GET(request: NextRequest) {
       status: trade.status,
       entry_date: trade.entry_date,
       exit_date: trade.exit_date ?? "",
-      entry_price: trade.entry_price,
-      exit_price: trade.exit_price ?? "",
+      entry_price: decryptNumeric("trades", trade.entry_price_enc, trade.entry_price) ?? "",
+      exit_price: decryptNumeric("trades", trade.exit_price_enc, trade.exit_price) ?? "",
       lots: trade.lots,
       stop_loss_price: trade.stop_loss_price ?? "",
       take_profit_price: trade.take_profit_price ?? "",
-      pnl: trade.pnl ?? "",
-      pnl_percent: trade.pnl_percent ?? "",
+      pnl: decryptNumeric("trades", trade.pnl_enc, trade.pnl) ?? "",
+      pnl_percent: decryptNumeric("trades", trade.pnl_percent_enc, trade.pnl_percent) ?? "",
       account: trade.account?.name ?? "",
       setup: trade.setup?.name ?? "",
       notes: decryptText(asString(trade.notes)),

@@ -1,7 +1,7 @@
 // src/app/api/tradehub/trades/[id]/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { decryptText, encryptText } from "@/lib/security/encryption";
+import { decryptText, encryptText, encryptNumeric, decryptNumeric } from "@/lib/security/encryption";
 import { mirrorTradeOnUpdate } from "@/lib/copygroups/mirroring";
 import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
@@ -80,7 +80,7 @@ export async function PATCH(
     // Verify ownership
     const { data: existingTrade, error: tradeError } = await supabase
       .from("trades")
-      .select("id, user_id, account_id, symbol, direction, status, entry_date, exit_date, entry_price, exit_price, lots, stop_loss_price, take_profit_price, pnl, pnl_percent, notes, setup_id, is_featured_in_report")
+      .select("id, user_id, account_id, symbol, direction, status, entry_date, exit_date, entry_price, exit_price, lots, stop_loss_price, take_profit_price, pnl, pnl_percent, pnl_enc, entry_price_enc, exit_price_enc, pnl_percent_enc, notes, setup_id, is_featured_in_report")
       .eq("id", id)
       .eq("user_id", userId)
       .single();
@@ -146,6 +146,10 @@ export async function PATCH(
         pnl: updateData.pnl !== undefined ? updateData.pnl : existingTrade.pnl,
         pnl_percent: updateData.pnl_percent !== undefined ? updateData.pnl_percent : existingTrade.pnl_percent,
         notes: updateData.notes !== undefined ? encryptText(updateData.notes) : existingTrade.notes,
+        pnl_enc: encryptNumeric("trades", updateData.pnl !== undefined ? updateData.pnl : existingTrade.pnl),
+        entry_price_enc: encryptNumeric("trades", updateData.entry_price !== undefined ? updateData.entry_price : existingTrade.entry_price),
+        exit_price_enc: encryptNumeric("trades", updateData.exit_price !== undefined ? updateData.exit_price : existingTrade.exit_price),
+        pnl_percent_enc: encryptNumeric("trades", updateData.pnl_percent !== undefined ? updateData.pnl_percent : existingTrade.pnl_percent),
         setup_id: updateData.setup_id !== undefined ? updateData.setup_id : existingTrade.setup_id,
         is_featured_in_report: updateData.is_featured_in_report !== undefined ? updateData.is_featured_in_report : existingTrade.is_featured_in_report,
       };
@@ -221,6 +225,10 @@ export async function PATCH(
     const responsePayload = {
       ...data,
       notes: decryptText(asString(data.notes)),
+      pnl: decryptNumeric("trades", data.pnl_enc, data.pnl),
+      entry_price: decryptNumeric("trades", data.entry_price_enc, data.entry_price),
+      exit_price: decryptNumeric("trades", data.exit_price_enc, data.exit_price),
+      pnl_percent: decryptNumeric("trades", data.pnl_percent_enc, data.pnl_percent),
       progress_update: progressUpdate,
     };
 

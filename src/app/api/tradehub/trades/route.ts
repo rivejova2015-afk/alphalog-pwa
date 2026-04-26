@@ -1,7 +1,7 @@
 // src/app/api/tradehub/trades/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { decryptText, encryptText } from "@/lib/security/encryption";
+import { decryptText, encryptText, encryptNumeric, decryptNumeric } from "@/lib/security/encryption";
 import { mirrorTradeOnCreate } from "@/lib/copygroups/mirroring";
 import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
@@ -132,6 +132,10 @@ export async function GET(request: NextRequest) {
     const decrypted = (data || []).map((trade: any) => ({
       ...trade,
       notes: decryptText(asString(trade.notes)),
+      pnl: decryptNumeric("trades", trade.pnl_enc, trade.pnl),
+      entry_price: decryptNumeric("trades", trade.entry_price_enc, trade.entry_price),
+      exit_price: decryptNumeric("trades", trade.exit_price_enc, trade.exit_price),
+      pnl_percent: decryptNumeric("trades", trade.pnl_percent_enc, trade.pnl_percent),
     }));
 
     return NextResponse.json(decrypted, {
@@ -271,6 +275,10 @@ export async function POST(request: NextRequest) {
         notes: encryptText(notes),
         setup_id,
         is_featured_in_report: is_featured_in_report || false,
+        pnl_enc: encryptNumeric("trades", pnl),
+        entry_price_enc: encryptNumeric("trades", entry_price),
+        exit_price_enc: encryptNumeric("trades", exit_price),
+        pnl_percent_enc: encryptNumeric("trades", pnl_percent),
       })
       .select()
       .single();

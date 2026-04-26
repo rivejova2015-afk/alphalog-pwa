@@ -8,6 +8,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { checkAiRateLimit } from '@/lib/security/aiRateLimit';
 import { computeIntegrityHash } from '@/lib/security/integrity';
+import { encryptNumeric, encryptForDomain } from '@/lib/security/encryption';
 
 interface CreatePayoutRequest {
   accountId: string; // UUID
@@ -262,7 +263,7 @@ export async function POST(request: Request): Promise<Response> {
         payout_date: todayStr,
         amount: cashPayoutAmount,
         status: 'planned',
-        notes: note || null,
+        notes: note ? encryptForDomain("treasury", note) : null,
         cycle_start: cycleStartStr,
         cycle_expected_end: cycleExpectedEnd.toISOString().split('T')[0],
         calc_cutoff: todayStr,
@@ -272,6 +273,7 @@ export async function POST(request: Request): Promise<Response> {
         bonus_vault_amount: bonusVaultAmount,
         blocked_reasons: [],
         _integrity_hash: integrityHash,
+        amount_enc: encryptNumeric("treasury", cashPayoutAmount),
       })
       .select('id')
       .single();

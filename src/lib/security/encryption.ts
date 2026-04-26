@@ -32,6 +32,25 @@ const getDomainKey = (domain: keyof typeof DOMAIN_KEYS): Buffer => {
   return keyBuffer;
 };
 
+/** Encrypt a numeric field for a specific domain. Returns null if value is null/undefined. */
+export const encryptNumeric = (domain: keyof typeof DOMAIN_KEYS, value: number | null | undefined): string | null => {
+  if (value === null || value === undefined) return null;
+  return encryptForDomain(domain, String(value));
+};
+
+/** Decrypt an encrypted numeric field. Falls back to the plaintext numeric if ciphertext is absent. */
+export const decryptNumeric = (domain: keyof typeof DOMAIN_KEYS, ciphertext: string | null | undefined, fallback: number | null | undefined): number | null => {
+  if (!ciphertext) return fallback ?? null;
+  try {
+    const decrypted = decryptForDomain(domain, ciphertext);
+    if (decrypted === null) return fallback ?? null;
+    const n = Number(decrypted);
+    return Number.isFinite(n) ? n : (fallback ?? null);
+  } catch {
+    return fallback ?? null;
+  }
+};
+
 export const encryptForDomain = (domain: keyof typeof DOMAIN_KEYS, value?: string | null): string | null => {
   if (value === undefined || value === null) return null;
   if (value.startsWith("enc:v")) return value;
