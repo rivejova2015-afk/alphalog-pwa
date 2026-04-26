@@ -196,6 +196,17 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
         const ipHint = getIpHint(request) || "unknown";
         const rateKey = data?.user?.id ? `user:${data.user.id}` : `ip:${ipHint}`;
 
+        // Level 9.4 — IP ban check (set by honeypot or repeated 401 handler)
+        const banKey = `banned-ip:${ipHint}`;
+        const { data: banRow } = await serviceClient
+          .from("api_rate_limits")
+          .select("hits")
+          .eq("key", banKey)
+          .maybeSingle();
+        if (banRow && banRow.hits > 0) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         const { data: hits, error: rateError } = await serviceClient
           .rpc("increment_api_rate_limit", {
             p_key: rateKey,
@@ -207,6 +218,19 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
             { error: "Rate limit exceeded" },
             { status: 429 }
           );
+        }
+
+        // Level 10.2 — Scraping detector: >50 GETs in 30s from unauthenticated IP
+        if (!data?.user && request.method === "GET") {
+          const scrapeWindow = new Date(Math.floor(Date.now() / 30_000) * 30_000).toISOString();
+          const { data: scrapeHits } = await serviceClient.rpc("increment_api_rate_limit", {
+            p_key: `scrape:${ipHint}`,
+            p_window_start: scrapeWindow,
+          });
+          if (typeof scrapeHits === "number" && scrapeHits > 50) {
+            void triggerSecurityAlert("scraping_detected", { ip: ipHint, path: pathname });
+            return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+          }
         }
       }
     }

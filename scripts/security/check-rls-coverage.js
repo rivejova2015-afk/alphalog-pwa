@@ -31,7 +31,7 @@ const REQUIRED_TABLES = [
   "bot_commands",
   "bot_command_status",
   "bot_telemetry",
-  // New tables from migrations 047-053
+  // Migrations 047-053
   "bot_signal_engine_state",
   "bot_regime_states",
   "bot_skills",
@@ -39,6 +39,12 @@ const REQUIRED_TABLES = [
   "bot_active_skill",
   "iv_surface_snapshots",
   "paper_trades",
+  // Migrations 057-060 (pairing, algorithms, backtest, open positions)
+  "bot_open_positions",
+  "trading_algorithms",
+  "algorithm_deployments",
+  "algorithm_backtest_results",
+  // Migration 046 adds columns to bot_instances — already covered above
 ];
 
 function loadEnvFile(filePath) {
