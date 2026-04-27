@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Check, Server } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, Check, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/browser';
@@ -116,13 +116,23 @@ function DirectionChips({ value, onChange, options }: {
 // ─── Step 1: Forex ────────────────────────────────────────────────────────────
 
 function StepForex({ name, setName, legA, setLegA, legB, setLegB,
-  direction, setDirection, botAccountId, setBotAccountId, botAccounts }: {
+  direction, setDirection, botAccountId, setBotAccountId, botAccounts,
+  showAddAccount, setShowAddAccount,
+  newAccNumber, setNewAccNumber,
+  newAccLabel, setNewAccLabel,
+  newAccPlatform, setNewAccPlatform,
+  addingAccount, handleAddAccount }: {
   name: string; setName: (v: string) => void;
   legA: string; setLegA: (v: string) => void;
   legB: string; setLegB: (v: string) => void;
   direction: Direction; setDirection: (v: Direction) => void;
   botAccountId: string; setBotAccountId: (v: string) => void;
   botAccounts: BotAccount[];
+  showAddAccount: boolean; setShowAddAccount: (v: boolean) => void;
+  newAccNumber: string; setNewAccNumber: (v: string) => void;
+  newAccLabel: string; setNewAccLabel: (v: string) => void;
+  newAccPlatform: 'MT4' | 'MT5'; setNewAccPlatform: (v: 'MT4' | 'MT5') => void;
+  addingAccount: boolean; handleAddAccount: () => Promise<void>;
 }) {
   return (
     <div className="space-y-4">
@@ -155,18 +165,49 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
       </Field>
 
       <Field label="Cuenta MT4/MT5" hint="El engine conectará esta estrategia con la cuenta seleccionada.">
-        {botAccounts.length === 0 ? (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-xs text-[#2d3748]">
-            <Server size={12} />
-            Sin cuentas bot — ve a Bot Control para agregar una
-          </div>
+        <Select value={botAccountId} onChange={(v) => { setBotAccountId(v); setShowAddAccount(false); }}>
+          <option value="">— Sin vincular —</option>
+          {botAccounts.map((a) => (
+            <option key={a.id} value={a.id}>{a.label} ({a.account_id})</option>
+          ))}
+        </Select>
+
+        {!showAddAccount ? (
+          <button type="button" onClick={() => setShowAddAccount(true)}
+            className="mt-1.5 flex items-center gap-1 text-xs text-[#06b6d4] hover:text-[#22d3ee] transition-colors">
+            <Plus size={12} /> Agregar cuenta nueva
+          </button>
         ) : (
-          <Select value={botAccountId} onChange={setBotAccountId}>
-            <option value="">— Sin vincular —</option>
-            {botAccounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.label} ({a.account_id})</option>
-            ))}
-          </Select>
+          <div className="mt-2 p-3 rounded-lg bg-[#0a0e1a] border border-[#1f2937] space-y-3">
+            <div className="flex gap-2">
+              {(['MT4', 'MT5'] as const).map((p) => (
+                <button key={p} type="button" onClick={() => setNewAccPlatform(p)}
+                  className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                    newAccPlatform === p
+                      ? 'bg-[#06b6d4] border-[#06b6d4] text-black'
+                      : 'bg-transparent border-[#1f2937] text-[#94a3b8] hover:border-[#475569]'
+                  }`}>{p}</button>
+              ))}
+            </div>
+            <input type="text" value={newAccNumber} onChange={(e) => setNewAccNumber(e.target.value)}
+              placeholder="Número de cuenta (ej. 12345678)"
+              className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
+            <input type="text" value={newAccLabel} onChange={(e) => setNewAccLabel(e.target.value)}
+              placeholder="Nombre (ej. Gold Live Account)"
+              className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
+            <div className="flex gap-2">
+              <button type="button" onClick={handleAddAccount}
+                disabled={addingAccount || !newAccNumber.trim()}
+                className="flex-1 py-1.5 rounded-lg bg-[#06b6d4] text-black text-xs font-semibold disabled:opacity-40 hover:bg-[#22d3ee] transition-colors">
+                {addingAccount ? 'Guardando…' : 'Guardar cuenta'}
+              </button>
+              <button type="button"
+                onClick={() => { setShowAddAccount(false); setNewAccNumber(''); setNewAccLabel(''); }}
+                className="px-3 py-1.5 rounded-lg border border-[#1f2937] text-[#475569] text-xs hover:border-[#475569] transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
         )}
       </Field>
     </div>
@@ -442,6 +483,12 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [stepIdx,     setStepIdx]     = useState(0);
   const [saving,      setSaving]      = useState(false);
   const [botAccounts, setBotAccounts] = useState<BotAccount[]>([]);
+  const [bots,        setBots]        = useState<{ id: string; name: string }[]>([]);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccNumber,   setNewAccNumber]   = useState('');
+  const [newAccLabel,    setNewAccLabel]    = useState('');
+  const [newAccPlatform, setNewAccPlatform] = useState<'MT4' | 'MT5'>('MT5');
+  const [addingAccount,  setAddingAccount]  = useState(false);
   const router = useRouter();
 
   // Common
@@ -477,9 +524,43 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   };
 
   useEffect(() => {
-    createClient().from('bot_accounts').select('id, label, account_id')
-      .then(({ data }) => setBotAccounts(data ?? []));
+    const sb = createClient();
+    Promise.all([
+      sb.from('bots').select('id, name'),
+      sb.from('bot_accounts').select('id, label, account_id'),
+    ]).then(([botsRes, accsRes]) => {
+      setBots(botsRes.data ?? []);
+      setBotAccounts(accsRes.data ?? []);
+    });
   }, []);
+
+  async function handleAddAccount() {
+    if (!newAccNumber.trim()) { toast.error('El número de cuenta es obligatorio'); return; }
+    const botId = bots[0]?.id;
+    if (!botId) { toast.error('Configura un bot primero en Bot Control'); return; }
+    setAddingAccount(true);
+    const sb = createClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) { toast.error('No autenticado'); setAddingAccount(false); return; }
+    const label = `${newAccPlatform} — ${newAccLabel.trim() || newAccNumber.trim()}`;
+    const { data, error } = await sb
+      .from('bot_accounts')
+      .insert({ user_id: user.id, bot_id: botId, account_id: newAccNumber.trim(), label })
+      .select('id, label, account_id')
+      .single();
+    if (error) {
+      toast.error('Error al crear cuenta: ' + error.message);
+    } else if (data) {
+      setBotAccounts((prev) => [...prev, data as BotAccount]);
+      setBotAccountId(data.id);
+      setShowAddAccount(false);
+      setNewAccNumber('');
+      setNewAccLabel('');
+      setNewAccPlatform('MT5');
+      toast.success('Cuenta agregada y seleccionada');
+    }
+    setAddingAccount(false);
+  }
 
   const isFirst = stepIdx === 0;
   const isLast  = stepIdx === STEPS.length - 1;
@@ -615,6 +696,11 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
               direction={direction} setDirection={setDirection}
               botAccountId={botAccountId} setBotAccountId={setBotAccountId}
               botAccounts={botAccounts}
+              showAddAccount={showAddAccount} setShowAddAccount={setShowAddAccount}
+              newAccNumber={newAccNumber} setNewAccNumber={setNewAccNumber}
+              newAccLabel={newAccLabel} setNewAccLabel={setNewAccLabel}
+              newAccPlatform={newAccPlatform} setNewAccPlatform={setNewAccPlatform}
+              addingAccount={addingAccount} handleAddAccount={handleAddAccount}
             />
           )}
           {stepIdx === 0 && marketType === 'futures' && (
