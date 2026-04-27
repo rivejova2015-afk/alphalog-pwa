@@ -9,6 +9,7 @@ import type { RegimeState } from '../skills/regime-detector.js';
 import type { AdaptiveState } from '../skills/adaptive-kelly.js';
 import type { CrossMarketSignal } from '../skills/cross-market.js';
 import type { SentimentPulse } from '../skills/sentiment-pulse.js';
+import type { EventState } from '../skills/event-detector.js';
 
 export interface TelemetrySnapshot {
   agentId: string;
@@ -42,6 +43,8 @@ export interface TelemetrySnapshot {
   sentimentSnapshot: SentimentPulse[] | null;
   /** SP#2 Memory Bank — conditional win rate stats */
   memoryBankStats: Array<{ key: string; wins: number; total: number; winRate: number }> | null;
+  /** Event-driven mode — last EventDetector output */
+  eventState: EventState | null;
 }
 
 const UPSERT_INTERVAL_MS = 5_000;
@@ -115,6 +118,7 @@ export class TelemetryWriter {
           cross_market_snapshot: s.crossMarketSnapshot ?? null,
           sentiment_snapshot: s.sentimentSnapshot ?? null,
           memory_bank_stats: s.memoryBankStats ?? null,
+          event_state: s.eventState ?? null,
           last_heartbeat_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },

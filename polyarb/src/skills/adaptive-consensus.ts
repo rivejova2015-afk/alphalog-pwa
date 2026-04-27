@@ -10,22 +10,43 @@
  *   minScoreMargin >= 0.45
  */
 
+import type { EventState } from './event-detector.js';
+
 export interface ConsensusThresholds {
   minEngineVotes: number;
   minScoreMargin: number;
   winRateUsed: number;
   sampleCount: number;
-  mode: 'STRICT' | 'BASELINE' | 'LOOSE';
+  mode: 'STRICT' | 'BASELINE' | 'LOOSE' | 'EVENT';
 }
 
 const ABS_MIN_VOTES  = 3;
-const ABS_MIN_MARGIN = 0.45;
+const ABS_MIN_MARGIN = 0.40; // event mode lowers floor; non-event paths keep 0.45 effectively via mode logic
+
+const EVENT_VOTE_FRACTION = 0.50;
+const EVENT_MIN_MARGIN    = 0.40;
 
 export function computeConsensusThresholds(
   recentWinRate: number,
   sampleCount: number,
   totalActiveVoters: number,
+  eventState: EventState | null = null,
+  flagAggressive: boolean = false,
 ): ConsensusThresholds {
+  // Event override — loosens quorum to capture the move.
+  if (flagAggressive && eventState?.active) {
+    const computed = Math.ceil(totalActiveVoters * EVENT_VOTE_FRACTION);
+    const minEngineVotes = Math.max(ABS_MIN_VOTES, computed);
+    const minScoreMargin = Math.max(ABS_MIN_MARGIN, EVENT_MIN_MARGIN);
+    return {
+      minEngineVotes,
+      minScoreMargin,
+      winRateUsed: recentWinRate,
+      sampleCount,
+      mode: 'EVENT',
+    };
+  }
+
   // Use baseline if too few samples to trust the win rate
   const effectiveWinRate = sampleCount < 10 ? 0.50 : recentWinRate;
 
@@ -53,7 +74,8 @@ export function computeConsensusThresholds(
 
   const computed = Math.ceil(totalActiveVoters * voteFraction);
   const minEngineVotes = Math.max(ABS_MIN_VOTES, computed);
-  const clampedMargin  = Math.max(ABS_MIN_MARGIN, minScoreMargin);
+  // Non-event paths preserve original 0.45 floor.
+  const clampedMargin  = Math.max(0.45, minScoreMargin);
 
   return {
     minEngineVotes,

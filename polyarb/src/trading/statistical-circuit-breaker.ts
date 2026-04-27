@@ -84,7 +84,7 @@ export async function runStatisticalChecks(
 
     const { data } = await supabase
       .from('polyarb_positions')
-      .select('exit_reason, pnl_usd, status')
+      .select('exit_reason, pnl_usd, status, entry_reason')
       .eq('agent_id', agentId)
       .in('status', ['CLOSED', 'LIQUIDATED'])
       .is('deleted_at', null)
@@ -93,18 +93,29 @@ export async function runStatisticalChecks(
 
     if (!data || data.length === 0) return null;
 
+    // Event-mode trades skew win rate during volatile windows by design — exclude
+    // them from the floor calc so the breaker only fires on systemic latency-mode failure.
+    const isEventTrade = (r: { entry_reason: unknown }): boolean => {
+      const er = r.entry_reason as { eventType?: string | null } | null | undefined;
+      return Boolean(er?.eventType);
+    };
+    const nonEventRows = data.filter(r => !isEventTrade(r));
+
     const closed = data.length;
     const wins = data.filter(r => (r.pnl_usd ?? 0) > 0).length;
     const timeouts = data.filter(r => r.exit_reason === 'settlement_timeout').length;
 
-    // Check 1: win rate floor
-    if (closed >= 30) {
-      const winRate = wins / closed;
+    const nonEventClosed = nonEventRows.length;
+    const nonEventWins = nonEventRows.filter(r => (r.pnl_usd ?? 0) > 0).length;
+
+    // Check 1: win rate floor — applied only to non-event (latency-mode) trades
+    if (nonEventClosed >= 30) {
+      const winRate = nonEventWins / nonEventClosed;
       if (winRate < 0.15) {
         const result: StatCBResult = {
           triggered: true,
           check: 'win_rate_floor',
-          detail: `win rate ${(winRate * 100).toFixed(1)}% en ${closed} trades (mínimo 15%)`,
+          detail: `win rate ${(winRate * 100).toFixed(1)}% en ${nonEventClosed} non-event trades (mínimo 15%)`,
         };
         if (!state.paused) {
           state.paused = true;
@@ -140,7 +151,11 @@ export async function runStatisticalChecks(
       state.reason = null;
     }
 
-    console.log(`[stat-cb] OK — winRate=${(wins/closed*100).toFixed(1)}% timeoutRate=${(timeouts/closed*100).toFixed(0)}% n=${closed}`);
+    const eventTrades = closed - nonEventClosed;
+    console.log(
+      `[stat-cb] OK — winRate=${(wins/closed*100).toFixed(1)}% (non-event ${nonEventClosed > 0 ? (nonEventWins/nonEventClosed*100).toFixed(1) : 'n/a'}%)` +
+      ` timeoutRate=${(timeouts/closed*100).toFixed(0)}% n=${closed} (events=${eventTrades})`
+    );
     return null;
   } catch {
     return null; // Never block trading on a monitoring failure

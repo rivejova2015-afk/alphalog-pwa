@@ -37,6 +37,9 @@ export interface TradingParams {
   minPositionSizeUsd: number;       // Minimum bet size in USD
   lossStreakRiskReduction: number;  // Kelly multiplier when >= 10 consecutive losses (0–1)
   lossStreakThreshold: number;      // How many consecutive losses trigger reduction
+  // Event-driven volatility capture (POLYARB_KELLY_AGGRESSIVE)
+  flagAggressive: boolean;          // master switch — false → NORMAL mode always
+  maxKellyFractionEvent: number;    // hard cap when EventDetector active (default 0.40)
 }
 
 const DEFAULT_PARAMS: TradingParams = {
@@ -57,6 +60,8 @@ const DEFAULT_PARAMS: TradingParams = {
   minPositionSizeUsd: 0.01,   // effectively no floor — Kelly determines exact size
   lossStreakRiskReduction: 0.4, // reduce Kelly to 40% after streak
   lossStreakThreshold: 10,    // trigger after 10 consecutive losses
+  flagAggressive: false,        // overridden from env at load time
+  maxKellyFractionEvent: 0.40,  // hard ceiling during events
 };
 
 export async function loadAgentConfig(): Promise<AgentConfig> {
@@ -94,6 +99,10 @@ export async function loadAgentConfig(): Promise<AgentConfig> {
     minPositionSizeUsd:      (configJson.min_position_size_usd as number)    ?? DEFAULT_PARAMS.minPositionSizeUsd,
     lossStreakRiskReduction: (configJson.loss_streak_risk_reduction as number) ?? DEFAULT_PARAMS.lossStreakRiskReduction,
     lossStreakThreshold:     (configJson.loss_streak_threshold as number)    ?? DEFAULT_PARAMS.lossStreakThreshold,
+    flagAggressive:          process.env.POLYARB_KELLY_AGGRESSIVE === 'true',
+    maxKellyFractionEvent:   process.env.POLYARB_EVENT_KELLY_CAP
+      ? Number(process.env.POLYARB_EVENT_KELLY_CAP)
+      : DEFAULT_PARAMS.maxKellyFractionEvent,
   };
 
   return {

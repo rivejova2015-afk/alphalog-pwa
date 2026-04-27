@@ -28,6 +28,8 @@ import { SessionClock } from './skills/session-clock.js';
 import { ReplaySimilarity } from './skills/replay-similarity.js';
 import { CalibrationTracker } from './skills/calibration-tracker.js';
 import { createStatCBState } from './trading/statistical-circuit-breaker.js';
+import { EventDetector } from './skills/event-detector.js';
+import { MacroEventFeed } from './feeds/macro-event-feed.js';
 
 let loopTimeout: ReturnType<typeof setTimeout> | null = null;
 let commandPollInterval: ReturnType<typeof setInterval> | null = null;
@@ -150,6 +152,13 @@ async function main(): Promise<void> {
   const replaySimilarity = new ReplaySimilarity(config.agentId);
   const calibrationTracker = new CalibrationTracker(config.agentId, config.userId);
 
+  // Event-driven volatility capture (gated by POLYARB_KELLY_AGGRESSIVE)
+  const eventDetector = new EventDetector();
+  const macroEventFeed = new MacroEventFeed();
+  if (config.params.flagAggressive) {
+    console.log('[main] *** EVENT-DRIVEN MODE ACTIVE — Kelly cap up to 40% during events ***');
+  }
+
   // Load calibration bias history from DB (non-blocking — bot runs with empty data if it fails)
   void calibrationTracker.loadFromDb().then(() => {
     console.log('[main] Calibration Tracker loaded');
@@ -176,6 +185,8 @@ async function main(): Promise<void> {
     replaySimilarity,
     calibrationTracker,
     statCB: createStatCBState(),
+    eventDetector,
+    macroEventFeed,
   };
 
   // 8. Refresh crypto market list every 5 min — catches new short-term markets

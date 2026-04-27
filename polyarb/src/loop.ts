@@ -71,6 +71,10 @@ import {
   runStatisticalChecks,
   type StatCBState,
 } from './trading/statistical-circuit-breaker.js';
+import { EventDetector, inactiveEventState, type EventState } from './skills/event-detector.js';
+import { MacroEventFeed } from './feeds/macro-event-feed.js';
+import { effectiveKellyCap } from './skills/dynamic-kelly-cap.js';
+import { shouldExitOnEventReversal } from './skills/event-position-manager.js';
 
 export interface LoopDeps {
   config: AgentConfig;
@@ -95,6 +99,9 @@ export interface LoopDeps {
   calibrationTracker: CalibrationTracker;
   // Observability
   statCB: StatCBState;
+  // Event-driven volatility capture (hybrid mode)
+  eventDetector: EventDetector;
+  macroEventFeed: MacroEventFeed;
 }
 
 interface LoopMetrics {
@@ -123,6 +130,10 @@ interface LoopMetrics {
   lastFundamentalSignal: FundamentalSignal | null;
   /** Real CLOB balance from last successful fetchBalance() */
   realClobBalance: number | null;
+  /** Latest EventDetector output — read by processMarket + telemetry */
+  lastEventState: EventState | null;
+  /** Last seen "active" event type — used to detect false→true edges for DB log */
+  lastEventActive: boolean;
 }
 
 export function createLoopMetrics(startingEquity: number): LoopMetrics {
@@ -145,6 +156,8 @@ export function createLoopMetrics(startingEquity: number): LoopMetrics {
     lastOrderAttemptAt: new Map(),
     lastFundamentalSignal: null,
     realClobBalance: null,
+    lastEventState: inactiveEventState(),
+    lastEventActive: false,
   };
 }
 
@@ -164,6 +177,9 @@ async function checkProfitTakeExits(
     : null;
   const exitReversalSignal = priceHistory.length >= 10 ? computeReversalSignal(priceHistory) : null;
 
+  const eventState = metrics.lastEventState ?? inactiveEventState();
+  const flagAggressive = config.params.flagAggressive;
+
   for (const pos of [...positionTracker.open]) {
     const ob = polymarketFeed.getOrderbook(pos.conditionId);
     if (!ob) continue;
@@ -174,11 +190,64 @@ async function checkProfitTakeExits(
     const maxGain = (1 - pos.entryPrice) * pos.shares;
     if (maxGain <= 0) continue;
 
-    // E3 Adaptive Profit-Take: dynamic 60-85% threshold based on market conditions
-    const windowInfo = extractWindowInfo(pos.marketSlug);
+    // Event-driven early exit: if position was opened during an event and the move
+    // has reversed by ≥50% of severity, exit immediately rather than waiting for PT.
     const exitNow = Date.now();
+    if (flagAggressive && eventState.active) {
+      const velocity = metrics.lastVelocitySignals.find(v => v.symbol === (pos.marketSlug.startsWith('eth') ? 'ETH' : 'BTC')) ?? null;
+      const reversal = shouldExitOnEventReversal(pos, velocity, eventState, exitNow);
+      if (reversal.exit) {
+        console.log(`[loop] EVENT REVERSAL EXIT ${pos.marketSlug} ${pos.outcome} reason=${reversal.reason}`);
+        if (!config.dryRun) {
+          const market = polymarketFeed.getMarkets().find(m => m.conditionId === pos.conditionId);
+          const sellResult = await orderManager.placeOrder({
+            conditionId: pos.conditionId,
+            yesTokenId:  market?.yesTokenId ?? pos.conditionId,
+            noTokenId:   market?.noTokenId ?? '',
+            marketSlug:  pos.marketSlug,
+            outcome:     pos.outcome,
+            side:        'SELL',
+            price:       exitPrice,
+            sizeUsd:     pos.shares * exitPrice,
+            negRisk:     market?.negRisk ?? true,
+            agentId:     config.agentId,
+            userId:      config.userId,
+          });
+          if (!sellResult.success) {
+            console.error(`[loop] Event-reversal SELL failed for ${pos.marketSlug}: ${sellResult.error ?? 'unknown'} — keeping open`);
+            continue;
+          }
+        }
+        const closed = await positionTracker.closePosition(pos.id, exitPrice, 'event_reversal');
+        if (closed) {
+          recordExit(deps.statCB, pos.conditionId);
+          recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd);
+          deps.adaptiveKelly.recordOutcome({
+            conditionId: pos.conditionId,
+            edge:        0,
+            pnlUsd:      closed.pnlUsd,
+            won:         closed.pnlUsd > 0,
+            symbol:      pos.marketSlug.startsWith('eth') ? 'ETH' : 'BTC',
+            computedAt:  Date.now(),
+          });
+          void deps.memoryBank.recordOutcome(pos.id, closed.pnlUsd);
+          void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
+        }
+        continue;
+      }
+    }
+
+    // E3 Adaptive Profit-Take: dynamic 60-85% threshold (30-70% during events) based on market conditions
+    const windowInfo = extractWindowInfo(pos.marketSlug);
     const msLeftInWindow = (windowInfo && isNearExpiry(windowInfo, exitNow, 90_000)) ? 45_000 : 300_000;
-    const ptResult = computeProfitTakePct(exitEntropySignal, exitReversalSignal, msLeftInWindow, metrics.lastRegime);
+    const ptResult = computeProfitTakePct(
+      exitEntropySignal,
+      exitReversalSignal,
+      msLeftInWindow,
+      metrics.lastRegime,
+      eventState,
+      flagAggressive,
+    );
 
     if (unrealizedPnl < ptResult.threshold * maxGain) continue;
 
@@ -331,9 +400,35 @@ export async function tradingTick(
     return;
   }
 
+  // ── Event Detection (hybrid mode trigger) ──
+  // Use the orderbook history of the first market with depth as the canonical
+  // history for spread/volume/odds-cliff detection. Velocity uses BTC samples.
+  const eventCanonical = orderbooks[0];
+  const obHistory = eventCanonical
+    ? deps.polymarketFeed.getOrderbookHistory(eventCanonical.conditionId)
+    : [];
+  const eventState = deps.eventDetector.evaluate({
+    orderbookHistory: obHistory,
+    binanceSamples: deps.binanceFeed.getTimestampedSamples('BTC'),
+    fundingMomentum: deps.fundamentalEngine.fundingMomentum.get(),
+    regime,
+    macroNow: deps.macroEventFeed.getCurrentWindow(),
+  });
+  metrics.lastEventState = eventState;
+
+  // Edge-trigger DB log (false → true transition only)
+  if (eventState.active && !metrics.lastEventActive) {
+    void logEventToDb(deps, eventState).catch(() => {});
+    console.log(
+      `[loop] EVENT DETECTED type=${eventState.type} severity=${eventState.severity.toFixed(2)}` +
+      ` ttl=${eventState.ttlMs}ms reason=${eventState.reason}`
+    );
+  }
+  metrics.lastEventActive = eventState.active;
+
   // ── Process each market ──
   for (const orderbook of orderbooks) {
-    await processMarket(deps, metrics, orderbook, btcPrice.last, regime, crossMarket, fundamental);
+    await processMarket(deps, metrics, orderbook, btcPrice.last, regime, crossMarket, fundamental, eventState);
   }
 
   // ── Evolve Heston vol ──
@@ -498,6 +593,28 @@ async function logSkippedTrade(
     });
   } catch {
     // Non-critical — don't let logging failures interrupt the loop
+    return;
+  }
+}
+
+/**
+ * Edge-trigger insert into polyarb_event_log when EventDetector flips active.
+ * Silent failure: missing table (pre-migration) or DB error → no-op.
+ */
+async function logEventToDb(deps: LoopDeps, event: EventState): Promise<void> {
+  try {
+    const supabase = getSupabase();
+    await supabase.from('polyarb_event_log').insert({
+      agent_id:    deps.config.agentId,
+      user_id:     deps.config.userId,
+      event_type:  event.type,
+      severity:    event.severity,
+      detected_at: new Date(event.detectedAt).toISOString(),
+      ttl_ms:      event.ttlMs,
+      metadata:    { reason: event.reason },
+    });
+  } catch {
+    // Silent — table may not exist yet, or transient DB error
   }
 }
 
@@ -509,6 +626,7 @@ async function processMarket(
   regime: RegimeState,
   crossMarket: CrossMarketSignal,
   fundamental: FundamentalSignal,
+  eventState: EventState,
 ): Promise<void> {
   const { config, binanceFeed, positionTracker, orderManager, milestoneMap, adaptiveKelly, memoryBank, sentimentPulse,
           bayesianWinRate, sessionClock, replaySimilarity, calibrationTracker } = deps;
@@ -651,6 +769,20 @@ async function processMarket(
 
   // ── Engine Consensus Voting (Level 150 — up to 13 voters) ──
   const votes = computeEngineVotes(velocitySignal, sentimentMultiplier, fundamental, edge, kellyMinEdge, extSignals);
+
+  // EVENT_TRIGGER synthetic voter — only when flagAggressive AND eventState.active.
+  // Direction follows BTC velocity; confidence scales with severity.
+  if (config.params.flagAggressive && eventState.active) {
+    const velDir = extSignals.velocityDirection;
+    if (velDir !== 'FLAT') {
+      votes.push({
+        engine: 'EVENT_TRIGGER',
+        direction: velDir === 'UP' ? 'YES' : 'NO',
+        confidence: 0.85 * eventState.severity,
+      });
+    }
+  }
+
   const yesVotes = votes.filter(v => v.direction === 'YES');
   const noVotes  = votes.filter(v => v.direction === 'NO');
   const yesScore = yesVotes.reduce((s, v) => s + v.confidence, 0);
@@ -660,7 +792,9 @@ async function processMarket(
   const { winRate: recentWR, sampleCount: wrSamples } = computeRecentWinRate({
     wins: metrics.wins, losses: metrics.losses, totalTrades: metrics.totalTrades,
   });
-  const consensusThresholds = computeConsensusThresholds(recentWR, wrSamples, votes.length);
+  const consensusThresholds = computeConsensusThresholds(
+    recentWR, wrSamples, votes.length, eventState, config.params.flagAggressive,
+  );
 
   const buyYesMajority = yesScore > noScore
     && yesVotes.length >= consensusThresholds.minEngineVotes
@@ -697,13 +831,14 @@ async function processMarket(
     params.jerkReversalThreshold,
   );
 
-  // ── Kelly sizing — capped at 10% of balance ──
+  // ── Kelly sizing — dynamic cap (10% NORMAL, up to 40% during event) ──
   const accountValue = metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd);
-  const maxSizeUsd = accountValue * params.maxKellyFraction; // 10% cap
+  const effectiveCap = effectiveKellyCap(params.maxKellyFraction, eventState, params.flagAggressive);
+  const maxSizeUsd = accountValue * effectiveCap;
   const entryPrice = buyYes ? orderbook.askPrice : orderbook.bidPrice;
 
   // C2 Asymmetric Kelly — true binary reward/risk ratio b = (1-p)/p instead of fixed 1.5
-  const kellyResult = asymmetricKelly(edge, entryPrice, params.maxKellyFraction, accountValue);
+  const kellyResult = asymmetricKelly(edge, entryPrice, effectiveCap, accountValue);
   const kelly = { ...kellyResult, leverage: 1.0 };
 
   const lossStreakMult = metrics.consecutiveLosses >= params.lossStreakThreshold
@@ -784,6 +919,11 @@ async function processMarket(
       votes,
       yesScore,
       noScore,
+      // Event-driven mode metadata
+      eventType: eventState.active ? eventState.type : null,
+      eventSeverity: eventState.active ? eventState.severity : 0,
+      eventCap: effectiveCap,
+      eventReason: eventState.active ? eventState.reason : null,
     },
   });
 
@@ -851,5 +991,6 @@ function updateTelemetry(deps: LoopDeps, metrics: LoopMetrics, tickStart: number
     crossMarketSnapshot: metrics.lastCrossMarket,
     sentimentSnapshot: metrics.lastSentimentPulses.length > 0 ? metrics.lastSentimentPulses : null,
     memoryBankStats: deps.memoryBank.getStats().length > 0 ? deps.memoryBank.getStats() : null,
+    eventState: metrics.lastEventState,
   });
 }
