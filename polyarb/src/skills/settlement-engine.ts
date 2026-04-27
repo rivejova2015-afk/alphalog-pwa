@@ -27,7 +27,7 @@ const ClobMarketSchema = z.object({
   closed: z.boolean(),
   tokens: z.array(z.object({
     outcome: z.string(),
-    price:   z.string(),
+    price:   z.union([z.string(), z.number()]).transform(v => String(v)),
   })).min(2),
 });
 
