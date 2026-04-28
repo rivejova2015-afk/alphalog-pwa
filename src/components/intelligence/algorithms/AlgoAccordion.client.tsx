@@ -8,6 +8,7 @@ import { EquityCurve } from './EquityCurve';
 import { ControlPanel } from './ControlPanel.client';
 import { QuantModelsPanel } from './QuantModelsPanel';
 import { OpenPositionsPanel } from './OpenPositionsPanel.client';
+import { BacktestPanel } from './BacktestPanel.client';
 import { Badge } from '@/components/shared/Badge';
 
 type MarketType = 'forex' | 'futures' | 'options';
@@ -150,6 +151,13 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                     parameters={algo.parameters}
                   />
                 </div>
+
+                {/* Backtest & Validation */}
+                <BacktestPanel
+                  algorithmId={algo.id}
+                  defaultSymbol={algo.instrument}
+                  defaultParameters={algo.parameters}
+                />
 
                 {/* Recent trades */}
                 <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4">
