@@ -8,6 +8,17 @@ import { createClient } from '@/lib/supabase/browser';
 
 interface BotAccount { id: string; label: string; account_id: string; }
 
+interface CmeAccount {
+  id: string;
+  account_type: 'propfirm' | 'broker';
+  provider_name: string;
+  account_number: string;
+  label: string | null;
+  funded_amount: number | null;
+  max_daily_loss: number | null;
+  max_trailing_dd: number | null;
+}
+
 type MarketType = 'forex' | 'futures' | 'options';
 type Direction  = 'long'  | 'short'  | 'both';
 
@@ -40,6 +51,15 @@ const OPTIONS_STRATEGIES = [
   { value: 'calendar_spread',   label: 'Calendar Spread',    desc: 'Mismo strike, diferente vencimiento' },
   { value: 'covered_call',      label: 'Covered Call',       desc: 'Largo subyacente + call vendida' },
   { value: 'cash_secured_put',  label: 'Cash-Secured Put',   desc: 'Put vendida cubierta con cash' },
+];
+
+const PROPFIRM_PROVIDERS = [
+  'TopstepX', 'Apex', 'Earn2Trade', 'Topstep',
+  'MyFundedFutures', 'TradeDay', 'Elite Trader Funding',
+];
+const BROKER_PROVIDERS = [
+  'IBKR', 'Rithmic', 'NinjaTrader Brokerage',
+  'TradeStation', 'AMP Futures', 'Optimus Futures',
 ];
 
 const STEPS = ['Básico', 'Overrides'] as const;
@@ -216,16 +236,42 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
 
 // ─── Step 1: Futures ──────────────────────────────────────────────────────────
 
-function StepFutures({ name, setName, contract, setContract, direction, setDirection,
-  hedgeEnabled, setHedgeEnabled, hedgeContract, setHedgeContract, ibkrAccount, setIbkrAccount }: {
+function StepFutures({
+  name, setName,
+  contract, setContract,
+  direction, setDirection,
+  hedgeEnabled, setHedgeEnabled,
+  hedgeContract, setHedgeContract,
+  cmeAccounts, cmeAccountId, setCmeAccountId,
+  showAddCmeAccount, setShowAddCmeAccount,
+  newCmeType, setNewCmeType,
+  newCmeProvider, setNewCmeProvider,
+  newCmeNumber, setNewCmeNumber,
+  newCmeLabel, setNewCmeLabel,
+  newCmeFunded, setNewCmeFunded,
+  newCmeMaxLoss, setNewCmeMaxLoss,
+  newCmeTrailingDD, setNewCmeTrailingDD,
+  addingCmeAccount, handleAddCmeAccount,
+}: {
   name: string; setName: (v: string) => void;
   contract: string; setContract: (v: string) => void;
   direction: Direction; setDirection: (v: Direction) => void;
   hedgeEnabled: boolean; setHedgeEnabled: (v: boolean) => void;
   hedgeContract: string; setHedgeContract: (v: string) => void;
-  ibkrAccount: string; setIbkrAccount: (v: string) => void;
+  cmeAccounts: CmeAccount[];
+  cmeAccountId: string; setCmeAccountId: (v: string) => void;
+  showAddCmeAccount: boolean; setShowAddCmeAccount: (v: boolean) => void;
+  newCmeType: 'propfirm' | 'broker'; setNewCmeType: (v: 'propfirm' | 'broker') => void;
+  newCmeProvider: string; setNewCmeProvider: (v: string) => void;
+  newCmeNumber: string; setNewCmeNumber: (v: string) => void;
+  newCmeLabel: string; setNewCmeLabel: (v: string) => void;
+  newCmeFunded: string; setNewCmeFunded: (v: string) => void;
+  newCmeMaxLoss: string; setNewCmeMaxLoss: (v: string) => void;
+  newCmeTrailingDD: string; setNewCmeTrailingDD: (v: string) => void;
+  addingCmeAccount: boolean; handleAddCmeAccount: () => Promise<void>;
 }) {
   const selected = FUTURES_CONTRACTS.find((c) => c.symbol === contract);
+  const providers = newCmeType === 'propfirm' ? PROPFIRM_PROVIDERS : BROKER_PROVIDERS;
 
   return (
     <div className="space-y-4">
@@ -275,8 +321,135 @@ function StepFutures({ name, setName, contract, setContract, direction, setDirec
         )}
       </div>
 
-      <Field label="Cuenta IBKR" hint="Formato: U1234567">
-        <TextInput value={ibkrAccount} onChange={setIbkrAccount} placeholder="U1234567" />
+      {/* CME Account selector */}
+      <Field label="Cuenta CME" hint="Selecciona una cuenta propfirm o broker real para vincular esta estrategia.">
+        <Select value={cmeAccountId} onChange={(v) => { setCmeAccountId(v); setShowAddCmeAccount(false); }}>
+          <option value="">— Sin vincular —</option>
+          {cmeAccounts.map((a) => {
+            const badge = a.account_type === 'propfirm' ? 'PropFirm' : 'Broker';
+            const display = a.label ?? a.account_number;
+            return (
+              <option key={a.id} value={a.id}>
+                [{badge}] {a.provider_name} — {display}
+              </option>
+            );
+          })}
+        </Select>
+
+        {/* Account badges below dropdown */}
+        {cmeAccountId && (() => {
+          const acc = cmeAccounts.find((a) => a.id === cmeAccountId);
+          if (!acc) return null;
+          const isPropfirm = acc.account_type === 'propfirm';
+          return (
+            <div className="mt-1.5 flex flex-wrap gap-2 text-[10px]">
+              <span className={`px-1.5 py-0.5 rounded font-medium ${isPropfirm ? 'bg-[#f59e0b]/15 text-[#f59e0b]' : 'bg-[#06b6d4]/15 text-[#06b6d4]'}`}>
+                {isPropfirm ? 'PropFirm' : 'Broker'}
+              </span>
+              <span className="text-[#475569]">{acc.provider_name}</span>
+              <span className="text-[#2d3748]">{acc.account_number}</span>
+              {isPropfirm && acc.funded_amount && (
+                <span className="text-[#475569]">Fondeo: <span className="text-[#34d399]">${acc.funded_amount.toLocaleString()}</span></span>
+              )}
+              {isPropfirm && acc.max_daily_loss && (
+                <span className="text-[#475569]">Pérd. diaria: <span className="text-[#f87171]">${acc.max_daily_loss.toLocaleString()}</span></span>
+              )}
+            </div>
+          );
+        })()}
+
+        {!showAddCmeAccount ? (
+          <button type="button" onClick={() => setShowAddCmeAccount(true)}
+            className="mt-1.5 flex items-center gap-1 text-xs text-[#06b6d4] hover:text-[#22d3ee] transition-colors">
+            <Plus size={12} /> Agregar cuenta nueva
+          </button>
+        ) : (
+          <div className="mt-2 p-3 rounded-lg bg-[#0a0e1a] border border-[#1f2937] space-y-3">
+            {/* Type chips */}
+            <div className="flex gap-2">
+              {(['propfirm', 'broker'] as const).map((t) => (
+                <button key={t} type="button"
+                  onClick={() => {
+                    setNewCmeType(t);
+                    setNewCmeProvider(t === 'propfirm' ? PROPFIRM_PROVIDERS[0] : BROKER_PROVIDERS[0]);
+                  }}
+                  className={`flex-1 py-1 rounded text-xs font-semibold border transition-colors ${
+                    newCmeType === t
+                      ? t === 'propfirm'
+                        ? 'bg-[#f59e0b]/20 border-[#f59e0b] text-[#f59e0b]'
+                        : 'bg-[#06b6d4]/20 border-[#06b6d4] text-[#06b6d4]'
+                      : 'bg-transparent border-[#1f2937] text-[#475569] hover:border-[#2d3748]'
+                  }`}>
+                  {t === 'propfirm' ? 'PropFirm' : 'Broker real'}
+                </button>
+              ))}
+            </div>
+
+            {/* Provider */}
+            <div>
+              <p className="text-[10px] text-[#475569] mb-1">Proveedor</p>
+              <select value={newCmeProvider} onChange={(e) => setNewCmeProvider(e.target.value)}
+                className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none">
+                {providers.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            {/* Account number */}
+            <input type="text" value={newCmeNumber} onChange={(e) => setNewCmeNumber(e.target.value)}
+              placeholder={newCmeType === 'broker' ? 'Número de cuenta (ej. U1234567)' : 'ID de cuenta propfirm'}
+              className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
+
+            {/* Label */}
+            <input type="text" value={newCmeLabel} onChange={(e) => setNewCmeLabel(e.target.value)}
+              placeholder="Nombre / etiqueta (opcional)"
+              className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
+
+            {/* PropFirm-only fields */}
+            {newCmeType === 'propfirm' && (
+              <div className="space-y-2">
+                <div className="h-px bg-[#1f2937]" />
+                <p className="text-[10px] text-[#f59e0b]">Parámetros de la cuenta fondada</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <p className="text-[10px] text-[#475569] mb-1">Fondeo ($)</p>
+                    <input type="number" value={newCmeFunded} onChange={(e) => setNewCmeFunded(e.target.value)}
+                      placeholder="150000" min="0" step="1000"
+                      className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none placeholder:text-[#2d3748]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#475569] mb-1">Pérd. diaria ($)</p>
+                    <input type="number" value={newCmeMaxLoss} onChange={(e) => setNewCmeMaxLoss(e.target.value)}
+                      placeholder="1500" min="0" step="100"
+                      className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none placeholder:text-[#2d3748]" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#475569] mb-1">Trailing DD ($)</p>
+                    <input type="number" value={newCmeTrailingDD} onChange={(e) => setNewCmeTrailingDD(e.target.value)}
+                      placeholder="3000" min="0" step="100"
+                      className="w-full rounded-lg bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none placeholder:text-[#2d3748]" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button type="button" onClick={handleAddCmeAccount}
+                disabled={addingCmeAccount || !newCmeNumber.trim()}
+                className="flex-1 py-1.5 rounded-lg bg-[#06b6d4] text-black text-xs font-semibold disabled:opacity-40 hover:bg-[#22d3ee] transition-colors">
+                {addingCmeAccount ? 'Guardando…' : 'Guardar cuenta'}
+              </button>
+              <button type="button"
+                onClick={() => {
+                  setShowAddCmeAccount(false);
+                  setNewCmeNumber(''); setNewCmeLabel('');
+                  setNewCmeFunded(''); setNewCmeMaxLoss(''); setNewCmeTrailingDD('');
+                }}
+                className="px-3 py-1.5 rounded-lg border border-[#1f2937] text-[#475569] text-xs hover:border-[#475569] transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </Field>
     </div>
   );
@@ -491,6 +664,19 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [addingAccount,  setAddingAccount]  = useState(false);
   const router = useRouter();
 
+  // CME account management
+  const [cmeAccounts,       setCmeAccounts]       = useState<CmeAccount[]>([]);
+  const [cmeAccountId,      setCmeAccountId]      = useState('');
+  const [showAddCmeAccount, setShowAddCmeAccount] = useState(false);
+  const [newCmeType,        setNewCmeType]        = useState<'propfirm' | 'broker'>('broker');
+  const [newCmeProvider,    setNewCmeProvider]    = useState('IBKR');
+  const [newCmeNumber,      setNewCmeNumber]      = useState('');
+  const [newCmeLabel,       setNewCmeLabel]       = useState('');
+  const [newCmeFunded,      setNewCmeFunded]      = useState('');
+  const [newCmeMaxLoss,     setNewCmeMaxLoss]     = useState('');
+  const [newCmeTrailingDD,  setNewCmeTrailingDD]  = useState('');
+  const [addingCmeAccount,  setAddingCmeAccount]  = useState(false);
+
   // Common
   const [name,       setName]       = useState('');
   const [marketType, setMarketType] = useState<MarketType>('forex');
@@ -505,12 +691,12 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [contract,      setContract]      = useState('ES');
   const [hedgeEnabled,  setHedgeEnabled]  = useState(false);
   const [hedgeContract, setHedgeContract] = useState('NQ');
-  const [ibkrAccount,   setIbkrAccount]   = useState('');
 
   // Options-specific
   const [underlying,       setUnderlying]       = useState('SPX');
   const [optionsStrategy,  setOptionsStrategy]  = useState('iron_condor');
   const [optionsDirection, setOptionsDirection] = useState<OptionsDirection>('neutral');
+  const [ibkrAccount,      setIbkrAccount]      = useState('');
 
   // Overrides (per market type)
   const [forexOvr,   setForexOvr]   = useState<Record<string, string>>(FOREX_OVERRIDES_INIT);
@@ -528,9 +714,11 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
     Promise.all([
       sb.from('bots').select('id, name'),
       sb.from('bot_accounts').select('id, label, account_id'),
-    ]).then(([botsRes, accsRes]) => {
+      sb.from('algo_cme_accounts').select('*').is('deleted_at', null),
+    ]).then(([botsRes, accsRes, cmeRes]) => {
       setBots(botsRes.data ?? []);
       setBotAccounts(accsRes.data ?? []);
+      setCmeAccounts((cmeRes.data ?? []) as CmeAccount[]);
     });
   }, []);
 
@@ -562,6 +750,35 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
     setAddingAccount(false);
   }
 
+  async function handleAddCmeAccount() {
+    if (!newCmeNumber.trim()) { toast.error('El número de cuenta es obligatorio'); return; }
+    setAddingCmeAccount(true);
+    const sb = createClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) { toast.error('No autenticado'); setAddingCmeAccount(false); return; }
+    const { data, error } = await sb.from('algo_cme_accounts').insert({
+      user_id:         user.id,
+      account_type:    newCmeType,
+      provider_name:   newCmeProvider,
+      account_number:  newCmeNumber.trim(),
+      label:           newCmeLabel.trim() || null,
+      funded_amount:   newCmeFunded    ? Number(newCmeFunded)    : null,
+      max_daily_loss:  newCmeMaxLoss   ? Number(newCmeMaxLoss)   : null,
+      max_trailing_dd: newCmeTrailingDD ? Number(newCmeTrailingDD) : null,
+    }).select('*').single();
+    if (error) {
+      toast.error('Error al crear cuenta: ' + error.message);
+    } else if (data) {
+      setCmeAccounts((prev) => [...prev, data as CmeAccount]);
+      setCmeAccountId(data.id);
+      setShowAddCmeAccount(false);
+      setNewCmeNumber(''); setNewCmeLabel('');
+      setNewCmeFunded(''); setNewCmeMaxLoss(''); setNewCmeTrailingDD('');
+      toast.success('Cuenta CME guardada y seleccionada');
+    }
+    setAddingCmeAccount(false);
+  }
+
   const isFirst = stepIdx === 0;
   const isLast  = stepIdx === STEPS.length - 1;
 
@@ -591,9 +808,16 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         parameters.leg_b_instrument = legB;
       } else if (marketType === 'futures') {
         parameters.contract        = contract;
-        parameters.ibkr_account    = ibkrAccount || null;
         parameters.hedge_enabled   = hedgeEnabled;
         if (hedgeEnabled) parameters.hedge_contract = hedgeContract;
+        // Linked CME account
+        parameters.cme_account_id = cmeAccountId || null;
+        const selectedCme = cmeAccounts.find((a) => a.id === cmeAccountId);
+        if (selectedCme) {
+          parameters.cme_provider    = selectedCme.provider_name;
+          parameters.cme_account_num = selectedCme.account_number;
+          parameters.cme_type        = selectedCme.account_type;
+        }
       } else {
         parameters.underlying        = underlying;
         parameters.options_strategy  = optionsStrategy;
@@ -607,7 +831,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
           ? optionsDirection === 'bullish' ? 'long' : optionsDirection === 'bearish' ? 'short' : 'both'
           : direction;
 
-      // Map DB columns by market type — use the relevant override key per market
+      // Map DB columns by market type
       const lotSize =
         marketType === 'forex'   ? (engineOverrides.lot_per_leg      ?? 0.01) :
         marketType === 'futures' ? (engineOverrides.contracts_per_trade ?? 1)  :
@@ -717,7 +941,17 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
               direction={direction} setDirection={setDirection}
               hedgeEnabled={hedgeEnabled} setHedgeEnabled={setHedgeEnabled}
               hedgeContract={hedgeContract} setHedgeContract={setHedgeContract}
-              ibkrAccount={ibkrAccount} setIbkrAccount={setIbkrAccount}
+              cmeAccounts={cmeAccounts}
+              cmeAccountId={cmeAccountId} setCmeAccountId={setCmeAccountId}
+              showAddCmeAccount={showAddCmeAccount} setShowAddCmeAccount={setShowAddCmeAccount}
+              newCmeType={newCmeType} setNewCmeType={setNewCmeType}
+              newCmeProvider={newCmeProvider} setNewCmeProvider={setNewCmeProvider}
+              newCmeNumber={newCmeNumber} setNewCmeNumber={setNewCmeNumber}
+              newCmeLabel={newCmeLabel} setNewCmeLabel={setNewCmeLabel}
+              newCmeFunded={newCmeFunded} setNewCmeFunded={setNewCmeFunded}
+              newCmeMaxLoss={newCmeMaxLoss} setNewCmeMaxLoss={setNewCmeMaxLoss}
+              newCmeTrailingDD={newCmeTrailingDD} setNewCmeTrailingDD={setNewCmeTrailingDD}
+              addingCmeAccount={addingCmeAccount} handleAddCmeAccount={handleAddCmeAccount}
             />
           )}
           {stepIdx === 0 && marketType === 'options' && (
