@@ -1,8 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Play, BarChart3, Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Play, BarChart3, Loader2, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
+import type { AlgorithmRules, SimulatedTrade } from '@/types/backtest';
+import { BacktestRuleBuilder } from './BacktestRuleBuilder.client';
+import { BacktestEquityChart } from './BacktestEquityChart.client';
+import { BacktestTradesTable } from './BacktestTradesTable.client';
+import { BacktestSensitivityHeatmap } from './BacktestSensitivityHeatmap.client';
 
 interface BacktestPanelProps {
   algorithmId: string;
@@ -21,14 +26,20 @@ interface JobRow {
   finished_at: string | null;
 }
 
+interface ConePoint { step: number; p5: number; p50: number; p95: number }
+interface EquityPoint { ts: string; equity: number; drawdown: number }
+
 interface JobResults {
   metrics: Record<string, number>;
+  equity_curve: EquityPoint[];
+  trades: SimulatedTrade[];
   monte_carlo: {
     iterations: number;
     probProfitable: number;
     probRuin: number;
     finalEquityPercentiles: { p5: number; p50: number; p95: number };
     maxDrawdownPercentiles: { p5: number; p50: number; p95: number };
+    cone: ConePoint[];
   } | null;
   walk_forward: {
     avgEfficiency: number;
@@ -43,6 +54,7 @@ interface JobResults {
 }
 
 const TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'] as const;
+type Tab = 'overview' | 'chart' | 'trades' | 'sensitivity';
 
 const STATUS_COLORS: Record<JobRow['status'], string> = {
   queued: 'text-[#94a3b8]',
@@ -59,6 +71,8 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [selectedResults, setSelectedResults] = useState<JobResults | null>(null);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [showRules, setShowRules] = useState(false);
 
   // Form state
   const today = new Date();
@@ -71,6 +85,7 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
   const [mcIterations, setMcIterations] = useState(1000);
   const [wfWindows, setWfWindows] = useState(5);
   const [stress, setStress] = useState(true);
+  const [rules, setRules] = useState<AlgorithmRules>(() => buildDefaultRules(defaultParameters));
 
   const loadJobs = useCallback(async () => {
     const r = await fetch(`/api/backtest/jobs?algorithm_id=${algorithmId}&limit=10`);
@@ -81,7 +96,6 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
 
   useEffect(() => { loadJobs(); }, [loadJobs]);
 
-  // Poll while any job is running
   useEffect(() => {
     const hasActive = jobs.some((j) => j.status === 'queued' || j.status === 'running');
     if (!hasActive) return;
@@ -96,6 +110,7 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
       const j = await r.json();
       setSelectedResults(j.results ?? null);
       setSelectedJob(jobId);
+      setTab('overview');
     } finally {
       setLoadingResults(false);
     }
@@ -118,7 +133,7 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
         slippagePoints: 2,
         direction: 'both' as const,
         parameters: defaultParameters ?? {},
-        rules: buildDefaultRules(defaultParameters),
+        rules,
         monteCarloIterations: mcIterations,
         walkForwardWindows: wfWindows,
         stressTests: stress,
@@ -161,37 +176,49 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
       </div>
 
       {showForm && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 p-3 rounded bg-[#0f1322] border border-[#1f2937]">
-          <Field label="Symbol">
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className={inp} />
-          </Field>
-          <Field label="Timeframe">
-            <select value={timeframe} onChange={(e) => setTimeframe(e.target.value as typeof TIMEFRAMES[number])} className={inp}>
-              {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </Field>
-          <Field label="From">
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inp} />
-          </Field>
-          <Field label="To">
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inp} />
-          </Field>
-          <Field label="Initial Balance">
-            <input type="number" min={100} value={initialBalance} onChange={(e) => setInitialBalance(Number(e.target.value))} className={inp} />
-          </Field>
-          <Field label="MC Iterations">
-            <input type="number" min={0} max={10000} step={100} value={mcIterations} onChange={(e) => setMcIterations(Number(e.target.value))} className={inp} />
-          </Field>
-          <Field label="WF Windows">
-            <input type="number" min={0} max={20} value={wfWindows} onChange={(e) => setWfWindows(Number(e.target.value))} className={inp} />
-          </Field>
-          <Field label="Stress tests">
-            <label className="flex items-center gap-1.5 text-xs text-[#e2e8f0] mt-1.5">
-              <input type="checkbox" checked={stress} onChange={(e) => setStress(e.target.checked)} />
-              <span>Enabled</span>
-            </label>
-          </Field>
-          <div className="col-span-2 lg:col-span-4 flex justify-end mt-1">
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 p-3 rounded bg-[#0f1322] border border-[#1f2937]">
+            <Field label="Symbol">
+              <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className={inp} />
+            </Field>
+            <Field label="Timeframe">
+              <select value={timeframe} onChange={(e) => setTimeframe(e.target.value as typeof TIMEFRAMES[number])} className={inp}>
+                {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="From">
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inp} />
+            </Field>
+            <Field label="To">
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inp} />
+            </Field>
+            <Field label="Initial Balance">
+              <input type="number" min={100} value={initialBalance} onChange={(e) => setInitialBalance(Number(e.target.value))} className={inp} />
+            </Field>
+            <Field label="MC Iterations">
+              <input type="number" min={0} max={10000} step={100} value={mcIterations} onChange={(e) => setMcIterations(Number(e.target.value))} className={inp} />
+            </Field>
+            <Field label="WF Windows">
+              <input type="number" min={0} max={20} value={wfWindows} onChange={(e) => setWfWindows(Number(e.target.value))} className={inp} />
+            </Field>
+            <Field label="Stress tests">
+              <label className="flex items-center gap-1.5 text-xs text-[#e2e8f0] mt-1.5">
+                <input type="checkbox" checked={stress} onChange={(e) => setStress(e.target.checked)} />
+                <span>Enabled</span>
+              </label>
+            </Field>
+          </div>
+
+          <button
+            onClick={() => setShowRules((s) => !s)}
+            className="flex items-center gap-1 text-[11px] text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+          >
+            {showRules ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            Reglas {showRules ? '(ocultar)' : '(personalizar)'}
+          </button>
+          {showRules && <BacktestRuleBuilder rules={rules} onChange={setRules} />}
+
+          <div className="flex justify-end">
             <button
               onClick={handleRun}
               disabled={submitting}
@@ -241,9 +268,64 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
           <Loader2 size={12} className="animate-spin" /> Loading results…
         </div>
       ) : selectedResults && (
-        <ResultsView results={selectedResults} />
+        <div className="space-y-2">
+          <div className="flex gap-1 border-b border-[#1f2937] -mb-px">
+            <TabBtn active={tab === 'overview'}    onClick={() => setTab('overview')}>Overview</TabBtn>
+            <TabBtn active={tab === 'chart'}       onClick={() => setTab('chart')}>Equity</TabBtn>
+            <TabBtn active={tab === 'trades'}      onClick={() => setTab('trades')}>Trades ({selectedResults.trades.length})</TabBtn>
+            <TabBtn active={tab === 'sensitivity'} onClick={() => setTab('sensitivity')}>Sensitivity</TabBtn>
+          </div>
+
+          {tab === 'overview' && <ResultsOverview results={selectedResults} />}
+          {tab === 'chart' && (
+            <div className="p-3 rounded bg-[#0f1322] border border-[#1f2937]">
+              <BacktestEquityChart
+                equity={selectedResults.equity_curve}
+                cone={selectedResults.monte_carlo?.cone ?? null}
+                initialBalance={selectedResults.metrics.totalPnl !== undefined && selectedResults.equity_curve[0]
+                  ? selectedResults.equity_curve[0].equity
+                  : 10000}
+              />
+            </div>
+          )}
+          {tab === 'trades' && (
+            <div className="p-3 rounded bg-[#0f1322] border border-[#1f2937]">
+              <BacktestTradesTable trades={selectedResults.trades} />
+            </div>
+          )}
+          {tab === 'sensitivity' && (
+            <BacktestSensitivityHeatmap
+              baseConfig={{
+                symbol,
+                timeframe,
+                from: new Date(from).toISOString(),
+                to: new Date(to).toISOString(),
+                initialBalance,
+                contractSize: symbol.includes('XAU') ? 100 : 100000,
+                pointValue: symbol.includes('XAU') ? 1 : 10,
+                spreadPoints: 5,
+                commissionPerLot: 7,
+                slippagePoints: 2,
+                direction: 'both',
+                parameters: defaultParameters ?? {},
+                rules,
+              }}
+            />
+          )}
+        </div>
       ))}
     </div>
+  );
+}
+
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1 text-[11px] font-medium border-b-2 transition-colors ${
+        active ? 'border-[#06b6d4] text-[#06b6d4]' : 'border-transparent text-[#94a3b8] hover:text-[#e2e8f0]'
+      }`}
+    >{children}</button>
   );
 }
 
@@ -265,7 +347,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inp = "w-full rounded bg-[#111827] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1 focus:outline-none focus:border-[#475569]";
 
-function ResultsView({ results }: { results: JobResults }) {
+function ResultsOverview({ results }: { results: JobResults }) {
   const m = results.metrics;
   return (
     <div className="space-y-3 p-3 rounded bg-[#0f1322] border border-[#1f2937]">
@@ -350,21 +432,20 @@ function fmtPct(n: number | undefined): string {
   return `${(n * 100).toFixed(2)}%`;
 }
 
-// Build naive default rules from algorithm parameters until ParameterRules wizard ships.
-function buildDefaultRules(params: Record<string, unknown> | undefined) {
+function buildDefaultRules(params: Record<string, unknown> | undefined): AlgorithmRules {
   const rsiBuy = numParam(params, 'rsiBuyLevel', 30);
   const rsiSell = numParam(params, 'rsiSellLevel', 70);
   const sl = numParam(params, 'stopLossPoints', 200);
   const tp = numParam(params, 'takeProfitPoints', 400);
 
   return {
-    entryLong:  [{ left: { type: 'rsi' as const, period: 14 }, op: '<' as const, right: rsiBuy }],
-    entryShort: [{ left: { type: 'rsi' as const, period: 14 }, op: '>' as const, right: rsiSell }],
-    exitLong:   [{ left: { type: 'rsi' as const, period: 14 }, op: '>' as const, right: 50 }],
-    exitShort:  [{ left: { type: 'rsi' as const, period: 14 }, op: '<' as const, right: 50 }],
+    entryLong:  [{ left: { type: 'rsi', period: 14 }, op: '<', right: rsiBuy }],
+    entryShort: [{ left: { type: 'rsi', period: 14 }, op: '>', right: rsiSell }],
+    exitLong:   [{ left: { type: 'rsi', period: 14 }, op: '>', right: 50 }],
+    exitShort:  [{ left: { type: 'rsi', period: 14 }, op: '<', right: 50 }],
     slPoints: sl,
     tpPoints: tp,
-    sizing: { mode: 'fixed_lot' as const, value: 0.1 },
+    sizing: { mode: 'fixed_lot', value: 0.1 },
     maxConcurrent: 1,
   };
 }
