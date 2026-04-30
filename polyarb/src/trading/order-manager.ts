@@ -343,6 +343,34 @@ export class OrderManager {
   }
 
   /**
+   * Ask the Polymarket CLOB to re-read on-chain allowances/balance for this
+   * wallet. Useful at boot or after a deposit so the cached `balance` reported
+   * by `/balance-allowance` reflects current on-chain state. No tx signing.
+   */
+  async updateBalanceAllowance(): Promise<boolean> {
+    if (this.dryRun || !this.apiKey || !this.walletAddress) return false;
+    try {
+      const path = '/balance-allowance/update';
+      const qs   = '?asset_type=COLLATERAL&signature_type=0';
+      const headers = buildL2AuthHeaders(
+        this.apiKey, this.apiSecret, this.apiPassphrase,
+        this.walletAddress, 'GET', path,
+      );
+      const res = await clobFetch(`${CLOB_BASE}${path}${qs}`, { headers: headers as Record<string, string> });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[order-manager] balance-allowance/update HTTP ${res.status}: ${errText.slice(0, 200)}`);
+        return false;
+      }
+      console.log('[order-manager] CLOB balance-allowance refresh OK');
+      return true;
+    } catch (err) {
+      console.warn(`[order-manager] balance-allowance/update threw: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
    * Fetch real USDC balance from the Polymarket CLOB.
    * Returns null if unavailable (dry run, no auth, or network error).
    */

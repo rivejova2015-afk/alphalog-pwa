@@ -107,6 +107,7 @@ async function main(): Promise<void> {
   await sweepUnsettledPositions(supabase, config.agentId);
   await redeemPendingWins(supabase, ctfRedeemer, config.agentId);
 
+  await orderManager.updateBalanceAllowance();
   const balances = await orderManager.fetchOnChainBalance();
   console.log(`[500x] CLOB balance:   ${balances.clob   !== null ? `$${balances.clob.toFixed(4)} USDC`   : 'N/A'}`);
   console.log(`[500x] Wallet balance: ${balances.wallet !== null ? `$${balances.wallet.toFixed(4)} USDC` : 'N/A'}`);
@@ -220,6 +221,7 @@ async function main(): Promise<void> {
   marketRefreshInterval = setInterval(() => void refreshMarkets(), 5 * 60_000);
 
   const pollRealBalance = async () => {
+    await orderManager.updateBalanceAllowance();
     const { clob, wallet, total } = await orderManager.fetchOnChainBalance();
     if (total !== null) {
       metrics.realClobBalance = total;
