@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     // 1. Find the pairing token in bot_instances
     const { data: instance, error: findErr } = await svc
       .from("bot_instances")
-      .select("id, bot_account_id, instance_secret, is_paper_mode, status, pairing_token_hash, pairing_token_used_at")
+      .select("id, bot_account_id, instance_secret, is_paper_mode, status, pairing_token_hash, pairing_token_used_at, pairing_token_expires_at")
       .eq("pairing_token_hash", hashToken(pairing_token))
       .maybeSingle();
 
@@ -50,6 +50,13 @@ export async function POST(request: NextRequest) {
     if (instance.pairing_token_used_at) {
       return NextResponse.json({
         error: "Token ya usado. Genera uno nuevo en AlphaLog → Bot Control → Configuración"
+      }, { status: 401 });
+    }
+
+    // 2b. Reject expired tokens (only enforced when expires_at is set; legacy tokens have NULL)
+    if (instance.pairing_token_expires_at && new Date(instance.pairing_token_expires_at) < new Date()) {
+      return NextResponse.json({
+        error: "Token expirado. Genera uno nuevo desde AlphaLog."
       }, { status: 401 });
     }
 

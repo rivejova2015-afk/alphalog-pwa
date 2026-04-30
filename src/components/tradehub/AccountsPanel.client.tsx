@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
-import AccountDialog from "./AccountDialog.client";
+import AccountDialog, { type AccountSavePayload } from "./AccountDialog.client";
 import CategoryManagerModal, { Category as CategoryType } from "./CategoryManagerModal.client";
 import AccountDetailsModal from "./AccountDetailsModal.client";
+import PairingInstructionsModal from "./PairingInstructionsModal.client";
 import { computePnlTotals, filterTradesForPnl } from "@/lib/metrics/pnl";
 import { subscribeTradeUpdates } from "@/lib/metrics/tradeUpdates";
 import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
@@ -63,6 +64,8 @@ export default function AccountsPanel() {
   const [stats, setStats] = useState<Record<string, AccountStats>>({});
   const [statsRefresh, setStatsRefresh] = useState(0);
   const [confirmDeleteAccountId, setConfirmDeleteAccountId] = useState<string | null>(null);
+  const [pairing, setPairing] = useState<{ token: string; expiresAt: string; expiresInMinutes: number } | null>(null);
+  const [heartbeats, setHeartbeats] = useState<Record<string, { last_heartbeat_at: string | null; paired: boolean }>>({});
 
   const sortedCategories = useMemo(() => {
     const list = [...categories];
@@ -126,6 +129,21 @@ export default function AccountsPanel() {
   useEffect(() => {
     void fetchAccounts();
   }, [fetchAccounts]);
+
+  const fetchHeartbeats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/accounts/heartbeats");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && typeof data === "object") setHeartbeats(data);
+    } catch { /* silent — staleness badge is best-effort */ }
+  }, []);
+
+  useEffect(() => {
+    void fetchHeartbeats();
+    const id = setInterval(() => { void fetchHeartbeats(); }, 30_000);
+    return () => clearInterval(id);
+  }, [fetchHeartbeats]);
 
   useEffect(() => {
     if (accounts.length === 0) return;
@@ -193,11 +211,16 @@ export default function AccountsPanel() {
     }
   };
 
-  const handleSaveAccount = async (accountData: Partial<Account>) => {
+  const handleSaveAccount = async (accountData: AccountSavePayload) => {
     try {
       setError("");
+      const isLinkingMt5 = !editingAccount && Boolean(accountData.mt5);
       const method = editingAccount ? "PATCH" : "POST";
-      const url = editingAccount ? `/api/accounts/${editingAccount.id}` : "/api/accounts";
+      const url = editingAccount
+        ? `/api/accounts/${editingAccount.id}`
+        : isLinkingMt5
+          ? "/api/accounts/with-mt5"
+          : "/api/accounts";
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -212,6 +235,16 @@ export default function AccountsPanel() {
       void fetchAccounts();
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("accounts:updated"));
+      }
+      if (isLinkingMt5 && data?.pairing?.token) {
+        setPairing({
+          token: data.pairing.token,
+          expiresAt: data.pairing.expires_at,
+          expiresInMinutes: data.pairing.expires_in_minutes ?? 10,
+        });
+        toast.success("Cuenta creada. Sigue las instrucciones para vincular MT5.");
+      } else {
+        toast.success(editingAccount ? "Cuenta actualizada" : "Cuenta creada");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al guardar cuenta";
@@ -334,11 +367,15 @@ export default function AccountsPanel() {
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {accountsForCat.map((acc) => {
                       const stat = stats[acc.id];
+                      const hb = heartbeats[acc.id];
                       return (
                         <div key={acc.id} className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-3">
                           <div className="flex justify-between items-start gap-2">
                             <div>
-                              <div className="text-lg font-semibold text-slate-50">{acc.name}</div>
+                              <div className="text-lg font-semibold text-slate-50 flex items-center gap-2">
+                                {acc.name}
+                                <Mt5Badge hb={hb} />
+                              </div>
                               <div className="text-sm text-slate-400">
                                 {acc.currency} · Balance {formatCurrency(acc.current_balance, acc.currency)} · Equity {formatCurrency(acc.account_size, acc.currency)}
                               </div>
@@ -439,6 +476,15 @@ export default function AccountsPanel() {
         />
       )}
 
+      {pairing && (
+        <PairingInstructionsModal
+          token={pairing.token}
+          expiresAt={pairing.expiresAt}
+          expiresInMinutes={pairing.expiresInMinutes}
+          onClose={() => setPairing(null)}
+        />
+      )}
+
       {confirmDeleteAccountId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Confirmar eliminación">
           <div className="bg-slate-900 border border-red-800/60 rounded-xl p-5 w-full max-w-sm shadow-xl">
@@ -453,4 +499,19 @@ export default function AccountsPanel() {
       )}
     </div>
   );
+}
+
+function Mt5Badge({ hb }: { hb: { last_heartbeat_at: string | null; paired: boolean } | undefined }) {
+  if (!hb) return null;
+  if (!hb.paired || !hb.last_heartbeat_at) {
+    return <span className="text-[10px] text-slate-500" title="MT5 no emparejado">○ Not paired</span>;
+  }
+  const ageMin = (Date.now() - new Date(hb.last_heartbeat_at).getTime()) / 60_000;
+  if (ageMin < 2) {
+    return <span className="text-[10px] text-green-400" title={`Último heartbeat: ${new Date(hb.last_heartbeat_at).toLocaleString()}`}>● Live</span>;
+  }
+  if (ageMin < 15) {
+    return <span className="text-[10px] text-yellow-400" title={`Último heartbeat: ${new Date(hb.last_heartbeat_at).toLocaleString()}`}>● {Math.round(ageMin)}m ago</span>;
+  }
+  return <span className="text-[10px] text-red-400" title={`Último heartbeat: ${new Date(hb.last_heartbeat_at).toLocaleString()}`}>● Stale {Math.round(ageMin)}m</span>;
 }

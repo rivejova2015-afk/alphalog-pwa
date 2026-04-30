@@ -24,10 +24,18 @@ interface Category {
   description?: string | null;
 }
 
+export interface AccountSavePayload extends Partial<Account> {
+  mt5?: {
+    platform: "MT5";
+    broker_name: string;
+    label: string;
+  };
+}
+
 interface AccountDialogProps {
   account?: Account;
   categories: Category[];
-  onSave: (data: Partial<Account>) => Promise<void>;
+  onSave: (data: AccountSavePayload) => Promise<void>;
   onClose: () => void;
 }
 
@@ -58,6 +66,12 @@ export default function AccountDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // MT5 vinculation (only for new accounts)
+  const isCreating = !account;
+  const [linkMt5, setLinkMt5] = useState(false);
+  const [brokerName, setBrokerName] = useState("");
+  const [mt5Label, setMt5Label] = useState("");
+
   const parseNumber = (value: string) => {
     if (!value) return null;
     const normalized = value.replace(/,/g, "");
@@ -79,6 +93,11 @@ export default function AccountDialog({
       return;
     }
 
+    if (linkMt5 && isCreating) {
+      if (!brokerName.trim()) { setError("El broker es obligatorio para vincular MT5"); return; }
+      if (!mt5Label.trim()) { setError("La etiqueta es obligatoria para vincular MT5"); return; }
+    }
+
     try {
       setLoading(true);
       await onSave({
@@ -93,6 +112,13 @@ export default function AccountDialog({
         withdrawals_enabled: withdrawalsEnabled,
         currency,
         status,
+        ...(linkMt5 && isCreating && {
+          mt5: {
+            platform: "MT5" as const,
+            broker_name: brokerName.trim(),
+            label: mt5Label.trim(),
+          },
+        }),
       });
     } catch (err: unknown) {
       await logger.error(
@@ -297,6 +323,49 @@ export default function AccountDialog({
             />
             <span className="text-sm text-slate-300">Retiros habilitados</span>
           </label>
+
+          {/* Vincular MT5 (solo al crear) */}
+          {isCreating && (
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={linkMt5}
+                  onChange={(e) => setLinkMt5(e.target.checked)}
+                  disabled={loading}
+                  className="cursor-pointer"
+                />
+                <span className="text-sm text-slate-300 font-medium">
+                  Vincular terminal MT5 (sincronización automática de balance)
+                </span>
+              </label>
+
+              {linkMt5 && (
+                <div className="space-y-2 p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <input
+                    type="text"
+                    value={brokerName}
+                    onChange={(e) => setBrokerName(e.target.value)}
+                    disabled={loading}
+                    placeholder="Broker (ej. OANDA, IC Markets, FTMO)"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm disabled:opacity-50"
+                  />
+                  <input
+                    type="text"
+                    value={mt5Label}
+                    onChange={(e) => setMt5Label(e.target.value)}
+                    disabled={loading}
+                    placeholder="Etiqueta (ej. Real Account / Eval Phase 1)"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-50 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm disabled:opacity-50"
+                  />
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Recibirás un token de emparejamiento. Instala el EA <code className="text-cyan-400">AlphaLogTelemetry.ex5</code> en MT5,
+                    pega el token, y el balance aparecerá aquí en ~30 segundos.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Buttons */}
           <div className="flex gap-3 pt-4">
