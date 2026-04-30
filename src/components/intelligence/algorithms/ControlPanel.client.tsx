@@ -40,12 +40,12 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
   };
 
   const handleSave = async () => {
-    const payload = Object.fromEntries(params.map((p) => [p.key, p.value]));
+    const parameters = Object.fromEntries(params.map((p) => [p.key, p.value]));
     try {
       const res = await fetch(`/api/algorithms/${algoId}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ parameters }),
       });
       if (!res.ok) { toast.error('Error al guardar parámetros'); return; }
       setSaved(true);
@@ -62,11 +62,12 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
 
   const toggleStatus = async () => {
     const next = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    const dbStatus = next === 'ACTIVE' ? 'live' : 'paused';
     try {
       const res = await fetch(`/api/algorithms/${algoId}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: next === 'ACTIVE' ? 'running' : 'paused' }),
+        body: JSON.stringify({ status: dbStatus }),
       });
       if (!res.ok) { toast.error('Error al cambiar estado'); return; }
       onStatusChange?.(algoId, next);
