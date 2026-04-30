@@ -1,0 +1,13 @@
+app = "polyarb-50x"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile.50x"
+
+[env]
+  NODE_ENV = "production"
+  POLYARB_ENTRYPOINT = "50x"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
