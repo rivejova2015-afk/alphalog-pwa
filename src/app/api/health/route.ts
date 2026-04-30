@@ -289,19 +289,55 @@ async function checkAppLogsWritable(): Promise<HealthCheck> {
   }
 }
 
+async function checkCmeConnections(): Promise<HealthCheck> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { status: "ok", message: "CME check skipped (no service key)" };
+  }
+  const startedAt = Date.now();
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("cme_connections")
+      .select("id, status")
+      .limit(50);
+
+    if (error) {
+      return { status: "degraded", message: "CME connections query failed", latencyMs: Date.now() - startedAt, details: error.message };
+    }
+
+    const connections = data ?? [];
+    if (connections.length === 0) {
+      return { status: "ok", message: "No CME accounts connected", latencyMs: Date.now() - startedAt };
+    }
+
+    const errored = connections.filter((c: { id: string; status: string }) => c.status === "error");
+    if (errored.length === connections.length) {
+      return { status: "error", message: "All CME connections in error state", latencyMs: Date.now() - startedAt };
+    }
+    if (errored.length > 0) {
+      return { status: "degraded", message: "Some CME connections in error state", latencyMs: Date.now() - startedAt, details: `${errored.length}/${connections.length} errored` };
+    }
+
+    return { status: "ok", message: `${connections.length} CME connection(s) healthy`, latencyMs: Date.now() - startedAt };
+  } catch (error) {
+    return { status: "degraded", message: "CME check failed", latencyMs: Date.now() - startedAt, details: error instanceof Error ? error.message : "Unknown" };
+  }
+}
+
 export async function GET() {
   const isProduction = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
 
   const runtime = checkRuntimeEnv();
-  const [supabase, botRuntime, botFunctions, appLogs] = await Promise.all([
+  const [supabase, botRuntime, botFunctions, appLogs, cme] = await Promise.all([
     checkSupabaseReadiness(),
     checkBotRuntime(),
     checkBotFunctionsReachability(),
     checkAppLogsWritable(),
+    checkCmeConnections(),
   ]);
   const botRemote = checkBotRemoteConfig();
 
-  const checks = [runtime, supabase, botRemote, botRuntime, botFunctions, appLogs];
+  const checks = [runtime, supabase, botRemote, botRuntime, botFunctions, appLogs, cme];
   const status = summarizeStatus(checks);
   const ok = status !== "error";
 
@@ -324,6 +360,7 @@ export async function GET() {
         botRuntime,
         botFunctions,
         appLogs,
+        cme,
       },
     },
     {

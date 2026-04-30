@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { deleteCmeAccessToken } from '@/lib/cme/vault';
+import { logAuditFromRequest } from '@/lib/security/auditLog';
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ cmeAccountId: string }> }
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { cmeAccountId } = await params;
+  const svc = createServiceClient();
+
+  const { data: conn } = await svc
+    .from('cme_connections')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('cme_account_id', cmeAccountId)
+    .maybeSingle();
+
+  if (conn) {
+    await deleteCmeAccessToken(conn.id);
+    await svc
+      .from('cme_connections')
+      .update({ status: 'disconnected', updated_at: new Date().toISOString() })
+      .eq('id', conn.id);
+  }
+
+  await logAuditFromRequest(
+    { userId: user.id, action: 'api_call', resourceType: 'account', status: 'success', changes: { cme_account_id: cmeAccountId } },
+    req
+  );
+
+  return NextResponse.json({ success: true });
+}

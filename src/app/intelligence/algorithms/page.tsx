@@ -2,6 +2,7 @@ import { TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AlgoAccordion } from "@/components/intelligence/algorithms/AlgoAccordion.client";
 import { NewStrategyButton } from "@/components/intelligence/algorithms/NewStrategyButton.client";
+import CmeAlgoTabs from "@/components/intelligence/algorithms/CmeAlgoTabs.client";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -82,6 +83,10 @@ export default async function AlgorithmsPage() {
       ) : (
         <AlgoAccordion algos={algos} />
       )}
+
+      <div className="mt-8">
+        <CmeAlgoTabs />
+      </div>
     </div>
   );
 }

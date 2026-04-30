@@ -1,0 +1,62 @@
+name: CME Cron Jobs
+
+on:
+  schedule:
+    - cron: '* * * * *'   # every minute (GitHub Actions minimum)
+  workflow_dispatch:
+
+jobs:
+  cme-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: position-sync
+        run: |
+          curl -s -X POST "${{ vars.APP_URL }}/api/cron/cme/position-sync" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP %{http_code}"
+
+      - name: equity-sync
+        run: |
+          curl -s -X POST "${{ vars.APP_URL }}/api/cron/cme/equity-sync" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP %{http_code}"
+
+      - name: risk-monitor
+        run: |
+          curl -s -X POST "${{ vars.APP_URL }}/api/cron/cme/risk-monitor" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP %{http_code}"
+
+  cme-heartbeat:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && startsWith(github.event.schedule, '*/5'))
+    timeout-minutes: 2
+    steps:
+      - name: connection-heartbeat
+        run: |
+          curl -s -X POST "${{ vars.APP_URL }}/api/cron/cme/connection-heartbeat" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP %{http_code}"
+
+  cme-daily-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check time (17:00 ET window)
+        id: check
+        run: |
+          HOUR=$(TZ="America/New_York" date +%H)
+          MIN=$(TZ="America/New_York" date +%M)
+          if [ "$HOUR" = "17" ] && [ "$MIN" -lt "5" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: daily-report
+        if: steps.check.outputs.run == 'true'
+        run: |
+          curl -s -X POST "${{ vars.APP_URL }}/api/cron/cme/daily-report" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP %{http_code}"
