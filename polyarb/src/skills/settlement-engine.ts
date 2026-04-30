@@ -229,11 +229,14 @@ interface DbPosition {
 
 export async function sweepUnsettledPositions(
   supabase: SupabaseClient,
+  agentId: string,
 ): Promise<SweepResult[]> {
-  // Include settlement_timeout — these were previously unresolvable and should be retried
+  // Include settlement_timeout — these were previously unresolvable and should be retried.
+  // Scoped by agent_id so parallel agents (prod + 50x) only sweep their own positions.
   const { data, error } = await supabase
     .from('polyarb_positions')
     .select('id, market_slug, condition_id, outcome, shares, size_usd, exit_reason')
+    .eq('agent_id', agentId)
     .in('status', ['CLOSED', 'LIQUIDATED'])
     .not('exit_reason', 'in', '("settled_win","settled_loss")')
     .limit(200);
@@ -299,15 +302,18 @@ export async function sweepUnsettledPositions(
 export async function redeemPendingWins(
   supabase: SupabaseClient,
   redeemer: CtfRedeemer,
+  agentId: string,
 ): Promise<void> {
   if (!redeemer.walletAddress) {
     console.log('[settlement] redeemPendingWins: sin wallet — se omite on-chain redemption');
     return;
   }
 
+  // Scoped by agent_id so parallel agents (prod + 50x) only redeem their own wins.
   const { data, error } = await supabase
     .from('polyarb_positions')
     .select('id, market_slug, condition_id, outcome')
+    .eq('agent_id', agentId)
     .eq('exit_reason', 'settled_win')
     .eq('redeemed', false)
     .limit(50);

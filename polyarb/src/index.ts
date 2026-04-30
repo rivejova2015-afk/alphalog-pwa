@@ -81,10 +81,10 @@ async function main(): Promise<void> {
   await positionTracker.loadFromDb();
 
   // Liquidar P&L en DB para posiciones pasadas sin resultado confirmado
-  await sweepUnsettledPositions(supabase);
+  await sweepUnsettledPositions(supabase, config.agentId);
 
   // Redimir tokens ganadores on-chain vía NegRiskAdapter (requiere MATIC en wallet)
-  await redeemPendingWins(supabase, ctfRedeemer);
+  await redeemPendingWins(supabase, ctfRedeemer, config.agentId);
 
   // Startup balance check — shows CLOB-approved + on-chain wallet balance
   const balances = await orderManager.fetchOnChainBalance();
