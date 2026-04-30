@@ -8,14 +8,36 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+const parametersSchema = z.object({
+  lot_size:         z.number().min(0.01).max(100).optional(),
+  stop_loss_pips:   z.number().int().min(1).max(10000).optional(),
+  take_profit_pips: z.number().int().min(1).max(10000).optional(),
+  max_trades:       z.number().int().min(1).max(100).optional(),
+  risk_percent:     z.number().min(0).max(100).optional(),
+}).passthrough();
+
 const updateSchema = z.object({
-  name:        z.string().min(1).max(80).optional(),
-  description: z.string().max(500).optional(),
-  algo_type:   z.enum(["scalping", "grid_basket", "arbitrage"]).optional(),
-  status:      z.enum(["draft", "paper", "approved", "live", "paused", "archived"]).optional(),
-  parameters:  z.record(z.string(), z.unknown()).optional(),
-  slot_number: z.number().int().min(1).max(50).optional(),
+  name:       z.string().min(1).max(80).optional(),
+  instrument: z.string().min(1).max(40).optional(),
+  status:     z.enum(["running", "stopped", "paused", "error"]).optional(),
+  parameters: parametersSchema.optional(),
 });
+
+const KNOWN_PARAM_COLUMNS = ["lot_size", "stop_loss_pips", "take_profit_pips", "max_trades", "risk_percent"] as const;
+
+function buildUpdatePayload(parsed: z.infer<typeof updateSchema>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (parsed.name !== undefined) payload.name = parsed.name;
+  if (parsed.instrument !== undefined) payload.instrument = parsed.instrument;
+  if (parsed.status !== undefined) payload.status = parsed.status;
+  if (parsed.parameters) {
+    for (const key of KNOWN_PARAM_COLUMNS) {
+      const value = parsed.parameters[key];
+      if (value !== undefined) payload[key] = value;
+    }
+  }
+  return payload;
+}
 
 // GET /api/algorithms/[id]
 export async function GET(_req: NextRequest, { params }: Ctx) {
@@ -26,12 +48,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data, error } = await supabase
-      .from("trading_algorithms")
-      .select(`
-        *,
-        deployments:algorithm_deployments(*, bot_accounts(label, account_id)),
-        backtest:algorithm_backtest_results(*)
-      `)
+      .from("algorithms")
+      .select("*")
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null)
@@ -39,12 +57,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
     if (error || !data) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    return NextResponse.json({
-      algorithm: {
-        ...data,
-        backtest: Array.isArray(data.backtest) ? (data.backtest[0] ?? null) : data.backtest,
-      },
-    });
+    return NextResponse.json({ algorithm: data });
   } catch (err) {
     logError("Algorithms", { component: "GET /api/algorithms/[id]", message: String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -65,9 +78,14 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
+    const payload = buildUpdatePayload(parsed.data);
+    if (Object.keys(payload).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+
     const { data, error } = await supabase
-      .from("trading_algorithms")
-      .update(parsed.data)
+      .from("algorithms")
+      .update(payload)
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null)
@@ -91,17 +109,9 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Stop active deployments first
-    await supabase
-      .from("algorithm_deployments")
-      .update({ status: "stopped", stopped_at: new Date().toISOString() })
-      .eq("algorithm_id", id)
-      .eq("user_id", user.id)
-      .eq("status", "active");
-
     const { error } = await supabase
-      .from("trading_algorithms")
-      .update({ deleted_at: new Date().toISOString(), status: "archived" })
+      .from("algorithms")
+      .update({ deleted_at: new Date().toISOString(), status: "stopped" })
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null);

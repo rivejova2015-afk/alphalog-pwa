@@ -62,7 +62,7 @@ export function ControlPanel({ algoId, algoName, status, onStatusChange }: Contr
 
   const toggleStatus = async () => {
     const next = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-    const dbStatus = next === 'ACTIVE' ? 'live' : 'paused';
+    const dbStatus = next === 'ACTIVE' ? 'running' : 'paused';
     try {
       const res = await fetch(`/api/algorithms/${algoId}`, {
         method: 'PUT',
