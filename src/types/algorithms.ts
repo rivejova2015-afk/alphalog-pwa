@@ -200,3 +200,27 @@ export const DEFAULT_ARBITRAGE_PARAMS: ArbitrageParams = {
   exit_threshold: 0.5, max_hold_minutes: 60,
   sessions: ["LONDON", "NY"], hedge_ratio: 1.0,
 };
+
+// ─── Algorithm templates (system presets, e.g. GoldRangeBasketR) ─────────────
+
+export interface AlgorithmTemplate {
+  id:                   string;
+  template_key:         string;
+  name:                 string;
+  description:          string | null;
+  market_type:          "forex" | "futures" | "options";
+  algo_type:            AlgoType;
+  default_instrument:   string;
+  default_direction:    "long" | "short" | "both";
+  default_lot_size:     number;
+  default_max_trades:   number;
+  default_risk_percent: number;
+  parameters:           Record<string, unknown>;
+  source_path:          string | null;
+  magic_number:         number | null;
+  supported_platforms:  AlgoPlatform[];
+  is_active:            boolean;
+  sort_index:           number;
+  created_at:           string;
+  updated_at:           string;
+}

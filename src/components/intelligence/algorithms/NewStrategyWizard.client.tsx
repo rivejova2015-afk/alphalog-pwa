@@ -5,6 +5,7 @@ import { X, ChevronRight, ChevronLeft, Check, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/browser';
+import type { AlgorithmTemplate } from '@/types/algorithms';
 
 interface BotAccount { id: string; label: string; account_id: string; }
 
@@ -141,7 +142,8 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
   newAccNumber, setNewAccNumber,
   newAccLabel, setNewAccLabel,
   newAccPlatform, setNewAccPlatform,
-  addingAccount, handleAddAccount }: {
+  addingAccount, handleAddAccount,
+  templates, selectedTemplateKey, onTemplateChange }: {
   name: string; setName: (v: string) => void;
   legA: string; setLegA: (v: string) => void;
   legB: string; setLegB: (v: string) => void;
@@ -153,9 +155,45 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
   newAccLabel: string; setNewAccLabel: (v: string) => void;
   newAccPlatform: 'MT4' | 'MT5'; setNewAccPlatform: (v: 'MT4' | 'MT5') => void;
   addingAccount: boolean; handleAddAccount: () => Promise<void>;
+  templates: AlgorithmTemplate[];
+  selectedTemplateKey: string;
+  onTemplateChange: (key: string) => void;
 }) {
+  const forexTemplates = templates.filter((t) => t.market_type === 'forex' && t.is_active);
+  const selectedTemplate = forexTemplates.find((t) => t.template_key === selectedTemplateKey);
+
   return (
     <div className="space-y-4">
+      {forexTemplates.length > 0 && (
+        <Field label="Plantilla de EA" hint="Elegí un EA preconfigurado o construí desde cero.">
+          <Select value={selectedTemplateKey} onChange={onTemplateChange}>
+            <option value="">— Desde cero (custom) —</option>
+            {forexTemplates.map((t) => {
+              const platforms = t.supported_platforms?.length ? t.supported_platforms.join('/') : 'MT5';
+              return (
+                <option key={t.template_key} value={t.template_key}>{t.name} — {platforms}</option>
+              );
+            })}
+          </Select>
+          {selectedTemplate && (
+            <div className="mt-1.5 space-y-1">
+              {selectedTemplate.supported_platforms?.length ? (
+                <div className="flex gap-1">
+                  {selectedTemplate.supported_platforms.map((p) => (
+                    <span key={p} className="px-1.5 py-0.5 rounded bg-[#06b6d4]/10 border border-[#06b6d4]/30 text-[9px] font-semibold text-[#22d3ee]">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {selectedTemplate.description && (
+                <p className="text-[10px] text-[#94a3b8] leading-relaxed">{selectedTemplate.description}</p>
+              )}
+            </div>
+          )}
+        </Field>
+      )}
+
       <Field label="Nombre de la estrategia *">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="Gold Arb v1" autoFocus
@@ -664,6 +702,11 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [addingAccount,  setAddingAccount]  = useState(false);
   const router = useRouter();
 
+  // Algorithm templates (system presets, e.g. GoldRangeBasketR)
+  const [templates,           setTemplates]           = useState<AlgorithmTemplate[]>([]);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
+  const [templateBotAccountByKey, setTemplateBotAccountByKey] = useState<Record<string, string>>({});
+
   // CME account management
   const [cmeAccounts,       setCmeAccounts]       = useState<CmeAccount[]>([]);
   const [cmeAccountId,      setCmeAccountId]      = useState('');
@@ -715,12 +758,50 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
       sb.from('bots').select('id, name'),
       sb.from('bot_accounts').select('id, label, account_id'),
       sb.from('algo_cme_accounts').select('*').is('deleted_at', null),
-    ]).then(([botsRes, accsRes, cmeRes]) => {
+      sb.from('algorithm_templates').select('*').eq('is_active', true).order('sort_index'),
+    ]).then(([botsRes, accsRes, cmeRes, tmplRes]) => {
+      const accs = (accsRes.data ?? []) as BotAccount[];
       setBots(botsRes.data ?? []);
-      setBotAccounts(accsRes.data ?? []);
+      setBotAccounts(accs);
       setCmeAccounts((cmeRes.data ?? []) as CmeAccount[]);
+      setTemplates((tmplRes.data ?? []) as AlgorithmTemplate[]);
+
+      // Map known template_key -> placeholder bot_account.id (created by migration 079).
+      const goldPlaceholder = accs.find((a) => a.account_id === 'PENDING-GOLDRANGE');
+      if (goldPlaceholder) {
+        setTemplateBotAccountByKey({ goldrangebasketr: goldPlaceholder.id });
+      }
     });
   }, []);
+
+  function handleTemplateChange(key: string) {
+    setSelectedTemplateKey(key);
+    if (!key) return;
+    const t = templates.find((x) => x.template_key === key);
+    if (!t) return;
+
+    if (!name.trim()) setName(t.name);
+    setLegA(t.default_instrument);
+    if (t.default_direction !== 'both') setDirection(t.default_direction);
+
+    // Map common engine overrides from template parameters.
+    const params = t.parameters ?? {};
+    const numericFromParams = (k: string): string => {
+      const v = (params as Record<string, unknown>)[k];
+      return typeof v === 'number' ? String(v) : '';
+    };
+    setForexOvr((prev) => ({
+      ...prev,
+      lot_per_leg:        prev.lot_per_leg        || String(t.default_lot_size),
+      max_concurrent:     prev.max_concurrent     || String(t.default_max_trades),
+      max_daily_loss_pct: prev.max_daily_loss_pct || String(t.default_risk_percent),
+      daily_op_limit:     prev.daily_op_limit     || numericFromParams('max_entries_per_bar'),
+    }));
+
+    // Auto-select the linked bot_account placeholder (if user hasn't picked one).
+    const placeholderId = templateBotAccountByKey[key];
+    if (placeholderId && !botAccountId) setBotAccountId(placeholderId);
+  }
 
   async function handleAddAccount() {
     if (!newAccNumber.trim()) { toast.error('El número de cuenta es obligatorio'); return; }
@@ -801,8 +882,18 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
       // Derive instrument (Leg A / contract / underlying)
       const instrument = marketType === 'forex' ? legA : marketType === 'futures' ? contract : underlying;
 
-      // Build parameters JSONB
-      const parameters: Record<string, unknown> = { ...engineOverrides };
+      // Build parameters JSONB — engine overrides first; if a template is selected,
+      // its base parameters are merged underneath so the engine has full context
+      // but user overrides win.
+      const selectedTemplate = templates.find((t) => t.template_key === selectedTemplateKey);
+      const templateParams = selectedTemplate?.parameters ?? {};
+      const parameters: Record<string, unknown> = { ...templateParams, ...engineOverrides };
+      if (selectedTemplate) {
+        parameters.template_key  = selectedTemplate.template_key;
+        parameters.template_name = selectedTemplate.name;
+        if (selectedTemplate.magic_number != null) parameters.magic_number = selectedTemplate.magic_number;
+        if (selectedTemplate.source_path)         parameters.source_path  = selectedTemplate.source_path;
+      }
       if (marketType === 'forex') {
         parameters.leg_a_instrument = legA;
         parameters.leg_b_instrument = legB;
@@ -925,6 +1016,9 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
               newAccLabel={newAccLabel} setNewAccLabel={setNewAccLabel}
               newAccPlatform={newAccPlatform} setNewAccPlatform={setNewAccPlatform}
               addingAccount={addingAccount} handleAddAccount={handleAddAccount}
+              templates={templates}
+              selectedTemplateKey={selectedTemplateKey}
+              onTemplateChange={handleTemplateChange}
             />
           )}
           {stepIdx === 0 && marketType === 'futures' && (
