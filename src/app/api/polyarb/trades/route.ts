@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       )
     `, { count: 'exact' })
     .eq('user_id', user.id)
+    .is('archived_at', null)
     .order('executed_at', { ascending: false })
     .range(offset, offset + limit - 1);
 

@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       .from('polyarb_trades')
       .select('price, size, fee_usd, status, side')
       .eq('agent_id', agent.id)
+      .is('archived_at', null)
       .gte('executed_at', todayStart.toISOString())
       .eq('status', 'FILLED');
 
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
       .from('polyarb_positions')
       .select('pnl_usd, pnl_percent, exit_reason')
       .eq('agent_id', agent.id)
+      .is('deleted_at', null)
       .gte('closed_at', todayStart.toISOString())
       .in('status', ['CLOSED', 'LIQUIDATED']);
 

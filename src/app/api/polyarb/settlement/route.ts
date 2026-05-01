@@ -55,12 +55,14 @@ export async function GET() {
       .from('polyarb_positions')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .in('status', ['CLOSED', 'LIQUIDATED'])
       .not('exit_reason', 'in', `(${SETTLED_REASONS.map(r => `"${r}"`).join(',')})`),
     supabase
       .from('polyarb_positions')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .in('exit_reason', SETTLED_REASONS),
   ]);
 
@@ -81,6 +83,7 @@ export async function POST() {
     .from('polyarb_positions')
     .select('id, market_slug, outcome, shares, size_usd, exit_reason')
     .eq('user_id', user.id)
+    .is('deleted_at', null)
     .in('status', ['CLOSED', 'LIQUIDATED'])
     .not('exit_reason', 'in', `(${SETTLED_REASONS.map(r => `"${r}"`).join(',')})`)
     .limit(200);

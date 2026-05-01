@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     .from('polyarb_equity_snapshots')
     .select('equity_usd, pnl_usd, open_positions, btc_price, snapshot_at')
     .eq('user_id', user.id)
+    .is('archived_at', null)
     .gte('snapshot_at', cutoff)
     .order('snapshot_at', { ascending: true })
     .limit(2000);

@@ -44,6 +44,7 @@ let commandPollInterval: ReturnType<typeof setInterval> | null = null;
 let marketRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let balancePollInterval: ReturnType<typeof setInterval> | null = null;
 let running = false;
+let lastSeenStatus: string | null = null;
 
 async function main(): Promise<void> {
   console.log('[500x] === PolyArb 500x — 24/7 session-aware Kelly 2.5× ===');
@@ -278,17 +279,26 @@ async function pollCommands(
   if (!data) return;
 
   const status = data.status as string;
+  const prev = lastSeenStatus;
+  lastSeenStatus = status;
+
+  // Only act on user-driven status TRANSITIONS in the DB. Without this,
+  // the circuit breaker (which toggles tradingEnabled off on WS disconnect,
+  // drawdown, etc.) would cause the RESUME branch to fire every 5s — the
+  // CB had set tradingEnabled=false, status was still RUNNING, so each
+  // poll re-armed trading and re-logged "Received RESUME command".
+  if (status === prev) return;
 
   if (status === 'STOPPED' && running) {
     console.log('[500x] Received STOP command');
     running = false;
     deps.cbState.tradingEnabled = false;
     shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine);
-  } else if (status === 'PAUSED' && deps.cbState.tradingEnabled) {
+  } else if (status === 'PAUSED') {
     console.log('[500x] Received PAUSE command');
     deps.cbState.tradingEnabled = false;
     void logCompliance(config.agentId, config.userId, 'AGENT_PAUSE');
-  } else if (status === 'RUNNING' && !deps.cbState.tradingEnabled && running) {
+  } else if (status === 'RUNNING' && running) {
     console.log('[500x] Received RESUME command');
     deps.cbState.tradingEnabled = true;
     deps.cbState.pausedUntil = null;

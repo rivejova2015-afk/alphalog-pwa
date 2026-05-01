@@ -36,6 +36,7 @@ let commandPollInterval: ReturnType<typeof setInterval> | null = null;
 let marketRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let balancePollInterval: ReturnType<typeof setInterval> | null = null;
 let running = false;
+let lastSeenStatus: string | null = null;
 
 async function main(): Promise<void> {
   console.log('=== PolyArb-Crypto-Latency-Physics-v1 ===');
@@ -271,17 +272,24 @@ async function pollCommands(
   if (!data) return;
 
   const status = data.status as string;
+  const prev = lastSeenStatus;
+  lastSeenStatus = status;
+
+  // Only act on user-driven status TRANSITIONS — see fifty-x/index.ts for
+  // the same fix. CB toggles tradingEnabled independently, so polling on
+  // the CB flag would re-arm trading + re-log every 5s while WS is down.
+  if (status === prev) return;
 
   if (status === 'STOPPED' && running) {
     console.log('[main] Received STOP command');
     running = false;
     deps.cbState.tradingEnabled = false;
     shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine);
-  } else if (status === 'PAUSED' && deps.cbState.tradingEnabled) {
+  } else if (status === 'PAUSED') {
     console.log('[main] Received PAUSE command');
     deps.cbState.tradingEnabled = false;
     void logCompliance(config.agentId, config.userId, 'AGENT_PAUSE');
-  } else if (status === 'RUNNING' && !deps.cbState.tradingEnabled && running) {
+  } else if (status === 'RUNNING' && running) {
     console.log('[main] Received RESUME command');
     deps.cbState.tradingEnabled = true;
     deps.cbState.pausedUntil = null;

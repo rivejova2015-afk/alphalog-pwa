@@ -417,12 +417,14 @@ export class OrderManager {
           (new ethers.Contract(USDC_E,     USDC_ABI, provider).balanceOf(this.walletAddress) as Promise<bigint>),
         ]);
         wallet = Number(bPusd + bUsdc + bUsdce) / 1e6;
-        if (wallet > 0) {
-          console.log(`[order-manager] Wallet breakdown — pUSD: $${(Number(bPusd)/1e6).toFixed(4)} | USDC: $${(Number(bUsdc)/1e6).toFixed(4)} | USDC.e: $${(Number(bUsdce)/1e6).toFixed(4)}`);
-        }
-      } catch {
+        console.log(`[order-manager] Wallet breakdown (${this.walletAddress.slice(0,10)}…) — pUSD: $${(Number(bPusd)/1e6).toFixed(4)} | USDC: $${(Number(bUsdc)/1e6).toFixed(4)} | USDC.e: $${(Number(bUsdce)/1e6).toFixed(4)} | RPC: ${POLYGON_RPC}`);
+      } catch (err) {
         wallet = null;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[order-manager] Wallet RPC query failed: ${msg.slice(0, 200)} | RPC: ${POLYGON_RPC}`);
       }
+    } else {
+      console.warn('[order-manager] No walletAddress configured — cannot read on-chain balance');
     }
 
     const total = clob !== null && wallet !== null ? clob + wallet
