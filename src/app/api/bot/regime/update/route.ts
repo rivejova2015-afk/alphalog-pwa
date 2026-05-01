@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
     }
 
     const botInstanceId = instance.id as string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userId = (instance as any).bot_accounts?.user_id as string;
 
     // ── 2. Obtener ticks de live_market_data (XAUUSD, últimos 1000) ───────
@@ -94,7 +93,6 @@ export async function POST(request: NextRequest) {
         bid: Number(r.bid),
         ask: Number(r.ask),
         last: Number(r.last),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         volume: Number((r.raw_payload as any)?.volume ?? 1),
         timestamp: r.received_at as string,
       }));
@@ -108,7 +106,6 @@ export async function POST(request: NextRequest) {
       .eq("session_date", today)
       .maybeSingle();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storedModel: HMMModel | undefined = (stateRow?.quantum_state as any)
       ?.hmm_model;
 
@@ -144,8 +141,7 @@ export async function POST(request: NextRequest) {
 
     // ── 6. INSERT en bot_regime_states ────────────────────────────────────
     const prevRegime = storedModel
-      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (stateRow?.quantum_state as any)?.signalDirection
+      ? (stateRow?.quantum_state as any)?.signalDirection
       : null;
     const regimeChanged = prevRegime !== classification.regime;
 

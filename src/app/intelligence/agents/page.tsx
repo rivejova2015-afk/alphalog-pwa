@@ -25,8 +25,9 @@ export default async function AgentsDashboardPage() {
   // Determine if PolyArb agent is configured (has wallet + API key)
   const polyarbAgent = agents[0] ?? null;
   const isConfigured = !!(polyarbAgent?.wallet_address && polyarbAgent?.api_key_encrypted);
+  const renderedAt = new Date().getTime();
   const heartbeatMs = polyarbAgent?.last_heartbeat_at
-    ? Date.now() - new Date(polyarbAgent.last_heartbeat_at).getTime()
+    ? renderedAt - new Date(polyarbAgent.last_heartbeat_at).getTime()
     : Infinity;
   const isLive = heartbeatMs < 30_000;
 

@@ -20,6 +20,12 @@ const eslintConfig = defineConfig([
     "supabase/functions/**",
     // Ignore legacy reference exports not part of active app
     "reference/**",
+    // Sub-projects with their own toolchain / lint config
+    "lattice-desktop/**",
+    "polyarb/**",
+    ".claude/**",
+    ".obsidian/**",
+    ".playwright-mcp/**",
   ]),
   // Allow CommonJS require in config and JS runtime files
   {

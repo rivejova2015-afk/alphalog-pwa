@@ -68,7 +68,7 @@ export default function StepUpPage() {
     };
 
     init().catch(() => setStage("error"));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleWebAuthn = async (options: unknown) => {
     try {

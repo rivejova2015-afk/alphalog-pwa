@@ -123,7 +123,7 @@ export default function AlgorithmCard({ algo, onRefresh, onDeploy }: Props) {
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-slate-900/95 backdrop-blur-sm border border-red-800/60 p-4">
           <AlertTriangle className="w-6 h-6 text-red-400" />
           <p className="text-xs text-slate-300 text-center font-medium">
-            ¿Eliminar <span className="text-slate-100 font-semibold">"{algo.name}"</span>?<br />
+            ¿Eliminar <span className="text-slate-100 font-semibold">&quot;{algo.name}&quot;</span>?<br />
             <span className="text-slate-500">Se detendrán todos los deploys activos.</span>
           </p>
           <div className="flex gap-2 w-full">

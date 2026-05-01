@@ -532,7 +532,8 @@ export const processPendingSoftResyncs = async (options: {
     .in("id", masterIds)
     .is("deleted_at", null);
 
-  const masterMap = new Map((masterTrades ?? []).map((t: any) => [t.id as string, t]));
+  const masterTradesTyped = (masterTrades ?? []) as TradeRow[];
+  const masterMap = new Map(masterTradesTyped.map((t) => [t.id, t]));
 
   let resynced = 0;
 

@@ -77,7 +77,6 @@ export function hestonHamiltonianState(
       const ψ_jp = psi[idx(i, j + 1)].re;
       const ψ_jm = psi[idx(i, j - 1)].re;
       const ψ_ipjp = psi[idx(i + 1, j + 1)].re;
-      const ψ_imjm = psi[idx(i - 1, j - 1)].re;
 
       const d2ψ_dS2 = (ψ_ip - 2 * ψ_ij + ψ_im) / (dS * dS);
       const d2ψ_dV2 = (ψ_jp - 2 * ψ_ij + ψ_jm) / (dV * dV);

@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     // Attach last message preview for each session
     const sessionIds = (sessions ?? []).map((s) => s.id as string);
-    let previews: Record<string, string> = {};
+    const previews: Record<string, string> = {};
 
     if (sessionIds.length > 0) {
       const { data: lastMsgs } = await supabase

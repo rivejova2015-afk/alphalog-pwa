@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/browser";
 import {
   Activity,
   AlertTriangle,
+  Archive,
   ArrowDown,
   ArrowUp,
   Bot,
@@ -1025,7 +1026,7 @@ function LivePositionCard({ position, livePrice }: { position: Position; livePri
 
   const slugTs = parseInt(position.market_slug.split('-').pop() ?? '0', 10);
   const expiresAt = Number.isFinite(slugTs) && slugTs > 1_000_000_000 ? slugTs * 1000 : null;
-  const [timeLeft, setTimeLeft] = useState(expiresAt ? Math.max(0, expiresAt - Date.now()) : null);
+  const [timeLeft, setTimeLeft] = useState(() => (expiresAt ? Math.max(0, expiresAt - Date.now()) : null));
   useEffect(() => {
     if (!expiresAt) return;
     const t = setInterval(() => setTimeLeft(Math.max(0, expiresAt - Date.now())), 1000);
@@ -1107,6 +1108,8 @@ export default function PolyArbDashboard() {
   const [loading, setLoading] = useState(true);
   const [livePrices, setLivePrices] = useState<Map<string, LivePrice>>(new Map());
   const prevOpenIds = useRef<Set<string>>(new Set());
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     fetch("/api/polyarb/agents")
@@ -1277,6 +1280,33 @@ export default function PolyArbDashboard() {
     }
   };
 
+  const archiveHistory = async () => {
+    if (archiving) return;
+    setArchiving(true);
+    try {
+      const res = await fetch("/api/polyarb/archive-history", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo archivar el historial");
+        return;
+      }
+      if (data.archived === 0) {
+        toast.info("No hay actividad pendiente para archivar.");
+      } else {
+        const counts = data.counts ?? {};
+        toast.success(
+          `Historial archivado: ${counts.trades ?? 0} trades, ${counts.positions ?? 0} posiciones, ${counts.equity_snapshots ?? 0} snapshots → EvidenceVault`,
+        );
+      }
+      setArchiveModalOpen(false);
+      void fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Archive failed");
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1330,8 +1360,63 @@ export default function PolyArbDashboard() {
             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
             <Square className="w-3 h-3" /> Stop
           </button>
+          <button
+            onClick={() => setArchiveModalOpen(true)}
+            disabled={archiving}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Archivar historial completo en EvidenceVault y resetear el dashboard"
+          >
+            <Archive className="w-3 h-3" /> Archivar historial
+          </button>
         </div>
       </div>
+
+      {archiveModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar archivo de historial"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => !archiving && setArchiveModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Archive className="w-4 h-4 text-cyan-400" />
+              <h2 className="text-sm font-semibold text-white">Archivar historial PolyArb</h2>
+            </div>
+            <p className="text-xs text-zinc-300 leading-relaxed mb-4">
+              Se generarán PDF + 3 CSV (trades, posiciones cerradas, equity) y se subirán al{" "}
+              <strong className="text-white">EvidenceVault</strong>. Los datos quedarán inmutables y
+              auditables. Después, el dashboard se reseteará a cero y las nuevas operaciones
+              empezarán limpias.
+            </p>
+            <p className="text-[11px] text-zinc-400 mb-5">
+              Reversible: <code className="text-zinc-300">archived_at</code> puede limpiarse para
+              restaurar las filas. El audit trail compliance permanece intacto.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setArchiveModalOpen(false)}
+                disabled={archiving}
+                className="px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void archiveHistory()}
+                disabled={archiving}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-cyan-600 hover:bg-cyan-700 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Archive className="w-3 h-3" />
+                {archiving ? "Archivando…" : "Archivar y resetear"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Status bar ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">

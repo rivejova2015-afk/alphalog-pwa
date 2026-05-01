@@ -74,7 +74,7 @@ export async function triggerSecurityAlert(
     }).catch(() => {
       // Silently fail on network/API errors
     });
-  } catch (error) {
+  } catch {
     // Silently fail on any exception
     // Logging here would create a circular dependency with the security module
   }

@@ -7,7 +7,7 @@ const TEST_KEY = crypto.randomBytes(32).toString('base64');
 beforeAll(() => {
   process.env.DATA_ENCRYPTION_KEY = TEST_KEY;
   // Mock window as undefined so ensureServer() passes
-  (global as any).window = undefined;
+  (global as { window?: unknown }).window = undefined;
 });
 
 // Dynamic import so env var is set before module-level code runs

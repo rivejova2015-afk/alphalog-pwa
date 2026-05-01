@@ -352,7 +352,6 @@ export async function POST(request: NextRequest, { params }: Params) {
 }
 
 async function triggerMemoryExtraction(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   serviceSupabase: any,
   sessionId: string,
   userId: string,

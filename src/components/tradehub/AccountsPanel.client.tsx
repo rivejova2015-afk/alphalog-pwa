@@ -506,7 +506,7 @@ function Mt5Badge({ hb }: { hb: { last_heartbeat_at: string | null; paired: bool
   if (!hb.paired || !hb.last_heartbeat_at) {
     return <span className="text-[10px] text-slate-500" title="MT5 no emparejado">○ Not paired</span>;
   }
-  const ageMin = (Date.now() - new Date(hb.last_heartbeat_at).getTime()) / 60_000;
+  const ageMin = (new Date().getTime() - new Date(hb.last_heartbeat_at).getTime()) / 60_000;
   if (ageMin < 2) {
     return <span className="text-[10px] text-green-400" title={`Último heartbeat: ${new Date(hb.last_heartbeat_at).toLocaleString()}`}>● Live</span>;
   }
