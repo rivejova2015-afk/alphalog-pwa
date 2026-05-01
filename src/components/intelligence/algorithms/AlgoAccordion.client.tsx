@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Key } from 'lucide-react';
 import { AlgoCard } from './AlgoCard';
 import { TradesTable } from './TradesTable';
 import { EquityCurve } from './EquityCurve';
@@ -10,6 +10,7 @@ import { QuantModelsPanel } from './QuantModelsPanel';
 import { OpenPositionsPanel } from './OpenPositionsPanel.client';
 import { BacktestPanel } from './BacktestPanel.client';
 import { Badge } from '@/components/shared/Badge';
+import AlgorithmDetailsModal from './AlgorithmDetailsModal.client';
 
 type MarketType = 'forex' | 'futures' | 'options';
 type Direction  = 'long' | 'short' | 'both';
@@ -37,6 +38,7 @@ interface AlgoAccordionProps {
 
 export function AlgoAccordion({ algos }: AlgoAccordionProps) {
   const [expanded, setExpanded] = useState<string | null>(algos[0]?.id ?? null);
+  const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<Record<string, AlgoData['status']>>(
     Object.fromEntries(algos.map((a) => [a.id, a.status]))
   );
@@ -70,13 +72,21 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
             }`}
           >
             {/* Accordion header */}
-            <button
-              className="w-full flex items-center justify-between p-4 hover:bg-[#1c2335]/50 transition-colors"
+            <div
+              className="w-full flex items-center justify-between p-4 hover:bg-[#1c2335]/50 transition-colors cursor-pointer"
               onClick={() => setExpanded(isOpen ? null : algo.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setExpanded(isOpen ? null : algo.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
               aria-expanded={isOpen}
             >
-              <div className="flex items-center gap-3 text-left">
-                <div>
+              <div className="flex items-center gap-3 text-left min-w-0">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-[#e2e8f0]">{algo.name}</span>
                     <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold"
@@ -88,6 +98,17 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                       {algo.marketType === 'forex' ? 'Forex' : algo.marketType === 'futures' ? 'Futures' : 'Options'}
                     </span>
                     <Badge variant={statusVariant}>{currentStatus}</Badge>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailsOpenId(algo.id);
+                      }}
+                      className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-cyan-900/40 border border-cyan-700/50 text-cyan-300 hover:bg-cyan-800/60 transition-colors"
+                      aria-label={`Ver detalles de conexión de ${algo.name}`}
+                    >
+                      <Key className="w-3 h-3" /> Detalles
+                    </button>
                   </div>
                   <span className="text-xs text-[#475569]">
                     {algo.instrument}
@@ -110,7 +131,7 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   ? <ChevronUp size={16} className="text-[#94a3b8] flex-shrink-0" />
                   : <ChevronDown size={16} className="text-[#94a3b8] flex-shrink-0" />}
               </div>
-            </button>
+            </div>
 
             {/* Expanded content */}
             {isOpen && (
@@ -171,6 +192,14 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
           </div>
         );
       })}
+
+      {detailsOpenId && (
+        <AlgorithmDetailsModal
+          algorithmId={detailsOpenId}
+          algorithmName={algos.find((a) => a.id === detailsOpenId)?.name ?? ''}
+          onClose={() => setDetailsOpenId(null)}
+        />
+      )}
     </div>
   );
 }
