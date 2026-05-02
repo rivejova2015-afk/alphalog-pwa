@@ -45,13 +45,8 @@ const WS_URL = 'wss://www.deribit.com/ws/api/v2';
 const RECONNECT_DELAY_MS = 3_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const STALE_THRESHOLD_MS = 30_000;
-// Phase 2: env-tunable dead zones + AND/OR logic. Lowering the floors and
-// switching to disjunction lets IV vote UP/DOWN more often during quiet
-// sessions instead of NEUTRAL, which is what feeds the LASTCHANCE/PANIC
-// tiers in the loop.
-const MIN_BASIS_BPS_FOR_BIAS = parseFloat(process.env.POLYARB_IV_MIN_BASIS_BPS ?? '1');
-const MIN_FUNDING_BPS_FOR_BIAS = parseFloat(process.env.POLYARB_IV_MIN_FUNDING_BPS ?? '1');
-const IV_DIRECTION_LOGIC = (process.env.POLYARB_IV_LOGIC ?? 'conjunction').toLowerCase();
+const MIN_BASIS_BPS_FOR_BIAS = 1;   // 0.01% basis
+const MIN_FUNDING_BPS_FOR_BIAS = 1; // 0.01% funding
 
 const INSTRUMENTS: Record<IVSymbol, string> = {
   BTC: 'BTC-PERPETUAL',
@@ -142,17 +137,10 @@ export class DeribitIVFeed {
 
     let direction: IVDirection = 'NEUTRAL';
     let confidence = 0;
-    const useDisjunction = IV_DIRECTION_LOGIC === 'disjunction';
-    const upPasses = useDisjunction ? (basisUp || fundingUp) : (basisUp && fundingUp);
-    const downPasses = useDisjunction ? (basisDown || fundingDown) : (basisDown && fundingDown);
-    // In disjunction mode, prevent contradictory votes (e.g. basisUp && fundingDown)
-    // from being labeled as either direction — fall back to NEUTRAL.
-    const upConflict = useDisjunction && upPasses && (basisDown || fundingDown);
-    const downConflict = useDisjunction && downPasses && (basisUp || fundingUp);
-    if (upPasses && !upConflict) {
+    if (basisUp && fundingUp) {
       direction = 'UP';
       confidence = this.scoreConfidence(basisBps, fundingBps);
-    } else if (downPasses && !downConflict) {
+    } else if (basisDown && fundingDown) {
       direction = 'DOWN';
       confidence = this.scoreConfidence(-basisBps, -fundingBps);
     }

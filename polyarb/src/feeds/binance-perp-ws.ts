@@ -58,12 +58,8 @@ const HTTP_TIMEOUT_MS = 8_000;
 const MARK_HISTORY_MS = 60_000;
 const OI_HISTORY_MS = 90_000;          // keep slightly more than 60s so we can pick the closest sample to t-60s
 const STALE_THRESHOLD_MS = 15_000;
-// Phase 2: env-tunable dead zones. Lowering the floors lets perps vote UP/DOWN
-// more often during quiet sessions instead of NEUTRAL, which is what feeds the
-// LASTCHANCE/PANIC tiers in the loop.
-const MIN_OI_DELTA_PCT = parseFloat(process.env.POLYARB_PERP_MIN_OI_PCT ?? '0.10');
-const MIN_FUNDING_BPS_FOR_BIAS = parseFloat(process.env.POLYARB_PERP_MIN_FUNDING_BPS ?? '1');
-const PERP_DIRECTION_LOGIC = (process.env.POLYARB_PERP_LOGIC ?? 'conjunction').toLowerCase();
+const MIN_OI_DELTA_PCT = 0.10;
+const MIN_FUNDING_BPS_FOR_BIAS = 1;
 
 const SYMBOL_TO_FAPI: Record<PerpSymbol, string> = {
   BTC: 'BTCUSDT',
@@ -150,19 +146,10 @@ export class BinancePerpFeed {
     let direction: PerpDirection = 'NEUTRAL';
     let confidence = 0;
 
-    // Phase 2: optional disjunction logic — vote UP/DOWN when ANY two of the
-    // three sub-signals agree, instead of requiring all three. Defaults to the
-    // legacy conjunction.
-    const useDisjunction = PERP_DIRECTION_LOGIC === 'disjunction';
-    const upVotes = (fundingUp ? 1 : 0) + (oiUp ? 1 : 0) + (markUp ? 1 : 0);
-    const downVotes = (fundingDown ? 1 : 0) + (oiDown ? 1 : 0) + (markDown ? 1 : 0);
-    const upPasses = useDisjunction ? upVotes >= 2 : (fundingUp && oiUp && markUp);
-    const downPasses = useDisjunction ? downVotes >= 2 : (fundingDown && oiDown && markDown);
-
-    if (upPasses && upVotes >= downVotes) {
+    if (fundingUp && oiUp && markUp) {
       direction = 'UP';
       confidence = this.scoreConfidence(fundingRateBps, oiDeltaPct1m, s.lastMark, avgMark1m);
-    } else if (downPasses) {
+    } else if (fundingDown && oiDown && markDown) {
       direction = 'DOWN';
       confidence = this.scoreConfidence(-fundingRateBps, -oiDeltaPct1m, avgMark1m, s.lastMark);
     }
