@@ -751,7 +751,10 @@ function updateTelemetry50x(
 ): void {
   const { config, binanceFeed, polymarketFeed, positionTracker, telemetryWriter } = deps;
   const loopLatencyMs = Date.now() - tickStart;
-  const equity = config.startingCapitalUsd + metrics.totalPnlUsd;
+  const openPositionsValue = positionTracker.open.reduce((s: number, p: Position) => s + p.sizeUsd, 0);
+  const equity = metrics.realClobBalance != null
+    ? metrics.realClobBalance + openPositionsValue
+    : config.startingCapitalUsd + metrics.totalPnlUsd;
   const totalTrades = metrics.wins + metrics.losses;
   const maxDrawdown = metrics.peakEquity > 0
     ? ((metrics.peakEquity - equity) / metrics.peakEquity) * 100
@@ -761,7 +764,7 @@ function updateTelemetry50x(
     agentId: config.agentId,
     userId: config.userId,
     equityUsd: equity,
-    availableBalanceUsd: metrics.realClobBalance ?? (equity - positionTracker.open.reduce((s: number, p: Position) => s + p.sizeUsd, 0)),
+    availableBalanceUsd: metrics.realClobBalance ?? (equity - openPositionsValue),
     openPositionsCount: positionTracker.openCount,
     totalPnlUsd: metrics.totalPnlUsd,
     winRate: totalTrades > 0 ? (metrics.wins / totalTrades) * 100 : null,

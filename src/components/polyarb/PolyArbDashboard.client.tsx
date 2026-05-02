@@ -1432,9 +1432,8 @@ export default function PolyArbDashboard() {
       </div>
 
       {/* ── Métricas principales ────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard label="Balance Total" value={`$${fmt(telemetry?.available_balance_usd)}`} sub="CLOB + wallet" />
-        <MetricCard label="Equity Total" value={`$${fmt(telemetry?.equity_usd)}`} sub={null} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <MetricCard label="Balance Actual" value={`$${fmt(telemetry?.available_balance_usd)}`} sub="CLOB + wallet (live)" />
         <MetricCard label="P&L Neto" value={fmtUsd(pnl)} sub={`${pnlPct >= 0 ? "+" : ""}${fmt(pnlPct, 1)}%`} positive={pnl >= 0} />
         <MetricCard label="Win Rate" value={telemetry?.win_rate ? `${fmt(telemetry.win_rate, 1)}%` : "—"} sub={null} />
       </div>
