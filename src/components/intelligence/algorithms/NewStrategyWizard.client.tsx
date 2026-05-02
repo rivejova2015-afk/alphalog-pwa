@@ -136,7 +136,7 @@ function DirectionChips({ value, onChange, options }: {
 
 // ─── Step 1: Forex ────────────────────────────────────────────────────────────
 
-function StepForex({ name, setName, legA, setLegA, legB, setLegB,
+function StepForex({ name, setName, legA, setLegA,
   direction, setDirection, botAccountId, setBotAccountId, botAccounts,
   showAddAccount, setShowAddAccount,
   newAccNumber, setNewAccNumber,
@@ -147,7 +147,6 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
   selectedPlatform, setSelectedPlatform }: {
   name: string; setName: (v: string) => void;
   legA: string; setLegA: (v: string) => void;
-  legB: string; setLegB: (v: string) => void;
   direction: Direction; setDirection: (v: Direction) => void;
   botAccountId: string; setBotAccountId: (v: string) => void;
   botAccounts: BotAccount[];
@@ -229,20 +228,13 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Leg A — instrumento largo">
-          <Select value={legA} onChange={setLegA}>
-            {FOREX_INSTRUMENTS.map((i) => <option key={i} value={i}>{i}</option>)}
-          </Select>
-        </Field>
-        <Field label="Leg B — instrumento corto">
-          <Select value={legB} onChange={setLegB}>
-            {FOREX_INSTRUMENTS.map((i) => <option key={i} value={i}>{i}</option>)}
-          </Select>
-        </Field>
-      </div>
+      <Field label="Instrumento">
+        <Select value={legA} onChange={setLegA}>
+          {FOREX_INSTRUMENTS.map((i) => <option key={i} value={i}>{i}</option>)}
+        </Select>
+      </Field>
 
-      <Field label="Dirección de Leg A">
+      <Field label="Dirección">
         <DirectionChips value={direction} onChange={(v) => setDirection(v as Direction)}
           options={[
             { value: 'long',  label: 'Long bias'  },
@@ -757,7 +749,6 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
 
   // Forex-specific
   const [legA,         setLegA]         = useState('XAUUSD');
-  const [legB,         setLegB]         = useState('XAGUSD');
   const [botAccountId, setBotAccountId] = useState('');
 
   // Futures-specific
@@ -900,9 +891,6 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
 
   async function handleCreate() {
     if (!name.trim()) { toast.error('El nombre es obligatorio'); setStepIdx(0); return; }
-    if (marketType === 'forex' && legA === legB) {
-      toast.error('Leg A y Leg B deben ser instrumentos diferentes'); setStepIdx(0); return;
-    }
     setSaving(true);
     try {
       const supabase = createClient();
@@ -931,7 +919,6 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
       }
       if (marketType === 'forex') {
         parameters.leg_a_instrument = legA;
-        parameters.leg_b_instrument = legB;
       } else if (marketType === 'futures') {
         parameters.contract        = contract;
         parameters.hedge_enabled   = hedgeEnabled;
@@ -1043,7 +1030,6 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
             <StepForex
               name={name} setName={setName}
               legA={legA} setLegA={setLegA}
-              legB={legB} setLegB={setLegB}
               direction={direction} setDirection={setDirection}
               botAccountId={botAccountId} setBotAccountId={setBotAccountId}
               botAccounts={botAccounts}

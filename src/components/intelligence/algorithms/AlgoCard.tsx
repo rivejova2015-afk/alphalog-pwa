@@ -52,11 +52,14 @@ export function AlgoCard({
 
   const mStyle = MARKET_STYLE[marketType];
 
+  const legB = parameters?.leg_b_instrument;
   const subLine = marketType === 'futures'
     ? `${instrument} · ${DIRECTION_LABEL[direction]}`
     : marketType === 'options'
     ? `${instrument} · ${String(parameters?.options_strategy ?? '').replace(/_/g, ' ')} · ${DIRECTION_LABEL[direction]}`
-    : `${instrument} → ${String(parameters?.leg_b_instrument ?? '—')} · ${DIRECTION_LABEL[direction]}`;
+    : legB
+    ? `${instrument} → ${String(legB)} · ${DIRECTION_LABEL[direction]}`
+    : `${instrument} · ${DIRECTION_LABEL[direction]}`;
 
   return (
     <div
