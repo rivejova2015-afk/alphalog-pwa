@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
+import QualityGatesPanel from "./QualityGatesPanel.client";
 
 type ConnectionStatus = "live" | "stale" | "synced" | "pending";
 
@@ -132,6 +133,11 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                 {data.algorithm.market_type === "options" && (
                   <OptionsSection />
                 )}
+
+                <div className="mt-6 pt-5 border-t border-[#1f2937]">
+                  <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-3">Quality Gates Tier-1</h3>
+                  <QualityGatesPanel algorithmId={algorithmId} />
+                </div>
               </>
             )}
           </div>

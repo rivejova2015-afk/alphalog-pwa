@@ -700,6 +700,74 @@ function EmptyHint() {
   );
 }
 
+// ─── Step extra: Latency Arb Pairing (renderiza sólo si template = latency_arb_mt5)
+
+function StepLatencyArbPairing({
+  botAccounts, fastBotAccountId, slowBotAccountId, setSlowBotAccountId,
+  cfg, setCfg,
+}: {
+  botAccounts: BotAccount[];
+  fastBotAccountId: string;
+  slowBotAccountId: string;
+  setSlowBotAccountId: (v: string) => void;
+  cfg: { max_skew_points: string; min_pulse_ticks: string; pulse_window_ms: string; min_hold_seconds: string; max_hold_seconds: string };
+  setCfg: (k: keyof typeof cfg, v: string) => void;
+}) {
+  const slowOptions = botAccounts.filter((a) => a.id !== fastBotAccountId);
+  const collision = !!fastBotAccountId && fastBotAccountId === slowBotAccountId;
+
+  return (
+    <div className="mt-5 space-y-4 rounded-lg border border-[#a78bfa]/30 bg-[#a78bfa]/5 p-4">
+      <div>
+        <p className="text-[11px] font-mono font-bold text-[#a78bfa] uppercase tracking-wider mb-1">Latency Arb · pairing cross-broker</p>
+        <p className="text-[10px] text-[#64748b]">Selecciona dos cuentas MT5 en brokers distintos. El broker rápido define la dirección; el broker lento ejecuta la entrada.</p>
+      </div>
+
+      <Field label="Broker rápido (fast)" hint="Broker que adelanta el tick">
+        <div className="text-xs text-[#94a3b8] py-2 px-3 rounded-md border border-[#1f2937] bg-[#0a0e1a]">
+          {botAccounts.find((a) => a.id === fastBotAccountId)?.label ?? '— elige una cuenta en el campo Broker arriba —'}
+        </div>
+      </Field>
+
+      <Field label="Broker lento (slow)" hint="Broker que recibe la orden de entrada">
+        <Select value={slowBotAccountId} onChange={setSlowBotAccountId}>
+          <option value="">— elige una cuenta —</option>
+          {slowOptions.map((a) => (
+            <option key={a.id} value={a.id}>{a.label} ({a.account_id})</option>
+          ))}
+        </Select>
+      </Field>
+
+      {collision && (
+        <p className="text-[10px] text-[#f87171]">El broker fast y slow no pueden ser la misma cuenta.</p>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#1f2937]">
+        <Field label="Max skew (pts)" hint="Threshold de divergencia">
+          <NumInput value={cfg.max_skew_points} onChange={(v) => setCfg('max_skew_points', v)}
+            step="1" min="1" placeholder="30" />
+        </Field>
+        <Field label="Min pulse ticks" hint="Confirmaciones requeridas">
+          <NumInput value={cfg.min_pulse_ticks} onChange={(v) => setCfg('min_pulse_ticks', v)}
+            step="1" min="1" placeholder="5" />
+        </Field>
+        <Field label="Pulse window (ms)" hint="Ventana de validación">
+          <NumInput value={cfg.pulse_window_ms} onChange={(v) => setCfg('pulse_window_ms', v)}
+            step="100" min="100" placeholder="800" />
+        </Field>
+        <Field label="Min hold (seg)" hint="Tiempo mínimo de exposición">
+          <NumInput value={cfg.min_hold_seconds} onChange={(v) => setCfg('min_hold_seconds', v)}
+            step="5" min="5" placeholder="60" />
+        </Field>
+        <Field label="Max hold (seg)" hint="Hard exit (10–600)">
+          <NumInput value={cfg.max_hold_seconds} onChange={(v) => setCfg('max_hold_seconds', v)}
+            step="10" min="10" placeholder="300" />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
 // ─── Market type selector chips ───────────────────────────────────────────────
 
 const MARKET_CHIPS: { value: MarketType; label: string; color: string }[] = [
@@ -759,6 +827,16 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   // Forex-specific
   const [legA,         setLegA]         = useState('XAUUSD');
   const [botAccountId, setBotAccountId] = useState('');
+
+  // Latency-arb specific (only used when selectedTemplateKey === 'latency_arb_mt5')
+  const [slowBotAccountId, setSlowBotAccountId] = useState('');
+  const [latencyArbCfg, setLatencyArbCfg] = useState({
+    max_skew_points:  '30',
+    min_pulse_ticks:  '5',
+    pulse_window_ms:  '800',
+    min_hold_seconds: '60',
+    max_hold_seconds: '300',
+  });
 
   // Futures-specific
   const [contract,      setContract]      = useState('ES');
@@ -836,6 +914,17 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
     // Auto-select the linked bot_account placeholder (if user hasn't picked one).
     const placeholderId = templateBotAccountByKey[key];
     if (placeholderId && !botAccountId) setBotAccountId(placeholderId);
+
+    // Seed latency-arb config from template defaults when applicable.
+    if (key === 'latency_arb_mt5') {
+      setLatencyArbCfg({
+        max_skew_points:  String(numericFromParams('max_skew_points')  || '30'),
+        min_pulse_ticks:  String(numericFromParams('min_pulse_ticks')  || '5'),
+        pulse_window_ms:  String(numericFromParams('pulse_window_ms')  || '800'),
+        min_hold_seconds: String(numericFromParams('min_hold_seconds') || '60'),
+        max_hold_seconds: String(numericFromParams('max_hold_seconds') || '300'),
+      });
+    }
   }
 
   async function handleAddAccount() {
@@ -966,7 +1055,18 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         marketType === 'futures' ? (engineOverrides.max_daily_loss_usd ?? 500)  :
                                    (engineOverrides.max_premium_usd   ?? 200);
 
-      const { error } = await supabase.from('algorithms').insert({
+      const isLatencyArb = selectedTemplateKey === 'latency_arb_mt5';
+
+      // Pre-validate latency-arb pairing before touching the DB.
+      if (isLatencyArb) {
+        if (!botAccountId)               { toast.error('Selecciona el broker rápido (fast)'); setStepIdx(0); return; }
+        if (!slowBotAccountId)           { toast.error('Selecciona el broker lento (slow)');  setStepIdx(0); return; }
+        if (botAccountId === slowBotAccountId) {
+          toast.error('Fast y slow no pueden ser la misma cuenta'); setStepIdx(0); return;
+        }
+      }
+
+      const { data: created, error } = await supabase.from('algorithms').insert({
         user_id:               user.id,
         name:                  name.trim(),
         instrument,
@@ -980,9 +1080,30 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         parameters,
         scan_config: {},
         status: 'paused',
-      });
+      }).select('id').single();
 
       if (error) { toast.error(error.message); return; }
+
+      if (isLatencyArb && created?.id) {
+        const pairInsert = await supabase.from('arbitrage_latency_pairs').insert({
+          user_id:             user.id,
+          algorithm_id:        created.id,
+          fast_bot_account_id: botAccountId,
+          slow_bot_account_id: slowBotAccountId,
+          symbol:              legA,
+          max_skew_points:     Number(latencyArbCfg.max_skew_points)  || 30,
+          min_pulse_ticks:     Number(latencyArbCfg.min_pulse_ticks)  || 5,
+          pulse_window_ms:     Number(latencyArbCfg.pulse_window_ms)  || 800,
+          min_hold_seconds:    Number(latencyArbCfg.min_hold_seconds) || 60,
+          max_hold_seconds:    Number(latencyArbCfg.max_hold_seconds) || 300,
+          enabled:             false,
+        });
+        if (pairInsert.error) {
+          toast.error('Algorithm creado, pero el pairing falló: ' + pairInsert.error.message);
+          return;
+        }
+      }
+
       toast.success(`"${name.trim()}" registrada — el engine la activará al conectar`);
       onClose();
       router.refresh();
@@ -1052,6 +1173,16 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
               onTemplateChange={handleTemplateChange}
               selectedPlatform={selectedPlatform}
               setSelectedPlatform={setSelectedPlatform}
+            />
+          )}
+          {stepIdx === 0 && marketType === 'forex' && selectedTemplateKey === 'latency_arb_mt5' && (
+            <StepLatencyArbPairing
+              botAccounts={botAccounts}
+              fastBotAccountId={botAccountId}
+              slowBotAccountId={slowBotAccountId}
+              setSlowBotAccountId={setSlowBotAccountId}
+              cfg={latencyArbCfg}
+              setCfg={(k, v) => setLatencyArbCfg((c) => ({ ...c, [k]: v }))}
             />
           )}
           {stepIdx === 0 && marketType === 'futures' && (
