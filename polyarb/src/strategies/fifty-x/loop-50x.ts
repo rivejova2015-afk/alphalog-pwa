@@ -17,7 +17,19 @@
 import type { BinanceFeed } from '../../feeds/binance-ws.js';
 import type { BinancePerpFeed } from '../../feeds/binance-perp-ws.js';
 import type { DeribitIVFeed } from '../../feeds/deribit-iv-ws.js';
+import type { CoinbaseFeed } from '../../feeds/coinbase-ws.js';
 import type { PolymarketFeed, PolymarketOrderbook } from '../../feeds/polymarket-ws.js';
+import { computeConsensusSpot, type SpotSample } from '../../skills/consensus-spot.js';
+import { computeDepthSignal } from '../../skills/orderbook-depth.js';
+import { computeCrossMarketSignal } from '../../skills/cross-market.js';
+import { updateStasisBuffer, computeStasisSignal } from '../../skills/stasis-breakout.js';
+import { computeDivergenceSignal } from '../../skills/sentiment-divergence.js';
+import { computeProfitTakePct } from '../../skills/adaptive-profit-take.js';
+import { computeEntropySignal } from '../../skills/entropy-detector.js';
+import type { AdaptiveKelly } from '../../skills/adaptive-kelly.js';
+import type { BayesianWinRate } from '../../skills/bayesian-winrate.js';
+import type { MemoryBank } from '../../skills/memory-bank.js';
+import type { SessionClock } from '../../skills/session-clock.js';
 import type { PositionTracker, Position } from '../../trading/position-tracker.js';
 import type { OrderManager } from '../../trading/order-manager.js';
 import type { TelemetryWriter } from '../../telemetry/writer.js';
@@ -186,6 +198,15 @@ export interface LoopDeps50x {
   // Engine v2 feeds — optional so legacy mode (off) can run without instantiating them.
   perpFeed?: BinancePerpFeed;
   ivFeed?: DeribitIVFeed;
+  // Phase B — multi-source consensus + skill instances. All optional: if a
+  // flag is off in config, the loop uses fallback paths and ignores the
+  // missing dep. Stateful skills only — pure-function skills are imported
+  // and called inline.
+  coinbaseFeed?: CoinbaseFeed;
+  adaptiveKelly?: AdaptiveKelly;
+  bayesianWR?: BayesianWinRate;
+  memoryBank?: MemoryBank;
+  sessionClock?: SessionClock;
 }
 
 export interface LoopMetrics50x {
@@ -243,7 +264,8 @@ async function checkProfitTakeExits50x(
   metrics: LoopMetrics50x,
   session: SessionInfo,
 ): Promise<void> {
-  const { positionTracker, polymarketFeed, orderManager, config } = deps;
+  const { positionTracker, polymarketFeed, orderManager, config, binanceFeed } = deps;
+  const { params } = config;
 
   for (const pos of [...positionTracker.open]) {
     const ob = polymarketFeed.getOrderbook(pos.conditionId);
@@ -254,8 +276,27 @@ async function checkProfitTakeExits50x(
     const maxGain = (1 - pos.entryPrice) * pos.shares;
     if (maxGain <= 0) continue;
 
-    // Fixed 70% profit-take (500x strategy: simple, predictable exits)
-    const threshold = 0.70;
+    // Adaptive profit-take threshold: entropy + reversal + time pressure aware.
+    // Fallback to fixed 0.70 when flag is off or inputs are missing.
+    let threshold = 0.70;
+    if (params.useAdaptiveTP) {
+      const priceHistory = binanceFeed.history;
+      const entropy = priceHistory.length >= 10
+        ? computeEntropySignal(priceHistory, 'FLAT')
+        : null;
+      const reversal = computeReversalSignal(priceHistory);
+      const winInfo = extractWindowInfo(pos.marketSlug);
+      const msLeft = winInfo ? Math.max(0, winInfo.windowEnd - Date.now()) : 0;
+      const tp = computeProfitTakePct(
+        entropy,
+        reversal,
+        msLeft,
+        metrics.lastRegime,
+        metrics.lastEventState,
+        params.flagAggressive,
+      );
+      threshold = tp.threshold;
+    }
     if (unrealizedPnl < threshold * maxGain) continue;
 
     console.log(
@@ -287,7 +328,7 @@ async function checkProfitTakeExits50x(
     const closed = await positionTracker.closePosition(pos.id, exitPrice, 'profit_take');
     if (closed) {
       recordExit(deps.statCB, pos.conditionId);
-      recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd, deps, session);
+      recordTradeResult(metrics, closed, config.startingCapitalUsd, deps, session);
       deps.cascadeState.reset(pos.conditionId);
       void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
     }
@@ -453,7 +494,7 @@ export async function tradingTick50x(
     const closed = await positionTracker.closePosition(pos.id, exitPrice, 'timeout');
     if (closed) {
       recordExit(deps.statCB, pos.conditionId);
-      recordTradeResult(metrics, closed.pnlUsd, config.startingCapitalUsd, deps, session);
+      recordTradeResult(metrics, closed, config.startingCapitalUsd, deps, session);
       deps.cascadeState.reset(pos.conditionId);
       void logCompliance(config.agentId, config.userId, 'TRADE_EXIT', pos.id, 'polyarb_positions');
       settleTimedOutPosition(pos, supabase);
@@ -559,6 +600,39 @@ async function processMarket50x(
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
 
+  // ─── Phase B — multi-source spot consensus (Binance + Coinbase median) ───
+  // Resolve symbol from market slug (used to fetch matching feeds).
+  const slugSymbol: FeedSymbol | null =
+    orderbook.marketSlug.startsWith('btc-') ? 'BTC' :
+    orderbook.marketSlug.startsWith('eth-') ? 'ETH' :
+    orderbook.marketSlug.startsWith('sol-') ? 'SOL' : 'BTC';
+  let consensusPrice = btcSpotPrice;
+  let consensusSnapshot: { dispersionBps: number; sources: number; usedSources: string[] } | null = null;
+  if (params.useCoinbase && deps.coinbaseFeed && slugSymbol) {
+    const binPx = binanceFeed.getPrice(slugSymbol);
+    const cbPx = deps.coinbaseFeed.getPrice(slugSymbol);
+    const samples: SpotSample[] = [];
+    const nowMs = Date.now();
+    if (binPx) samples.push({ source: 'binance', price: binPx.last, ageMs: nowMs - binPx.timestamp });
+    if (cbPx) samples.push({ source: 'coinbase', price: cbPx.last, ageMs: nowMs - cbPx.timestamp });
+    const consensus = computeConsensusSpot(samples);
+    if (consensus) {
+      if (consensus.sources >= 2 && consensus.dispersionBps > params.dispersionMaxBps) {
+        console.log(
+          `[500x] SKIP ${orderbook.marketSlug} — dispersion_too_high ` +
+          `(${consensus.dispersionBps.toFixed(1)}bps > ${params.dispersionMaxBps})`,
+        );
+        return;
+      }
+      consensusPrice = consensus.price;
+      consensusSnapshot = {
+        dispersionBps: consensus.dispersionBps,
+        sources: consensus.sources,
+        usedSources: consensus.usedSources,
+      };
+    }
+  }
+
   // Belief volatility + base fair price
   const sigma = estimateBeliefVolatility(priceHistory, orderbook.bidPrice, orderbook.askPrice);
   const baseFairPrice = computeFairPrice(orderbook.midPrice, sigma);
@@ -569,7 +643,7 @@ async function processMarket50x(
   const velocitySignal = computeVelocitySignal(
     orderbook.conditionId,
     market?.question ?? orderbook.marketSlug,
-    btcSpotPrice,
+    consensusPrice,
     binanceFeed.getTimestampedSamples('BTC'),
     orderbook.midPrice,
     baseFairPrice,
@@ -582,7 +656,31 @@ async function processMarket50x(
 
   // Calibration bias
   const calibration = calibrationTracker.getSignal(velocitySignal.symbol, orderbook.midPrice);
-  const fairPrice = Math.max(0.01, Math.min(0.99, velocitySignal.adjustedFairProb + calibration.biasCorrection));
+
+  // Phase B — orderbook depth bias on fair price (max ±0.005 sesgo).
+  let depthBias = 0;
+  let depthSnapshot: { imbalance: number; signal: string; confidence: number } | null = null;
+  if (params.useDepthBias) {
+    const depth = computeDepthSignal(orderbook.bidLevels, orderbook.askLevels);
+    depthSnapshot = {
+      imbalance: depth.imbalanceRatio,
+      signal: depth.signal,
+      confidence: depth.confidence,
+    };
+    if (depth.signal !== 'NEUTRAL') {
+      depthBias = (depth.imbalanceRatio - 0.5) * 0.01; // ±0.005 max
+    }
+  }
+
+  const fairPrice = Math.max(
+    0.01,
+    Math.min(0.99, velocitySignal.adjustedFairProb + calibration.biasCorrection + depthBias),
+  );
+
+  // Phase B — keep stasis buffer fed every tick for breakout detection.
+  if (params.useStasis) {
+    updateStasisBuffer(orderbook.conditionId, orderbook.midPrice);
+  }
 
   // Edge + fundamental multiplier
   let edge = computeEdge(fairPrice, orderbook.midPrice);
@@ -707,7 +805,7 @@ async function processMarket50x(
   );
 
   // Decision tier
-  const decision = decide(gap, fiveLayer, params);
+  let decision = decide(gap, fiveLayer, params);
   if (decision.decision === 'SKIP') {
     console.log(`[500x] SKIP ${orderbook.marketSlug} — ${decision.reason}`);
     return;
@@ -715,6 +813,119 @@ async function processMarket50x(
 
   // Direction follows the sign of `gap` (positive → fair price above market → buy YES)
   const buyYes = gap > 0;
+  const directionUp: 'UP' | 'DOWN' = buyYes ? 'UP' : 'DOWN';
+
+  // ─── Phase B — additive modifiers (do not replace the 5-layer gate) ───
+  let confidenceBoost = 0;
+  let kellySkillMult = 1.0;
+
+  // Cross-market: BTC/ETH/SOL alignment. Diverging → downgrade to SCALP.
+  let crossSnapshot: { strength: string; agreementCount: number; edgeMultiplier: number } | null = null;
+  const crossSig = computeCrossMarketSignal(
+    velocitySignal.symbol,
+    directionUp,
+    binanceFeed.getTimestampedSamples('BTC'),
+    binanceFeed.getTimestampedSamples('ETH'),
+    binanceFeed.getTimestampedSamples('SOL'),
+  );
+  crossSnapshot = {
+    strength: crossSig.strength,
+    agreementCount: crossSig.agreementCount,
+    edgeMultiplier: crossSig.edgeMultiplier,
+  };
+  if (crossSig.strength === 'DIVERGING' && decision.decision === 'ENTER') {
+    decision = { ...decision, decision: 'SCALP', reason: `${decision.reason} (downgraded:cross_market_diverging)` };
+  }
+  kellySkillMult *= crossSig.edgeMultiplier;
+
+  // Stasis breakout in our direction → confidence +0.10
+  let stasisSnapshot: { breakout: boolean; direction: string | null; confidence: number } | null = null;
+  if (params.useStasis) {
+    const stasis = computeStasisSignal(orderbook.conditionId);
+    stasisSnapshot = {
+      breakout: stasis.breakoutDetected,
+      direction: stasis.breakoutDirection,
+      confidence: stasis.confidence,
+    };
+    if (stasis.breakoutDetected && stasis.breakoutDirection === directionUp) {
+      confidenceBoost += 0.10 * stasis.confidence;
+    }
+  }
+
+  // Sentiment vs price divergence → contrarian boost when aligned with our buy
+  let divergenceSnapshot: { active: boolean; direction: string | null; strength: number } | null = null;
+  if (params.useDivergence) {
+    const fg = fundamental.components.fearGreed;
+    const div = computeDivergenceSignal(fg, priceHistory);
+    divergenceSnapshot = {
+      active: div.divergenceActive,
+      direction: div.direction,
+      strength: div.strength,
+    };
+    if (div.divergenceActive) {
+      const aligned =
+        (div.direction === 'CONTRARIAN_BULLISH' && buyYes) ||
+        (div.direction === 'CONTRARIAN_BEARISH' && !buyYes);
+      if (aligned) confidenceBoost += 0.05 * div.strength;
+    }
+  }
+
+  // Memory bank: filter when historical winrate <40% on similar conditions
+  if (params.useMemoryBank && deps.memoryBank) {
+    const filt = deps.memoryBank.shouldFilter(velocitySignal, regime.regime);
+    if (filt.filter) {
+      console.log(`[500x] SKIP ${orderbook.marketSlug} — memory_filter ${filt.reason}`);
+      return;
+    }
+  }
+
+  // Bayesian winrate posterior — fold into confidence
+  let bayesSnapshot: { mean: number; n: number; signal: string } | null = null;
+  if (params.useBayesianWR && deps.bayesianWR) {
+    try {
+      const est = await deps.bayesianWR.estimate(velocitySignal, regime.regime);
+      bayesSnapshot = { mean: est.posteriorMean, n: est.sampleCount, signal: est.signal };
+      if (est.signal === 'BULLISH' && buyYes) confidenceBoost += 0.05 * est.confidence;
+      else if (est.signal === 'BEARISH' && !buyYes) confidenceBoost += 0.05 * est.confidence;
+      else if (est.signal === 'BULLISH' && !buyYes) confidenceBoost -= 0.05 * est.confidence;
+      else if (est.signal === 'BEARISH' && buyYes) confidenceBoost -= 0.05 * est.confidence;
+    } catch (err) {
+      console.warn(`[500x] WARN bayesian-wr threw: ${(err as Error).message}`);
+    }
+  }
+
+  // Session clock — historical winrate by (symbol, session)
+  let sessionClockSnapshot: { session: string; winRate: number; signal: string; mult: number } | null = null;
+  let sessionClockMult = 1.0;
+  if (params.useSessionClock && deps.sessionClock) {
+    try {
+      const sc = await deps.sessionClock.getSignal(velocitySignal.symbol);
+      sessionClockMult = sc.signal === 'FAVORABLE' ? (1.0 + 0.20 * sc.confidence)
+                       : sc.signal === 'UNFAVORABLE' ? (1.0 - 0.30 * sc.confidence)
+                       : 1.0;
+      sessionClockSnapshot = {
+        session: sc.session,
+        winRate: sc.sessionWinRate,
+        signal: sc.signal,
+        mult: sessionClockMult,
+      };
+    } catch (err) {
+      console.warn(`[500x] WARN session-clock threw: ${(err as Error).message}`);
+    }
+  }
+  kellySkillMult *= sessionClockMult;
+
+  // Adaptive Kelly — invert multiplier (skill: high=conservative, kelly: high=aggressive)
+  let adaptiveSnapshot: { mult: number; winRate: number | null; trend: string } | null = null;
+  if (params.useAdaptiveKelly && deps.adaptiveKelly) {
+    const st = deps.adaptiveKelly.getState();
+    const inverted = Math.max(0.5, Math.min(1.5, 1 / st.multiplier));
+    adaptiveSnapshot = { mult: inverted, winRate: st.winRateRecent, trend: st.trend };
+    kellySkillMult *= inverted;
+  }
+
+  // Apply confidence boost (clamped)
+  const skillConfidence = Math.max(0, Math.min(1, fiveLayer.overallConfidence + confidenceBoost));
 
   // Claim window before any await
   deps.windowGate.markEntered(orderbook.conditionId, orderbook.marketSlug);
@@ -731,9 +942,9 @@ async function processMarket50x(
     : 0;
 
   const adjusted = adjustKelly({
-    baseFraction: kellyBase.fraction,
+    baseFraction: kellyBase.fraction * kellySkillMult,
     gap,
-    confidence: fiveLayer.overallConfidence,
+    confidence: skillConfidence,
     consecutiveWins: metrics.consecutiveWins,
     drawdown,
     decision: decision.decision,
@@ -821,12 +1032,15 @@ async function processMarket50x(
       gap,
       fairPrice,
       calibrationBias: calibration.biasCorrection,
+      depthBias,
       kellyFraction: adjusted.fraction,
       kellyBaseFraction: kellyBase.fraction,
       kellyMultipliers: adjusted.multipliers,
+      kellySkillMultiplier: kellySkillMult,
       regime: regime.regime,
       fiveLayer: fiveLayer.layers.map(l => ({ name: l.name, score: l.score, valid: l.isValid })),
       overallConfidence: fiveLayer.overallConfidence,
+      skillConfidence,
       eventType: eventState.active ? eventState.type : null,
       eventSeverity: eventState.active ? eventState.severity : 0,
       eventCap: effectiveCap,
@@ -834,19 +1048,30 @@ async function processMarket50x(
       sessionMultiplier: sessionMult,
       engineV2Mode: ENGINE_V2_MODE,
       confluence: confluenceSnapshot,
+      consensus: consensusSnapshot,
+      depth: depthSnapshot,
+      crossMarket: crossSnapshot,
+      stasis: stasisSnapshot,
+      divergence: divergenceSnapshot,
+      bayesian: bayesSnapshot,
+      sessionClock: sessionClockSnapshot,
+      adaptiveKelly: adaptiveSnapshot,
     },
   });
 
   if (position) {
     metrics.totalTrades++;
     deps.cascadeState.recordOriginal(orderbook.conditionId, adjusted.fraction, now);
+    if (params.useMemoryBank && deps.memoryBank) {
+      deps.memoryBank.recordEntry(position.id, velocitySignal, regime.regime, edge);
+    }
     void logCompliance(
       config.agentId, config.userId, 'TRADE_ENTRY', position.id, 'polyarb_positions',
       undefined,
       {
         decision: decision.decision,
         kelly: adjusted.fraction,
-        confidence: fiveLayer.overallConfidence,
+        confidence: skillConfidence,
         gap,
         regime: regime.regime,
         session: session.name,
@@ -863,12 +1088,33 @@ function fmt(score: number | undefined): string {
 
 function recordTradeResult(
   metrics: LoopMetrics50x,
-  pnlUsd: number,
+  closed: { id: string; pnlUsd: number; conditionId: string; marketSlug: string; entryReason: Record<string, unknown> },
   startingCapital: number,
   deps: LoopDeps50x,
   session: SessionInfo,
 ): void {
+  const pnlUsd = closed.pnlUsd;
   metrics.totalPnlUsd += pnlUsd;
+
+  // Phase B — feed adaptive-kelly + memory-bank with the trade outcome.
+  const symbol =
+    closed.marketSlug.startsWith('btc-') ? 'BTC' :
+    closed.marketSlug.startsWith('eth-') ? 'ETH' :
+    closed.marketSlug.startsWith('sol-') ? 'SOL' : 'BTC';
+  const edgeAtEntry = typeof closed.entryReason.gap === 'number' ? closed.entryReason.gap : 0;
+  if (deps.config.params.useAdaptiveKelly && deps.adaptiveKelly) {
+    deps.adaptiveKelly.recordOutcome({
+      conditionId: closed.conditionId,
+      edge: edgeAtEntry,
+      pnlUsd,
+      won: pnlUsd > 0,
+      symbol,
+      computedAt: Date.now(),
+    });
+  }
+  if (deps.config.params.useMemoryBank && deps.memoryBank) {
+    void deps.memoryBank.recordOutcome(closed.id, pnlUsd).catch(() => {});
+  }
 
   if (pnlUsd > 0) {
     metrics.wins++;

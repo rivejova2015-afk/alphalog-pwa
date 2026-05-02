@@ -31,6 +31,27 @@ export interface FiftyXParams extends TradingParams {
   scalpMinConfidence: number;
   /** SCALP tier — minimum five-layer validated layer count (e.g. 3). */
   scalpMinValidatedCount: number;
+
+  /** Phase B — Multi-source spot consensus (Binance + Coinbase median). */
+  useCoinbase: boolean;
+  /** Phase B — Max allowed dispersion across spot sources before SKIP (bps). */
+  dispersionMaxBps: number;
+  /** Phase B — Apply Polymarket orderbook-imbalance bias to fairPrice. */
+  useDepthBias: boolean;
+  /** Phase B — Tune base Kelly multiplier from recent trade outcomes. */
+  useAdaptiveKelly: boolean;
+  /** Phase B — Bayesian Beta(α,β) winrate estimate replaces 0.5 baseline. */
+  useBayesianWR: boolean;
+  /** Phase B — Conditional winrate lookup by (regime, symbol, gap-bucket). */
+  useMemoryBank: boolean;
+  /** Phase B — Multiplier on Kelly by trading session (Asia/London/NY). */
+  useSessionClock: boolean;
+  /** Phase B — Stasis-buffer breakout boosts confidence. */
+  useStasis: boolean;
+  /** Phase B — Sentiment vs price divergence boosts contrarian confidence. */
+  useDivergence: boolean;
+  /** Phase B — Entropy-aware adaptive profit-take instead of fixed 0.70. */
+  useAdaptiveTP: boolean;
 }
 
 export interface FiftyXAgentConfig extends Omit<AgentConfig, 'params'> {
@@ -52,6 +73,16 @@ const DEFAULTS = {
    *  the 2.5× session multiplier to actually push sizing up; the production
    *  engine's `maxKellyFractionEvent` (0.40) is still the hard ceiling. */
   maxKellyFraction: 0.40,
+  useCoinbase: true,
+  dispersionMaxBps: 30,
+  useDepthBias: true,
+  useAdaptiveKelly: true,
+  useBayesianWR: true,
+  useMemoryBank: true,
+  useSessionClock: true,
+  useStasis: true,
+  useDivergence: true,
+  useAdaptiveTP: true,
 } as const;
 
 function envNum(key: string, fallback: number): number {
@@ -59,6 +90,12 @@ function envNum(key: string, fallback: number): number {
   if (raw === undefined || raw === '') return fallback;
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function envBool(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (raw === undefined || raw === '') return fallback;
+  return raw === 'true' || raw === '1' || raw.toLowerCase() === 'yes';
 }
 
 export async function loadFiftyXAgentConfig(): Promise<FiftyXAgentConfig> {
@@ -77,6 +114,16 @@ export async function loadFiftyXAgentConfig(): Promise<FiftyXAgentConfig> {
     scalpMinGap:             envNum('POLYARB_50X_SCALP_MIN_GAP',     DEFAULTS.scalpMinGap),
     scalpMinConfidence:      envNum('POLYARB_50X_SCALP_MIN_CONF',    DEFAULTS.scalpMinConfidence),
     scalpMinValidatedCount:  envNum('POLYARB_50X_SCALP_MIN_LAYERS',  DEFAULTS.scalpMinValidatedCount),
+    useCoinbase:             envBool('POLYARB_50X_USE_COINBASE',          DEFAULTS.useCoinbase),
+    dispersionMaxBps:        envNum('POLYARB_50X_DISPERSION_MAX_BPS',     DEFAULTS.dispersionMaxBps),
+    useDepthBias:            envBool('POLYARB_50X_USE_DEPTH_BIAS',        DEFAULTS.useDepthBias),
+    useAdaptiveKelly:        envBool('POLYARB_50X_USE_ADAPTIVE_KELLY',    DEFAULTS.useAdaptiveKelly),
+    useBayesianWR:           envBool('POLYARB_50X_USE_BAYESIAN_WR',       DEFAULTS.useBayesianWR),
+    useMemoryBank:           envBool('POLYARB_50X_USE_MEMORY_BANK',       DEFAULTS.useMemoryBank),
+    useSessionClock:         envBool('POLYARB_50X_USE_SESSION_CLOCK',     DEFAULTS.useSessionClock),
+    useStasis:               envBool('POLYARB_50X_USE_STASIS',            DEFAULTS.useStasis),
+    useDivergence:           envBool('POLYARB_50X_USE_DIVERGENCE',        DEFAULTS.useDivergence),
+    useAdaptiveTP:           envBool('POLYARB_50X_USE_ADAPTIVE_TP',       DEFAULTS.useAdaptiveTP),
   };
 
   return { ...base, params };

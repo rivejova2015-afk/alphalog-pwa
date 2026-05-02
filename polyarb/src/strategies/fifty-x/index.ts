@@ -13,7 +13,12 @@ import { getSupabase } from '../../supabase.js';
 import { BinanceFeed } from '../../feeds/binance-ws.js';
 import { BinancePerpFeed } from '../../feeds/binance-perp-ws.js';
 import { DeribitIVFeed } from '../../feeds/deribit-iv-ws.js';
+import { CoinbaseFeed } from '../../feeds/coinbase-ws.js';
 import { PolymarketFeed } from '../../feeds/polymarket-ws.js';
+import { AdaptiveKelly } from '../../skills/adaptive-kelly.js';
+import { BayesianWinRate } from '../../skills/bayesian-winrate.js';
+import { MemoryBank } from '../../skills/memory-bank.js';
+import { SessionClock } from '../../skills/session-clock.js';
 import { PositionTracker } from '../../trading/position-tracker.js';
 import { OrderManager } from '../../trading/order-manager.js';
 import { TelemetryWriter } from '../../telemetry/writer.js';
@@ -153,6 +158,15 @@ async function main(): Promise<void> {
   binanceFeed.start();
   console.log('[500x] Binance WS feed started');
 
+  // Phase B — Coinbase WS for multi-source spot consensus.
+  const coinbaseFeed = config.params.useCoinbase ? new CoinbaseFeed() : null;
+  if (coinbaseFeed) {
+    coinbaseFeed.start();
+    console.log('[500x] Coinbase WS feed started (Phase B consensus)');
+  } else {
+    console.log('[500x] Coinbase feed DISABLED (POLYARB_50X_USE_COINBASE=false)');
+  }
+
   // Engine v2 multi-source feeds (perp + IV). Started only when v2 mode is
   // active so legacy deployments don't open extra sockets.
   const engineV2Mode = resolveEngineV2Mode();
@@ -224,6 +238,25 @@ async function main(): Promise<void> {
   const kellyAdjuster500x = new KellyAdjuster500xOptionB(config.agentId, deploymentDate);
   const day10Validator = new Day10Validator(kellyAdjuster500x, realtimeMetrics);
 
+  // Phase B — stateful skill instances. Each gated by its own flag.
+  const adaptiveKelly = config.params.useAdaptiveKelly
+    ? new AdaptiveKelly(config.params.minEdgePercent)
+    : undefined;
+  const bayesianWR = config.params.useBayesianWR ? new BayesianWinRate() : undefined;
+  const memoryBank = config.params.useMemoryBank
+    ? new MemoryBank(config.agentId, config.userId)
+    : undefined;
+  const sessionClock = config.params.useSessionClock ? new SessionClock() : undefined;
+  if (memoryBank) {
+    void memoryBank.loadFromDb().catch((err) =>
+      console.warn(`[500x] WARN memory-bank loadFromDb: ${(err as Error).message}`),
+    );
+  }
+  if (adaptiveKelly) console.log('[500x] AdaptiveKelly initialized (multiplier=1.0)');
+  if (bayesianWR)    console.log('[500x] BayesianWinRate initialized (Beta(2,2) prior)');
+  if (memoryBank)    console.log('[500x] MemoryBank initialized');
+  if (sessionClock)  console.log('[500x] SessionClock initialized');
+
   await realtimeMetrics.hydrateFromSupabase(supabase, config.agentId, 11).catch((err) => {
     console.warn(`[500x] WARN realtime-metrics hydrate failed; starting cold: ${(err as Error).message}`);
   });
@@ -251,6 +284,11 @@ async function main(): Promise<void> {
     kellyAdjuster500x,
     perpFeed,
     ivFeed,
+    coinbaseFeed: coinbaseFeed ?? undefined,
+    adaptiveKelly,
+    bayesianWR,
+    memoryBank,
+    sessionClock,
   };
 
   const refreshMarkets = async () => {
@@ -309,6 +347,7 @@ async function main(): Promise<void> {
   const stopV2Feeds = () => {
     perpFeed.stop();
     ivFeed.stop();
+    coinbaseFeed?.stop();
   };
   process.on('SIGINT', () => { stopV2Feeds(); shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine); });
   process.on('SIGTERM', () => { stopV2Feeds(); shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine); });
