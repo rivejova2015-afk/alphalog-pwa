@@ -1,10 +1,10 @@
--- 074_backtest_jobs.sql
+-- 086_backtest_jobs.sql
 -- Backtest job queue + progress tracking
 
 CREATE TABLE IF NOT EXISTS public.backtest_jobs (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id        uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  algorithm_id   uuid REFERENCES public.trading_algorithms(id) ON DELETE SET NULL,
+  algorithm_id   uuid REFERENCES public.algorithms(id) ON DELETE SET NULL,
   status         text NOT NULL DEFAULT 'queued'
                  CHECK (status IN ('queued','running','completed','failed','cancelled')),
   config         jsonb NOT NULL,

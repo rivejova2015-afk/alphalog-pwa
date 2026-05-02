@@ -1,4 +1,4 @@
--- 075_backtest_results.sql
+-- 087_backtest_results.sql
 -- Heavy result data separated from backtest_jobs
 
 CREATE TABLE IF NOT EXISTS public.backtest_results (
