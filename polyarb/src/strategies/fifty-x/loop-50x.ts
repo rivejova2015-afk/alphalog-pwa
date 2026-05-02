@@ -90,6 +90,42 @@ export function resolveEngineV2Mode(): EngineV2Mode {
 }
 const ENGINE_V2_MODE: EngineV2Mode = resolveEngineV2Mode();
 
+// ─── Engine v2 Phase 2 — per-window trade trigger optimization ──────────────
+// Tiered confluence by time remaining in the 5-min window. NORMAL_MIN applies
+// when msRemaining > LASTCHANCE_WINDOW_MS, LASTCHANCE_MIN when within the
+// last-chance window, PANIC_MIN when within the panic window. The panic tier
+// can drop sourcesAgreeing requirement to 0 (acts on velocity-detector alone)
+// and uses a flat $25 cap when the confluence engine returned cap=0.
+//
+// FAVORED_SIDE_INVERSION lets the loop accept buyNo trades when YES_mid<=0.50
+// (because NO_mid = 1-YES_mid > 0.50 — still the favored side). When disabled
+// the loop falls back to the legacy behavior of skipping any market with
+// midPrice<=0.50.
+//
+// All defaults preserve Phase 1 behavior (NORMAL=2, LASTCHANCE=2, PANIC=2,
+// inversion off, max-open=2). Tuning happens via fly secrets.
+const PHASE2_NORMAL_MIN_AGREE = parseInt(process.env.POLYARB_CONFLUENCE_NORMAL_MIN ?? '2', 10);
+const PHASE2_LASTCHANCE_MIN_AGREE = parseInt(process.env.POLYARB_CONFLUENCE_LASTCHANCE_MIN ?? '2', 10);
+const PHASE2_PANIC_MIN_AGREE = parseInt(process.env.POLYARB_CONFLUENCE_PANIC_MIN ?? '2', 10);
+const PHASE2_LASTCHANCE_WINDOW_MS = parseInt(process.env.POLYARB_LASTCHANCE_WINDOW_MS ?? '60000', 10);
+const PHASE2_PANIC_WINDOW_MS = parseInt(process.env.POLYARB_PANIC_WINDOW_MS ?? '15000', 10);
+const PHASE2_FAVORED_SIDE_INVERSION = (process.env.POLYARB_FAVORED_SIDE_INVERSION ?? '0') === '1';
+const PHASE2_MAX_OPEN_POSITIONS = parseInt(process.env.POLYARB_MAX_OPEN_POSITIONS ?? '2', 10);
+const PHASE2_NEAR_EXPIRY_BUFFER_MS = parseInt(process.env.POLYARB_NEAR_EXPIRY_BUFFER_MS ?? '60000', 10);
+const PHASE2_ENTRY_WINDOW_MS = parseInt(process.env.POLYARB_ENTRY_WINDOW_MS ?? '60000', 10);
+const PHASE2_PANIC_FALLBACK_CAP_USD = parseInt(process.env.POLYARB_PANIC_FALLBACK_CAP_USD ?? '25', 10);
+
+type TriggerTier = 'NORMAL' | 'LASTCHANCE' | 'PANIC';
+function resolveTriggerTier(msRemaining: number): { tier: TriggerTier; minAgreeing: number } {
+  if (msRemaining > PHASE2_LASTCHANCE_WINDOW_MS) {
+    return { tier: 'NORMAL', minAgreeing: PHASE2_NORMAL_MIN_AGREE };
+  }
+  if (msRemaining > PHASE2_PANIC_WINDOW_MS) {
+    return { tier: 'LASTCHANCE', minAgreeing: PHASE2_LASTCHANCE_MIN_AGREE };
+  }
+  return { tier: 'PANIC', minAgreeing: PHASE2_PANIC_MIN_AGREE };
+}
+
 // Velocity-detector returns the literal string 'CRYPTO' when the question text
 // matches no known crypto. Cast guards prevent passing that bogus value to a
 // feed whose state Map only knows BTC/ETH/SOL — without this, a runtime call
@@ -546,15 +582,15 @@ async function processMarket50x(
 
   const now = Date.now();
 
-  if (isNearExpiry(windowInfo, now, 60_000)) return;
+  if (isNearExpiry(windowInfo, now, PHASE2_NEAR_EXPIRY_BUFFER_MS)) return;
   if (deps.windowGate.hasEnteredWindow(orderbook.conditionId, orderbook.marketSlug)) return;
-  if (!isInEntryWindow(windowInfo, now, 60_000)) return;
+  if (!isInEntryWindow(windowInfo, now, PHASE2_ENTRY_WINDOW_MS)) return;
 
   // Skip if already have an open position on this market
   if (positionTracker.open.some(p => p.conditionId === orderbook.conditionId)) return;
 
-  // Max 2 simultaneous positions
-  if (positionTracker.openCount >= 2) return;
+  // Max simultaneous positions (env-configurable; legacy default 2)
+  if (positionTracker.openCount >= PHASE2_MAX_OPEN_POSITIONS) return;
 
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
@@ -592,11 +628,24 @@ async function processMarket50x(
   // Signed gap = adjusted fair prob minus market price
   const gap = fairPrice - orderbook.midPrice;
 
-  // ─── Engine v2 pre-validator gates (midprice + multi-source confluence) ───
+  // ─── Engine v2 pre-validator gates (favored-side + multi-source confluence) ─
   // Runs only when ENGINE_V2_MODE !== 'off'. Fail-closed: any missing/stale
   // perp or IV signal forces SKIP. Spot direction derives from sign(gap).
+  //
+  // Phase 2 changes:
+  //   - midPrice gate respects FAVORED_SIDE_INVERSION: if model says buyNo
+  //     and YES_mid<=0.50, NO_mid>0.50 = favored side → ALLOW. Legacy
+  //     behavior (skip whenever YES_mid<=0.50) is preserved when the env
+  //     flag is off.
+  //   - Confluence threshold scales by tier: NORMAL > LASTCHANCE > PANIC
+  //     based on time remaining in the 5-min window.
+  //   - When PANIC tier passes with cap=0 (sourcesAgreeing=0), apply a
+  //     flat $25 fallback so the panic-trade can fire on velocity-detector
+  //     alone.
   const v2BuyYes = gap > 0;
   const spotDirection = Math.abs(gap) < 1e-6 ? 'NEUTRAL' : (v2BuyYes ? 'UP' : 'DOWN');
+  const msRemaining = Math.max(0, windowInfo.windowEnd - now);
+  const triggerInfo = resolveTriggerTier(msRemaining);
   let confluenceCapUsd: number | null = null;
   let confluenceSnapshot: {
     agreeing: number;
@@ -605,9 +654,30 @@ async function processMarket50x(
     cap: number;
     perpDir: string | null;
     ivDir: string | null;
+    triggerTier: TriggerTier;
+    msRemaining: number;
+    invertedSide: boolean;
+    requiredAgreeing: number;
   } | null = null;
   if (ENGINE_V2_MODE !== 'off') {
-    if (orderbook.midPrice <= 0.50) {
+    // Favored-side gate. The favored side has price > 0.50. We always trade
+    // the favored side. If model direction picks the unfavored side, SKIP.
+    const wantsYes = v2BuyYes;
+    const yesIsFavored = orderbook.midPrice > 0.50;
+    const buyingFavored = wantsYes ? yesIsFavored : !yesIsFavored;
+    const invertedSide = !wantsYes && !yesIsFavored; // model says buyNo and YES is unfavored → buying NO favored side
+    if (!buyingFavored) {
+      // wantsYes && !yesIsFavored OR !wantsYes && yesIsFavored: model picks unfavored side.
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'unfavored_side',
+        `mid=${orderbook.midPrice.toFixed(3)} buyYes=${wantsYes}`,
+      );
+      return;
+    }
+    if (invertedSide && !PHASE2_FAVORED_SIDE_INVERSION) {
+      // Legacy behavior: skip any market with YES_mid<=0.50 even when model
+      // would have correctly picked the NO favored side.
       logEngineV2Skip(
         orderbook.marketSlug,
         'midprice_below_favorite',
@@ -643,35 +713,61 @@ async function processMarket50x(
       );
       return;
     }
-    if (confluence.sourcesAgreeing < 2) {
+    if (confluence.sourcesAgreeing < triggerInfo.minAgreeing) {
       logEngineV2Skip(
         orderbook.marketSlug,
         'no_confluence',
-        `agreeing=${confluence.sourcesAgreeing}/3 dir=${confluence.agreedDirection}`,
+        `agreeing=${confluence.sourcesAgreeing}/${triggerInfo.minAgreeing}` +
+        ` tier=${triggerInfo.tier} t-${Math.round(msRemaining / 1000)}s` +
+        ` dir=${confluence.agreedDirection}`,
       );
       return;
     }
-    if (!confluence.matchesBuyDirection) {
+    // Direction conflict only enforced when at least one source agreed
+    // (matchesBuyDirection compares the majority direction to buyYes; a
+    // sourcesAgreeing=0 PANIC trade has agreedDirection=NEUTRAL, which never
+    // matches — but the spot signal alone already implies the buy direction).
+    if (confluence.sourcesAgreeing > 0 && !confluence.matchesBuyDirection) {
       logEngineV2Skip(
         orderbook.marketSlug,
         'direction_conflict',
-        `confluence=${confluence.agreedDirection} buyYes=${v2BuyYes}`,
+        `confluence=${confluence.agreedDirection} buyYes=${v2BuyYes}` +
+        ` tier=${triggerInfo.tier}`,
       );
       return;
     }
 
-    confluenceCapUsd = confluence.kellyCapUsd;
+    // Sizing cap: confluence engine returns 0 for sourcesAgreeing=0. In
+    // PANIC tier we substitute the flat fallback so the panic-trade fires.
+    const baseCap = confluence.kellyCapUsd;
+    confluenceCapUsd = baseCap > 0
+      ? baseCap
+      : (triggerInfo.tier === 'PANIC' ? PHASE2_PANIC_FALLBACK_CAP_USD : 0);
+    if (confluenceCapUsd <= 0) {
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'no_kelly_cap',
+        `tier=${triggerInfo.tier} agreeing=${confluence.sourcesAgreeing}`,
+      );
+      return;
+    }
     confluenceSnapshot = {
       agreeing: confluence.sourcesAgreeing,
       available: confluence.sourcesAvailable,
       direction: confluence.agreedDirection,
-      cap: confluence.kellyCapUsd,
+      cap: confluenceCapUsd,
       perpDir: perpSig?.direction ?? null,
       ivDir: ivSig?.direction ?? null,
+      triggerTier: triggerInfo.tier,
+      msRemaining,
+      invertedSide,
+      requiredAgreeing: triggerInfo.minAgreeing,
     };
     console.log(
       `[ENGINE_V2] PASS ${orderbook.marketSlug} agreeing=${confluence.sourcesAgreeing}/3` +
-      ` dir=${confluence.agreedDirection} cap=$${confluence.kellyCapUsd}`,
+      ` dir=${confluence.agreedDirection} cap=$${confluenceCapUsd}` +
+      ` tier=${triggerInfo.tier} t-${Math.round(msRemaining / 1000)}s` +
+      ` inverted=${invertedSide}`,
     );
   }
 
@@ -710,7 +806,9 @@ async function processMarket50x(
   // Kelly sizing
   const accountValue = metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd);
   const effectiveCap = effectiveKellyCap(params.maxKellyFraction, eventState, params.flagAggressive);
-  const entryPrice = buyYes ? orderbook.askPrice : orderbook.bidPrice;
+  // Polymarket binary: orderbook fields are YES-side. NO_ask = 1 - YES_bid.
+  // For a BUY on the NO outcome we lift the NO ask, not the YES bid.
+  const entryPrice = buyYes ? orderbook.askPrice : (1 - orderbook.bidPrice);
 
   const kellyBase = asymmetricKelly(edge, entryPrice, effectiveCap, accountValue);
 
