@@ -23,9 +23,14 @@ interface CmeAccount {
 type MarketType = 'forex' | 'futures' | 'options';
 type Direction  = 'long'  | 'short'  | 'both';
 
-const FOREX_INSTRUMENTS = [
-  'XAUUSD','XAGUSD','EURUSD','GBPUSD','USDJPY',
-  'USDCHF','AUDUSD','NZDUSD','USDCAD','GBPJPY','EURJPY','EURGBP',
+const FOREX_INSTRUMENT_GROUPS: { label: string; symbols: string[] }[] = [
+  { label: 'Metales',         symbols: ['XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD'] },
+  { label: 'Forex Majors',    symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD'] },
+  { label: 'Forex Crosses',   symbols: ['GBPJPY', 'EURJPY', 'EURGBP', 'AUDJPY', 'CHFJPY', 'EURAUD', 'GBPAUD', 'AUDNZD'] },
+  { label: 'Índices US',      symbols: ['US30', 'US500', 'USTEC', 'US2000'] },
+  { label: 'Índices EU/Asia', symbols: ['GER40', 'UK100', 'FRA40', 'ESP35', 'JPN225', 'HK50'] },
+  { label: 'Energía',         symbols: ['USOIL', 'UKOIL', 'NGAS'] },
+  { label: 'Crypto',          symbols: ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD'] },
 ];
 
 const FUTURES_CONTRACTS = [
@@ -230,7 +235,11 @@ function StepForex({ name, setName, legA, setLegA,
 
       <Field label="Instrumento">
         <Select value={legA} onChange={setLegA}>
-          {FOREX_INSTRUMENTS.map((i) => <option key={i} value={i}>{i}</option>)}
+          {FOREX_INSTRUMENT_GROUPS.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.symbols.map((s) => <option key={s} value={s}>{s}</option>)}
+            </optgroup>
+          ))}
         </Select>
       </Field>
 
