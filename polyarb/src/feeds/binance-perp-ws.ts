@@ -73,7 +73,15 @@ export class BinancePerpFeed {
   private connected = false;
   private reconnectDelay = RECONNECT_DELAY_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private diagnosticTimer: ReturnType<typeof setInterval> | null = null;
   private shouldRun = true;
+
+  // Diagnostics — tracks whether Binance is actually delivering data after handshake.
+  // Cloud IPs (Fly.io, AWS, etc.) sometimes complete the WS handshake to fstream.binance.com
+  // but never receive frames, due to silent geo/IP blocking.
+  private msgsReceived = 0;
+  private parseErrors = 0;
+  private firstMessageLogged = false;
 
   private state: Map<PerpSymbol, PerpState> = new Map([
     ['BTC', this.emptyState()],
@@ -86,13 +94,29 @@ export class BinancePerpFeed {
   start(): void {
     this.shouldRun = true;
     this.connect();
+    // Periodic diagnostic dump so we can detect silent data starvation in production.
+    if (!this.diagnosticTimer) {
+      this.diagnosticTimer = setInterval(() => this.logDiagnostics(), 30_000);
+    }
   }
 
   stop(): void {
     this.shouldRun = false;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.diagnosticTimer) { clearInterval(this.diagnosticTimer); this.diagnosticTimer = null; }
     if (this.ws) { this.ws.close(); this.ws = null; }
     this.connected = false;
+  }
+
+  private logDiagnostics(): void {
+    const btc = this.state.get('BTC')!;
+    const eth = this.state.get('ETH')!;
+    const sol = this.state.get('SOL')!;
+    console.log(
+      `[binance-perp-ws] diag connected=${this.connected} msgs=${this.msgsReceived} parseErrs=${this.parseErrors} ` +
+      `BTC.mark=${btc.lastMark} ETH.mark=${eth.lastMark} SOL.mark=${sol.lastMark} ` +
+      `BTC.trades=${btc.trades.length} ETH.trades=${eth.trades.length} SOL.trades=${sol.trades.length}`
+    );
   }
 
   /**
@@ -154,6 +178,12 @@ export class BinancePerpFeed {
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
+        this.msgsReceived++;
+        if (!this.firstMessageLogged) {
+          this.firstMessageLogged = true;
+          const preview = data.toString().slice(0, 200);
+          console.log(`[binance-perp-ws] first message received: ${preview}`);
+        }
         try {
           const envelope = JSON.parse(data.toString()) as {
             stream?: string;
@@ -189,8 +219,11 @@ export class BinancePerpFeed {
               this.pruneTrades(s, ts);
             }
           }
-        } catch {
-          // Skip malformed messages
+        } catch (err) {
+          this.parseErrors++;
+          if (this.parseErrors <= 3) {
+            console.warn(`[binance-perp-ws] parse error #${this.parseErrors}:`, (err as Error).message);
+          }
         }
       });
 
