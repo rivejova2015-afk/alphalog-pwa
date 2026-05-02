@@ -11,6 +11,8 @@
 import { loadFiftyXAgentConfig, type FiftyXAgentConfig } from './config-50x.js';
 import { getSupabase } from '../../supabase.js';
 import { BinanceFeed } from '../../feeds/binance-ws.js';
+import { BinancePerpFeed } from '../../feeds/binance-perp-ws.js';
+import { DeribitIVFeed } from '../../feeds/deribit-iv-ws.js';
 import { PolymarketFeed } from '../../feeds/polymarket-ws.js';
 import { PositionTracker } from '../../trading/position-tracker.js';
 import { OrderManager } from '../../trading/order-manager.js';
@@ -31,6 +33,7 @@ import {
   tradingTick50x,
   createLoopMetrics50x,
   KellyAdjuster500xOptionB,
+  resolveEngineV2Mode,
   type LoopDeps50x,
 } from './loop-50x.js';
 import { CascadeState } from './cascade-manager.js';
@@ -150,6 +153,19 @@ async function main(): Promise<void> {
   binanceFeed.start();
   console.log('[500x] Binance WS feed started');
 
+  // Engine v2 multi-source feeds (perp + IV). Started only when v2 mode is
+  // active so legacy deployments don't open extra sockets.
+  const engineV2Mode = resolveEngineV2Mode();
+  const perpFeed = new BinancePerpFeed();
+  const ivFeed = new DeribitIVFeed();
+  if (engineV2Mode !== 'off') {
+    perpFeed.start();
+    ivFeed.start();
+    console.log(`[500x] Engine v2 feeds started (mode=${engineV2Mode}): binance-perp + deribit-iv`);
+  } else {
+    console.log('[500x] Engine v2 OFF — perp/IV feeds not started');
+  }
+
   const markets = await polymarketFeed.fetchCryptoMarkets();
   const activeMarkets = markets.filter(m => m.active);
   console.log(`[500x] Found ${activeMarkets.length} active crypto markets`);
@@ -233,6 +249,8 @@ async function main(): Promise<void> {
     anomalyDetector,
     day10Validator,
     kellyAdjuster500x,
+    perpFeed,
+    ivFeed,
   };
 
   const refreshMarkets = async () => {
@@ -288,8 +306,12 @@ async function main(): Promise<void> {
     await pollCommands(config, deps, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine);
   }, 5_000);
 
-  process.on('SIGINT', () => shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine));
-  process.on('SIGTERM', () => shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine));
+  const stopV2Feeds = () => {
+    perpFeed.stop();
+    ivFeed.stop();
+  };
+  process.on('SIGINT', () => { stopV2Feeds(); shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine); });
+  process.on('SIGTERM', () => { stopV2Feeds(); shutdown(config, binanceFeed, polymarketFeed, telemetryWriter, fundamentalEngine); });
 
   console.log('[500x] PolyArb 500x engine running. Press Ctrl+C to stop.');
 }

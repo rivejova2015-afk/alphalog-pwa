@@ -15,10 +15,13 @@
  */
 
 import type { BinanceFeed } from '../../feeds/binance-ws.js';
+import type { BinancePerpFeed } from '../../feeds/binance-perp-ws.js';
+import type { DeribitIVFeed } from '../../feeds/deribit-iv-ws.js';
 import type { PolymarketFeed, PolymarketOrderbook } from '../../feeds/polymarket-ws.js';
 import type { PositionTracker, Position } from '../../trading/position-tracker.js';
 import type { OrderManager } from '../../trading/order-manager.js';
 import type { TelemetryWriter } from '../../telemetry/writer.js';
+import { evaluateConfluence } from '../../skills/confluence-engine.js';
 import {
   checkCircuitBreakers,
   drainEvents,
@@ -72,6 +75,30 @@ import { TradeScheduler, type SessionInfo, type SessionName } from './scheduler.
 import { RealtimeMetrics } from './observability/realtime-metrics.js';
 import { AnomalyDetector } from './observability/anomaly-detector.js';
 import { Day10Validator, type KellyAdjusterDay10Hook } from './observability/day-10-validator.js';
+
+// ─── Engine v2 — multi-source confluence rollout ────────────────────────────
+// 'off'    : legacy behaviour, no confluence gating, no sizing cap, no dryrun branch.
+// 'dryrun' : confluence + midprice gates run, decisions are logged with the
+//            ENGINE_V2 prefix, but placeOrder() is short-circuited.
+// 'live'   : confluence gates active AND placeOrder() executes with the
+//            confluence-derived sizing cap.
+export type EngineV2Mode = 'off' | 'dryrun' | 'live';
+export function resolveEngineV2Mode(): EngineV2Mode {
+  const raw = (process.env.POLYARB_ENGINE_V2_MODE ?? 'off').toLowerCase();
+  if (raw === 'dryrun' || raw === 'live') return raw;
+  return 'off';
+}
+const ENGINE_V2_MODE: EngineV2Mode = resolveEngineV2Mode();
+
+// Velocity-detector returns the literal string 'CRYPTO' when the question text
+// matches no known crypto. Cast guards prevent passing that bogus value to a
+// feed whose state Map only knows BTC/ETH/SOL — without this, a runtime call
+// like `getSignal('CRYPTO')` silently returns null and is indistinguishable
+// from a stale signal in the logs.
+type FeedSymbol = 'BTC' | 'ETH' | 'SOL';
+function asFeedSymbol(symbol: string): FeedSymbol | null {
+  return symbol === 'BTC' || symbol === 'ETH' || symbol === 'SOL' ? symbol : null;
+}
 
 // ─── KellyAdjuster500xOptionB ────────────────────────────────────────────────
 
@@ -140,6 +167,9 @@ export interface LoopDeps50x {
   anomalyDetector: AnomalyDetector;
   day10Validator: Day10Validator;
   kellyAdjuster500x: KellyAdjuster500xOptionB;
+  // Engine v2 feeds — optional so legacy mode (off) can run without instantiating them.
+  perpFeed?: BinancePerpFeed;
+  ivFeed?: DeribitIVFeed;
 }
 
 export interface LoopMetrics50x {
@@ -546,6 +576,81 @@ async function processMarket50x(
   // Signed gap = adjusted fair prob minus market price
   const gap = fairPrice - orderbook.midPrice;
 
+  // ─── Engine v2 pre-validator gates (midprice + multi-source confluence) ───
+  // Runs only when ENGINE_V2_MODE !== 'off'. Fail-closed: any missing/stale
+  // perp or IV signal forces SKIP. Spot direction derives from sign(gap).
+  const v2BuyYes = gap > 0;
+  const spotDirection = Math.abs(gap) < 1e-6 ? 'NEUTRAL' : (v2BuyYes ? 'UP' : 'DOWN');
+  let confluenceCapUsd: number | null = null;
+  let confluenceSnapshot: {
+    agreeing: number;
+    available: number;
+    direction: string;
+    cap: number;
+    perpDir: string | null;
+    ivDir: string | null;
+  } | null = null;
+  if (ENGINE_V2_MODE !== 'off') {
+    if (orderbook.midPrice <= 0.50) {
+      console.log(
+        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=midprice_below_favorite mid=${orderbook.midPrice.toFixed(3)}`,
+      );
+      return;
+    }
+
+    const feedSymbol = asFeedSymbol(velocitySignal.symbol);
+    if (!feedSymbol) {
+      console.log(
+        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=unsupported_symbol symbol=${velocitySignal.symbol}`,
+      );
+      return;
+    }
+
+    const perpSig = deps.perpFeed?.getSignal(feedSymbol) ?? null;
+    const ivSig = deps.ivFeed?.getSignal(feedSymbol) ?? null;
+    const confluence = evaluateConfluence({
+      spotDirection,
+      perpSignal: perpSig,
+      ivSignal: ivSig,
+      buyYes: v2BuyYes,
+    });
+
+    if (confluence.failClosed) {
+      console.log(
+        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=fail_closed detail=${confluence.failReason}`,
+      );
+      return;
+    }
+    if (confluence.sourcesAgreeing < 2) {
+      console.log(
+        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=no_confluence agreeing=${confluence.sourcesAgreeing}/3` +
+        ` dir=${confluence.agreedDirection}`,
+      );
+      return;
+    }
+    if (!confluence.matchesBuyDirection) {
+      console.log(
+        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=direction_conflict confluence=${confluence.agreedDirection}` +
+        ` buyYes=${v2BuyYes}`,
+      );
+      return;
+    }
+
+    confluenceCapUsd = confluence.kellyCapUsd;
+    confluenceSnapshot = {
+      agreeing: confluence.sourcesAgreeing,
+      available: confluence.sourcesAvailable,
+      direction: confluence.agreedDirection,
+      cap: confluence.kellyCapUsd,
+      perpDir: perpSig?.direction ?? null,
+      ivDir: ivSig?.direction ?? null,
+    };
+    console.log(
+      `[ENGINE_V2] PASS ${orderbook.marketSlug} agreeing=${confluence.sourcesAgreeing}/3` +
+      ` dir=${confluence.agreedDirection} cap=$${confluence.kellyCapUsd}`,
+    );
+  }
+
   // Reversal signal (L3 input)
   const reversalSignal = computeReversalSignal(priceHistory);
 
@@ -601,7 +706,13 @@ async function processMarket50x(
     sessionMultiplier: sessionMult,
   });
 
-  const finalSize = accountValue * adjusted.fraction;
+  // Engine v2 sizing cap: confluenceCapUsd is the hard ceiling derived from
+  // sourcesAgreeing (1=$25, 2=$50, 3=$100). Only applied when v2 mode is on
+  // and the confluence gate passed (cap is non-null).
+  const kellyDerivedSize = accountValue * adjusted.fraction;
+  const finalSize = confluenceCapUsd != null
+    ? Math.min(kellyDerivedSize, confluenceCapUsd)
+    : kellyDerivedSize;
   if (finalSize < 0.01) {
     console.log(`[500x] SKIP ${orderbook.marketSlug} — kelly_size_negligible (${finalSize.toFixed(4)})`);
     return;
@@ -616,6 +727,21 @@ async function processMarket50x(
     ` s${adjusted.multipliers.streak.toFixed(2)} d${adjusted.multipliers.drawdown.toFixed(2)}` +
     ` t${adjusted.multipliers.tier.toFixed(2)} S${adjusted.multipliers.session.toFixed(2)}]`,
   );
+
+  // Engine v2 dryrun branch: log what would have executed and exit before
+  // touching the order manager. Window claim already happened above, which is
+  // intentional — dryrun must compete with itself for windows the same way
+  // live mode would, otherwise the 24h validation rate is overstated.
+  if (ENGINE_V2_MODE === 'dryrun') {
+    console.log(
+      `[ENGINE_V2] DRYRUN would_execute ${orderbook.marketSlug} ${v2BuyYes ? 'YES' : 'NO'}` +
+      ` mid=${orderbook.midPrice.toFixed(3)} gap=${(gap * 100).toFixed(2)}%` +
+      ` conf=${fiveLayer.overallConfidence.toFixed(2)} valid=${fiveLayer.validatedCount}/5` +
+      ` size=$${finalSize.toFixed(2)} cap=$${confluenceCapUsd ?? 0}` +
+      ` decision=${decision.decision} session=${session.name}`,
+    );
+    return;
+  }
 
   // Execute order
   const result = await orderManager.placeOrder({
@@ -670,6 +796,8 @@ async function processMarket50x(
       eventCap: effectiveCap,
       session: session.name,
       sessionMultiplier: sessionMult,
+      engineV2Mode: ENGINE_V2_MODE,
+      confluence: confluenceSnapshot,
     },
   });
 
