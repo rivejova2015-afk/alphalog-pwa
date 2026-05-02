@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PushNotificationButton } from "@/components/push/PushNotificationButton.client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1347,27 +1348,30 @@ export default function PolyArbDashboard() {
             {activeAgent?.status}
           </span>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => sendCommand("start")} disabled={activeAgent?.status === "RUNNING"}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-green-600 hover:bg-green-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
-            <Play className="w-3 h-3" /> Start
-          </button>
-          <button onClick={() => sendCommand("pause")} disabled={activeAgent?.status !== "RUNNING"}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
-            <Pause className="w-3 h-3" /> Pause
-          </button>
-          <button onClick={() => sendCommand("stop")} disabled={activeAgent?.status === "STOPPED"}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
-            <Square className="w-3 h-3" /> Stop
-          </button>
-          <button
-            onClick={() => setArchiveModalOpen(true)}
-            disabled={archiving}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Archivar historial completo en EvidenceVault y resetear el dashboard"
-          >
-            <Archive className="w-3 h-3" /> Archivar historial
-          </button>
+        <div className="flex flex-wrap items-start gap-3">
+          <PushNotificationButton />
+          <div className="flex gap-2">
+            <button onClick={() => sendCommand("start")} disabled={activeAgent?.status === "RUNNING"}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-green-600 hover:bg-green-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+              <Play className="w-3 h-3" /> Start
+            </button>
+            <button onClick={() => sendCommand("pause")} disabled={activeAgent?.status !== "RUNNING"}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+              <Pause className="w-3 h-3" /> Pause
+            </button>
+            <button onClick={() => sendCommand("stop")} disabled={activeAgent?.status === "STOPPED"}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">
+              <Square className="w-3 h-3" /> Stop
+            </button>
+            <button
+              onClick={() => setArchiveModalOpen(true)}
+              disabled={archiving}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Archivar historial completo en EvidenceVault y resetear el dashboard"
+            >
+              <Archive className="w-3 h-3" /> Archivar historial
+            </button>
+          </div>
         </div>
       </div>
 
