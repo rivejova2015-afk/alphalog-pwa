@@ -100,6 +100,22 @@ function asFeedSymbol(symbol: string): FeedSymbol | null {
   return symbol === 'BTC' || symbol === 'ETH' || symbol === 'SOL' ? symbol : null;
 }
 
+// Engine v2 skip-log throttle. The trading loop iterates every 250ms, so a
+// single market stuck in fail_closed / no_confluence floods the log buffer
+// with ~14k lines/hour and pushes diagnostic output (WS health, balance,
+// derivatives) out of Fly.io's bounded buffer. We log the first occurrence
+// of each (slug, reason) pair, then re-log at most once per 60s.
+const ENGINE_V2_SKIP_THROTTLE_MS = 60_000;
+const engineV2SkipLastLoggedAt: Map<string, number> = new Map();
+function logEngineV2Skip(slug: string, reason: string, detail: string): void {
+  const key = `${slug}::${reason}`;
+  const now = Date.now();
+  const last = engineV2SkipLastLoggedAt.get(key) ?? 0;
+  if (now - last < ENGINE_V2_SKIP_THROTTLE_MS) return;
+  engineV2SkipLastLoggedAt.set(key, now);
+  console.log(`[ENGINE_V2] SKIP ${slug} reason=${reason} ${detail}`);
+}
+
 // ─── KellyAdjuster500xOptionB ────────────────────────────────────────────────
 
 const SESSION_MULT_AGGRESSIVE: Record<SessionName, number> = {
@@ -592,16 +608,20 @@ async function processMarket50x(
   } | null = null;
   if (ENGINE_V2_MODE !== 'off') {
     if (orderbook.midPrice <= 0.50) {
-      console.log(
-        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=midprice_below_favorite mid=${orderbook.midPrice.toFixed(3)}`,
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'midprice_below_favorite',
+        `mid=${orderbook.midPrice.toFixed(3)}`,
       );
       return;
     }
 
     const feedSymbol = asFeedSymbol(velocitySignal.symbol);
     if (!feedSymbol) {
-      console.log(
-        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=unsupported_symbol symbol=${velocitySignal.symbol}`,
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'unsupported_symbol',
+        `symbol=${velocitySignal.symbol}`,
       );
       return;
     }
@@ -616,22 +636,26 @@ async function processMarket50x(
     });
 
     if (confluence.failClosed) {
-      console.log(
-        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=fail_closed detail=${confluence.failReason}`,
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'fail_closed',
+        `detail=${confluence.failReason}`,
       );
       return;
     }
     if (confluence.sourcesAgreeing < 2) {
-      console.log(
-        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=no_confluence agreeing=${confluence.sourcesAgreeing}/3` +
-        ` dir=${confluence.agreedDirection}`,
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'no_confluence',
+        `agreeing=${confluence.sourcesAgreeing}/3 dir=${confluence.agreedDirection}`,
       );
       return;
     }
     if (!confluence.matchesBuyDirection) {
-      console.log(
-        `[ENGINE_V2] SKIP ${orderbook.marketSlug} reason=direction_conflict confluence=${confluence.agreedDirection}` +
-        ` buyYes=${v2BuyYes}`,
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'direction_conflict',
+        `confluence=${confluence.agreedDirection} buyYes=${v2BuyYes}`,
       );
       return;
     }
