@@ -22,6 +22,7 @@ import type { TelemetryWriter } from '../../telemetry/writer.js';
 import {
   checkCircuitBreakers,
   drainEvents,
+  rebaseStartOfDay,
   type CircuitBreakerState,
 } from '../../trading/circuit-breaker.js';
 import { logCircuitBreakerEvents, logCompliance } from '../../telemetry/compliance.js';
@@ -375,9 +376,16 @@ export async function tradingTick50x(
   const regime = detectRegime(binanceFeed.getTimestampedSamples('BTC'));
   metrics.lastRegime = regime;
 
+  // Rebase startOfDayEquity to the first real reading we observe so the daily
+  // drawdown check compares against actual capital, not the hard-coded
+  // startingCapitalUsd. Without this, $0 CLOB balance vs $50 starting = -100%
+  // and trips MAX_DAILY_DRAWDOWN before any real activity.
+  const liveEquity = metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd);
+  rebaseStartOfDay(cbState, liveEquity);
+
   const cbEvents = checkCircuitBreakers(
     cbState,
-    metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd),
+    liveEquity,
     metrics.consecutiveLosses,
     metrics.lastLatencyMs,
     metrics.lastSlippage,

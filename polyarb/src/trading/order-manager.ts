@@ -49,6 +49,24 @@ const PUSD         = '0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB'; // Polymarket
 const POLYGON_RPC  = process.env.POLYGON_RPC_URL ?? 'https://polygon.api.onfinality.io/public';
 const USDC_ABI = ['function balanceOf(address account) view returns (uint256)'];
 
+// Polymarket exchange contracts on Polygon mainnet (protocol constants).
+// First 3: legacy CTF stack (still active for some markets).
+// Last 2: current CLOB-active spenders observed in /balance-allowance responses
+// for btc-updown-5m markets — these are the ones the CLOB checks before accepting orders.
+// Without ALL 5 approved, /balance-allowance returns 0 even when on-chain USDC.e is positive.
+const POLYMARKET_SPENDERS = [
+  { name: 'CTFExchange',           address: '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E' },
+  { name: 'NegRiskAdapter',        address: '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296' },
+  { name: 'NegRiskExchange',       address: '0xC5d563A36AE78145C45a50134d48A1215220f80a' },
+  { name: 'CLOB-CTFExchange-v2',   address: '0xE111180000d2663C0091e4f400237545B87B996B' },
+  { name: 'CLOB-NegRiskExchange-v2', address: '0xe2222d279d744050d28e00520010520000310F59' },
+] as const;
+
+const ERC20_APPROVE_ABI = [
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+];
+
 export class OrderManager {
   private signer:        ClobSigner | ClobProxySigner | null;
   private apiKey:        string;
@@ -57,6 +75,7 @@ export class OrderManager {
   private walletAddress = '';  // POLY_ADDRESS used in HMAC auth headers
   private signerAddress: string;  // address that signs EIP-712 orders (= API key owner)
   private dryRun:        boolean;
+  private l1Wallet:      ethers.Wallet | null = null;  // for on-chain txs (approve, etc.)
 
   constructor(
     apiKey:       string,
@@ -87,6 +106,7 @@ export class OrderManager {
 
     if (l1PK) {
       const makerAddress = walletAddress ?? l1Address;
+      this.l1Wallet = new ethers.Wallet(l1PK);
       if (walletAddress && walletAddress.toLowerCase() !== l1Address.toLowerCase()) {
         this.signer        = new ClobProxySigner(l1PK, makerAddress);
         this.signerAddress = l1Address;
@@ -201,16 +221,29 @@ export class OrderManager {
         negRisk:    params.negRisk ?? false,
       });
 
-      // Submit to CLOB — official @polymarket/clob-client format:
-      // { deferExec, order: { salt: INT, side: "BUY"|"SELL", ... }, owner, orderType }
+      // Submit to CLOB V2 — wire body matches @polymarket/clob-client-v2 orderToJsonV2.
+      // Struct (signed): salt, maker, signer, tokenId, makerAmount, takerAmount,
+      //                  side(uint8), signatureType, timestamp, metadata(bytes32), builder(bytes32).
+      // Wire-only fields (NOT signed): postOnly, expiration; `side` becomes string "BUY"|"SELL".
       const body = JSON.stringify({
         deferExec: false,
+        postOnly:  false,
         order: {
-          ...signed,
-          salt: Number.parseInt(signed.salt, 10),   // must be integer in JSON
-          side: params.side === 'BUY' ? 'BUY' : 'SELL',  // must be string in JSON
+          salt:          Number.parseInt(signed.salt, 10),
+          maker:         signed.maker,
+          signer:        signed.signer,
+          tokenId:       signed.tokenId,
+          makerAmount:   signed.makerAmount,
+          takerAmount:   signed.takerAmount,
+          side:          params.side === 'BUY' ? 'BUY' : 'SELL',
+          signatureType: signed.signatureType,
+          timestamp:     signed.timestamp,
+          expiration:    '0',
+          metadata:      signed.metadata,
+          builder:       signed.builder,
+          signature:     signed.signature,
         },
-        owner:     this.apiKey,  // must equal creds.key (the api_key, not a wallet address)
+        owner:     this.apiKey,
         orderType: 'GTC',
       });
       const authHeaders = buildL2AuthHeaders(
@@ -431,5 +464,81 @@ export class OrderManager {
                 : clob  !== null ? clob
                 : wallet;
     return { clob, wallet, total };
+  }
+
+  /**
+   * Returns the wallet address used for HMAC auth (POLY_ADDRESS).
+   * For EOA mode this equals the L1 signer; for PROXY mode it's the proxy.
+   */
+  getWalletAddress(): string {
+    return this.walletAddress;
+  }
+
+  /**
+   * Approve USDC.e for the 3 Polymarket exchange contracts on Polygon.
+   * Idempotent: skips contracts where allowance is already effectively MAX.
+   *
+   * Without this, /balance-allowance returns min(balance, allowance) = 0 for any
+   * deposit, and the bot sees zero buying power. Required to unlock trading the
+   * very first time the wallet is used. Subsequent restarts are no-ops.
+   *
+   * Skipped in DRY_RUN mode and when no L1 wallet is configured.
+   * Approval txs are sent from the L1 EOA, so this is meaningful only in EOA mode
+   * (POLY_PROXY mode would need a separate flow — proxy holds USDC, not L1).
+   */
+  async ensureAllowances(): Promise<void> {
+    if (this.dryRun) {
+      console.log('[order-manager] ensureAllowances skipped (DRY_RUN)');
+      return;
+    }
+    if (!this.l1Wallet) {
+      console.warn('[order-manager] ensureAllowances skipped: no L1 wallet (set POLYARB_WALLET_PRIVATE_KEY)');
+      return;
+    }
+    const provider = new ethers.JsonRpcProvider(POLYGON_RPC, 137, { staticNetwork: ethers.Network.from(137) });
+    const wallet   = this.l1Wallet.connect(provider);
+    const owner    = await wallet.getAddress();
+    const HALF_MAX = ethers.MaxUint256 / 2n;
+
+    // V2 (April 2026) switched collateral USDC.e → pUSD. Both must be approved:
+    // USDC.e for legacy V1 markets still active, pUSD for all V2 CLOB orders.
+    const TOKENS = [
+      { name: 'USDC.e', address: USDC_E },
+      { name: 'pUSD',   address: PUSD   },
+    ] as const;
+
+    for (const { name: tokenName, address: tokenAddress } of TOKENS) {
+      const erc20 = new ethers.Contract(tokenAddress, ERC20_APPROVE_ABI, wallet);
+      console.log(`[order-manager] ensureAllowances: checking ${tokenName} allowances for ${owner}`);
+      for (const { name, address } of POLYMARKET_SPENDERS) {
+        try {
+          const current = await erc20.allowance!(owner, address) as bigint;
+          if (current >= HALF_MAX) {
+            console.log(`[order-manager] ${tokenName} allowance OK for ${name} (${address.slice(0, 10)}…)`);
+            continue;
+          }
+          console.warn(`[order-manager] Approving ${tokenName} for ${name} — current=${current.toString()}`);
+          // Polygon mainnet is currently sustaining ~180 gwei base + 76 gwei tip
+          // (post-Bhilai upgrade). Use 'latest' nonce to replace any stuck pending
+          // tx from previous failed attempts (RBF). 400/150 gwei guarantees inclusion.
+          // Gas cost: 100k gas * 400 gwei = 0.04 MATIC ≈ $0.02 per approve.
+          const nonce = await provider.getTransactionCount(owner, 'latest');
+          const tx = await erc20.approve!(address, ethers.MaxUint256, {
+            maxFeePerGas:         ethers.parseUnits('400', 'gwei'),
+            maxPriorityFeePerGas: ethers.parseUnits('150', 'gwei'),
+            gasLimit:             100_000n,
+            nonce,
+          });
+          console.log(`[order-manager] approve tx submitted — token=${tokenName} hash=${tx.hash} nonce=${nonce}`);
+          const receipt = await tx.wait();
+          console.log(`[order-manager] Approved ${tokenName} for ${name} — tx=${receipt?.hash ?? 'n/a'} block=${receipt?.blockNumber}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[order-manager] Approve failed for ${tokenName}/${name}: ${msg.slice(0, 200)}`);
+          throw err;
+        }
+      }
+    }
+    console.log('[order-manager] ensureAllowances complete');
   }
 }

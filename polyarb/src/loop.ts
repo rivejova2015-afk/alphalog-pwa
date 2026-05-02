@@ -26,6 +26,7 @@ import type { TelemetryWriter } from './telemetry/writer.js';
 import {
   checkCircuitBreakers,
   drainEvents,
+  rebaseStartOfDay,
   type CircuitBreakerState,
 } from './trading/circuit-breaker.js';
 import { logCircuitBreakerEvents, logCompliance } from './telemetry/compliance.js';
@@ -329,9 +330,15 @@ export async function tradingTick(
   metrics.lastRegime = regime;
 
   // ── Check circuit breakers ──
+  // Rebase startOfDayEquity to the first real reading so daily DD compares
+  // against actual capital (not the hard-coded startingCapitalUsd). Otherwise
+  // a $0 CLOB balance vs $50 starting trips MAX_DAILY_DRAWDOWN at -100%.
+  const liveEquity = metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd);
+  rebaseStartOfDay(cbState, liveEquity);
+
   const cbEvents = checkCircuitBreakers(
     cbState,
-    metrics.realClobBalance ?? (config.startingCapitalUsd + metrics.totalPnlUsd),
+    liveEquity,
     metrics.consecutiveLosses,
     metrics.lastLatencyMs,
     metrics.lastSlippage,

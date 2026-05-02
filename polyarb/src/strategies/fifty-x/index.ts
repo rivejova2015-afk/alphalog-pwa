@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   console.log('[500x] session-multipliers AGGRESSIVE = {OVERLAP:2.5, LDN:1.9, NY:2.2, ASIA:1.0}');
   console.log('[500x] session-multipliers SAFE       = {OVERLAP:2.0, LDN:1.5, NY:1.8, ASIA:0.8}');
   console.log('[500x] day-10 gate: winRate>=85% EV>=2.5% PF>=2.0 sharpe>=1.2(warn)');
-  console.log('[500x] guardrails REMOVED (no daily-cap, no DD-breaker, no loss-cooldown)');
+  console.log('[500x] guardrails ACTIVE: dailyDD=-90%, hourlyDD=-50%, balance-gate=$1 (skips CB until first real reading)');
   console.log('[500x] safety nets KEPT (statistical-CB, regime-detector, event-detector, asymmetric-kelly clamp at maxKellyFractionEvent=0.40)');
 
   if (!config.apiKey || !config.apiSecret || !config.apiPassphrase) {
@@ -107,6 +107,39 @@ async function main(): Promise<void> {
   await positionTracker.loadFromDb();
   await sweepUnsettledPositions(supabase, config.agentId);
   await redeemPendingWins(supabase, ctfRedeemer, config.agentId);
+
+  // Approve USDC.e for the 3 Polymarket exchange contracts (idempotent).
+  // Without this, /balance-allowance returns 0 even with USDC.e in the wallet
+  // and the bot sees zero buying power. Skipped in DRY_RUN.
+  try {
+    await orderManager.ensureAllowances();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[500x] ensureAllowances failed — bot cannot trade until approved: ${msg.slice(0, 200)}`);
+    await logCompliance(
+      config.agentId,
+      config.userId,
+      'CONFIG_CHANGE',
+      undefined,
+      undefined,
+      undefined,
+      { error: 'USDC.e approval failed at startup', detail: msg.slice(0, 500) },
+    );
+    // Continue running so heartbeat/logs work and the user gets visibility.
+  }
+
+  // Persist wallet_address to DB if missing (one-time backfill).
+  const walletAddress = orderManager.getWalletAddress();
+  if (walletAddress) {
+    const { error: walletUpdateErr } = await supabase
+      .from('polyarb_agents')
+      .update({ wallet_address: walletAddress })
+      .eq('id', config.agentId)
+      .is('wallet_address', null);
+    if (walletUpdateErr) {
+      console.warn(`[500x] wallet_address persist warning: ${walletUpdateErr.message}`);
+    }
+  }
 
   await orderManager.updateBalanceAllowance();
   const balances = await orderManager.fetchOnChainBalance();

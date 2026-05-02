@@ -39,6 +39,7 @@ export interface CircuitBreakerState {
   reduceSizeNextTrade: boolean;     // slippage flag
   lastDailyCheck: number;           // epoch ms
   startOfDayEquity: number;
+  startOfDayRebased: boolean;       // true once startOfDayEquity reflects a real reading
   startOfHourEquity: number;
   hourStartTimestamp: number;
   events: CircuitBreakerEvent[];    // pending events to flush
@@ -51,10 +52,33 @@ export function createCircuitBreakerState(startingEquity: number): CircuitBreake
     reduceSizeNextTrade: false,
     lastDailyCheck: Date.now(),
     startOfDayEquity: startingEquity,
+    startOfDayRebased: false,
     startOfHourEquity: startingEquity,
     hourStartTimestamp: Date.now(),
     events: [],
   };
+}
+
+/**
+ * Rebase startOfDayEquity (and startOfHourEquity) to the first real on-chain
+ * reading we observe. Without this, an initial $0 CLOB balance vs a hard-coded
+ * $50 startingCapital causes (0-50)/50 = -100% to trip MAX_DAILY_DRAWDOWN.
+ *
+ * Only fires once per process. Gated at `threshold` to avoid latching onto
+ * transient zeros.
+ */
+export function rebaseStartOfDay(
+  state: CircuitBreakerState,
+  realEquity: number,
+  threshold = 1.0,
+): void {
+  if (state.startOfDayRebased) return;
+  if (!Number.isFinite(realEquity) || realEquity < threshold) return;
+  const prev = state.startOfDayEquity;
+  state.startOfDayEquity = realEquity;
+  state.startOfHourEquity = realEquity;
+  state.startOfDayRebased = true;
+  console.log(`[circuit-breaker] startOfDayEquity rebased: ${prev.toFixed(4)} -> ${realEquity.toFixed(4)}`);
 }
 
 /**
@@ -91,8 +115,14 @@ export function checkCircuitBreakers(
     state.lastDailyCheck = now;
   }
 
+  // Balance gate: skip drawdown checks while balance is below $1 OR before the
+  // first real on-chain reading has rebased startOfDayEquity. This avoids the
+  // false-positive where ($0 CLOB - $50 starting) / $50 = -100% trips
+  // MAX_DAILY_DRAWDOWN before the user has even deposited funds.
+  const balanceGateActive = currentEquity < 1 || !state.startOfDayRebased;
+
   // 1. Daily drawdown
-  if (state.startOfDayEquity > 0) {
+  if (!balanceGateActive && state.startOfDayEquity > 0) {
     const dailyReturn = (currentEquity - state.startOfDayEquity) / state.startOfDayEquity;
     if (dailyReturn < params.dailyDrawdownLimit) {
       const evt: CircuitBreakerEvent = {
@@ -108,7 +138,7 @@ export function checkCircuitBreakers(
   }
 
   // 2. Hourly drawdown
-  if (state.startOfHourEquity > 0) {
+  if (!balanceGateActive && state.startOfHourEquity > 0) {
     const hourlyReturn = (currentEquity - state.startOfHourEquity) / state.startOfHourEquity;
     if (hourlyReturn < params.hourlyDrawdownLimit) {
       const evt: CircuitBreakerEvent = {

@@ -1,5 +1,11 @@
 /**
- * Polymarket CLOB EIP-712 Order Signer
+ * Polymarket CLOB V2 EIP-712 Order Signer
+ *
+ * V2 migration (2026-04-28): Polymarket bumped exchange domain version "1"→"2",
+ * deployed new exchange contracts, and restructured the Order struct.
+ * Removed fields: taker, expiration, nonce, feeRateBps.
+ * Added fields:   timestamp (ms), metadata (bytes32), builder (bytes32).
+ * `expiration` still appears in the POST /order wire body (not signed).
  *
  * Two signing modes:
  *
@@ -8,28 +14,33 @@
  *   - Signs with wallet private key (POLYARB_WALLET_PRIVATE_KEY)
  *
  * POLY_PROXY (signatureType=1):
- *   - maker = main wallet address (0xbf57...)
+ *   - maker = main wallet address (proxy)
  *   - signer = api_key address (the L2 key Polymarket generated)
  *   - Signs with api_secret (the L2 private key)
- *   - No main wallet private key needed
  *
  * References:
- *  - Contract: 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E (Polygon)
- *  - Chain: 137 (Polygon mainnet)
+ *   - https://docs.polymarket.com/v2-migration
+ *   - V2 contract (regular): 0xE111180000d2663C0091e4f400237545B87B996B (Polygon)
+ *   - V2 contract (negRisk): 0xe2222d279d744050d28e00520010520000310F59 (Polygon)
+ *   - Chain: 137 (Polygon mainnet)
  */
 
 import { ethers, type TypedDataField } from 'ethers';
 
-const CTF_EXCHANGE          = '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
-const NEG_RISK_CTF_EXCHANGE = '0xC5d563A36AE78145C45a50134d48A1215220f80a';
+// V2 exchange contracts (replaced V1 0x4bFb41d5... and 0xC5d563A3...)
+const CTF_EXCHANGE_V2          = '0xE111180000d2663C0091e4f400237545B87B996B';
+const NEG_RISK_CTF_EXCHANGE_V2 = '0xe2222d279d744050d28e00520010520000310F59';
 const CHAIN_ID = 137;
+
+// bytes32 zero — default for unused metadata/builder fields
+const ZERO_BYTES32 = `0x${'0'.repeat(64)}`;
 
 function buildDomain(negRisk: boolean) {
   return {
     name: 'Polymarket CTF Exchange',
-    version: '1',
+    version: '2',
     chainId: CHAIN_ID,
-    verifyingContract: negRisk ? NEG_RISK_CTF_EXCHANGE : CTF_EXCHANGE,
+    verifyingContract: negRisk ? NEG_RISK_CTF_EXCHANGE_V2 : CTF_EXCHANGE_V2,
   };
 }
 
@@ -38,15 +49,14 @@ const ORDER_TYPES: Record<string, TypedDataField[]> = {
     { name: 'salt',          type: 'uint256' },
     { name: 'maker',         type: 'address' },
     { name: 'signer',        type: 'address' },
-    { name: 'taker',         type: 'address' },
     { name: 'tokenId',       type: 'uint256' },
     { name: 'makerAmount',   type: 'uint256' },
     { name: 'takerAmount',   type: 'uint256' },
-    { name: 'expiration',    type: 'uint256' },
-    { name: 'nonce',         type: 'uint256' },
-    { name: 'feeRateBps',    type: 'uint256' },
     { name: 'side',          type: 'uint8'   },
     { name: 'signatureType', type: 'uint8'   },
+    { name: 'timestamp',     type: 'uint256' },
+    { name: 'metadata',      type: 'bytes32' },
+    { name: 'builder',       type: 'bytes32' },
   ],
 };
 
@@ -55,7 +65,6 @@ export const Side = { BUY: 0, SELL: 1 } as const;
 const SIGNATURE_TYPE_EOA        = 0;
 const SIGNATURE_TYPE_POLY_PROXY = 1;
 
-const ZERO_ADDRESS  = '0x0000000000000000000000000000000000000000';
 const USDC_DECIMALS = 6;
 
 export interface ClobOrderParams {
@@ -63,7 +72,8 @@ export interface ClobOrderParams {
   side:       0 | 1;
   price:      number;
   sizeUsd:    number;
-  feeRateBps: number;
+  /** Deprecated under V2 (no longer in EIP-712 struct). Kept for call-site compat; ignored. */
+  feeRateBps?: number;
   negRisk?:   boolean;
 }
 
@@ -71,15 +81,14 @@ export interface SignedOrder {
   salt:          string;
   maker:         string;
   signer:        string;
-  taker:         string;
   tokenId:       string;
   makerAmount:   string;
   takerAmount:   string;
-  expiration:    string;
-  nonce:         string;
-  feeRateBps:    string;
   side:          number;
   signatureType: number;
+  timestamp:     string;
+  metadata:      string;
+  builder:       string;
   signature:     string;
 }
 
@@ -103,31 +112,23 @@ export class ClobSigner {
 function toEthPrivateKey(secret: string): string {
   const stripped = secret.startsWith('0x') ? secret.slice(2) : secret;
   if (/^[0-9a-fA-F]{64}$/.test(stripped)) return `0x${stripped}`;
-  // base64url → base64 → bytes → hex
   const b64 = stripped.replace(/-/g, '+').replace(/_/g, '/');
   const bytes = Buffer.from(b64, 'base64');
   return `0x${bytes.toString('hex')}`;
 }
 
 // ─── POLY_PROXY mode ──────────────────────────────────────────────────────────
-// maker  = proxy wallet address (holds USDC on CTF Exchange)
-// signer = MetaMask EOA (owns the API key, signs the EIP-712 order)
-// api_secret is used ONLY for L2 HMAC auth headers — NOT for signing orders.
 
 export class ClobProxySigner {
-  private wallet:       ethers.Wallet;  // MetaMask EOA wallet
-  private proxyAddress: string;         // proxy wallet (maker field)
+  private wallet:       ethers.Wallet;
+  private proxyAddress: string;
 
-  /**
-   * @param privateKey     MetaMask EOA private key (POLYARB_WALLET_PRIVATE_KEY)
-   * @param proxyAddress   Proxy wallet address from polyarb_agents.wallet_address
-   */
   constructor(privateKey: string, proxyAddress: string) {
     this.wallet       = new ethers.Wallet(privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`);
     this.proxyAddress = proxyAddress;
   }
 
-  get signerAddress(): string { return this.wallet.address; }  // MetaMask EOA
+  get signerAddress(): string { return this.wallet.address; }
   get makerAddr():    string  { return this.proxyAddress; }
 
   async signOrder(params: ClobOrderParams): Promise<SignedOrder> {
@@ -135,7 +136,6 @@ export class ClobProxySigner {
   }
 }
 
-// Kept for reference — NOT used for order signing (api_secret is HMAC-only).
 export class ClobL2Signer {
   private l2Wallet:     ethers.Wallet;
   private makerAddress: string;
@@ -162,44 +162,41 @@ async function signEip712(
   signatureType: number,
   negRisk:       boolean,
 ): Promise<SignedOrder> {
-  const { tokenId, side, price, sizeUsd, feeRateBps } = params;
+  const { tokenId, side, price, sizeUsd } = params;
   const DOMAIN = buildDomain(negRisk);
 
   // Shares-first calculation — mirrors @polymarket/clob-client getOrderRawAmounts.
   // BUY:  makerAmt = USDC spent, takerAmt = shares received
   // SELL: makerAmt = shares sold, takerAmt = USDC received
-  // Round price to 3 dp (0.001 tick — covers all Polymarket tick sizes).
-  // Round shares DOWN to 2 dp so makerAmt/takerAmt ratio lands exactly on tick grid.
-  const priceRounded = Math.round(price * 1000) / 1000;
+  const priceRounded  = Math.round(price * 1000) / 1000;
   const sharesRounded = Math.floor((sizeUsd / priceRounded) * 100) / 100;
   const usdcRounded   = Math.round(sharesRounded * priceRounded * 100000) / 100000;
 
   const makerAmountRaw =
     side === Side.BUY
-      ? BigInt(Math.round(usdcRounded   * 10 ** USDC_DECIMALS))  // USDC out
-      : BigInt(Math.round(sharesRounded * 10 ** USDC_DECIMALS)); // shares out
+      ? BigInt(Math.round(usdcRounded   * 10 ** USDC_DECIMALS))
+      : BigInt(Math.round(sharesRounded * 10 ** USDC_DECIMALS));
   const takerAmountRaw =
     side === Side.BUY
-      ? BigInt(Math.round(sharesRounded * 10 ** USDC_DECIMALS))  // shares in
-      : BigInt(Math.round(usdcRounded   * 10 ** USDC_DECIMALS)); // USDC in
+      ? BigInt(Math.round(sharesRounded * 10 ** USDC_DECIMALS))
+      : BigInt(Math.round(usdcRounded   * 10 ** USDC_DECIMALS));
 
-  const salt       = BigInt(Date.now()).toString();
-  const nonce      = '0';
-  const expiration = '0';
+  const nowMs     = Date.now();
+  const salt      = BigInt(nowMs).toString();
+  const timestamp = String(nowMs);
 
   const orderData = {
     salt,
     maker:         makerAddress,
     signer:        signerWallet.address,
-    taker:         ZERO_ADDRESS,
     tokenId:       BigInt(tokenId).toString(),
     makerAmount:   makerAmountRaw.toString(),
     takerAmount:   takerAmountRaw.toString(),
-    expiration,
-    nonce,
-    feeRateBps:    feeRateBps.toString(),
     side,
     signatureType,
+    timestamp,
+    metadata: ZERO_BYTES32,
+    builder:  ZERO_BYTES32,
   };
 
   const signature = await signerWallet.signTypedData(DOMAIN, ORDER_TYPES, orderData);
