@@ -592,6 +592,18 @@ async function processMarket50x(
   // Signed gap = adjusted fair prob minus market price
   const gap = fairPrice - orderbook.midPrice;
 
+  // ─── 500x favored-side gate (always-on, independent of Engine v2) ───
+  // Solo opera el lado favorito (Polymarket midPrice >= 0.50 = probabilidad ≥50%).
+  // Override via POLYARB_50X_FAVORED_MIN_PROB (e.g. 0 = desactivar, 0.55 = más estricto).
+  const FAVORED_MIN_PROB = parseFloat(process.env.POLYARB_50X_FAVORED_MIN_PROB ?? '0.50');
+  if (orderbook.midPrice < FAVORED_MIN_PROB) {
+    console.log(
+      `[500x] SKIP ${orderbook.marketSlug} — below_favored ` +
+      `(mid=${orderbook.midPrice.toFixed(3)} < ${FAVORED_MIN_PROB})`,
+    );
+    return;
+  }
+
   // ─── Engine v2 pre-validator gates (midprice + multi-source confluence) ───
   // Runs only when ENGINE_V2_MODE !== 'off'. Fail-closed: any missing/stale
   // perp or IV signal forces SKIP. Spot direction derives from sign(gap).
