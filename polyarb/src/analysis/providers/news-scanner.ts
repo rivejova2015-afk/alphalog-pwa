@@ -1,8 +1,14 @@
 /**
- * News Scanner — CryptoPanic API + RSS fallback.
+ * News Scanner — CryptoPanic API + CoinTelegraph RSS fallback.
  *
  * Primary: CryptoPanic (CRYPTOPANIC_API_TOKEN env var — free tier at cryptopanic.com).
- * Fallback: CryptoPanic public hot feed (no token, limited).
+ * Fallback: CoinTelegraph RSS (https://cointelegraph.com/rss) — public, no token.
+ *
+ * RSS path is automatic when CRYPTOPANIC_API_TOKEN is unset. Tradeoff vs paid:
+ *   - CoinTelegraph: ~30-50 fresh BTC-relevant items/hour, 2-5 min latency, free
+ *   - CryptoPanic:   ~50-100 multi-source items/hour, <1 min latency, paid
+ * RSS is enough to keep the news component live for sentiment-divergence and
+ * the fundamental composite — quality is comparable for keyword-based scoring.
  *
  * Scoring engine:
  *   - Keyword NLP: bullish/bearish word lists with weighted scoring
@@ -155,6 +161,73 @@ interface CryptoPanicResponse {
   count?: number;
 }
 
+// ── CoinTelegraph RSS (free fallback) ──────────────────────────────────────────
+
+const COINTELEGRAPH_RSS_URL = 'https://cointelegraph.com/rss';
+
+/** Headlines must mention one of these to be kept (the RSS feed has no
+ *  currency tags, so we approximate Polymarket's BTC-only filter via keywords).
+ *  Broad enough to catch macro/regulatory items that move BTC even without
+ *  explicit BTC mention (e.g. "Fed rate cut", "spot ETF approval"). */
+const BTC_KEYWORDS = [
+  'bitcoin', 'btc', 'satoshi', 'hodl', 'halving',
+  'crypto', 'cryptocurrency', 'blockchain',
+  'etf', 'spot etf',
+  'fed ', 'fomc', 'rate cut', 'rate hike',
+];
+
+interface RssItem {
+  title: string;
+  link: string;
+  publishedAt: Date;
+  source: string;
+}
+
+/** Strip CDATA wrappers and decode HTML entities common in RSS payloads. */
+function decodeRssText(raw: string): string {
+  return raw
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .trim();
+}
+
+function extractTag(itemXml: string, tag: string): string | null {
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
+  const m = itemXml.match(re);
+  return m ? decodeRssText(m[1]) : null;
+}
+
+async function fetchCoinTelegraphRss(source: string): Promise<RssItem[]> {
+  const res = await fetch(COINTELEGRAPH_RSS_URL, {
+    headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) {
+    console.warn(`[news-scanner] cointelegraph RSS HTTP ${res.status}`);
+    return [];
+  }
+  const xml = await res.text();
+  const items: RssItem[] = [];
+  const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/g;
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const itemXml = match[1];
+    const title = extractTag(itemXml, 'title');
+    const link = extractTag(itemXml, 'link');
+    const pubDate = extractTag(itemXml, 'pubDate');
+    if (!title || !pubDate) continue;
+    const dt = new Date(pubDate);
+    if (Number.isNaN(dt.getTime())) continue;
+    items.push({ title, link: link ?? '', publishedAt: dt, source });
+  }
+  return items;
+}
+
 // ── Provider ───────────────────────────────────────────────────────────────────
 
 export class NewsScannerProvider {
@@ -174,11 +247,8 @@ export class NewsScannerProvider {
     try {
       const token = process.env.CRYPTOPANIC_API_TOKEN;
       if (!token) {
-        // CryptoPanic v1 requires auth_token on every request — without it the API
-        // returns 401. Log once so the operator knows the news component is offline.
-        if (!this.cached) {
-          console.warn('[news-scanner] CRYPTOPANIC_API_TOKEN not set — news signal disabled. Get a free token at cryptopanic.com/developers/api/');
-        }
+        // No paid token — fall back to CoinTelegraph's free RSS feed.
+        await this.refreshFromRss();
         return;
       }
 
@@ -236,6 +306,41 @@ export class NewsScannerProvider {
       console.warn('[news-scanner] Fetch failed (using stale):', err instanceof Error ? err.message : String(err));
     } finally {
       this.fetching = false;
+    }
+  }
+
+  /** Free fallback when CRYPTOPANIC_API_TOKEN is unset. Uses CoinTelegraph RSS. */
+  private async refreshFromRss(): Promise<void> {
+    try {
+      const items = await fetchCoinTelegraphRss('cointelegraph');
+      const headlines: ScoredHeadline[] = [];
+      const batchHashes = new Set<string>();
+
+      for (const item of items) {
+        const lower = item.title.toLowerCase();
+        // RSS lacks currency tags — approximate Polymarket's BTC-only filter.
+        if (!BTC_KEYWORDS.some(kw => lower.includes(kw))) continue;
+
+        const hash = titleHash(item.title);
+        batchHashes.add(hash);
+        if (this.seenHashes.has(hash)) continue;
+        this.seenHashes.add(hash);
+
+        const scored = scoreHeadline(item.title, item.link, item.source, item.publishedAt);
+        if (scored) headlines.push(scored);
+      }
+
+      if (this.seenHashes.size > 500) {
+        this.seenHashes = batchHashes;
+      }
+
+      this.cached = computeNewsComponent(headlines);
+      console.log(
+        `[news-scanner:rss] ${headlines.length} scored headlines (cointelegraph) → ` +
+        `${this.cached.signal} score=${this.cached.score} urgencyPeak=${this.cached.urgencyPeak}`,
+      );
+    } catch (err) {
+      console.warn('[news-scanner:rss] Fetch failed:', err instanceof Error ? err.message : String(err));
     }
   }
 }
