@@ -4,6 +4,7 @@ import type {
 } from '@/types/backtest';
 import { sma, ema, rsi, atr, bbands } from './indicators';
 import { computeMetrics } from './statistics';
+import { computeSlippage, type SlippageParams } from './slippage';
 
 interface IndicatorBundle {
   closes: number[];
@@ -127,6 +128,12 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
   const spreadCost = cfg.spreadPoints * point;
   const slipCost = cfg.slippagePoints * point;
 
+  const slipParams: SlippageParams | null = cfg.slippageMode
+    ? { mode: cfg.slippageMode, ...(cfg.slippageParams ?? {}) }
+    : null;
+  const dynamicSlip = (bar: Bar, side: Side, lots: number): number =>
+    slipParams ? computeSlippage(bar, side, lots, slipParams) : slipCost;
+
   let balance = cfg.initialBalance;
   let peakEquity = balance;
   const equity: EquityPoint[] = [];
@@ -166,13 +173,15 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
       const pos = open[p];
       let closed = false;
       if (pos.side === 'long') {
-        if (pos.slPrice && bar.low <= pos.slPrice)  { closePosition(pos, i, pos.slPrice - slipCost, 'sl'); open.splice(p, 1); closed = true; }
+        const exitSlip = dynamicSlip(bar, 'long', pos.lots);
+        if (pos.slPrice && bar.low <= pos.slPrice)  { closePosition(pos, i, pos.slPrice - exitSlip, 'sl'); open.splice(p, 1); closed = true; }
         else if (pos.tpPrice && bar.high >= pos.tpPrice) { closePosition(pos, i, pos.tpPrice, 'tp'); open.splice(p, 1); closed = true; }
-        else if (allConditions(bundle, rules.exitLong, i)) { closePosition(pos, i, bar.close - spreadCost - slipCost, 'signal'); open.splice(p, 1); closed = true; }
+        else if (allConditions(bundle, rules.exitLong, i)) { closePosition(pos, i, bar.close - spreadCost - exitSlip, 'signal'); open.splice(p, 1); closed = true; }
       } else {
-        if (pos.slPrice && bar.high >= pos.slPrice) { closePosition(pos, i, pos.slPrice + slipCost, 'sl'); open.splice(p, 1); closed = true; }
+        const exitSlip = dynamicSlip(bar, 'short', pos.lots);
+        if (pos.slPrice && bar.high >= pos.slPrice) { closePosition(pos, i, pos.slPrice + exitSlip, 'sl'); open.splice(p, 1); closed = true; }
         else if (pos.tpPrice && bar.low <= pos.tpPrice) { closePosition(pos, i, pos.tpPrice, 'tp'); open.splice(p, 1); closed = true; }
-        else if (allConditions(bundle, rules.exitShort, i)) { closePosition(pos, i, bar.close + spreadCost + slipCost, 'signal'); open.splice(p, 1); closed = true; }
+        else if (allConditions(bundle, rules.exitShort, i)) { closePosition(pos, i, bar.close + spreadCost + exitSlip, 'signal'); open.splice(p, 1); closed = true; }
       }
       if (closed && balance <= 0) {
         balance = 0;
@@ -186,16 +195,16 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
       const wantLong  = (cfg.direction === 'long'  || cfg.direction === 'both') && allConditions(bundle, rules.entryLong, i);
       const wantShort = (cfg.direction === 'short' || cfg.direction === 'both') && allConditions(bundle, rules.entryShort, i);
       if (wantLong) {
-        const entryPx = bar.close + spreadCost + slipCost;
+        const lots = calcLots(rules, balance, rules.slPoints ?? null, cfg.pointValue);
+        const entryPx = bar.close + spreadCost + dynamicSlip(bar, 'long', lots);
         const slPx = rules.slPoints ? entryPx - rules.slPoints * point : null;
         const tpPx = rules.tpPoints ? entryPx + rules.tpPoints * point : null;
-        const lots = calcLots(rules, balance, rules.slPoints ?? null, cfg.pointValue);
         open.push({ side: 'long', entryTs: bar.ts, entryIdx: i, entryPrice: entryPx, lots, slPrice: slPx, tpPrice: tpPx });
       } else if (wantShort) {
-        const entryPx = bar.close - spreadCost - slipCost;
+        const lots = calcLots(rules, balance, rules.slPoints ?? null, cfg.pointValue);
+        const entryPx = bar.close - spreadCost - dynamicSlip(bar, 'short', lots);
         const slPx = rules.slPoints ? entryPx + rules.slPoints * point : null;
         const tpPx = rules.tpPoints ? entryPx - rules.tpPoints * point : null;
-        const lots = calcLots(rules, balance, rules.slPoints ?? null, cfg.pointValue);
         open.push({ side: 'short', entryTs: bar.ts, entryIdx: i, entryPrice: entryPx, lots, slPrice: slPx, tpPrice: tpPx });
       }
     }

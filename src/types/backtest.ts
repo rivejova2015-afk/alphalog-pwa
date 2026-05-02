@@ -53,6 +53,15 @@ export interface BacktestConfig {
   monteCarloIterations?: number;
   walkForwardWindows?: number;
   stressTests?: boolean;
+  // Optional advanced execution model. When unset, the engine falls back to
+  // the simple `slippagePoints` linear cost.
+  slippageMode?: 'fixed' | 'vwap' | 'time_decay' | 'almgren';
+  slippageParams?: {
+    fixedPoints?: number;
+    participation?: number;
+    permanentImpactCoef?: number;
+    temporaryImpactCoef?: number;
+  };
 }
 
 export type Operator = '>' | '<' | '>=' | '<=' | '==' | 'cross_above' | 'cross_below';

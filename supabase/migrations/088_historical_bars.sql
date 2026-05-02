@@ -1,4 +1,4 @@
--- 073_historical_bars.sql
+-- 088_historical_bars.sql
 -- Historical OHLCV data for MT4/MT5/Dukascopy backtesting
 
 CREATE TABLE IF NOT EXISTS public.historical_bars (

@@ -1,12 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { logError } from "@/lib/log";
+import { runBacktestJob } from "@/lib/backtest/run-job";
+import { logError, logWarn } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
+const STUCK_QUEUED_MS = 30_000; // a job queued > 30s with no started_at is treated as zombie
+const STUCK_RUNNING_MS = 6 * 60 * 1000; // a job running > 6 min is dead (maxDuration is 5)
 
 const indicatorRefSchema = z.object({
   type: z.enum(["sma", "ema", "rsi", "atr", "bb_upper", "bb_lower", "macd", "price"]),
@@ -56,23 +60,6 @@ const configSchema = z.object({
   stressTests: z.boolean().optional(),
 });
 
-const QSTASH_PUBLISH = "https://qstash.upstash.io/v2/publish/";
-
-async function publishToQStash(workerUrl: string, payload: unknown): Promise<boolean> {
-  const token = process.env.QSTASH_TOKEN;
-  if (!token) return false;
-  const r = await fetch(QSTASH_PUBLISH + encodeURIComponent(workerUrl), {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Upstash-Retries": "0",
-    },
-    body: JSON.stringify(payload),
-  });
-  return r.ok;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -111,24 +98,55 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error?.message ?? "Insert failed" }, { status: 500 });
     }
 
-    const appUrl = process.env.ALPHALOG_WEB_URL || process.env.NEXT_PUBLIC_APP_URL || `https://${request.headers.get("host")}`;
-    const workerUrl = `${appUrl}/api/backtest/worker`;
-    const enqueued = await publishToQStash(workerUrl, { job_id: job.id });
-
-    if (!enqueued) {
-      // Fallback: fire-and-forget HTTP call so the run still happens (best effort).
-      fetch(workerUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-internal-trigger": process.env.CRON_SECRET ?? "" },
-        body: JSON.stringify({ job_id: job.id }),
-      }).catch(() => {});
+    // Run the backtest INLINE in the same request. This is the most reliable
+    // pattern on Vercel — fire-and-forget gets killed and after() may be
+    // limited on Hobby plans. The client polls for progress and will see the
+    // job transition queued → running → completed before this response returns.
+    try {
+      await runBacktestJob(svc, job.id);
+    } catch (err) {
+      logError("BacktestJobs", { component: "inline runBacktestJob", message: String(err), meta: { jobId: job.id } });
+      // runBacktestJob already records status='failed' in the DB on error.
     }
 
-    return NextResponse.json({ job }, { status: 201 });
+    // Return the latest job state so the UI doesn't wait for the next poll.
+    const { data: finalJob } = await svc
+      .from("backtest_jobs")
+      .select("id, status, progress_pct, current_phase, error, created_at, started_at, finished_at")
+      .eq("id", job.id)
+      .maybeSingle();
+
+    return NextResponse.json({ job: finalJob ?? job }, { status: 201 });
   } catch (err) {
     logError("BacktestJobs", { component: "POST /api/backtest/jobs", message: String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+// Watchdog: failure-quarantine for jobs that never progressed (worker died
+// mid-flight on a previous deploy/timeout). Keeps the UI informative instead
+// of leaving rows hanging forever.
+async function reapZombies(svc: ReturnType<typeof createServiceClient>, userId: string, algorithmId: string | null) {
+  const cutoffQueued  = new Date(Date.now() - STUCK_QUEUED_MS).toISOString();
+  const cutoffRunning = new Date(Date.now() - STUCK_RUNNING_MS).toISOString();
+
+  let q1 = svc.from("backtest_jobs")
+    .update({ status: "failed", error: "Worker timed out before starting. Re-run.", finished_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("status", "queued")
+    .lt("created_at", cutoffQueued);
+  if (algorithmId) q1 = q1.eq("algorithm_id", algorithmId);
+  const r1 = await q1;
+  if (r1.error) logWarn("BacktestJobs", "reap queued failed", { component: "reapZombies", meta: { message: r1.error.message } });
+
+  let q2 = svc.from("backtest_jobs")
+    .update({ status: "failed", error: "Worker exceeded max duration. Re-run with smaller scope.", finished_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("status", "running")
+    .lt("started_at", cutoffRunning);
+  if (algorithmId) q2 = q2.eq("algorithm_id", algorithmId);
+  const r2 = await q2;
+  if (r2.error) logWarn("BacktestJobs", "reap running failed", { component: "reapZombies", meta: { message: r2.error.message } });
 }
 
 export async function GET(request: NextRequest) {
@@ -139,6 +157,14 @@ export async function GET(request: NextRequest) {
 
     const algorithmId = request.nextUrl.searchParams.get("algorithm_id");
     const limit = Math.min(50, Number(request.nextUrl.searchParams.get("limit") ?? "20"));
+
+    // Best-effort zombie reaper — runs after the response so polling stays fast.
+    after(async () => {
+      try {
+        const svc = createServiceClient();
+        await reapZombies(svc, user.id, algorithmId);
+      } catch { /* best-effort, never throw */ }
+    });
 
     let q = supabase
       .from("backtest_jobs")
