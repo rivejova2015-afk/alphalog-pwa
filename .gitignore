@@ -24,6 +24,7 @@ tests/e2e/.auth/
 public/workbox-*.js
 public/sw.js
 public/fallback-*.js
+public/worker-*.js
 
 # production
 /build

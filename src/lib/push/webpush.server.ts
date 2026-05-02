@@ -55,8 +55,8 @@ export async function sendPushToSubscription(
     const message = JSON.stringify({
       title: payload.title,
       body: payload.body,
-      icon: payload.icon || '/icons/icon-192x192.png',
-      badge: payload.badge || '/icons/badge-72x72.png',
+      icon: payload.icon || '/icons/icon-192.png',
+      badge: payload.badge || '/icons/icon-192.png',
       tag: payload.tag || 'alphalog-notification',
       data: payload.data || {},
     });

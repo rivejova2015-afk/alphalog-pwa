@@ -13,12 +13,14 @@ import { getSupabase } from '../supabase.js';
 import { ClobSigner, ClobProxySigner, Side, type SignedOrder } from './clob-signer.js';
 import { buildL2AuthHeaders } from './clob-auth.js';
 import { clobFetch } from '../lib/clob-fetch.js';
+import { notifyTrade, formatEntry } from '../notifications/notify.js';
 
 export interface OrderParams {
   conditionId: string;
   yesTokenId: string;    // ERC1155 token ID for the YES outcome
   noTokenId: string;     // ERC1155 token ID for the NO outcome (from gamma API, NOT yesToken XOR 1)
   marketSlug: string;
+  marketQuestion?: string; // Human-readable title from gamma feed; falls back to marketSlug in notifications
   outcome: 'YES' | 'NO';
   side: 'BUY' | 'SELL';
   price: number;          // Limit price (0–1)
@@ -318,6 +320,24 @@ export class OrderManager {
       });
 
       console.log(`[order-manager] LIVE ${params.side} ${params.outcome} @ ${filledPrice} | $${params.sizeUsd.toFixed(2)} | slippage ${slippageBps}bps`);
+
+      // Entry-only push: BUY = position open. SELL exits get a WIN/LOSS push from
+      // position-tracker.closePosition() with realized P&L instead.
+      if (params.side === 'BUY') {
+        notifyTrade({
+          userId: params.userId,
+          ...formatEntry({
+            outcome: params.outcome,
+            side: params.side,
+            filledPrice,
+            sizeUsd: params.sizeUsd,
+            marketTitle: params.marketQuestion ?? params.marketSlug,
+            slippageBps,
+          }),
+          tag: `polyarb-trade-${result.orderID ?? params.conditionId}`,
+          data: { url: '/intelligence/agents/polyarb' },
+        });
+      }
 
       return {
         success: true,

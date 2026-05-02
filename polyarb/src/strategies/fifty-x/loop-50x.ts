@@ -285,6 +285,7 @@ async function processCascades(
       yesTokenId:  market?.yesTokenId ?? pos.conditionId,
       noTokenId:   market?.noTokenId ?? '',
       marketSlug:  pos.marketSlug,
+      marketQuestion: market?.question ?? pos.marketQuestion,
       outcome:     pos.outcome,
       side:        'BUY',
       price:       entryPrice,
@@ -301,6 +302,7 @@ async function processCascades(
 
     const cascadePos = await positionTracker.openPosition({
       marketSlug: pos.marketSlug,
+      marketQuestion: market?.question ?? pos.marketQuestion,
       conditionId: pos.conditionId,
       outcome: pos.outcome,
       side: 'BUY',
@@ -621,6 +623,7 @@ async function processMarket50x(
     yesTokenId: market?.yesTokenId ?? orderbook.conditionId,
     noTokenId:  market?.noTokenId ?? '',
     marketSlug: orderbook.marketSlug,
+    marketQuestion: market?.question,
     outcome:    buyYes ? 'YES' : 'NO',
     side:       'BUY',
     price:      entryPrice,
@@ -641,6 +644,7 @@ async function processMarket50x(
 
   const position = await positionTracker.openPosition({
     marketSlug: orderbook.marketSlug,
+    marketQuestion: market?.question,
     conditionId: orderbook.conditionId,
     outcome: buyYes ? 'YES' : 'NO',
     side: 'BUY',

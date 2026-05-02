@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import UpdateManager from "@/components/pwa/UpdateManager";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
 import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
+import IOSInstallBanner from "@/components/push/IOSInstallBanner.client";
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/icon-192.png", sizes: "180x180" }],
+    apple: [{ url: "/icons/icon-180.png", sizes: "180x180" }],
   },
   appleWebApp: {
     capable: true,
@@ -50,6 +51,7 @@ export default function RootLayout({
         <GlobalBackButton />
         <UpdateManager />
         <CsrfBridge />
+        <IOSInstallBanner />
         <Toaster position="bottom-right" theme="dark" richColors closeButton />
       </body>
     </html>

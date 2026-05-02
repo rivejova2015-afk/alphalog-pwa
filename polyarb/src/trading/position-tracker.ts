@@ -6,12 +6,14 @@
  */
 
 import { getSupabase } from '../supabase.js';
+import { notifyTrade, formatExit } from '../notifications/notify.js';
 
 export interface Position {
   id: string;
   agentId: string;
   userId: string;
   marketSlug: string;
+  marketQuestion?: string; // Human-readable title from gamma feed; falls back to marketSlug in notifications
   conditionId: string;
   outcome: 'YES' | 'NO';
   side: 'BUY' | 'SELL';
@@ -72,6 +74,7 @@ export class PositionTracker {
         agentId: row.agent_id,
         userId: row.user_id,
         marketSlug: row.market_slug,
+        marketQuestion: row.market_question ?? undefined,
         conditionId: row.condition_id ?? '',
         outcome: row.outcome,
         side: row.side,
@@ -92,6 +95,7 @@ export class PositionTracker {
    */
   async openPosition(params: {
     marketSlug: string;
+    marketQuestion?: string;
     conditionId: string;
     outcome: 'YES' | 'NO';
     side: 'BUY' | 'SELL';
@@ -110,6 +114,7 @@ export class PositionTracker {
         user_id: this.userId,
         agent_id: this.agentId,
         market_slug: params.marketSlug,
+        market_question: params.marketQuestion ?? null,
         condition_id: params.conditionId,
         outcome: params.outcome,
         side: params.side,
@@ -206,6 +211,18 @@ export class PositionTracker {
     if (tradeError) {
       console.warn('[position-tracker] EXIT trade insert error:', tradeError.message);
     }
+
+    notifyTrade({
+      userId: position.userId,
+      ...formatExit({
+        pnlUsd,
+        pnlPercent,
+        exitPrice,
+        marketTitle: position.marketQuestion ?? position.marketSlug,
+      }),
+      tag: `polyarb-exit-${positionId}`,
+      data: { url: '/intelligence/agents/polyarb' },
+    });
 
     return {
       ...position,

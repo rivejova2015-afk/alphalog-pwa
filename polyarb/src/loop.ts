@@ -867,6 +867,7 @@ async function processMarket(
     yesTokenId: market2?.yesTokenId ?? orderbook.conditionId,
     noTokenId: market2?.noTokenId ?? '',
     marketSlug: orderbook.marketSlug,
+    marketQuestion: market2?.question,
     outcome: buyYes ? 'YES' : 'NO',
     side: 'BUY',
     price: entryPrice,
@@ -889,6 +890,7 @@ async function processMarket(
   // ── Open position + record in Memory Bank ──
   const position = await positionTracker.openPosition({
     marketSlug: orderbook.marketSlug,
+    marketQuestion: market2?.question,
     conditionId: orderbook.conditionId,
     outcome: buyYes ? 'YES' : 'NO',
     side: 'BUY',
