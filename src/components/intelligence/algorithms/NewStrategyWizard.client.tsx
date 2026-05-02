@@ -143,7 +143,8 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
   newAccLabel, setNewAccLabel,
   newAccPlatform, setNewAccPlatform,
   addingAccount, handleAddAccount,
-  templates, selectedTemplateKey, onTemplateChange }: {
+  templates, selectedTemplateKey, onTemplateChange,
+  selectedPlatform, setSelectedPlatform }: {
   name: string; setName: (v: string) => void;
   legA: string; setLegA: (v: string) => void;
   legB: string; setLegB: (v: string) => void;
@@ -158,6 +159,8 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
   templates: AlgorithmTemplate[];
   selectedTemplateKey: string;
   onTemplateChange: (key: string) => void;
+  selectedPlatform: 'MT4' | 'MT5';
+  setSelectedPlatform: (v: 'MT4' | 'MT5') => void;
 }) {
   const forexTemplates = templates.filter((t) => t.market_type === 'forex' && t.is_active);
   const selectedTemplate = forexTemplates.find((t) => t.template_key === selectedTemplateKey);
@@ -193,6 +196,32 @@ function StepForex({ name, setName, legA, setLegA, legB, setLegB,
           )}
         </Field>
       )}
+
+      <Field label="Plataforma del bot" hint="Las credenciales generadas serán para esta plataforma.">
+        <div className="flex gap-2">
+          {(['MT5', 'MT4'] as const).map((p) => {
+            const allowed = !selectedTemplate?.supported_platforms?.length
+              || selectedTemplate.supported_platforms.includes(p);
+            return (
+              <button
+                key={p}
+                type="button"
+                disabled={!allowed}
+                onClick={() => setSelectedPlatform(p)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                  selectedPlatform === p
+                    ? 'bg-[#06b6d4] border-[#06b6d4] text-black'
+                    : allowed
+                      ? 'bg-transparent border-[#1f2937] text-[#94a3b8] hover:border-[#475569]'
+                      : 'bg-transparent border-[#1f2937] text-[#475569] opacity-40 cursor-not-allowed'
+                }`}
+              >
+                {p}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
 
       <Field label="Nombre de la estrategia *">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
@@ -699,6 +728,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [newAccNumber,   setNewAccNumber]   = useState('');
   const [newAccLabel,    setNewAccLabel]    = useState('');
   const [newAccPlatform, setNewAccPlatform] = useState<'MT4' | 'MT5'>('MT5');
+  const [selectedPlatform, setSelectedPlatform] = useState<'MT4' | 'MT5'>('MT5');
   const [addingAccount,  setAddingAccount]  = useState(false);
   const router = useRouter();
 
@@ -783,6 +813,11 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
     if (!name.trim()) setName(t.name);
     setLegA(t.default_instrument);
     if (t.default_direction !== 'both') setDirection(t.default_direction);
+
+    // Auto-select the only supported platform if the template restricts it.
+    if (t.supported_platforms?.length === 1) {
+      setSelectedPlatform(t.supported_platforms[0] as 'MT4' | 'MT5');
+    }
 
     // Map common engine overrides from template parameters.
     const params = t.parameters ?? {};
@@ -941,6 +976,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         instrument,
         market_type:           marketType,
         direction:             dbDirection,
+        platform:              marketType === 'forex' ? selectedPlatform : 'MT5',
         linked_bot_account_id: marketType === 'forex' ? (botAccountId || null) : null,
         lot_size:              lotSize,
         max_trades:            maxTrades,
@@ -1019,6 +1055,8 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
               templates={templates}
               selectedTemplateKey={selectedTemplateKey}
               onTemplateChange={handleTemplateChange}
+              selectedPlatform={selectedPlatform}
+              setSelectedPlatform={setSelectedPlatform}
             />
           )}
           {stepIdx === 0 && marketType === 'futures' && (

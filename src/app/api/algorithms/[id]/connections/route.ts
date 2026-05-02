@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
     const { data: algo, error: algoErr } = await supabase
       .from("algorithms")
-      .select("id, name, market_type, direction, instrument, status, parameters, linked_bot_account_id")
+      .select("id, name, market_type, direction, instrument, status, parameters, linked_bot_account_id, platform")
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null)
@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       : "forex") as "forex" | "futures" | "options";
 
     const response: {
-      algorithm: { id: string; name: string; market_type: string; instrument: string };
+      algorithm: { id: string; name: string; market_type: string; instrument: string; platform: 'MT4' | 'MT5' };
       mt5: {
         bot_account_id: string | null;
         account_id: string | null;
@@ -74,6 +74,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         name: algo.name,
         market_type: marketType,
         instrument: algo.instrument ?? "",
+        platform: algo.platform === 'MT4' ? 'MT4' : 'MT5',
       },
       mt5: null,
       cme: null,

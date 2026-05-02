@@ -13,6 +13,7 @@ interface ConnectionsResponse {
     name: string;
     market_type: "forex" | "futures" | "options";
     instrument: string;
+    platform: "MT4" | "MT5";
   };
   mt5: {
     bot_account_id: string | null;
@@ -117,7 +118,13 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
             {!loading && !error && data && (
               <>
                 {data.algorithm.market_type === "forex" && data.mt5 && (
-                  <Mt5Section data={data.mt5} algorithmId={algorithmId} onTokenGenerated={(t) => setPairing(t)} onRefresh={fetchConnections} />
+                  <Mt5Section
+                    data={data.mt5}
+                    algorithmId={algorithmId}
+                    defaultPlatform={data.algorithm.platform}
+                    onTokenGenerated={(t) => setPairing(t)}
+                    onRefresh={fetchConnections}
+                  />
                 )}
                 {data.algorithm.market_type === "futures" && data.cme && (
                   <CmeSection data={data.cme} />
@@ -161,11 +168,13 @@ function SkeletonBlock() {
 function Mt5Section({
   data,
   algorithmId,
+  defaultPlatform,
   onTokenGenerated,
   onRefresh,
 }: {
   data: NonNullable<ConnectionsResponse["mt5"]>;
   algorithmId: string;
+  defaultPlatform: "MT4" | "MT5";
   onTokenGenerated: (t: { token: string; expiresAt: string }) => void;
   onRefresh: () => void;
 }) {
@@ -178,7 +187,7 @@ function Mt5Section({
       const res = await fetch(`/api/algorithms/${algorithmId}/pairing-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: "MT5" }),
+        body: JSON.stringify({ platform: data.platform ?? defaultPlatform }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -214,7 +223,7 @@ function Mt5Section({
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-slate-500 font-medium">
         <Cloud className="w-3 h-3" />
-        Plataforma · MT5 / MT4
+        Plataforma · {data.platform ?? defaultPlatform}
       </div>
 
       {hasInstance ? (
