@@ -115,17 +115,6 @@ const PHASE2_NEAR_EXPIRY_BUFFER_MS = parseInt(process.env.POLYARB_NEAR_EXPIRY_BU
 const PHASE2_ENTRY_WINDOW_MS = parseInt(process.env.POLYARB_ENTRY_WINDOW_MS ?? '60000', 10);
 const PHASE2_PANIC_FALLBACK_CAP_USD = parseInt(process.env.POLYARB_PANIC_FALLBACK_CAP_USD ?? '25', 10);
 
-// Per-tier fail-closed tolerance. Tiers in this list still fail-closed when
-// perp or IV signals are missing/stale. Tiers NOT in the list degrade
-// gracefully: they bypass the confluence gate and fall back to the panic
-// fallback cap ($25). Default preserves Phase 1 behavior (all tiers fail
-// closed). Recommended universal-fire setting: 'NORMAL' only.
-const PHASE2_FAIL_CLOSED_TIERS = new Set(
-  (process.env.POLYARB_FAIL_CLOSED_TIERS ?? 'NORMAL,LASTCHANCE,PANIC')
-    .split(',')
-    .map(t => t.trim().toUpperCase()),
-);
-
 type TriggerTier = 'NORMAL' | 'LASTCHANCE' | 'PANIC';
 function resolveTriggerTier(msRemaining: number): { tier: TriggerTier; minAgreeing: number } {
   if (msRemaining > PHASE2_LASTCHANCE_WINDOW_MS) {
@@ -716,108 +705,70 @@ async function processMarket50x(
       buyYes: v2BuyYes,
     });
 
-    // Per-tier fail-closed tolerance: tiers not listed in
-    // POLYARB_FAIL_CLOSED_TIERS degrade gracefully when perp/IV are
-    // missing/stale. The trade proceeds on velocity-detector + favored-side
-    // alone, sized at the panic-fallback cap.
-    const tierFailsClosed = PHASE2_FAIL_CLOSED_TIERS.has(triggerInfo.tier);
-    if (confluence.failClosed && tierFailsClosed) {
+    if (confluence.failClosed) {
       logEngineV2Skip(
         orderbook.marketSlug,
         'fail_closed',
-        `detail=${confluence.failReason} tier=${triggerInfo.tier}`,
+        `detail=${confluence.failReason}`,
       );
       return;
     }
-    if (confluence.failClosed) {
-      // Tier tolerates degradation. Skip the confluence/direction checks
-      // entirely and short-circuit to panic-fallback sizing. The trade still
-      // had to pass the favored-side gate above, so direction safety remains.
-      const fallbackCap = PHASE2_PANIC_FALLBACK_CAP_USD;
-      if (fallbackCap <= 0) {
-        logEngineV2Skip(
-          orderbook.marketSlug,
-          'no_kelly_cap',
-          `tier=${triggerInfo.tier} fail_closed_tolerated`,
-        );
-        return;
-      }
-      confluenceCapUsd = fallbackCap;
-      confluenceSnapshot = {
-        agreeing: 0,
-        available: 0,
-        direction: 'NEUTRAL',
-        cap: fallbackCap,
-        perpDir: perpSig?.direction ?? null,
-        ivDir: ivSig?.direction ?? null,
-        triggerTier: triggerInfo.tier,
-        msRemaining,
-        invertedSide,
-        requiredAgreeing: triggerInfo.minAgreeing,
-      };
-      console.log(
-        `[ENGINE_V2] PASS-DEGRADED ${orderbook.marketSlug}` +
-        ` failClosed=${confluence.failReason} tier=${triggerInfo.tier}` +
-        ` cap=$${fallbackCap} t-${Math.round(msRemaining / 1000)}s`,
-      );
-    } else {
-      // Normal path: confluence engine returned valid signals.
-      if (confluence.sourcesAgreeing < triggerInfo.minAgreeing) {
-        logEngineV2Skip(
-          orderbook.marketSlug,
-          'no_confluence',
-          `agreeing=${confluence.sourcesAgreeing}/${triggerInfo.minAgreeing}` +
-          ` tier=${triggerInfo.tier} t-${Math.round(msRemaining / 1000)}s` +
-          ` dir=${confluence.agreedDirection}`,
-        );
-        return;
-      }
-      // Direction conflict only enforced when at least one source agreed
-      // (matchesBuyDirection compares the majority direction to buyYes; a
-      // sourcesAgreeing=0 PANIC trade has agreedDirection=NEUTRAL, which
-      // never matches — the spot signal alone already implies buy direction).
-      if (confluence.sourcesAgreeing > 0 && !confluence.matchesBuyDirection) {
-        logEngineV2Skip(
-          orderbook.marketSlug,
-          'direction_conflict',
-          `confluence=${confluence.agreedDirection} buyYes=${v2BuyYes}` +
-          ` tier=${triggerInfo.tier}`,
-        );
-        return;
-      }
-      // Sizing cap: confluence engine returns 0 for sourcesAgreeing=0. In
-      // PANIC tier we substitute the flat fallback so the panic-trade fires.
-      const baseCap = confluence.kellyCapUsd;
-      confluenceCapUsd = baseCap > 0
-        ? baseCap
-        : (triggerInfo.tier === 'PANIC' ? PHASE2_PANIC_FALLBACK_CAP_USD : 0);
-      if (confluenceCapUsd <= 0) {
-        logEngineV2Skip(
-          orderbook.marketSlug,
-          'no_kelly_cap',
-          `tier=${triggerInfo.tier} agreeing=${confluence.sourcesAgreeing}`,
-        );
-        return;
-      }
-      confluenceSnapshot = {
-        agreeing: confluence.sourcesAgreeing,
-        available: confluence.sourcesAvailable,
-        direction: confluence.agreedDirection,
-        cap: confluenceCapUsd,
-        perpDir: perpSig?.direction ?? null,
-        ivDir: ivSig?.direction ?? null,
-        triggerTier: triggerInfo.tier,
-        msRemaining,
-        invertedSide,
-        requiredAgreeing: triggerInfo.minAgreeing,
-      };
-      console.log(
-        `[ENGINE_V2] PASS ${orderbook.marketSlug} agreeing=${confluence.sourcesAgreeing}/3` +
-        ` dir=${confluence.agreedDirection} cap=$${confluenceCapUsd}` +
+    if (confluence.sourcesAgreeing < triggerInfo.minAgreeing) {
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'no_confluence',
+        `agreeing=${confluence.sourcesAgreeing}/${triggerInfo.minAgreeing}` +
         ` tier=${triggerInfo.tier} t-${Math.round(msRemaining / 1000)}s` +
-        ` inverted=${invertedSide}`,
+        ` dir=${confluence.agreedDirection}`,
       );
+      return;
     }
+    // Direction conflict only enforced when at least one source agreed
+    // (matchesBuyDirection compares the majority direction to buyYes; a
+    // sourcesAgreeing=0 PANIC trade has agreedDirection=NEUTRAL, which never
+    // matches — but the spot signal alone already implies the buy direction).
+    if (confluence.sourcesAgreeing > 0 && !confluence.matchesBuyDirection) {
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'direction_conflict',
+        `confluence=${confluence.agreedDirection} buyYes=${v2BuyYes}` +
+        ` tier=${triggerInfo.tier}`,
+      );
+      return;
+    }
+
+    // Sizing cap: confluence engine returns 0 for sourcesAgreeing=0. In
+    // PANIC tier we substitute the flat fallback so the panic-trade fires.
+    const baseCap = confluence.kellyCapUsd;
+    confluenceCapUsd = baseCap > 0
+      ? baseCap
+      : (triggerInfo.tier === 'PANIC' ? PHASE2_PANIC_FALLBACK_CAP_USD : 0);
+    if (confluenceCapUsd <= 0) {
+      logEngineV2Skip(
+        orderbook.marketSlug,
+        'no_kelly_cap',
+        `tier=${triggerInfo.tier} agreeing=${confluence.sourcesAgreeing}`,
+      );
+      return;
+    }
+    confluenceSnapshot = {
+      agreeing: confluence.sourcesAgreeing,
+      available: confluence.sourcesAvailable,
+      direction: confluence.agreedDirection,
+      cap: confluenceCapUsd,
+      perpDir: perpSig?.direction ?? null,
+      ivDir: ivSig?.direction ?? null,
+      triggerTier: triggerInfo.tier,
+      msRemaining,
+      invertedSide,
+      requiredAgreeing: triggerInfo.minAgreeing,
+    };
+    console.log(
+      `[ENGINE_V2] PASS ${orderbook.marketSlug} agreeing=${confluence.sourcesAgreeing}/3` +
+      ` dir=${confluence.agreedDirection} cap=$${confluenceCapUsd}` +
+      ` tier=${triggerInfo.tier} t-${Math.round(msRemaining / 1000)}s` +
+      ` inverted=${invertedSide}`,
+    );
   }
 
   // Reversal signal (L3 input)
