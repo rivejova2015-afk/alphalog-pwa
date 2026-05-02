@@ -24,11 +24,11 @@ import type { NewsComponent, ScoredHeadline } from '../types.js';
 
 const TTL_MS = 3 * 60_000;  // refresh every 3 minutes
 const MAX_HEADLINE_AGE_MS = 45 * 60_000;  // CryptoPanic: high freq → 45 min cutoff
-/** CoinTelegraph publishes ~20 articles/day (~1/h) — using the CryptoPanic
- *  45-min cutoff would frequently zero the news component. 4 hours captures
- *  recent context without going stale; the recency-weighted aggregator already
- *  de-weights older items so older headlines contribute proportionally less. */
-const MAX_HEADLINE_AGE_MS_RSS = 4 * 60 * 60_000;
+/** Crypto-news RSS feeds publish ~1-3 articles/h on weekdays but go quiet on
+ *  weekends — 4h cutoff zeroed the component on Saturdays. 8h captures the last
+ *  full session of headlines; the recency-weighted aggregator already de-weights
+ *  older items so they contribute proportionally less to the signal. */
+const MAX_HEADLINE_AGE_MS_RSS = 8 * 60 * 60_000;
 const BREAKING_THRESHOLD_MS = 2 * 60_000; // "breaking" if younger than 2 min
 
 // ── Weighted keyword lexicon ──────────────────────────────────────────────────
@@ -169,13 +169,14 @@ interface CryptoPanicResponse {
 
 // ── Multi-source RSS fallback (no token required) ─────────────────────────────
 
-/** Free RSS feeds aggregated when CRYPTOPANIC_API_TOKEN is unset. Two sources
- *  give weekend coverage — CoinTelegraph has long quiet stretches on weekends
- *  while Decrypt publishes more steadily. Add more if dispersion of pubDates
- *  shows gaps. */
+/** Free RSS feeds aggregated when CRYPTOPANIC_API_TOKEN is unset. Three sources
+ *  give weekend coverage — CoinTelegraph and Bitcoin Magazine focus on crypto
+ *  (high BTC keyword hit rate); Decrypt is broader (AI/tech/crypto) but
+ *  publishes more steadily. Add more if dispersion of pubDates shows gaps. */
 const RSS_SOURCES: Array<{ url: string; name: string }> = [
-  { url: 'https://cointelegraph.com/rss', name: 'cointelegraph' },
-  { url: 'https://decrypt.co/feed',       name: 'decrypt' },
+  { url: 'https://cointelegraph.com/rss',           name: 'cointelegraph' },
+  { url: 'https://decrypt.co/feed',                 name: 'decrypt' },
+  { url: 'https://bitcoinmagazine.com/.rss/full/',  name: 'bitcoinmagazine' },
 ];
 
 /** Headlines must mention one of these to be kept (the RSS feed has no
