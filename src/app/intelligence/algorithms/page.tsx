@@ -10,46 +10,61 @@ export default async function AlgorithmsPage() {
 
   const algorithms = userData?.user
     ? (await supabase
-        .from("algorithms")
-        .select("*")
+        .from("trading_algorithms")
+        .select(`
+          *,
+          deployments:algorithm_deployments(
+            id, status, bot_account_id
+          )
+        `)
         .eq("user_id", userData.user.id)
         .is("deleted_at", null)
-        .order("sort_index", { ascending: true })
+        .order("slot_number", { ascending: true })
       ).data ?? []
     : [];
 
-  const active = algorithms.filter((a) => a.status === "running");
-  const pnlToday = algorithms.reduce((sum, a) => sum + (a.pnl_today ?? 0), 0);
-  const avgWinRate = algorithms.length > 0
-    ? algorithms.reduce((sum, a) => sum + (a.win_rate ?? 0), 0) / algorithms.length
-    : 0;
-  const totalTrades = algorithms.reduce((sum, a) => sum + (a.trade_count ?? 0), 0);
+  const active = algorithms.filter((a) => a.status === "live");
 
   type MarketType = 'forex' | 'futures' | 'options';
   type Direction  = 'long' | 'short' | 'both';
 
-  // Map DB rows to AlgoAccordion shape
-  const algos = algorithms.map((a) => ({
-    id: a.id as string,
-    name: a.name as string,
-    marketType: (["forex","futures","options"].includes(a.market_type as string) ? a.market_type : "forex") as MarketType,
-    instrument: a.instrument as string ?? "XAUUSD",
-    direction: (["long","short","both"].includes(a.direction as string) ? a.direction : "both") as Direction,
-    parameters: (a.parameters as Record<string, unknown>) ?? {},
-    status: a.status === "running" ? "ACTIVE" as const : a.status === "paused" ? "PAUSED" as const : "ERROR" as const,
-    pnlToday: (a.pnl_today ?? 0) as number,
-    pnlTotal: (a.pnl_total ?? 0) as number,
-    winRate: (a.win_rate ?? 0) as number,
-    totalTrades: (a.trade_count ?? 0) as number,
-    profitFactor: (a.profit_factor ?? 0) as number,
-    maxDrawdown: -((a.max_drawdown_pct ?? 0) as number),
-  }));
+  const algos = algorithms.map((a) => {
+    const params = (a.parameters as Record<string, unknown>) ?? {};
+    const deployments = (a.deployments as { id: string; status: string; bot_account_id: string | null }[] | null) ?? [];
+    const activeDeployment = deployments.find((d) => d.status === "active") ?? deployments[0] ?? null;
+
+    const marketType: MarketType =
+      a.algo_type === "arbitrage" ? "futures" : "forex";
+
+    const status =
+      a.status === "live" ? ("ACTIVE" as const) :
+      a.status === "paused" ? ("PAUSED" as const) :
+      "PAUSED" as const;
+
+    return {
+      id: a.id as string,
+      name: a.name as string,
+      marketType,
+      instrument: (params.instrument as string) ?? (params.trade_symbol as string) ?? "XAUUSD",
+      direction: (["long","short","both"].includes(params.direction as string) ? params.direction : "both") as Direction,
+      parameters: params,
+      status,
+      algoStatus: a.status as string,
+      linkedBotAccountId: activeDeployment?.bot_account_id ?? null,
+      pnlToday: 0,
+      pnlTotal: 0,
+      winRate: 0,
+      totalTrades: 0,
+      profitFactor: 0,
+      maxDrawdown: 0,
+    };
+  });
 
   const stats = [
     { label: "Active Strategies", value: active.length.toString(), color: "#34d399" },
-    { label: "P&L Today", value: `${pnlToday >= 0 ? "+" : ""}$${Math.abs(pnlToday).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: pnlToday >= 0 ? "#34d399" : "#ef4444" },
-    { label: "Avg Win Rate", value: `${avgWinRate.toFixed(1)}%`, color: "#22d3ee" },
-    { label: "Total Trades", value: totalTrades.toLocaleString(), color: "#94a3b8" },
+    { label: "P&L Today", value: "+$0.00", color: "#34d399" },
+    { label: "Avg Win Rate", value: "—", color: "#22d3ee" },
+    { label: "Total Trades", value: "0", color: "#94a3b8" },
   ];
 
   return (

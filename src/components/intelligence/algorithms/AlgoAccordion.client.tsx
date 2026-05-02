@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Key } from 'lucide-react';
+import { ChevronDown, ChevronUp, Key, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { AlgoCard } from './AlgoCard';
 import { TradesTable } from './TradesTable';
 import { EquityCurve } from './EquityCurve';
@@ -23,6 +24,7 @@ interface AlgoData {
   direction?: Direction;
   parameters?: Record<string, unknown>;
   status: 'ACTIVE' | 'PAUSED' | 'ERROR';
+  algoStatus?: string;
   linkedBotAccountId?: string | null;
   pnlToday: number;
   pnlTotal: number;
@@ -42,12 +44,29 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
   const [statuses, setStatuses] = useState<Record<string, AlgoData['status']>>(
     Object.fromEntries(algos.map((a) => [a.id, a.status]))
   );
+  const [algoStatuses, setAlgoStatuses] = useState<Record<string, string>>(
+    Object.fromEntries(algos.map((a) => [a.id, a.algoStatus ?? 'draft']))
+  );
 
-  // Sync statuses when algos prop changes (e.g. after router.refresh() adds a new entry)
+  const handleApprove = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/algorithms/${id}/approve`, { method: 'POST' });
+      if (!res.ok) { toast.error('No se pudo aprobar el algoritmo'); return; }
+      setAlgoStatuses((prev) => ({ ...prev, [id]: 'approved' }));
+      toast.success('Algoritmo aprobado');
+    } catch { toast.error('Error de conexión'); }
+  };
+
   useEffect(() => {
     setStatuses((prev) => {
       const updated = { ...prev };
       algos.forEach((a) => { if (!(a.id in updated)) updated[a.id] = a.status; });
+      return updated;
+    });
+    setAlgoStatuses((prev) => {
+      const updated = { ...prev };
+      algos.forEach((a) => { if (!(a.id in updated)) updated[a.id] = a.algoStatus ?? 'draft'; });
       return updated;
     });
   }, [algos]);
@@ -98,6 +117,29 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                       {algo.marketType === 'forex' ? 'Forex' : algo.marketType === 'futures' ? 'Futures' : 'Options'}
                     </span>
                     <Badge variant={statusVariant}>{currentStatus}</Badge>
+                    {(() => {
+                      const ls = algoStatuses[algo.id] ?? algo.algoStatus ?? 'draft';
+                      const lifecycleColor: Record<string, string> = {
+                        draft: '#94a3b8', paper: '#f59e0b', approved: '#22d3ee', live: '#34d399',
+                        paused: '#f97316', archived: '#475569',
+                      };
+                      return (
+                        <span
+                          className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase"
+                          style={{ color: lifecycleColor[ls] ?? '#94a3b8', background: `${lifecycleColor[ls] ?? '#94a3b8'}15`, border: `1px solid ${lifecycleColor[ls] ?? '#94a3b8'}30` }}
+                        >{ls}</span>
+                      );
+                    })()}
+                    {(algoStatuses[algo.id] ?? algo.algoStatus) === 'paper' && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleApprove(algo.id, e)}
+                        className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-800/60 transition-colors"
+                        aria-label={`Aprobar ${algo.name}`}
+                      >
+                        <CheckCircle className="w-3 h-3" /> Aprobar
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
