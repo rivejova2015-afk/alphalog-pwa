@@ -23,7 +23,12 @@
 import type { NewsComponent, ScoredHeadline } from '../types.js';
 
 const TTL_MS = 3 * 60_000;  // refresh every 3 minutes
-const MAX_HEADLINE_AGE_MS = 45 * 60_000;  // ignore headlines older than 45 min
+const MAX_HEADLINE_AGE_MS = 45 * 60_000;  // CryptoPanic: high freq → 45 min cutoff
+/** CoinTelegraph publishes ~20 articles/day (~1/h) — using the CryptoPanic
+ *  45-min cutoff would frequently zero the news component. 4 hours captures
+ *  recent context without going stale; the recency-weighted aggregator already
+ *  de-weights older items so older headlines contribute proportionally less. */
+const MAX_HEADLINE_AGE_MS_RSS = 4 * 60 * 60_000;
 const BREAKING_THRESHOLD_MS = 2 * 60_000; // "breaking" if younger than 2 min
 
 // ── Weighted keyword lexicon ──────────────────────────────────────────────────
@@ -94,9 +99,10 @@ function scoreHeadline(
   url: string,
   source: string,
   publishedAt: Date,
+  maxAgeMs: number = MAX_HEADLINE_AGE_MS,
 ): ScoredHeadline | null {
   const ageMs = Date.now() - publishedAt.getTime();
-  if (ageMs > MAX_HEADLINE_AGE_MS) return null;
+  if (ageMs > maxAgeMs) return null;
 
   const lower = title.toLowerCase();
 
@@ -120,7 +126,7 @@ function scoreHeadline(
   if (ageMs < BREAKING_THRESHOLD_MS) urgency = Math.min(10, urgency + 3);
 
   // Age decay: linearly reduce urgency for older news
-  const ageFraction = ageMs / MAX_HEADLINE_AGE_MS; // 0=new, 1=old
+  const ageFraction = ageMs / maxAgeMs; // 0=new, 1=old
   urgency = Math.max(0, Math.round(urgency * (1 - ageFraction * 0.8)));
 
   // Source weight: trusted sources count more
@@ -326,7 +332,9 @@ export class NewsScannerProvider {
         if (this.seenHashes.has(hash)) continue;
         this.seenHashes.add(hash);
 
-        const scored = scoreHeadline(item.title, item.link, item.source, item.publishedAt);
+        const scored = scoreHeadline(
+          item.title, item.link, item.source, item.publishedAt, MAX_HEADLINE_AGE_MS_RSS,
+        );
         if (scored) headlines.push(scored);
       }
 
@@ -334,7 +342,7 @@ export class NewsScannerProvider {
         this.seenHashes = batchHashes;
       }
 
-      this.cached = computeNewsComponent(headlines);
+      this.cached = computeNewsComponent(headlines, MAX_HEADLINE_AGE_MS_RSS);
       console.log(
         `[news-scanner:rss] ${headlines.length} scored headlines (cointelegraph) → ` +
         `${this.cached.signal} score=${this.cached.score} urgencyPeak=${this.cached.urgencyPeak}`,
@@ -345,7 +353,10 @@ export class NewsScannerProvider {
   }
 }
 
-function computeNewsComponent(headlines: ScoredHeadline[]): NewsComponent {
+function computeNewsComponent(
+  headlines: ScoredHeadline[],
+  maxAgeMs: number = MAX_HEADLINE_AGE_MS,
+): NewsComponent {
   if (headlines.length === 0) {
     return {
       headlines: [],
@@ -364,7 +375,7 @@ function computeNewsComponent(headlines: ScoredHeadline[]): NewsComponent {
 
   for (const h of headlines) {
     // Weight = (1 - ageFraction)^2 × (1 + urgency/10)
-    const ageFraction = h.ageMs / MAX_HEADLINE_AGE_MS;
+    const ageFraction = h.ageMs / maxAgeMs;
     const recencyWeight = Math.pow(1 - ageFraction, 2);
     const urgencyWeight = 1 + h.urgency / 10;
     const w = recencyWeight * urgencyWeight;
