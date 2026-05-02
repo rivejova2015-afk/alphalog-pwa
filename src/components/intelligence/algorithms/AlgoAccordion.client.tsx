@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Key, CheckCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronUp, Key, CheckCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AlgoCard } from './AlgoCard';
 import { TradesTable } from './TradesTable';
@@ -39,8 +40,11 @@ interface AlgoAccordionProps {
 }
 
 export function AlgoAccordion({ algos }: AlgoAccordionProps) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(algos[0]?.id ?? null);
   const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<Record<string, AlgoData['status']>>(
     Object.fromEntries(algos.map((a) => [a.id, a.status]))
   );
@@ -56,6 +60,25 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
       setAlgoStatuses((prev) => ({ ...prev, [id]: 'approved' }));
       toast.success('Algoritmo aprobado');
     } catch { toast.error('Error de conexión'); }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/algorithms/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        toast.error(j.error || 'No se pudo eliminar la estrategia');
+        return;
+      }
+      toast.success(`"${name}" eliminada`);
+      setConfirmDeleteId(null);
+      router.refresh();
+    } catch {
+      toast.error('Error de conexión');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   useEffect(() => {
@@ -151,6 +174,17 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                     >
                       <Key className="w-3 h-3" /> Detalles
                     </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteId(algo.id);
+                      }}
+                      className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-900/40 border border-red-700/50 text-red-300 hover:bg-red-800/60 transition-colors"
+                      aria-label={`Eliminar ${algo.name}`}
+                    >
+                      <Trash2 className="w-3 h-3" /> Eliminar
+                    </button>
                   </div>
                   <span className="text-xs text-[#475569]">
                     {algo.instrument}
@@ -242,6 +276,48 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
           onClose={() => setDetailsOpenId(null)}
         />
       )}
+
+      {confirmDeleteId && (() => {
+        const target = algos.find((a) => a.id === confirmDeleteId);
+        if (!target) return null;
+        const isDeleting = deletingId === target.id;
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirmar eliminación"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={(e) => { if (e.target === e.currentTarget && !isDeleting) setConfirmDeleteId(null); }}
+          >
+            <div className="w-full max-w-sm rounded-2xl border border-[#1f2937] bg-[#0d1117] p-5 shadow-2xl">
+              <h3 className="text-sm font-bold text-[#e2e8f0] mb-2">Eliminar estrategia</h3>
+              <p className="text-xs text-[#94a3b8] mb-4">
+                Vas a eliminar <span className="font-mono text-[#e2e8f0]">&ldquo;{target.name}&rdquo;</span>.
+                Esta acción se puede revertir desde la base de datos, pero el bot dejará de operarla.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[#1f2937] text-[#94a3b8] hover:border-[#475569] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => handleDelete(target.id, target.name)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  {isDeleting ? 'Eliminando…' : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

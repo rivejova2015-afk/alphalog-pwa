@@ -125,8 +125,8 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { error } = await supabase
-      .from("trading_algorithms")
-      .update({ deleted_at: new Date().toISOString(), status: "archived" })
+      .from("algorithms")
+      .update({ deleted_at: new Date().toISOString(), status: "stopped" })
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null);
