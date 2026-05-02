@@ -128,6 +128,25 @@ function logEngineV2Skip(slug: string, reason: string, detail: string): void {
   console.log(`[ENGINE_V2] SKIP ${slug} reason=${reason} ${detail}`);
 }
 
+// Per-market SKIP throttle. Each market's entry window is 60s; the loop ticks
+// every 250ms (240 ticks/window). Without throttling, a single SKIPed market
+// emits ~240 identical lines per window, drowning out genuine telemetry.
+// Logging once per (slug, reasonCategory) per window keeps full visibility
+// (every reason gets logged at least once) while collapsing the spam.
+const TICK_SKIP_THROTTLE_MS = 60_000;
+const tickSkipLastLoggedAt: Map<string, number> = new Map();
+function logTickSkip(slug: string, reason: string): void {
+  // Reason often embeds variable numbers (gap=0.32%, mid=0.487...) that prevent
+  // the throttle from collapsing repeats. Strip them with a coarse category key.
+  const reasonCategory = reason.replace(/[\d.]+%?/g, 'N').replace(/\s+/g, ' ').trim();
+  const key = `${slug}::${reasonCategory}`;
+  const now = Date.now();
+  const last = tickSkipLastLoggedAt.get(key) ?? 0;
+  if (now - last < TICK_SKIP_THROTTLE_MS) return;
+  tickSkipLastLoggedAt.set(key, now);
+  console.log(`[500x] SKIP ${slug} — ${reason}`);
+}
+
 // ─── KellyAdjuster500xOptionB ────────────────────────────────────────────────
 
 const SESSION_MULT_AGGRESSIVE: Record<SessionName, number> = {
@@ -618,9 +637,9 @@ async function processMarket50x(
     const consensus = computeConsensusSpot(samples);
     if (consensus) {
       if (consensus.sources >= 2 && consensus.dispersionBps > params.dispersionMaxBps) {
-        console.log(
-          `[500x] SKIP ${orderbook.marketSlug} — dispersion_too_high ` +
-          `(${consensus.dispersionBps.toFixed(1)}bps > ${params.dispersionMaxBps})`,
+        logTickSkip(
+          orderbook.marketSlug,
+          `dispersion_too_high (${consensus.dispersionBps.toFixed(1)}bps > ${params.dispersionMaxBps})`,
         );
         return;
       }
@@ -695,9 +714,9 @@ async function processMarket50x(
   // Override via POLYARB_50X_FAVORED_MIN_PROB (e.g. 0 = desactivar, 0.55 = más estricto).
   const FAVORED_MIN_PROB = parseFloat(process.env.POLYARB_50X_FAVORED_MIN_PROB ?? '0.50');
   if (orderbook.midPrice < FAVORED_MIN_PROB) {
-    console.log(
-      `[500x] SKIP ${orderbook.marketSlug} — below_favored ` +
-      `(mid=${orderbook.midPrice.toFixed(3)} < ${FAVORED_MIN_PROB})`,
+    logTickSkip(
+      orderbook.marketSlug,
+      `below_favored (mid=${orderbook.midPrice.toFixed(3)} < ${FAVORED_MIN_PROB})`,
     );
     return;
   }
@@ -807,7 +826,7 @@ async function processMarket50x(
   // Decision tier
   let decision = decide(gap, fiveLayer, params);
   if (decision.decision === 'SKIP') {
-    console.log(`[500x] SKIP ${orderbook.marketSlug} — ${decision.reason}`);
+    logTickSkip(orderbook.marketSlug, decision.reason);
     return;
   }
 
@@ -874,7 +893,7 @@ async function processMarket50x(
   if (params.useMemoryBank && deps.memoryBank) {
     const filt = deps.memoryBank.shouldFilter(velocitySignal, regime.regime);
     if (filt.filter) {
-      console.log(`[500x] SKIP ${orderbook.marketSlug} — memory_filter ${filt.reason}`);
+      logTickSkip(orderbook.marketSlug, `memory_filter ${filt.reason}`);
       return;
     }
   }
@@ -961,7 +980,7 @@ async function processMarket50x(
     ? Math.min(kellyDerivedSize, confluenceCapUsd)
     : kellyDerivedSize;
   if (finalSize < 0.01) {
-    console.log(`[500x] SKIP ${orderbook.marketSlug} — kelly_size_negligible (${finalSize.toFixed(4)})`);
+    logTickSkip(orderbook.marketSlug, `kelly_size_negligible (${finalSize.toFixed(4)})`);
     return;
   }
 
