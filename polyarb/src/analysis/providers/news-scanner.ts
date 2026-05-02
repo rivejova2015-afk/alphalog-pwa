@@ -167,9 +167,16 @@ interface CryptoPanicResponse {
   count?: number;
 }
 
-// ── CoinTelegraph RSS (free fallback) ──────────────────────────────────────────
+// ── Multi-source RSS fallback (no token required) ─────────────────────────────
 
-const COINTELEGRAPH_RSS_URL = 'https://cointelegraph.com/rss';
+/** Free RSS feeds aggregated when CRYPTOPANIC_API_TOKEN is unset. Two sources
+ *  give weekend coverage — CoinTelegraph has long quiet stretches on weekends
+ *  while Decrypt publishes more steadily. Add more if dispersion of pubDates
+ *  shows gaps. */
+const RSS_SOURCES: Array<{ url: string; name: string }> = [
+  { url: 'https://cointelegraph.com/rss', name: 'cointelegraph' },
+  { url: 'https://decrypt.co/feed',       name: 'decrypt' },
+];
 
 /** Headlines must mention one of these to be kept (the RSS feed has no
  *  currency tags, so we approximate Polymarket's BTC-only filter via keywords).
@@ -208,13 +215,13 @@ function extractTag(itemXml: string, tag: string): string | null {
   return m ? decodeRssText(m[1]) : null;
 }
 
-async function fetchCoinTelegraphRss(source: string): Promise<RssItem[]> {
-  const res = await fetch(COINTELEGRAPH_RSS_URL, {
+async function fetchRssFeed(url: string, source: string): Promise<RssItem[]> {
+  const res = await fetch(url, {
     headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
     signal: AbortSignal.timeout(8_000),
   });
   if (!res.ok) {
-    console.warn(`[news-scanner] cointelegraph RSS HTTP ${res.status}`);
+    console.warn(`[news-scanner:rss] ${source} HTTP ${res.status}`);
     return [];
   }
   const xml = await res.text();
@@ -315,10 +322,20 @@ export class NewsScannerProvider {
     }
   }
 
-  /** Free fallback when CRYPTOPANIC_API_TOKEN is unset. Uses CoinTelegraph RSS. */
+  /** Free fallback when CRYPTOPANIC_API_TOKEN is unset. Aggregates all RSS_SOURCES
+   *  in parallel — single-source coverage gaps (e.g. CoinTelegraph weekend lulls)
+   *  zero out the news component, so we merge multiple feeds before scoring. */
   private async refreshFromRss(): Promise<void> {
     try {
-      const items = await fetchCoinTelegraphRss('cointelegraph');
+      const batches = await Promise.all(
+        RSS_SOURCES.map(s =>
+          fetchRssFeed(s.url, s.name).catch(err => {
+            console.warn(`[news-scanner:rss] ${s.name} failed: ${err instanceof Error ? err.message : String(err)}`);
+            return [] as RssItem[];
+          }),
+        ),
+      );
+      const items = batches.flat();
       const headlines: ScoredHeadline[] = [];
       const batchHashes = new Set<string>();
 
@@ -343,8 +360,9 @@ export class NewsScannerProvider {
       }
 
       this.cached = computeNewsComponent(headlines, MAX_HEADLINE_AGE_MS_RSS);
+      const sourcesUsed = RSS_SOURCES.map(s => s.name).join('+');
       console.log(
-        `[news-scanner:rss] ${headlines.length} scored headlines (cointelegraph) → ` +
+        `[news-scanner:rss] ${headlines.length} scored headlines (${sourcesUsed}, ${items.length} raw) → ` +
         `${this.cached.signal} score=${this.cached.score} urgencyPeak=${this.cached.urgencyPeak}`,
       );
     } catch (err) {
