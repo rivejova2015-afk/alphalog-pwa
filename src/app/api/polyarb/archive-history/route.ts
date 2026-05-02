@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
     const tradesCsv = buildTradesCsv(dataset);
     const positionsCsv = buildPositionsCsv(dataset);
     const equityCsv = buildEquityCsv(dataset);
-    const pdfBuffer = await renderArchivePdf(dataset, summary);
+    const summaryBuffer = await renderArchivePdf(dataset, summary);
 
     // 5. Upload files.
     const archiveUuid = randomUUID();
@@ -196,13 +196,13 @@ export async function POST(request: NextRequest) {
     const tradesPath = `${baseDir}/trades.csv`;
     const positionsPath = `${baseDir}/positions.csv`;
     const equityPath = `${baseDir}/equity.csv`;
-    const pdfPath = `${baseDir}/summary.pdf`;
+    const summaryPath = `${baseDir}/summary.txt`;
 
     const upload = await uploadAll(supabase, [
       { path: tradesPath, body: tradesCsv, mime: "text/csv" },
       { path: positionsPath, body: positionsCsv, mime: "text/csv" },
       { path: equityPath, body: equityCsv, mime: "text/csv" },
-      { path: pdfPath, body: pdfBuffer, mime: "application/pdf" },
+      { path: summaryPath, body: summaryBuffer, mime: "text/plain" },
     ]);
 
     if (!upload.ok) {
@@ -213,16 +213,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allPaths: StoragePath[] = [tradesPath, positionsPath, equityPath, pdfPath];
+    const allPaths: StoragePath[] = [tradesPath, positionsPath, equityPath, summaryPath];
 
-    // 6. Insert evidence row pointing to PDF (manifest in report_text).
+    // 6. Insert evidence row pointing to summary (manifest in report_text).
     const manifest = {
       archive_uuid: archiveUuid,
       agent_id: agent.id,
       agent_name: agent.name ?? "PolyArb",
       summary,
       paths: {
-        pdf: pdfPath,
+        summary: summaryPath,
         trades_csv: tradesPath,
         positions_csv: positionsPath,
         equity_csv: equityPath,
@@ -238,9 +238,9 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         title: evidenceTitle,
         report_text: JSON.stringify(manifest),
-        file_path: pdfPath,
-        mime_type: "application/pdf",
-        size_bytes: pdfBuffer.length,
+        file_path: summaryPath,
+        mime_type: "text/plain",
+        size_bytes: summaryBuffer.length,
         trade_id: null,
         account_id: null,
       })

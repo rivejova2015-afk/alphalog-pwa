@@ -1388,7 +1388,7 @@ export default function PolyArbDashboard() {
               <h2 className="text-sm font-semibold text-white">Archivar historial PolyArb</h2>
             </div>
             <p className="text-xs text-zinc-300 leading-relaxed mb-4">
-              Se generarán PDF + 3 CSV (trades, posiciones cerradas, equity) y se subirán al{" "}
+              Se generarán summary.txt + 3 CSV (trades, posiciones cerradas, equity) y se subirán al{" "}
               <strong className="text-white">EvidenceVault</strong>. Los datos quedarán inmutables y
               auditables. Después, el dashboard se reseteará a cero y las nuevas operaciones
               empezarán limpias.

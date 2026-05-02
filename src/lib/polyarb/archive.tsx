@@ -1,5 +1,7 @@
-import React from "react";
-import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
+// PDF generation was removed: @react-pdf/renderer 3.4.5 throws
+// `Cannot read properties of undefined (reading 'hasOwnProperty')`
+// against React 19 internals. The audit-grade data lives in the CSVs;
+// this file now produces a plain-text summary instead.
 
 export interface PolyarbArchiveTrade {
   id: string;
@@ -227,101 +229,40 @@ export function buildEquityCsv(d: PolyarbArchiveDataset): string {
   return [csvRow(header), ...rows].join("\n");
 }
 
-const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 11, fontFamily: "Helvetica", color: "#0f172a" },
-  title: { fontSize: 18, marginBottom: 6, fontWeight: 700 },
-  subtitle: { fontSize: 11, marginBottom: 16, color: "#64748b" },
-  summary: { marginBottom: 16, color: "#334155" },
-  section: { marginBottom: 12 },
-  sectionTitle: { fontSize: 13, marginBottom: 6, fontWeight: 600 },
-  bullet: { marginBottom: 4, marginLeft: 10 },
-});
-
-const toNodeBuffer = async (data: unknown): Promise<Buffer> => {
-  if (Buffer.isBuffer(data)) return data;
-  if (data instanceof Uint8Array) return Buffer.from(data);
-  if (data instanceof ArrayBuffer) return Buffer.from(new Uint8Array(data));
-  if (data && typeof (data as { getReader?: () => unknown }).getReader === "function") {
-    const reader = (data as ReadableStream<Uint8Array>).getReader();
-    const chunks: Uint8Array[] = [];
-    let result = await reader.read();
-    while (!result.done) {
-      if (result.value) chunks.push(result.value);
-      result = await reader.read();
-    }
-    return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
-  }
-  throw new Error("Unsupported PDF buffer type");
-};
-
 export async function renderArchivePdf(
   d: PolyarbArchiveDataset,
   s: PolyarbArchiveSummary,
 ): Promise<Buffer> {
   const periodStartDate = s.periodStart.slice(0, 10);
   const periodEndDate = s.periodEnd.slice(0, 10);
-  const title = `PolyArb 500x — Historical Archive (${periodStartDate} → ${periodEndDate})`;
-  const subtitle = `Agent: ${d.agentName} (${d.agentId})`;
-  const summaryText =
-    `Snapshot of ${s.tradeCount} trades, ${s.closedPositionCount} closed positions. ` +
-    `Net P&L ${fmtUsd(s.totalPnlUsd)}, win rate ${fmtPct(s.winRate)}. ` +
-    `Generated immutable for audit before strategy reset.`;
-
-  const sections: Array<{ title: string; bullets: string[] }> = [
-    {
-      title: "Period",
-      bullets: [`Start: ${s.periodStart}`, `End: ${s.periodEnd}`],
-    },
-    {
-      title: "Activity",
-      bullets: [
-        `Trades: ${s.tradeCount}`,
-        `Closed positions: ${s.closedPositionCount}`,
-        `Total fees: ${fmtUsd(s.totalFeesUsd)}`,
-      ],
-    },
-    {
-      title: "Outcome",
-      bullets: [
-        `Net P&L: ${fmtUsd(s.totalPnlUsd)}`,
-        `Win rate: ${fmtPct(s.winRate)}`,
-        `Largest win:  ${fmtUsd(s.largestWinUsd)}`,
-        `Largest loss: ${fmtUsd(s.largestLossUsd)}`,
-        s.netReturnPct !== null
-          ? `Net return: ${s.netReturnPct.toFixed(2)}%`
-          : "Net return: n/a",
-      ],
-    },
-    {
-      title: "Notes",
-      bullets: [
-        "Source tables: polyarb_trades, polyarb_positions, polyarb_equity_snapshots.",
-        "Compliance audit trail (polyarb_compliance_audit) untouched and remains queryable.",
-        "Reversibility: archived_at can be cleared to restore rows to the live dashboard.",
-      ],
-    },
+  const lines = [
+    `PolyArb 500x — Historical Archive (${periodStartDate} → ${periodEndDate})`,
+    `Agent: ${d.agentName} (${d.agentId})`,
+    "",
+    `Snapshot of ${s.tradeCount} trades, ${s.closedPositionCount} closed positions.`,
+    `Net P&L ${fmtUsd(s.totalPnlUsd)}, win rate ${fmtPct(s.winRate)}.`,
+    "Generated immutable for audit before strategy reset.",
+    "",
+    "Period",
+    `  Start: ${s.periodStart}`,
+    `  End:   ${s.periodEnd}`,
+    "",
+    "Activity",
+    `  Trades:            ${s.tradeCount}`,
+    `  Closed positions:  ${s.closedPositionCount}`,
+    `  Total fees:        ${fmtUsd(s.totalFeesUsd)}`,
+    "",
+    "Outcome",
+    `  Net P&L:       ${fmtUsd(s.totalPnlUsd)}`,
+    `  Win rate:      ${fmtPct(s.winRate)}`,
+    `  Largest win:   ${fmtUsd(s.largestWinUsd)}`,
+    `  Largest loss:  ${fmtUsd(s.largestLossUsd)}`,
+    `  Net return:    ${s.netReturnPct !== null ? s.netReturnPct.toFixed(2) + "%" : "n/a"}`,
+    "",
+    "Notes",
+    "  Source tables: polyarb_trades, polyarb_positions, polyarb_equity_snapshots.",
+    "  Compliance audit trail (polyarb_compliance_audit) untouched and remains queryable.",
+    "  Reversibility: archived_at can be cleared to restore rows to the live dashboard.",
   ];
-
-  const doc = (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
-        <Text style={styles.summary}>{summaryText}</Text>
-        {sections.map((section) => (
-          <View key={section.title} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            {section.bullets.map((bullet, idx) => (
-              <Text key={`${section.title}-${idx}`} style={styles.bullet}>
-                {`\u2022 ${bullet}`}
-              </Text>
-            ))}
-          </View>
-        ))}
-      </Page>
-    </Document>
-  );
-
-  const instance = pdf(doc);
-  return toNodeBuffer(await instance.toBuffer());
+  return Buffer.from(lines.join("\n"), "utf-8");
 }
