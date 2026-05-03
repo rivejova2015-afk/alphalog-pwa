@@ -33,6 +33,14 @@ export interface FiftyXParams extends TradingParams {
   maxOpenPositions: number;
   /** Width of the entry window in ms. */
   entryWindowMs: number;
+  /** Allow spot venue (Coinbase Advanced) entries. Default true. */
+  spotEnabled: boolean;
+  /** Allow perp venue (Coinbase International) entries. Default true. */
+  perpEnabled: boolean;
+  /** Five-layer validator: minimum overall confidence to allow entry (0..1). */
+  validatorMinConfidence: number;
+  /** Cancel + skip if a post-only order fails to fill within this many ms. */
+  fillTimeoutMs: number;
 }
 
 export interface FiftyXAgentConfig extends Omit<CoinarbAgentConfig, 'params'> {
@@ -52,6 +60,10 @@ const DEFAULTS = {
   scalpMinValidatedCount: 3,
   maxOpenPositions: 2,
   entryWindowMs: 60_000,
+  spotEnabled: true,
+  perpEnabled: true,
+  validatorMinConfidence: 0.50,
+  fillTimeoutMs: 1_500,
 } as const;
 
 function envNum(key: string, fallback: number): number {
@@ -59,6 +71,12 @@ function envNum(key: string, fallback: number): number {
   if (raw === undefined || raw === '') return fallback;
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function envBool(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (raw === undefined || raw === '') return fallback;
+  return raw === 'true' || raw === '1' || raw.toLowerCase() === 'yes';
 }
 
 export async function loadFiftyXAgentConfig(): Promise<FiftyXAgentConfig> {
@@ -78,6 +96,10 @@ export async function loadFiftyXAgentConfig(): Promise<FiftyXAgentConfig> {
     scalpMinValidatedCount:  envNum('COINARB_50X_SCALP_MIN_LAYERS',  DEFAULTS.scalpMinValidatedCount),
     maxOpenPositions:        envNum('COINARB_50X_MAX_OPEN_POSITIONS', DEFAULTS.maxOpenPositions),
     entryWindowMs:           envNum('COINARB_50X_ENTRY_WINDOW_MS',    DEFAULTS.entryWindowMs),
+    spotEnabled:             envBool('COINARB_50X_SPOT_ENABLED',      DEFAULTS.spotEnabled),
+    perpEnabled:             envBool('COINARB_50X_PERP_ENABLED',      DEFAULTS.perpEnabled),
+    validatorMinConfidence:  envNum('COINARB_50X_VALIDATOR_MIN_CONF', DEFAULTS.validatorMinConfidence),
+    fillTimeoutMs:           envNum('COINARB_50X_FILL_TIMEOUT_MS',    DEFAULTS.fillTimeoutMs),
   };
 
   return { ...base, params };

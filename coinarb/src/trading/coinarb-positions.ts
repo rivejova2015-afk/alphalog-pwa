@@ -152,15 +152,22 @@ export class CoinarbPositionTracker {
     id: string,
     exitPrice: number,
     exitReason: string,
+    extras: {
+      feeUsd?: number;
+      slippageBps?: number;
+      executionLatencyMs?: number;
+    } = {},
   ): Promise<ClosedCoinarbPosition | null> {
     const pos = this.open.get(id);
     if (!pos) return null;
 
     this.open.delete(id);
 
-    const pnlUsd = pos.side === 'BUY'
+    const grossPnl = pos.side === 'BUY'
       ? (exitPrice - pos.entryPrice) * pos.baseSize
       : (pos.entryPrice - exitPrice) * pos.baseSize;
+    const feeUsd = Math.max(0, extras.feeUsd ?? 0);
+    const pnlUsd = grossPnl - feeUsd;
     const pnlPercent = pos.entryPrice > 0
       ? (pnlUsd / pos.sizeUsd) * 100
       : 0;
@@ -197,8 +204,10 @@ export class CoinarbPositionTracker {
       price: exitPrice,
       size: pos.baseSize,
       size_usd: pos.sizeUsd,
-      fee_usd: 0,
+      fee_usd: feeUsd,
       pnl_usd: pnlUsd,
+      slippage_bps: extras.slippageBps ?? null,
+      execution_latency_ms: extras.executionLatencyMs ?? null,
       trade_type: 'EXIT',
       status: 'FILLED',
       executed_at: closedAt,
@@ -208,11 +217,16 @@ export class CoinarbPositionTracker {
     return { ...pos, exitPrice, pnlUsd, pnlPercent, exitReason, closedAt: Date.now() };
   }
 
-  async closeAll(currentPrices: Map<string, number>, reason: string): Promise<ClosedCoinarbPosition[]> {
+  async closeAll(
+    currentPrices: Map<string, number>,
+    reason: string,
+    feeOf?: (pos: CoinarbPosition, exitPrice: number) => number,
+  ): Promise<ClosedCoinarbPosition[]> {
     const closed: ClosedCoinarbPosition[] = [];
     for (const [id, pos] of this.open) {
       const px = currentPrices.get(`${pos.venue}:${pos.symbol}`) ?? pos.entryPrice;
-      const r = await this.closePosition(id, px, reason);
+      const feeUsd = feeOf ? feeOf(pos, px) : 0;
+      const r = await this.closePosition(id, px, reason, { feeUsd });
       if (r) closed.push(r);
     }
     return closed;

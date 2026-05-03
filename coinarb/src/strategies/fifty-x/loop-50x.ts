@@ -28,6 +28,12 @@ import { calculateMomentumVector } from '../../math/momentum-physics.js';
 import { DecisionLogger } from '../../ops/decision-logger.js';
 import { notify, formatEntry, formatExit, formatBreaker, formatDaily } from '../../ops/notify-alphalog.js';
 import { getSupabase } from '../../supabase.js';
+import { detectRegime, type RegimeState } from '../../skills/regime-detector.js';
+import { computeReversalSignal } from '../../skills/reversal-radar.js';
+import { AdaptiveKelly } from '../../skills/adaptive-kelly.js';
+import type { PriceSample } from '../../skills/velocity-detector.js';
+import { validate as validateFiveLayer } from './five-layer-validator.js';
+import { estimateFeeUsd } from './fees.js';
 import type { FiftyXAgentConfig, FiftyXParams } from './config-50x.js';
 
 interface ProductCache {
@@ -35,16 +41,30 @@ interface ProductCache {
   perp: Record<string, { minOrderSize: number; baseIncrement: number; quoteIncrement: number; status: string }>;
 }
 
-const SPOT_SYMBOLS = ['BTC-USD', 'ETH-USD'] as const;
-const PERP_SYMBOLS = ['BTC-PERP', 'ETH-PERP'] as const;
+const SPOT_SYMBOLS = ['BTC-USD', 'ETH-USD', 'SOL-USD'] as const;
+const PERP_SYMBOLS = ['BTC-PERP', 'ETH-PERP', 'SOL-PERP'] as const;
 const PRICE_HISTORY_LEN = 80;
+
+type FeedSymbol = 'BTC' | 'ETH' | 'SOL';
+
+function productToFeedSymbol(product: string): FeedSymbol | null {
+  if (product.startsWith('BTC')) return 'BTC';
+  if (product.startsWith('ETH')) return 'ETH';
+  if (product.startsWith('SOL')) return 'SOL';
+  return null;
+}
 const GAP_WINDOW_SAMPLES = 60;     // 60 × 200ms = 12s window for crypto micro-moves
 const TAKE_PROFIT_PCT = 0.015;     // close winners at +1.5% notional move
 const STOP_LOSS_PCT = 0.020;       // hard stop at -2% notional move
 
 interface PerSymbolState {
   history: number[];               // recent prices for momentum derivative
+  samples: PriceSample[];          // price + ts pairs for regime-detector (BTC only used today)
   lastSampleAt: number;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 interface LoopState {
@@ -94,16 +114,19 @@ export class CoinarbLoop {
   private readonly fundingGate: FundingGate;
   private readonly logger = new DecisionLogger();
   private readonly perSymbol = new Map<string, PerSymbolState>();
+  private readonly adaptiveKelly: AdaptiveKelly;
   private readonly state: LoopState;
   private timer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private lastTickLatencyMs = 0;
+  private lastRegime: RegimeState | null = null;
 
   constructor(private readonly deps: LoopDeps) {
     const c = deps.config;
     this.tracker = new CoinarbPositionTracker(c.agentId, c.userId);
     this.fundingGate = new FundingGate(deps.intxFeed, c.params.fundingAdverseThreshold);
+    this.adaptiveKelly = new AdaptiveKelly(c.params.maxKellyFraction);
     this.state = {
       startedAt: Date.now(),
       peakEquityUsd: c.startingCapitalUsd,
@@ -215,7 +238,8 @@ export class CoinarbLoop {
 
     // Update price history for each spot symbol (used for momentum derivatives)
     for (const product of SPOT_SYMBOLS) {
-      const sym = product === 'BTC-USD' ? 'BTC' : 'ETH';
+      const sym = productToFeedSymbol(product);
+      if (!sym) continue;
       const cb = this.deps.coinbaseFeed.getPrice(sym);
       const bn = this.deps.binanceFeed.getPrice(sym);
       const consensus = median([cb?.last ?? 0, bn?.last ?? 0]);
@@ -226,6 +250,13 @@ export class CoinarbLoop {
       const q = this.deps.intxFeed.getQuote(symbol);
       if (!q || q.last <= 0) continue;
       this.recordSample(symbol, q.last, now);
+    }
+
+    // Refresh regime classification once per tick from the BTC spot stream
+    // (acts as the broad market gauge for all symbols, matches regime-detector design).
+    const btcState = this.perSymbol.get('BTC-USD');
+    if (btcState && btcState.samples.length >= 10) {
+      this.lastRegime = detectRegime(btcState.samples);
     }
 
     // Manage open positions (take-profit / stop-loss / drawdown breaker)
@@ -254,8 +285,11 @@ export class CoinarbLoop {
     }
 
     // Generate one signal per symbol, attempt one entry per tick
+    const params = this.deps.config.params;
     for (const symbol of [...SPOT_SYMBOLS, ...PERP_SYMBOLS]) {
       const venue: Venue = symbol.endsWith('-PERP') ? 'perp' : 'spot';
+      if (venue === 'spot' && !params.spotEnabled) continue;
+      if (venue === 'perp' && !params.perpEnabled) continue;
       if (this.tracker.forSymbol(venue, symbol).length > 0) continue;     // already in
       const entered = await this.maybeEnter(symbol, venue, now);
       if (entered) break;                                                  // one entry per tick
@@ -264,10 +298,14 @@ export class CoinarbLoop {
 
   private recordSample(key: string, price: number, now: number): void {
     let s = this.perSymbol.get(key);
-    if (!s) { s = { history: [], lastSampleAt: 0 }; this.perSymbol.set(key, s); }
+    if (!s) { s = { history: [], samples: [], lastSampleAt: 0 }; this.perSymbol.set(key, s); }
     if (now - s.lastSampleAt < this.deps.config.params.loopIntervalMs * 0.8) return;
     s.history.push(price);
     if (s.history.length > PRICE_HISTORY_LEN) s.history.shift();
+    s.samples.push({ price, timestamp: now });
+    // Keep ~1 hour of samples for regime classification (regime-detector windows: 1h/15m/5m).
+    const cutoff = now - 3_600_000;
+    while (s.samples.length > 0 && s.samples[0].timestamp < cutoff) s.samples.shift();
     s.lastSampleAt = now;
   }
 
@@ -290,6 +328,23 @@ export class CoinarbLoop {
 
     const side: Side = mv.signal === 'BUY' ? 'BUY' : 'SELL';
 
+    // Reversal radar — block entries that fight a jerk-confirmed flip.
+    // REVERSE_LONG = "was going up, now braking hard" → don't BUY.
+    // REVERSE_SHORT = "was going down, bouncing"      → don't SELL.
+    const reversal = computeReversalSignal(sample.history, dt);
+    if (reversal.reversalImminent) {
+      const blocks =
+        (reversal.signal === 'REVERSE_LONG' && side === 'BUY') ||
+        (reversal.signal === 'REVERSE_SHORT' && side === 'SELL');
+      if (blocks) {
+        await this.logger.log({
+          agentId: c.agentId, userId: c.userId, kind: 'SKIP', symbol, venue,
+          reason: `reversal_against ${reversal.signal} conf=${reversal.confidence.toFixed(2)}`,
+        });
+        return false;
+      }
+    }
+
     // Funding gate — only relevant for perps
     if (venue === 'perp') {
       const fg = this.fundingGate.check(symbol, side);
@@ -308,16 +363,52 @@ export class CoinarbLoop {
     const absGap = Math.abs(ret);
     const confidence = Math.min(1, mv.confidence * (0.5 + Math.min(0.5, absGap * 50)));
 
-    // Decision tier
+    // Regime-adjusted ENTER threshold: in VOLATILE/CRISIS we tighten by 1/agentMultiplier
+    // (e.g. 1/0.5 = 2× stricter), in TRENDING we relax. CALM is unchanged.
+    const regime = this.lastRegime;
+    const regimeMult = regime?.agentMultiplier ?? 1;
+    const enterMinGapEff = regimeMult > 0 ? params.enterMinGap / regimeMult : params.enterMinGap;
+    const scalpMinGapEff = regimeMult > 0 ? params.scalpMinGap / regimeMult : params.scalpMinGap;
+
+    // Decision tier (post-regime adjustment)
     let tier: 'ENTER' | 'SCALP' | 'SKIP';
-    if (absGap >= params.enterMinGap && confidence >= params.enterMinConfidence) tier = 'ENTER';
-    else if (absGap >= params.scalpMinGap && confidence >= params.scalpMinConfidence) tier = 'SCALP';
+    if (absGap >= enterMinGapEff && confidence >= params.enterMinConfidence) tier = 'ENTER';
+    else if (absGap >= scalpMinGapEff && confidence >= params.scalpMinConfidence) tier = 'SCALP';
     else tier = 'SKIP';
 
     if (tier === 'SKIP') {
       await this.logger.log({
         agentId: c.agentId, userId: c.userId, kind: 'SKIP', symbol, venue,
-        reason: `tier=SKIP gap=${(absGap * 100).toFixed(2)}% conf=${confidence.toFixed(2)}`,
+        reason: `tier=SKIP gap=${(absGap * 100).toFixed(2)}% conf=${confidence.toFixed(2)} regime=${regime?.regime ?? 'NA'}`,
+      });
+      return false;
+    }
+
+    // Five-layer validator — orthogonal scoring of realness/duration/reversal/capital_fit/exit_clarity.
+    // SKIPs anything below the configured overall confidence floor.
+    const validation = validateFiveLayer({
+      gap: ret,
+      regime,
+      reversal,
+      msLeftInWindow: params.entryWindowMs,
+      minEdgePercent: params.enterMinGap,
+    });
+    if (validation.overallConfidence < params.validatorMinConfidence) {
+      await this.logger.log({
+        agentId: c.agentId, userId: c.userId, kind: 'SKIP', symbol, venue,
+        reason: `low_confidence ${validation.overallConfidence.toFixed(2)} < ${params.validatorMinConfidence.toFixed(2)}`,
+        meta: { validatedCount: validation.validatedCount, layers: validation.layers.map(l => ({ n: l.name, s: l.score })) },
+      });
+      return false;
+    }
+
+    // Adaptive-Kelly minimum edge gate — tightens after losing streaks, relaxes after wins.
+    // Pure threshold check: regime applies to sizing below, not to this floor.
+    const adaptiveMinEdge = this.adaptiveKelly.getCurrentMinEdge(1.0);
+    if (absGap < adaptiveMinEdge) {
+      await this.logger.log({
+        agentId: c.agentId, userId: c.userId, kind: 'SKIP', symbol, venue,
+        reason: `adaptive_min_edge gap=${(absGap * 100).toFixed(2)}% < ${(adaptiveMinEdge * 100).toFixed(2)}%`,
       });
       return false;
     }
@@ -325,7 +416,8 @@ export class CoinarbLoop {
     // Live price for sizing
     let bid = 0, ask = 0, last = 0;
     if (venue === 'spot') {
-      const sym = symbol === 'BTC-USD' ? 'BTC' : 'ETH';
+      const sym = productToFeedSymbol(symbol);
+      if (!sym) return false;
       const cb = this.deps.coinbaseFeed.getPrice(sym);
       if (!cb) return false;
       bid = cb.bid; ask = cb.ask; last = cb.last;
@@ -336,10 +428,10 @@ export class CoinarbLoop {
     }
     if (bid <= 0 || ask <= 0) return false;
 
-    // Size: Kelly fraction × allocation × capital × tier multiplier
+    // Size: Kelly fraction × allocation × capital × tier multiplier × regime multiplier
     const allocation = venue === 'spot' ? params.spotAllocationPct : params.perpAllocationPct;
     const tierMult = tier === 'SCALP' ? params.scalpKellyMultiplier : 1;
-    const targetUsd = c.startingCapitalUsd * allocation * params.maxKellyFraction * tierMult;
+    const targetUsd = c.startingCapitalUsd * allocation * params.maxKellyFraction * tierMult * regimeMult;
     const leverage = venue === 'perp' ? params.maxLeverage : 1;
     const notionalUsd = targetUsd * leverage;
 
@@ -361,6 +453,26 @@ export class CoinarbLoop {
       return false;
     }
 
+    // Correlation cap by base asset — BTC-USD spot + BTC-PERP = same narrative,
+    // not 2 independent bets. Cap aggregate exposure per base asset to params.maxAggregateExposurePct.
+    const baseAsset = productToFeedSymbol(symbol);
+    if (baseAsset) {
+      const sameAssetUsd = this.tracker
+        .list()
+        .filter(p => productToFeedSymbol(p.symbol) === baseAsset)
+        .reduce((s, p) => s + p.sizeUsd, 0);
+      const projectedNotional = baseSize * last;
+      const cap = c.startingCapitalUsd * params.maxAggregateExposurePct;
+      if (sameAssetUsd + projectedNotional > cap) {
+        await this.logger.log({
+          agentId: c.agentId, userId: c.userId, kind: 'SKIP', symbol, venue,
+          reason: `correlation_cap ${baseAsset} ${(sameAssetUsd + projectedNotional).toFixed(0)} > ${cap.toFixed(0)}`,
+          meta: { baseAsset, sameAssetUsd, projectedNotional, cap },
+        });
+        return false;
+      }
+    }
+
     // Limit price = best opposite (post-only crosses on the resting side)
     const priceIncr = venue === 'spot'
       ? this.deps.productCache.spot[symbol]?.priceIncrement ?? 0.01
@@ -368,7 +480,11 @@ export class CoinarbLoop {
     const limitRaw = side === 'BUY' ? bid : ask;
     const limitPrice = roundToIncrement(limitRaw, priceIncr);
 
+    // Intended price = where we *wanted* to fill. Slippage is measured vs this.
+    const intendedPrice = side === 'BUY' ? ask : bid;
+
     // Place
+    const placedAt = Date.now();
     let orderId: string | undefined;
     let filledPrice = limitPrice;
     if (venue === 'spot') {
@@ -409,8 +525,55 @@ export class CoinarbLoop {
       if (raw?.filledPrice) filledPrice = raw.filledPrice;
     }
 
-    // Track
+    // Cancel/replace timeout — for real brokers a post-only order may rest unfilled.
+    // Poll getOrder until status reports FILLED or timeout, then cancel and skip.
+    // Paper brokers fill synchronously and report 'FILLED' immediately, so the loop is a single hop.
+    let filled = false;
+    const broker = venue === 'spot' ? this.deps.spotBroker : this.deps.perpBroker;
+    if (orderId) {
+      while (Date.now() - placedAt < params.fillTimeoutMs) {
+        try {
+          const status = await broker.getOrder(orderId) as { status?: string; filled_size?: number; filledPrice?: number };
+          const s = String(status?.status ?? '').toUpperCase();
+          if (s === 'FILLED' || s === 'DONE' || s === 'CLOSED' || (status?.filled_size ?? 0) > 0) {
+            filled = true;
+            if (status?.filledPrice) filledPrice = status.filledPrice;
+            break;
+          }
+        } catch {
+          // transient — keep polling until timeout
+        }
+        await sleep(100);
+      }
+      if (!filled) {
+        try { await broker.cancel([orderId]); } catch { /* best-effort */ }
+        await this.logger.log({
+          agentId: c.agentId, userId: c.userId, kind: 'SKIP', symbol, venue,
+          reason: `fill_timeout ${params.fillTimeoutMs}ms`,
+          meta: { orderId, limitPrice },
+        });
+        return false;
+      }
+    } else {
+      // No orderId returned but ack.success was true — treat as filled at limit.
+      filled = true;
+    }
+
+    const fillLatencyMs = Date.now() - placedAt;
     const sizeUsd = baseSize * filledPrice;
+
+    // Slippage: + means worse than intended (paid more on BUY, received less on SELL).
+    const slippageUsd = side === 'BUY'
+      ? (filledPrice - intendedPrice) * baseSize
+      : (intendedPrice - filledPrice) * baseSize;
+    const slippageBps = intendedPrice > 0
+      ? Math.round(((filledPrice - intendedPrice) / intendedPrice) * 10_000) * (side === 'BUY' ? 1 : -1)
+      : 0;
+
+    // Estimated entry-side fee. Round-trip fee is captured separately at exit.
+    const feeUsd = estimateFeeUsd(venue, sizeUsd, params.postOnly);
+
+    // Track
     await this.tracker.openPosition({
       venue, symbol, side,
       entryPrice: filledPrice,
@@ -418,21 +581,38 @@ export class CoinarbLoop {
       baseSize,
       leverageUsed: leverage,
       brokerOrderId: orderId ?? '',
-      entryReason: { tier, gap: ret, jerk: mv.jerk, confidence, paper: c.paperMode },
+      entryReason: {
+        tier,
+        gap: ret,
+        jerk: mv.jerk,
+        confidence,
+        paper: c.paperMode,
+        regime: regime?.regime ?? null,
+        regimeMult,
+        validatorConfidence: validation.overallConfidence,
+        validatedCount: validation.validatedCount,
+        adaptiveMinEdge,
+        intendedPrice,
+        filledPrice,
+        slippageUsd,
+        slippageBps,
+        feeUsdEstimated: feeUsd,
+        fillLatencyMs,
+      },
     });
 
     this.state.tradesToday += 1;
     await this.logger.log({
       agentId: c.agentId, userId: c.userId, kind: tier, symbol, venue,
-      reason: `entered ${side} size=${baseSize} @${filledPrice}`,
-      meta: { tier, jerk: mv.jerk, confidence, sizeUsd },
+      reason: `entered ${side} size=${baseSize} @${filledPrice} (slip=${slippageBps}bps lat=${fillLatencyMs}ms regime=${regime?.regime ?? 'NA'})`,
+      meta: { tier, jerk: mv.jerk, confidence, sizeUsd, regime: regime?.regime, validatorConfidence: validation.overallConfidence, slippageBps, fillLatencyMs, feeUsd },
     });
 
     notify({
       userId: c.userId,
       ...formatEntry({
         venue, symbol, side, filledPrice, sizeUsd,
-        reason: `${tier} jerk=${mv.jerk.toExponential(2)}`,
+        reason: `${tier} jerk=${mv.jerk.toExponential(2)} ${regime?.regime ?? ''}`,
         paper: c.paperMode,
       }),
       tag: `coinarb-entry-${orderId ?? Date.now()}`,
@@ -442,6 +622,7 @@ export class CoinarbLoop {
 
   private async manageOpen(now: number): Promise<void> {
     const c = this.deps.config;
+    const params = c.params;
     for (const pos of this.tracker.list()) {
       const px = this.currentPrice(pos.venue, pos.symbol);
       if (!px) continue;
@@ -457,7 +638,17 @@ export class CoinarbLoop {
       else if (now - pos.openedAt > 15 * 60_000) exitReason = `time_stop ${Math.round((now - pos.openedAt) / 60_000)}min`;
 
       if (!exitReason) continue;
-      const closed = await this.tracker.closePosition(pos.id, px, exitReason);
+
+      // Round-trip cost = entry fee (already paid + recorded in entry_reason)
+      // + exit fee. We pass exit-side fee here so coinarb_trades.fee_usd reflects exit cost.
+      const exitNotional = pos.baseSize * px;
+      const exitFeeUsd = estimateFeeUsd(pos.venue, exitNotional, params.postOnly);
+
+      const closed = await this.tracker.closePosition(pos.id, px, exitReason, {
+        feeUsd: exitFeeUsd,
+        slippageBps: 0,         // exits are market-priced off the live last; no intended price to compare
+        executionLatencyMs: 0,   // synchronous bookkeeping, no order placed for the close
+      });
       if (!closed) continue;
 
       const win = closed.pnlUsd > 0;
@@ -465,9 +656,20 @@ export class CoinarbLoop {
       if (win) { this.state.wins += 1; this.state.consecutiveWins += 1; }
       else { this.state.losses += 1; this.state.consecutiveWins = 0; this.state.cooldownUntil = now + c.params.lossCooldownMs; }
 
+      // Feed the outcome back into adaptive-Kelly so future entries tighten/loosen automatically.
+      const entryGap = typeof pos.entryReason.gap === 'number' ? Math.abs(pos.entryReason.gap as number) : 0;
+      this.adaptiveKelly.recordOutcome({
+        conditionId: pos.id,
+        edge: entryGap,
+        pnlUsd: closed.pnlUsd,
+        won: win,
+        symbol: pos.symbol,
+        computedAt: Date.now(),
+      });
+
       await this.logger.log({
         agentId: c.agentId, userId: c.userId, kind: 'EXIT', symbol: pos.symbol, venue: pos.venue,
-        reason: exitReason, meta: { pnlUsd: closed.pnlUsd, pnlPercent: closed.pnlPercent },
+        reason: exitReason, meta: { pnlUsd: closed.pnlUsd, pnlPercent: closed.pnlPercent, exitFeeUsd },
       });
 
       notify({
@@ -483,7 +685,11 @@ export class CoinarbLoop {
       // Drawdown breaker — triggers on aggregate equity DD
       if (this.drawdownPct() >= c.params.drawdownBreakerPct) {
         const prices = this.snapshotPrices();
-        await this.tracker.closeAll(prices, 'circuit_breaker');
+        await this.tracker.closeAll(
+          prices,
+          'circuit_breaker',
+          (p, exitPx) => estimateFeeUsd(p.venue, p.baseSize * exitPx, params.postOnly),
+        );
         this.state.drawdownPauseUntil = now + c.params.drawdownBreakerCooldownMs;
         await this.logger.log({
           agentId: c.agentId, userId: c.userId, kind: 'BREAKER',
@@ -505,7 +711,8 @@ export class CoinarbLoop {
 
   private currentPrice(venue: Venue, symbol: string): number | null {
     if (venue === 'spot') {
-      const sym = symbol === 'BTC-USD' ? 'BTC' : 'ETH';
+      const sym = productToFeedSymbol(symbol);
+      if (!sym) return null;
       return this.deps.coinbaseFeed.getPrice(sym)?.last ?? null;
     }
     return this.deps.intxFeed.getQuote(symbol)?.last ?? null;
@@ -514,7 +721,8 @@ export class CoinarbLoop {
   private snapshotPrices(): Map<string, number> {
     const m = new Map<string, number>();
     for (const product of SPOT_SYMBOLS) {
-      const sym = product === 'BTC-USD' ? 'BTC' : 'ETH';
+      const sym = productToFeedSymbol(product);
+      if (!sym) continue;
       const px = this.deps.coinbaseFeed.getPrice(sym)?.last;
       if (px) m.set(`spot:${product}`, px);
     }

@@ -68,7 +68,7 @@ async function main(): Promise<void> {
 
   const coinbaseFeed = new CoinbaseFeed();
   const binanceFeed  = new BinanceFeed();
-  const intxFeed     = new CoinbaseIntxFeed(['BTC-PERP', 'ETH-PERP']);
+  const intxFeed     = new CoinbaseIntxFeed(['BTC-PERP', 'ETH-PERP', 'SOL-PERP']);
   coinbaseFeed.start();
   binanceFeed.start();
 
