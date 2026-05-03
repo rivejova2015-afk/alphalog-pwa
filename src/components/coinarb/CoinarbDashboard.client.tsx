@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -77,7 +77,9 @@ interface Trade {
   executed_at: string;
 }
 
-const REFRESH_MS = 5000;
+const PRICE_REFRESH_MS = 1000;
+const TELEMETRY_REFRESH_MS = 5000;
+const SPARKLINE_LEN = 60;
 
 export default function CoinarbDashboard() {
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -88,14 +90,12 @@ export default function CoinarbDashboard() {
   const [creating, setCreating] = useState(false);
   const [now, setNow] = useState(Date.now());
 
-  const fetchAll = useCallback(async () => {
+  const fetchTelemetry = useCallback(async () => {
     try {
-      const [tRes, pRes, trRes] = await Promise.all([
+      const [tRes, trRes] = await Promise.all([
         fetch("/api/coinarb/telemetry", { cache: "no-store" }),
-        fetch("/api/coinarb/positions?status=open&limit=20", { cache: "no-store" }),
         fetch("/api/coinarb/trades?limit=25", { cache: "no-store" }),
       ]);
-
       if (tRes.ok) {
         const body = await tRes.json();
         setAgent(body.agent ?? null);
@@ -104,32 +104,56 @@ export default function CoinarbDashboard() {
         setAgent(null);
         setTelemetry(null);
       }
-
-      if (pRes.ok) {
-        const body = await pRes.json();
-        setPositions(body.data ?? []);
-      }
-
       if (trRes.ok) {
         const body = await trRes.json();
         setTrades(body.data ?? []);
       }
     } catch (err) {
-      console.error("[coinarb] fetch failed", err);
-    } finally {
-      setLoading(false);
+      console.error("[coinarb] telemetry fetch failed", err);
     }
   }, []);
 
+  const fetchPositions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/coinarb/positions?status=open&limit=20", { cache: "no-store" });
+      if (res.ok) {
+        const body = await res.json();
+        setPositions(body.data ?? []);
+      }
+    } catch (err) {
+      console.error("[coinarb] positions fetch failed", err);
+    }
+  }, []);
+
+  // Initial load
   useEffect(() => {
-    fetchAll();
-    const refresh = setInterval(fetchAll, REFRESH_MS);
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      clearInterval(refresh);
-      clearInterval(tick);
-    };
-  }, [fetchAll]);
+    Promise.all([fetchTelemetry(), fetchPositions()]).finally(() => setLoading(false));
+  }, [fetchTelemetry, fetchPositions]);
+
+  // Telemetry + trades refresh (5s)
+  useEffect(() => {
+    const id = setInterval(fetchTelemetry, TELEMETRY_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchTelemetry]);
+
+  // Positions refresh — 1s when open positions exist (live sparkline + drawdown), else 5s
+  const hasOpenPositions = positions.length > 0;
+  useEffect(() => {
+    const interval = hasOpenPositions ? PRICE_REFRESH_MS : TELEMETRY_REFRESH_MS;
+    const id = setInterval(fetchPositions, interval);
+    return () => clearInterval(id);
+  }, [fetchPositions, hasOpenPositions]);
+
+  // Now tick (1s) for relative time
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Derived live state per position
+  const newPositionIds = useNewPositionFlash(positions);
+  const priceHistory = usePriceSparkline(positions);
+  const drawdowns = usePositionDrawdownMap(positions);
 
   const createAgent = useCallback(async () => {
     setCreating(true);
@@ -144,13 +168,13 @@ export default function CoinarbDashboard() {
         throw new Error(body?.error ?? `HTTP ${res.status}`);
       }
       toast.success("Coinarb agent provisioned");
-      await fetchAll();
+      await Promise.all([fetchTelemetry(), fetchPositions()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create agent");
     } finally {
       setCreating(false);
     }
-  }, [fetchAll]);
+  }, [fetchTelemetry, fetchPositions]);
 
   if (loading) {
     return (
@@ -235,7 +259,7 @@ export default function CoinarbDashboard() {
           </div>
           <button
             type="button"
-            onClick={fetchAll}
+            onClick={() => { fetchTelemetry(); fetchPositions(); }}
             className="px-3 py-1.5 rounded text-xs font-mono text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1f2937] transition-colors inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} />
@@ -298,20 +322,22 @@ export default function CoinarbDashboard() {
 
       {/* Positions */}
       <Section title="Open Positions" icon={Coins} count={positions.length}>
+        <CoinarbExposureBar positions={positions} agent={agent} telemetry={telemetry} />
         {positions.length === 0 ? (
           <Empty msg="No open positions" />
         ) : (
-          <Table
-            cols={["Venue", "Symbol", "Side", "Entry", "Size", "P&L"]}
-            rows={positions.map((p) => [
-              <VenuePill key="v" v={p.venue} />,
-              <span key="s" className="font-mono text-[#e2e8f0]">{p.symbol}</span>,
-              <SidePill key="sd" side={p.side} />,
-              p.entry_price != null ? `$${Number(p.entry_price).toFixed(2)}` : "—",
-              p.size_usd != null ? `$${Number(p.size_usd).toFixed(2)}` : "—",
-              <PnL key="pn" value={p.pnl_usd} pct={p.pnl_percent} />,
-            ])}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            {positions.map((p) => (
+              <CoinarbPositionCard
+                key={p.id}
+                pos={p}
+                isNew={newPositionIds.has(p.id)}
+                worstPct={drawdowns.get(p.id) ?? 0}
+                prices={priceHistory.get(p.id) ?? []}
+                now={now}
+              />
+            ))}
+          </div>
         )}
       </Section>
 
@@ -501,5 +527,343 @@ function PnL({ value, pct }: { value: number | null; pct: number | null }) {
         </span>
       )}
     </span>
+  );
+}
+
+// ─── Live position helpers ─────────────────────────────────────────────────
+
+function impliedCurrentPrice(p: Position): number | null {
+  if (p.entry_price == null || p.pnl_percent == null) return null;
+  const dir = p.side === "BUY" ? 1 : -1;
+  return p.entry_price * (1 + (dir * p.pnl_percent) / 100);
+}
+
+function formatElapsed(ms: number): string {
+  if (ms < 0 || !Number.isFinite(ms)) return "—";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+function todayUtcKey(prefix: string): string {
+  return `${prefix}:${new Date().toISOString().slice(0, 10)}`;
+}
+
+// Flashes newly added position IDs for 5s after first detection.
+// Skips the first render so existing positions don't all flash on mount.
+function useNewPositionFlash(positions: Position[]): Set<string> {
+  const [flashing, setFlashing] = useState<Set<string>>(new Set());
+  const seenRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    const currentIds = new Set(positions.map((p) => p.id));
+    if (seenRef.current === null) {
+      seenRef.current = currentIds;
+      return;
+    }
+    const newIds: string[] = [];
+    for (const id of currentIds) {
+      if (!seenRef.current.has(id)) newIds.push(id);
+    }
+    seenRef.current = currentIds;
+    if (newIds.length === 0) return;
+
+    setFlashing((prev) => {
+      const next = new Set(prev);
+      for (const id of newIds) next.add(id);
+      return next;
+    });
+    setTimeout(() => {
+      setFlashing((prev) => {
+        const next = new Set(prev);
+        for (const id of newIds) next.delete(id);
+        return next;
+      });
+    }, 5000);
+  }, [positions]);
+
+  return flashing;
+}
+
+// Maintains a rolling implied-price history per positionId (last SPARKLINE_LEN samples).
+function usePriceSparkline(positions: Position[]): Map<string, number[]> {
+  const [history, setHistory] = useState<Map<string, number[]>>(() => new Map());
+
+  useEffect(() => {
+    setHistory((prev) => {
+      const next = new Map(prev);
+      const seen = new Set<string>();
+      let changed = false;
+      for (const p of positions) {
+        seen.add(p.id);
+        const price = impliedCurrentPrice(p);
+        if (price == null) continue;
+        const arr = next.get(p.id) ?? [];
+        if (arr[arr.length - 1] !== price) {
+          const nextArr = arr.length >= SPARKLINE_LEN
+            ? [...arr.slice(arr.length - SPARKLINE_LEN + 1), price]
+            : [...arr, price];
+          next.set(p.id, nextArr);
+          changed = true;
+        }
+      }
+      for (const id of Array.from(next.keys())) {
+        if (!seen.has(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [positions]);
+
+  return history;
+}
+
+// Tracks worst pnl_percent ever observed per position, persisted to localStorage.
+// Auto-cleans up keys for positions no longer present.
+function usePositionDrawdownMap(positions: Position[]): Map<string, number> {
+  const [drawdowns, setDrawdowns] = useState<Map<string, number>>(() => new Map());
+
+  useEffect(() => {
+    setDrawdowns((prev) => {
+      const next = new Map<string, number>();
+      const seen = new Set<string>();
+      let changed = next.size !== prev.size;
+
+      for (const p of positions) {
+        seen.add(p.id);
+        const key = `coinarb:dd:${p.id}`;
+        let stored: number | null = null;
+        try {
+          if (typeof window !== "undefined") {
+            const raw = window.localStorage.getItem(key);
+            stored = raw != null ? Number(raw) : null;
+          }
+        } catch {}
+        const prevWorst = prev.get(p.id) ?? stored ?? 0;
+        const current = p.pnl_percent ?? 0;
+        const worst = Math.min(prevWorst, current, 0);
+        next.set(p.id, worst);
+        if (worst !== prev.get(p.id)) changed = true;
+        if (worst !== stored) {
+          try {
+            if (typeof window !== "undefined") window.localStorage.setItem(key, String(worst));
+          } catch {}
+        }
+      }
+
+      if (typeof window !== "undefined") {
+        try {
+          const toDelete: string[] = [];
+          for (let i = 0; i < window.localStorage.length; i++) {
+            const k = window.localStorage.key(i);
+            if (!k || !k.startsWith("coinarb:dd:")) continue;
+            const id = k.slice("coinarb:dd:".length);
+            if (!seen.has(id)) toDelete.push(k);
+          }
+          for (const k of toDelete) window.localStorage.removeItem(k);
+        } catch {}
+      }
+
+      return changed ? next : prev;
+    });
+  }, [positions]);
+
+  return drawdowns;
+}
+
+// ─── Live UI components ────────────────────────────────────────────────────
+
+function MiniSparkline({ points, color = "#22d3ee" }: { points: number[]; color?: string }) {
+  if (points.length < 2) {
+    return <div className="w-[80px] h-[32px] flex items-center justify-end text-[9px] text-[#475569] font-mono">…</div>;
+  }
+  const W = 80;
+  const H = 32;
+  const sample = points.length > 32
+    ? Array.from({ length: 32 }, (_, i) => points[Math.floor((i / 31) * (points.length - 1))])
+    : points;
+  const min = Math.min(...sample);
+  const max = Math.max(...sample);
+  const range = Math.max(max - min, 1e-9);
+  const path = sample
+    .map((y, i) => {
+      const x = (i / (sample.length - 1)) * W;
+      const yy = H - ((y - min) / range) * H;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${yy.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+      <path d={path} fill="none" stroke={color} strokeWidth={1.25} />
+    </svg>
+  );
+}
+
+function CoinarbPositionCard({
+  pos,
+  isNew,
+  worstPct,
+  prices,
+  now,
+}: {
+  pos: Position;
+  isNew: boolean;
+  worstPct: number;
+  prices: number[];
+  now: number;
+}) {
+  const current = impliedCurrentPrice(pos);
+  const deltaPct = pos.pnl_percent ?? 0;
+  const deltaUsd = pos.pnl_usd ?? 0;
+  const positive = deltaPct >= 0;
+  const openedMs = pos.opened_at ? now - new Date(pos.opened_at).getTime() : 0;
+
+  return (
+    <div
+      className={`bg-[#151b28] border rounded-lg p-3 transition-colors ${
+        isNew
+          ? "border-[#34d399] shadow-[0_0_0_1px_rgba(52,211,153,0.4)]"
+          : "border-[#1f2937]"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <VenuePill v={pos.venue} />
+          <SidePill side={pos.side} />
+          <span className="font-mono text-[12px] text-[#e2e8f0] truncate">{pos.symbol}</span>
+        </div>
+        {isNew && (
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono bg-[#34d399]/20 text-[#34d399] border border-[#34d399]/40 animate-pulse">
+            NUEVA
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-end justify-between gap-3 mb-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-[9px] text-[#475569] uppercase tracking-wider mb-0.5">Entry → Now</div>
+          <div className="font-mono text-[11px] text-[#cbd5e1] truncate">
+            ${pos.entry_price?.toFixed(2) ?? "—"}
+            <span className="mx-1 text-[#475569]">→</span>
+            <span className={positive ? "text-green-400" : "text-red-400"}>
+              {current != null ? `$${current.toFixed(2)}` : "—"}
+            </span>
+          </div>
+          <div className={`text-[10px] font-mono font-bold mt-0.5 ${positive ? "text-green-400" : "text-red-400"}`}>
+            {positive ? "+" : ""}{deltaPct.toFixed(2)}% ({positive ? "+" : ""}${deltaUsd.toFixed(2)})
+          </div>
+        </div>
+        <MiniSparkline points={prices} color={positive ? "#34d399" : "#ef4444"} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#1f2937]">
+        <div>
+          <div className="text-[9px] text-[#475569] uppercase tracking-wider">En riesgo</div>
+          <div className="text-[11px] font-mono font-bold text-[#22d3ee]">
+            ${pos.size_usd?.toFixed(2) ?? "—"}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] text-[#475569] uppercase tracking-wider">Drawdown</div>
+          <div className={`text-[11px] font-mono font-bold ${worstPct < 0 ? "text-red-400" : "text-[#94a3b8]"}`}>
+            {worstPct.toFixed(2)}%
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] text-[#475569] uppercase tracking-wider">Tiempo</div>
+          <div className="text-[11px] font-mono text-[#94a3b8]">{formatElapsed(openedMs)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoinarbExposureBar({
+  positions,
+  agent,
+  telemetry,
+}: {
+  positions: Position[];
+  agent: Agent;
+  telemetry: Telemetry | null;
+}) {
+  const totalNotional = positions.reduce((sum, p) => sum + (p.size_usd ?? 0), 0);
+  const capitalAtRisk = totalNotional;
+  const cfg = agent.config as Record<string, unknown>;
+  const dailyCap = Number(cfg?.daily_trade_cap ?? cfg?.dailyTradeCap ?? 7);
+  const openCount = positions.length;
+
+  const peakKey = todayUtcKey("coinarb:peak");
+  const [peak, setPeak] = useState<number>(0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let stored = 0;
+    try {
+      const raw = window.localStorage.getItem(peakKey);
+      stored = raw != null ? Number(raw) : 0;
+    } catch {}
+    const next = Math.max(stored, totalNotional);
+    if (next > stored) {
+      try { window.localStorage.setItem(peakKey, String(next)); } catch {}
+    }
+    setPeak(next);
+  }, [totalNotional, peakKey]);
+
+  const baseKey = todayUtcKey("coinarb:pnl-base");
+  const [pnlDay, setPnlDay] = useState<number | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const total = telemetry?.total_pnl_usd ?? null;
+    if (total == null) {
+      setPnlDay(null);
+      return;
+    }
+    let base: number;
+    try {
+      const raw = window.localStorage.getItem(baseKey);
+      if (raw == null) {
+        base = total;
+        window.localStorage.setItem(baseKey, String(total));
+      } else {
+        base = Number(raw);
+      }
+    } catch {
+      base = total;
+    }
+    setPnlDay(total - base);
+  }, [telemetry?.total_pnl_usd, baseKey]);
+
+  const pnlDayPositive = pnlDay != null && pnlDay >= 0;
+
+  return (
+    <div className="bg-[#0a0f1a] border border-[#1f2937] rounded p-2.5 grid grid-cols-2 md:grid-cols-5 gap-2">
+      <ExposureMetric label="Notional" value={`$${totalNotional.toFixed(2)}`} color="#22d3ee" />
+      <ExposureMetric label="En riesgo" value={`$${capitalAtRisk.toFixed(2)}`} color="#a78bfa" />
+      <ExposureMetric
+        label="P&L día"
+        value={pnlDay != null ? `${pnlDayPositive ? "+" : ""}$${pnlDay.toFixed(2)}` : "—"}
+        color={pnlDay == null ? "#475569" : pnlDayPositive ? "#34d399" : "#ef4444"}
+      />
+      <ExposureMetric label="Peak today" value={`$${peak.toFixed(2)}`} color="#94a3b8" />
+      <ExposureMetric
+        label="Open / cap"
+        value={`${openCount} / ${dailyCap}`}
+        color={openCount >= dailyCap ? "#ef4444" : "#94a3b8"}
+      />
+    </div>
+  );
+}
+
+function ExposureMetric({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div>
+      <div className="text-[9px] text-[#475569] uppercase tracking-wider">{label}</div>
+      <div className="text-[12px] font-mono font-bold" style={{ color }}>{value}</div>
+    </div>
   );
 }
