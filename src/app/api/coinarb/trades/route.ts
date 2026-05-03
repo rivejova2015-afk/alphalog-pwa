@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('coinarb_trades')
     .select(
-      'id, trade_type, market_slug, outcome, side, price, size, size_usd, fee_usd, pnl_usd, status, executed_at',
+      'id, position_id, trade_type, market_slug, outcome, side, price, size, size_usd, fee_usd, pnl_usd, slippage_bps, execution_latency_ms, status, executed_at',
       { count: 'exact' },
     )
     .eq('user_id', user.id)
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const sizeNum = typeof t.size === 'string' ? parseFloat(t.size) : (t.size ?? 0);
     return {
       id: t.id,
+      position_id: t.position_id ?? null,
       trade_type: t.trade_type ?? 'ENTRY',
       venue: venue || 'unknown',
       symbol: symbol || t.market_slug,
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest) {
       size_usd: t.size_usd ?? (priceNum > 0 && sizeNum > 0 ? priceNum * sizeNum : null),
       fee_usd: t.fee_usd,
       pnl_usd: t.pnl_usd,
+      slippage_bps: t.slippage_bps ?? null,
+      execution_latency_ms: t.execution_latency_ms ?? null,
       status: t.status,
       executed_at: t.executed_at,
     };

@@ -60,6 +60,9 @@ interface Position {
   status: string;
   opened_at: string | null;
   closed_at: string | null;
+  leverageUsed?: number;
+  exitReason?: string | null;
+  entryMeta?: Record<string, unknown>;
 }
 
 interface Trade {
@@ -73,12 +76,48 @@ interface Trade {
   size_usd: number | null;
   fee_usd: number | null;
   pnl_usd: number | null;
+  slippage_bps: number | null;
+  execution_latency_ms: number | null;
   status: string;
   executed_at: string;
 }
 
+interface Decision {
+  id: string;
+  kind: 'ENTER' | 'SCALP' | 'SKIP' | 'EXIT' | 'BREAKER' | 'CASCADE' | 'TICK';
+  symbol: string | null;
+  venue: 'spot' | 'perp' | null;
+  reason: string;
+  meta: Record<string, unknown>;
+  createdAt: string;
+}
+
+interface ExecutionStats {
+  slippage: { p50: number; p95: number; max: number; count: number };
+  latency: { p50: number; p95: number; max: number; count: number };
+  fees: { totalUsd: number; count: number; avgUsd: number };
+  fills: number;
+}
+
+interface PnlBucket { count: number; pnlUsd: number; winRate: number }
+interface PnlStats {
+  byVenue: Record<string, PnlBucket>;
+  bySymbol: Array<{ symbol: string } & PnlBucket>;
+  byTier: Record<string, PnlBucket>;
+  cumulativeToday: Array<{ at: string; cumPnlUsd: number }>;
+}
+
+interface SkipReasons {
+  window: string;
+  total: number;
+  byReason: Array<{ reason: string; count: number }>;
+}
+
 const PRICE_REFRESH_MS = 1000;
 const TELEMETRY_REFRESH_MS = 5000;
+const STATS_REFRESH_MS = 15_000;
+const DECISIONS_REFRESH_MS = 3000;
+const SKIP_REFRESH_MS = 60_000;
 const SPARKLINE_LEN = 60;
 
 export default function CoinarbDashboard() {
@@ -86,6 +125,11 @@ export default function CoinarbDashboard() {
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [execStats, setExecStats] = useState<ExecutionStats | null>(null);
+  const [pnlStats, setPnlStats] = useState<PnlStats | null>(null);
+  const [skipReasons, setSkipReasons] = useState<SkipReasons | null>(null);
+  const [decisionsPaused, setDecisionsPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -125,10 +169,50 @@ export default function CoinarbDashboard() {
     }
   }, []);
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const [eRes, pRes] = await Promise.all([
+        fetch("/api/coinarb/stats/execution", { cache: "no-store" }),
+        fetch("/api/coinarb/stats/pnl", { cache: "no-store" }),
+      ]);
+      if (eRes.ok) setExecStats(await eRes.json());
+      if (pRes.ok) setPnlStats(await pRes.json());
+    } catch (err) {
+      console.error("[coinarb] stats fetch failed", err);
+    }
+  }, []);
+
+  const fetchDecisions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/coinarb/decisions?limit=50", { cache: "no-store" });
+      if (res.ok) {
+        const body = await res.json();
+        setDecisions(body.data ?? []);
+      }
+    } catch (err) {
+      console.error("[coinarb] decisions fetch failed", err);
+    }
+  }, []);
+
+  const fetchSkipReasons = useCallback(async () => {
+    try {
+      const res = await fetch("/api/coinarb/decisions/skip-reasons", { cache: "no-store" });
+      if (res.ok) setSkipReasons(await res.json());
+    } catch (err) {
+      console.error("[coinarb] skip-reasons fetch failed", err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
-    Promise.all([fetchTelemetry(), fetchPositions()]).finally(() => setLoading(false));
-  }, [fetchTelemetry, fetchPositions]);
+    Promise.all([
+      fetchTelemetry(),
+      fetchPositions(),
+      fetchStats(),
+      fetchDecisions(),
+      fetchSkipReasons(),
+    ]).finally(() => setLoading(false));
+  }, [fetchTelemetry, fetchPositions, fetchStats, fetchDecisions, fetchSkipReasons]);
 
   // Telemetry + trades refresh (5s)
   useEffect(() => {
@@ -150,10 +234,30 @@ export default function CoinarbDashboard() {
     return () => clearInterval(id);
   }, []);
 
+  // Stats refresh (15s)
+  useEffect(() => {
+    const id = setInterval(fetchStats, STATS_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchStats]);
+
+  // Decisions refresh (3s when not paused)
+  useEffect(() => {
+    if (decisionsPaused) return;
+    const id = setInterval(fetchDecisions, DECISIONS_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchDecisions, decisionsPaused]);
+
+  // Skip reasons refresh (60s)
+  useEffect(() => {
+    const id = setInterval(fetchSkipReasons, SKIP_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchSkipReasons]);
+
   // Derived live state per position
   const newPositionIds = useNewPositionFlash(positions);
   const priceHistory = usePriceSparkline(positions);
   const drawdowns = usePositionDrawdownMap(positions);
+  const newDecisionIds = useNewDecisionFlash(decisions);
 
   const createAgent = useCallback(async () => {
     setCreating(true);
@@ -259,7 +363,13 @@ export default function CoinarbDashboard() {
           </div>
           <button
             type="button"
-            onClick={() => { fetchTelemetry(); fetchPositions(); }}
+            onClick={() => {
+              fetchTelemetry();
+              fetchPositions();
+              fetchStats();
+              fetchDecisions();
+              fetchSkipReasons();
+            }}
             className="px-3 py-1.5 rounded text-xs font-mono text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1f2937] transition-colors inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} />
@@ -320,6 +430,17 @@ export default function CoinarbDashboard() {
         />
       </div>
 
+      {/* Execution quality + cumulative pnl */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2">
+          <ExecutionQualityStrip stats={execStats} />
+        </div>
+        <CumulativePnlChart points={pnlStats?.cumulativeToday ?? []} />
+      </div>
+
+      {/* P&L breakdown */}
+      <PnlBreakdownPanel stats={pnlStats} />
+
       {/* Positions */}
       <Section title="Open Positions" icon={Coins} count={positions.length}>
         <CoinarbExposureBar positions={positions} agent={agent} telemetry={telemetry} />
@@ -347,7 +468,7 @@ export default function CoinarbDashboard() {
           <Empty msg="No trades yet" />
         ) : (
           <Table
-            cols={["When", "Type", "Venue", "Symbol", "Side", "Price", "Size", "P&L"]}
+            cols={["When", "Type", "Venue", "Symbol", "Side", "Price", "Size", "Slip", "Lat", "Fee", "P&L"]}
             rows={trades.slice(0, 25).map((t) => [
               <span key="w" className="text-[10px] text-[#94a3b8]">
                 {new Date(t.executed_at).toLocaleTimeString()}
@@ -358,11 +479,33 @@ export default function CoinarbDashboard() {
               <SidePill key="sd" side={t.side} />,
               `$${t.price.toFixed(2)}`,
               t.size_usd != null ? `$${t.size_usd.toFixed(2)}` : `${t.size}`,
+              <span key="slip" className="font-mono text-[10px] text-[#94a3b8]">
+                {t.slippage_bps != null ? `${Math.abs(t.slippage_bps).toFixed(1)}bps` : "—"}
+              </span>,
+              <span key="lat" className="font-mono text-[10px] text-[#94a3b8]">
+                {t.execution_latency_ms != null ? `${t.execution_latency_ms}ms` : "—"}
+              </span>,
+              <span key="fee" className="font-mono text-[10px] text-[#94a3b8]">
+                {t.fee_usd != null ? `$${Number(t.fee_usd).toFixed(2)}` : "—"}
+              </span>,
               <PnL key="pn" value={t.pnl_usd} pct={null} />,
             ])}
           />
         )}
       </Section>
+
+      {/* Decisions feed + skip reasons */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2">
+          <DecisionsFeed
+            decisions={decisions}
+            paused={decisionsPaused}
+            onTogglePause={() => setDecisionsPaused((v) => !v)}
+            newIds={newDecisionIds}
+          />
+        </div>
+        <SkipReasonsPanel data={skipReasons} />
+      </div>
     </div>
   );
 }
@@ -722,6 +865,14 @@ function CoinarbPositionCard({
   const deltaUsd = pos.pnl_usd ?? 0;
   const positive = deltaPct >= 0;
   const openedMs = pos.opened_at ? now - new Date(pos.opened_at).getTime() : 0;
+  const meta = pos.entryMeta ?? {};
+  const regime = typeof meta.regime === 'string' ? meta.regime : null;
+  const tier = typeof meta.tier === 'string' ? meta.tier : null;
+  const conf = typeof meta.validatorConfidence === 'number' ? meta.validatorConfidence : null;
+  const slipBps = typeof meta.slippageBps === 'number' ? meta.slippageBps : null;
+  const feeUsd = typeof meta.feeUsdEstimated === 'number' ? meta.feeUsdEstimated : null;
+  const lev = pos.leverageUsed ?? null;
+  const hasMeta = regime != null || tier != null || slipBps != null || feeUsd != null || lev != null;
 
   return (
     <div
@@ -779,6 +930,17 @@ function CoinarbPositionCard({
           <div className="text-[11px] font-mono text-[#94a3b8]">{formatElapsed(openedMs)}</div>
         </div>
       </div>
+
+      {hasMeta && (
+        <div className="mt-2 pt-2 border-t border-[#1f2937]/60 flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] font-mono text-[#94a3b8]">
+          {regime && <span className="px-1.5 py-0.5 rounded bg-[#0a0f1a] border border-[#1f2937] text-[#22d3ee]">{regime}</span>}
+          {tier && <span className="px-1.5 py-0.5 rounded bg-[#0a0f1a] border border-[#1f2937] text-[#a78bfa]">{tier}</span>}
+          {conf != null && <span>conf {(conf * 100).toFixed(0)}%</span>}
+          {slipBps != null && <span>slip {Math.abs(slipBps).toFixed(1)}bps</span>}
+          {feeUsd != null && <span>fee ${feeUsd.toFixed(2)}</span>}
+          {lev != null && lev !== 1 && <span>lev {lev.toFixed(1)}x</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -864,6 +1026,324 @@ function ExposureMetric({ label, value, color }: { label: string; value: string;
     <div>
       <div className="text-[9px] text-[#475569] uppercase tracking-wider">{label}</div>
       <div className="text-[12px] font-mono font-bold" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+// ─── New Phase 1 panels ────────────────────────────────────────────────────
+
+function useNewDecisionFlash(decisions: Decision[]): Set<string> {
+  const [flashing, setFlashing] = useState<Set<string>>(new Set());
+  const seenRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    const ids = new Set(decisions.map((d) => d.id));
+    if (seenRef.current === null) {
+      seenRef.current = ids;
+      return;
+    }
+    const fresh: string[] = [];
+    for (const id of ids) {
+      if (!seenRef.current.has(id)) fresh.push(id);
+    }
+    seenRef.current = ids;
+    if (fresh.length === 0) return;
+
+    setFlashing((prev) => {
+      const next = new Set(prev);
+      for (const id of fresh) next.add(id);
+      return next;
+    });
+    setTimeout(() => {
+      setFlashing((prev) => {
+        const next = new Set(prev);
+        for (const id of fresh) next.delete(id);
+        return next;
+      });
+    }, 2000);
+  }, [decisions]);
+
+  return flashing;
+}
+
+function ExecutionQualityStrip({ stats }: { stats: ExecutionStats | null }) {
+  const slipP95 = stats?.slippage.p95 ?? 0;
+  const latP95 = stats?.latency.p95 ?? 0;
+  const slipBad = slipP95 >= 20;
+  const latBad = latP95 >= 500;
+  const tone = slipBad && latBad ? "border-red-700/50" : (slipBad || latBad ? "border-yellow-700/50" : "border-[#1f2937]");
+
+  return (
+    <div className={`bg-[#0a0f1a] border ${tone} rounded p-2.5 h-full`}>
+      <div className="flex items-center gap-2 mb-2">
+        <Activity size={12} className="text-[#22d3ee]" />
+        <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider font-mono">
+          Execution quality (today UTC)
+        </span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <ExposureMetric
+          label="Slip p95"
+          value={stats ? `${slipP95.toFixed(1)}bps` : "—"}
+          color={slipBad ? "#ef4444" : "#34d399"}
+        />
+        <ExposureMetric
+          label="Latency p95"
+          value={stats ? `${latP95}ms` : "—"}
+          color={latBad ? "#ef4444" : "#34d399"}
+        />
+        <ExposureMetric
+          label="Fees today"
+          value={stats ? `$${stats.fees.totalUsd.toFixed(2)}` : "—"}
+          color="#a78bfa"
+        />
+        <ExposureMetric
+          label="Fills"
+          value={stats ? String(stats.fills) : "—"}
+          color="#94a3b8"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CumulativePnlChart({ points }: { points: Array<{ at: string; cumPnlUsd: number }> }) {
+  if (points.length < 2) {
+    return (
+      <div className="bg-[#0a0f1a] border border-[#1f2937] rounded p-2.5 h-full flex flex-col">
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp size={12} className="text-[#22d3ee]" />
+          <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider font-mono">Cumulative P&amp;L (today)</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-[10px] text-[#475569] font-mono">
+          Sin cierres hoy
+        </div>
+      </div>
+    );
+  }
+  const W = 320;
+  const H = 64;
+  const ys = points.map((p) => p.cumPnlUsd);
+  const min = Math.min(0, ...ys);
+  const max = Math.max(0, ...ys);
+  const range = Math.max(max - min, 1e-9);
+  const last = ys[ys.length - 1];
+  const positive = last >= 0;
+  const stroke = positive ? "#34d399" : "#ef4444";
+  const fillId = positive ? "coinarbPnlPos" : "coinarbPnlNeg";
+  const yToPx = (y: number) => H - ((y - min) / range) * H;
+  const zeroY = yToPx(0);
+  const path = points
+    .map((p, i) => {
+      const x = (i / (points.length - 1)) * W;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${yToPx(p.cumPnlUsd).toFixed(1)}`;
+    })
+    .join(" ");
+  const area = `${path} L${W},${zeroY.toFixed(1)} L0,${zeroY.toFixed(1)} Z`;
+
+  return (
+    <div className="bg-[#0a0f1a] border border-[#1f2937] rounded p-2.5 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={12} className="text-[#22d3ee]" />
+          <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider font-mono">
+            Cumulative P&amp;L (today)
+          </span>
+        </div>
+        <span className={`text-[11px] font-mono font-bold ${positive ? "text-green-400" : "text-red-400"}`}>
+          {positive ? "+" : ""}${last.toFixed(2)}
+        </span>
+      </div>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="overflow-visible">
+        <defs>
+          <linearGradient id={fillId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <line x1="0" x2={W} y1={zeroY} y2={zeroY} stroke="#1f2937" strokeDasharray="2 3" />
+        <path d={area} fill={`url(#${fillId})`} />
+        <path d={path} fill="none" stroke={stroke} strokeWidth={1.5} />
+      </svg>
+      <div className="text-[9px] text-[#475569] font-mono mt-1">
+        {points.length} cierre{points.length === 1 ? "" : "s"} · día UTC
+      </div>
+    </div>
+  );
+}
+
+function PnlBreakdownPanel({ stats }: { stats: PnlStats | null }) {
+  const venues = stats ? Object.entries(stats.byVenue) : [];
+  const tiers = stats ? Object.entries(stats.byTier) : [];
+  const symbols = stats?.bySymbol ?? [];
+  const empty = !stats || (venues.length === 0 && tiers.length === 0 && symbols.length === 0);
+
+  return (
+    <Section title="P&L Breakdown" icon={Coins} count={symbols.length + venues.length + tiers.length}>
+      {empty ? (
+        <Empty msg="Sin trades cerrados" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <PnlGroup title="By Venue" rows={venues.map(([k, v]) => ({ label: k.toUpperCase(), ...v }))} />
+          <PnlGroup title="By Symbol" rows={symbols.map(({ symbol, count, pnlUsd, winRate }) => ({ label: symbol, count, pnlUsd, winRate }))} />
+          <PnlGroup title="By Tier" rows={tiers.map(([k, v]) => ({ label: k, ...v }))} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function PnlGroup({ title, rows }: { title: string; rows: Array<{ label: string; count: number; pnlUsd: number; winRate: number }> }) {
+  return (
+    <div className="bg-[#0a0f1a] border border-[#1f2937] rounded p-2.5">
+      <div className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider font-mono mb-2">{title}</div>
+      {rows.length === 0 ? (
+        <div className="text-[10px] text-[#475569] font-mono">—</div>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((r) => {
+            const positive = r.pnlUsd >= 0;
+            return (
+              <div key={r.label} className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[11px] text-[#cbd5e1]">{r.label}</span>
+                <div className="flex items-center gap-2 text-[10px] font-mono">
+                  <span className={`font-bold ${positive ? "text-green-400" : "text-red-400"}`}>
+                    {positive ? "+" : ""}${r.pnlUsd.toFixed(2)}
+                  </span>
+                  <span className="text-[#94a3b8]">{(r.winRate * 100).toFixed(0)}%</span>
+                  <span className="text-[#475569]">n={r.count}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DecisionsFeed({
+  decisions,
+  paused,
+  onTogglePause,
+  newIds,
+}: {
+  decisions: Decision[];
+  paused: boolean;
+  onTogglePause: () => void;
+  newIds: Set<string>;
+}) {
+  const slice = decisions.slice(0, 50);
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1f2937] bg-[#0a0f1a]">
+        <div className="flex items-center gap-2">
+          <Cpu size={14} className="text-[#22d3ee]" />
+          <span className="text-xs font-bold text-[#e2e8f0] font-mono uppercase tracking-wider">
+            Decisions feed
+          </span>
+          <span className="text-[10px] text-[#475569] font-mono">{slice.length}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onTogglePause}
+          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border transition-colors ${
+            paused
+              ? "border-yellow-700/50 text-yellow-400 hover:bg-yellow-900/20"
+              : "border-[#1f2937] text-[#94a3b8] hover:bg-[#1f2937]"
+          }`}
+        >
+          {paused ? "PAUSED" : "LIVE"}
+        </button>
+      </div>
+      <div className="max-h-[420px] overflow-y-auto">
+        {slice.length === 0 ? (
+          <Empty msg="Sin decisiones aún" />
+        ) : (
+          <ul className="divide-y divide-[#1f2937]/60">
+            {slice.map((d) => (
+              <DecisionRow key={d.id} d={d} fresh={newIds.has(d.id)} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DecisionRow({ d, fresh }: { d: Decision; fresh: boolean }) {
+  const colors: Record<Decision["kind"], string> = {
+    ENTER: "bg-green-900/30 text-green-400 border-green-700/40",
+    SCALP: "bg-[#22d3ee]/15 text-[#22d3ee] border-[#22d3ee]/30",
+    EXIT: "bg-blue-900/30 text-blue-300 border-blue-700/40",
+    SKIP: "bg-[#1f2937] text-[#94a3b8] border-[#1f2937]",
+    BREAKER: "bg-red-900/40 text-red-400 border-red-700/40",
+    CASCADE: "bg-purple-900/30 text-purple-300 border-purple-700/40",
+    TICK: "bg-[#0a0f1a] text-[#475569] border-[#1f2937]",
+  };
+  const t = new Date(d.createdAt).toLocaleTimeString();
+
+  return (
+    <li
+      className={`px-3 py-1.5 flex items-start gap-2 text-[11px] font-mono transition-colors ${
+        fresh ? "bg-[#34d399]/10" : "hover:bg-[#151b28]/50"
+      }`}
+    >
+      <span className="text-[10px] text-[#475569] w-[68px] shrink-0">{t}</span>
+      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 ${colors[d.kind] ?? colors.TICK}`}>
+        {d.kind}
+      </span>
+      {d.venue && <span className="text-[#94a3b8] shrink-0">{d.venue}</span>}
+      {d.symbol && <span className="text-[#cbd5e1] shrink-0">{d.symbol}</span>}
+      <span className="text-[#94a3b8] truncate">{d.reason}</span>
+    </li>
+  );
+}
+
+function SkipReasonsPanel({ data }: { data: SkipReasons | null }) {
+  const top = (data?.byReason ?? []).slice(0, 6);
+  const remainder = (data?.byReason.length ?? 0) - top.length;
+  const max = top.reduce((m, r) => Math.max(m, r.count), 0);
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg overflow-hidden h-full flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1f2937] bg-[#0a0f1a]">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={14} className="text-[#f7931a]" />
+          <span className="text-xs font-bold text-[#e2e8f0] font-mono uppercase tracking-wider">
+            Skip reasons (24h)
+          </span>
+        </div>
+        <span className="text-[10px] text-[#475569] font-mono">{data?.total ?? 0}</span>
+      </div>
+      <div className="p-3 flex-1">
+        {top.length === 0 ? (
+          <Empty msg="Sin SKIPs en 24h" />
+        ) : (
+          <div className="space-y-2">
+            {top.map((r) => {
+              const w = max > 0 ? (r.count / max) * 100 : 0;
+              return (
+                <div key={r.reason} title={`${r.count} skips`}>
+                  <div className="flex items-center justify-between text-[10px] font-mono mb-0.5">
+                    <span className="text-[#cbd5e1] truncate">{r.reason}</span>
+                    <span className="text-[#94a3b8] tabular-nums">{r.count}</span>
+                  </div>
+                  <div className="h-1.5 bg-[#0a0f1a] border border-[#1f2937] rounded overflow-hidden">
+                    <div
+                      className="h-full bg-[#f7931a]/60"
+                      style={{ width: `${w.toFixed(1)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {remainder > 0 && (
+              <div className="text-[9px] text-[#475569] font-mono pt-1">+{remainder} more</div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
