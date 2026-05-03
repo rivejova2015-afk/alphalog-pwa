@@ -37,7 +37,8 @@ interface ProductCache {
 
 const SPOT_SYMBOLS = ['BTC-USD', 'ETH-USD'] as const;
 const PERP_SYMBOLS = ['BTC-PERP', 'ETH-PERP'] as const;
-const PRICE_HISTORY_LEN = 32;
+const PRICE_HISTORY_LEN = 80;
+const GAP_WINDOW_SAMPLES = 60;     // 60 × 200ms = 12s window for crypto micro-moves
 const TAKE_PROFIT_PCT = 0.015;     // close winners at +1.5% notional move
 const STOP_LOSS_PCT = 0.020;       // hard stop at -2% notional move
 
@@ -301,8 +302,8 @@ export class CoinarbLoop {
       }
     }
 
-    // Recent return % over last 10 samples — proxy for "gap" the validator expects
-    const recent = sample.history.slice(-10);
+    // Recent return % over last 60 samples (12s) — crypto micro-move window
+    const recent = sample.history.slice(-GAP_WINDOW_SAMPLES);
     const ret = (recent[recent.length - 1] - recent[0]) / recent[0];
     const absGap = Math.abs(ret);
     const confidence = Math.min(1, mv.confidence * (0.5 + Math.min(0.5, absGap * 50)));
