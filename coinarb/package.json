@@ -1,0 +1,34 @@
+{
+  "name": "coinarb-crypto-engine",
+  "version": "0.1.0",
+  "description": "Coinarb — Autonomous ultra-aggressive Coinbase trading engine (cross-venue spot + perps), built on PolyArb math foundation",
+  "private": true,
+  "type": "module",
+  "main": "dist/strategies/fifty-x/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/strategies/fifty-x/index.js",
+    "start:50x": "node dist/strategies/fifty-x/index.js",
+    "dev": "tsx watch src/strategies/fifty-x/index.ts",
+    "dev:50x": "tsx watch src/strategies/fifty-x/index.ts",
+    "boot:products": "tsx scripts/boot-products.ts",
+    "test:cdp-auth": "tsx scripts/test-cdp-auth.ts",
+    "test:intx-auth": "tsx scripts/test-intx-auth.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
+    "jose": "^5.9.6",
+    "undici": "^8.1.0",
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

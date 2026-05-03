@@ -48,7 +48,8 @@
     "tests/**",
     "playwright.config.ts",
     "lattice-desktop/**",
-    "polyarb/**"
+    "polyarb/**",
+    "coinarb/**"
   ],
   "ts-node": {
     "transpileOnly": true,

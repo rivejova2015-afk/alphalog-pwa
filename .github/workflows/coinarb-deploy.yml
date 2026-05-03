@@ -1,0 +1,59 @@
+name: Coinarb Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coinarb/**'
+      - '.github/workflows/coinarb-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: 'Fly deploy strategy'
+        required: false
+        default: 'rolling'
+        type: choice
+        options: [rolling, immediate, bluegreen]
+
+concurrency:
+  group: coinarb-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build + Deploy to Fly (coinarb-50x)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: coinarb
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: coinarb/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy \
+            --app coinarb-50x \
+            --strategy ${{ github.event.inputs.strategy || 'rolling' }} \
+            --remote-only
