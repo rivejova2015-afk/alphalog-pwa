@@ -8,7 +8,11 @@ import {
   Coins,
   CircleDot,
   Cpu,
+  Grid3x3,
+  Layers,
+  Network,
   RefreshCw,
+  Target,
   TrendingDown,
   TrendingUp,
   Wifi,
@@ -113,11 +117,62 @@ interface SkipReasons {
   byReason: Array<{ reason: string; count: number }>;
 }
 
+interface CalibrationStats {
+  window: string;
+  total: number;
+  brier: number;
+  reliability: Array<{ bin: number; predicted: number; actual: number; count: number }>;
+  byRegime: Array<{ key: string; brier: number; winRate: number; count: number }>;
+  byTier: Array<{ key: string; brier: number; winRate: number; count: number }>;
+}
+
+interface RegimePoint {
+  capturedAt: string;
+  regime: string;
+  multiplier: number;
+  trend: string | null;
+  trendStrength: number;
+  volatilityPct: number;
+  consistencyScore: number;
+  previousRegime: string | null;
+  isTransition: boolean;
+}
+interface RegimeSnapshots {
+  window: string;
+  transitions: number;
+  current: RegimePoint | null;
+  points: RegimePoint[];
+}
+
+interface ExposureHeatmapData {
+  venues: string[];
+  symbols: string[];
+  cells: Array<{ venue: string; symbol: string; side: 'BUY' | 'SELL'; count: number; notionalUsd: number }>;
+  totalNotionalUsd: number;
+}
+
+interface CorrelationData {
+  window: string;
+  symbols: string[];
+  matrix: number[][];
+  days: number;
+}
+
+interface DrawdownPoint { at: string; equity: number; peak: number; ddPct: number }
+interface DrawdownStats {
+  window: string;
+  points: DrawdownPoint[];
+  maxDrawdownPct: number;
+  currentDrawdownPct: number;
+  startCapital: number;
+}
+
 const PRICE_REFRESH_MS = 1000;
 const TELEMETRY_REFRESH_MS = 5000;
 const STATS_REFRESH_MS = 15_000;
 const DECISIONS_REFRESH_MS = 3000;
 const SKIP_REFRESH_MS = 60_000;
+const PHASE2_REFRESH_MS = 30_000;
 const SPARKLINE_LEN = 60;
 
 export default function CoinarbDashboard() {
@@ -130,6 +185,11 @@ export default function CoinarbDashboard() {
   const [pnlStats, setPnlStats] = useState<PnlStats | null>(null);
   const [skipReasons, setSkipReasons] = useState<SkipReasons | null>(null);
   const [decisionsPaused, setDecisionsPaused] = useState(false);
+  const [calibration, setCalibration] = useState<CalibrationStats | null>(null);
+  const [regimeSnaps, setRegimeSnaps] = useState<RegimeSnapshots | null>(null);
+  const [heatmap, setHeatmap] = useState<ExposureHeatmapData | null>(null);
+  const [correlation, setCorrelation] = useState<CorrelationData | null>(null);
+  const [drawdown, setDrawdown] = useState<DrawdownStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -203,6 +263,25 @@ export default function CoinarbDashboard() {
     }
   }, []);
 
+  const fetchPhase2 = useCallback(async () => {
+    try {
+      const [c, r, h, cor, dd] = await Promise.all([
+        fetch("/api/coinarb/stats/calibration", { cache: "no-store" }),
+        fetch("/api/coinarb/stats/regime-snapshots", { cache: "no-store" }),
+        fetch("/api/coinarb/stats/exposure-heatmap", { cache: "no-store" }),
+        fetch("/api/coinarb/stats/correlation", { cache: "no-store" }),
+        fetch("/api/coinarb/stats/drawdown", { cache: "no-store" }),
+      ]);
+      if (c.ok) setCalibration(await c.json());
+      if (r.ok) setRegimeSnaps(await r.json());
+      if (h.ok) setHeatmap(await h.json());
+      if (cor.ok) setCorrelation(await cor.json());
+      if (dd.ok) setDrawdown(await dd.json());
+    } catch (err) {
+      console.error("[coinarb] phase2 stats fetch failed", err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     Promise.all([
@@ -211,8 +290,9 @@ export default function CoinarbDashboard() {
       fetchStats(),
       fetchDecisions(),
       fetchSkipReasons(),
+      fetchPhase2(),
     ]).finally(() => setLoading(false));
-  }, [fetchTelemetry, fetchPositions, fetchStats, fetchDecisions, fetchSkipReasons]);
+  }, [fetchTelemetry, fetchPositions, fetchStats, fetchDecisions, fetchSkipReasons, fetchPhase2]);
 
   // Telemetry + trades refresh (5s)
   useEffect(() => {
@@ -252,6 +332,12 @@ export default function CoinarbDashboard() {
     const id = setInterval(fetchSkipReasons, SKIP_REFRESH_MS);
     return () => clearInterval(id);
   }, [fetchSkipReasons]);
+
+  // Phase 2 stats refresh (30s)
+  useEffect(() => {
+    const id = setInterval(fetchPhase2, PHASE2_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchPhase2]);
 
   // Derived live state per position
   const newPositionIds = useNewPositionFlash(positions);
@@ -369,6 +455,7 @@ export default function CoinarbDashboard() {
               fetchStats();
               fetchDecisions();
               fetchSkipReasons();
+              fetchPhase2();
             }}
             className="px-3 py-1.5 rounded text-xs font-mono text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1f2937] transition-colors inline-flex items-center gap-1.5"
           >
@@ -430,6 +517,14 @@ export default function CoinarbDashboard() {
         />
       </div>
 
+      {/* Risk: drawdown curve + exposure heatmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2">
+          <DrawdownChart data={drawdown} />
+        </div>
+        <ExposureHeatmap data={heatmap} />
+      </div>
+
       {/* Execution quality + cumulative pnl */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2">
@@ -440,6 +535,14 @@ export default function CoinarbDashboard() {
 
       {/* P&L breakdown */}
       <PnlBreakdownPanel stats={pnlStats} />
+
+      {/* Calibration + correlation matrix */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2">
+          <CalibrationPanel stats={calibration} />
+        </div>
+        <CorrelationMatrix data={correlation} />
+      </div>
 
       {/* Positions */}
       <Section title="Open Positions" icon={Coins} count={positions.length}>
@@ -493,6 +596,9 @@ export default function CoinarbDashboard() {
           />
         )}
       </Section>
+
+      {/* Regime timeline */}
+      <RegimeTimeline data={regimeSnaps} />
 
       {/* Decisions feed + skip reasons */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -1344,6 +1450,372 @@ function SkipReasonsPanel({ data }: { data: SkipReasons | null }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Phase 2: Risk + Calibration + Regime ──────────────────────────────────
+
+const REGIME_COLORS: Record<string, string> = {
+  CALM:     "#22d3ee",
+  TRENDING: "#34d399",
+  VOLATILE: "#facc15",
+  CRISIS:   "#ef4444",
+  UNKNOWN:  "#475569",
+};
+
+function DrawdownChart({ data }: { data: DrawdownStats | null }) {
+  const points = data?.points ?? [];
+  const w = 320;
+  const h = 88;
+  const pad = 4;
+
+  const body = (() => {
+    if (points.length < 2) {
+      return (
+        <div className="h-[88px] flex items-center justify-center text-[10px] text-[#475569] font-mono">
+          {data && data.startCapital === 0 ? "Sin starting capital" : "Sin cierres aún"}
+        </div>
+      );
+    }
+    const maxDd = Math.max(0.001, ...points.map(p => p.ddPct));
+    const path = points
+      .map((p, i) => {
+        const x = pad + (i / (points.length - 1)) * (w - pad * 2);
+        const y = pad + (p.ddPct / maxDd) * (h - pad * 2);
+        return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(" ");
+    const area = `${path} L${w - pad},${h - pad} L${pad},${h - pad} Z`;
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[88px]" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="dd-grad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <line x1={pad} y1={pad} x2={w - pad} y2={pad} stroke="#1f2937" strokeWidth="0.5" strokeDasharray="2 2" />
+        <path d={area} fill="url(#dd-grad)" />
+        <path d={path} fill="none" stroke="#ef4444" strokeWidth="1.4" />
+      </svg>
+    );
+  })();
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <TrendingDown size={11} className="text-[#ef4444]" />
+          <h3 className="text-[10px] font-bold text-[#94a3b8] font-mono uppercase tracking-wide">Equity Underwater</h3>
+        </div>
+        <div className="flex items-center gap-3 text-[9px] font-mono text-[#94a3b8]">
+          <span>cur <span className="text-[#ef4444]">{((data?.currentDrawdownPct ?? 0) * 100).toFixed(2)}%</span></span>
+          <span>max <span className="text-[#ef4444]">{((data?.maxDrawdownPct ?? 0) * 100).toFixed(2)}%</span></span>
+          <span className="text-[#475569]">{data?.window ?? "14d"}</span>
+        </div>
+      </div>
+      {body}
+      <div className="text-[9px] text-[#475569] font-mono pt-1.5 text-right">
+        peak ${(data?.points[data.points.length - 1]?.peak ?? 0).toFixed(2)}
+      </div>
+    </div>
+  );
+}
+
+function ExposureHeatmap({ data }: { data: ExposureHeatmapData | null }) {
+  const cells = data?.cells ?? [];
+  const venues = data?.venues ?? [];
+  const symbols = data?.symbols ?? [];
+  const total = data?.totalNotionalUsd ?? 0;
+  const maxNotional = Math.max(0.01, ...cells.map(c => c.notionalUsd));
+
+  const get = (venue: string, symbol: string, side: 'BUY' | 'SELL') =>
+    cells.find(c => c.venue === venue && c.symbol === symbol && c.side === side);
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Grid3x3 size={11} className="text-[#a78bfa]" />
+          <h3 className="text-[10px] font-bold text-[#94a3b8] font-mono uppercase tracking-wide">Exposure Heatmap</h3>
+        </div>
+        <span className="text-[9px] font-mono text-[#94a3b8]">${total.toFixed(2)} total</span>
+      </div>
+      {cells.length === 0 ? (
+        <div className="text-[10px] text-[#475569] font-mono py-3 text-center">No open exposure</div>
+      ) : (
+        <div className="space-y-1">
+          {venues.map(v => (
+            <div key={v} className="flex items-center gap-1">
+              <span className="w-10 text-[9px] font-mono text-[#94a3b8] uppercase">{v}</span>
+              <div className="flex-1 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${Math.max(1, symbols.length)}, minmax(0, 1fr))` }}>
+                {symbols.map(s => {
+                  const buy = get(v, s, 'BUY');
+                  const sell = get(v, s, 'SELL');
+                  const dominant = (buy?.notionalUsd ?? 0) >= (sell?.notionalUsd ?? 0) ? buy : sell;
+                  const intensity = dominant ? Math.min(1, dominant.notionalUsd / maxNotional) : 0;
+                  const color = !dominant
+                    ? '#0a0f1a'
+                    : dominant.side === 'BUY'
+                      ? `rgba(52, 211, 153, ${0.15 + intensity * 0.65})`
+                      : `rgba(239, 68, 68, ${0.15 + intensity * 0.65})`;
+                  const tt = dominant
+                    ? `${v} ${s} ${dominant.side} · ${dominant.count} pos · $${dominant.notionalUsd.toFixed(2)}`
+                    : `${v} ${s} · empty`;
+                  return (
+                    <div
+                      key={`${v}-${s}`}
+                      title={tt}
+                      className="rounded text-center text-[9px] font-mono border border-[#1f2937] py-1 px-0.5"
+                      style={{ background: color, color: dominant ? '#0a0f1a' : '#475569' }}
+                    >
+                      <div className="font-bold">{s.replace(/-(USD|PERP)$/, '')}</div>
+                      <div className="opacity-80">{dominant ? `$${dominant.notionalUsd.toFixed(0)}` : '—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalibrationPanel({ stats }: { stats: CalibrationStats | null }) {
+  const reliability = stats?.reliability ?? [];
+  const total = stats?.total ?? 0;
+  const brier = stats?.brier ?? 0;
+  const w = 320;
+  const h = 140;
+  const pad = 18;
+
+  const body = (() => {
+    if (reliability.length === 0 || total === 0) {
+      return (
+        <div className="h-[140px] flex items-center justify-center text-[10px] text-[#475569] font-mono">
+          Sin posiciones cerradas (7d)
+        </div>
+      );
+    }
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[140px]" preserveAspectRatio="none">
+        {/* Perfect calibration diagonal */}
+        <line x1={pad} y1={h - pad} x2={w - pad} y2={pad} stroke="#1f2937" strokeWidth="0.6" strokeDasharray="2 2" />
+        {/* Axes */}
+        <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="#1f2937" strokeWidth="0.6" />
+        <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="#1f2937" strokeWidth="0.6" />
+        {/* Bars: predicted (x) vs actual (bar height) */}
+        {reliability.map((b) => {
+          if (b.count === 0) return null;
+          const cellW = (w - pad * 2) / reliability.length;
+          const x = pad + b.bin * cellW;
+          const y = pad + (1 - b.actual) * (h - pad * 2);
+          const barH = (h - pad) - y;
+          const offset = b.actual - b.predicted;
+          const color = Math.abs(offset) < 0.05 ? '#22d3ee' : offset > 0 ? '#34d399' : '#facc15';
+          return (
+            <g key={b.bin}>
+              <rect x={x + 1} y={y} width={cellW - 2} height={barH} fill={color} fillOpacity="0.6" />
+              <rect x={x + 1} y={y} width={cellW - 2} height={barH} fill="none" stroke={color} strokeWidth="0.7" />
+            </g>
+          );
+        })}
+        {/* Axis labels */}
+        <text x={pad} y={h - 4} fontSize="7" fill="#475569" fontFamily="monospace">0</text>
+        <text x={w - pad - 4} y={h - 4} fontSize="7" fill="#475569" fontFamily="monospace">1</text>
+        <text x={2} y={pad + 4} fontSize="7" fill="#475569" fontFamily="monospace">1</text>
+        <text x={2} y={h - pad} fontSize="7" fill="#475569" fontFamily="monospace">0</text>
+      </svg>
+    );
+  })();
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Target size={11} className="text-[#22d3ee]" />
+          <h3 className="text-[10px] font-bold text-[#94a3b8] font-mono uppercase tracking-wide">Calibration · Reliability</h3>
+        </div>
+        <div className="flex items-center gap-3 text-[9px] font-mono text-[#94a3b8]">
+          <span>brier <span className={brier < 0.20 ? 'text-[#34d399]' : brier < 0.30 ? 'text-[#facc15]' : 'text-[#ef4444]'}>{brier.toFixed(3)}</span></span>
+          <span>n={total}</span>
+          <span className="text-[#475569]">{stats?.window ?? "7d"}</span>
+        </div>
+      </div>
+      {body}
+      <div className="grid grid-cols-2 gap-2 pt-2 mt-1 border-t border-[#1f2937]/60">
+        <div>
+          <div className="text-[9px] text-[#475569] font-mono uppercase mb-1">By regime</div>
+          <CalibBucketList rows={stats?.byRegime ?? []} />
+        </div>
+        <div>
+          <div className="text-[9px] text-[#475569] font-mono uppercase mb-1">By tier</div>
+          <CalibBucketList rows={stats?.byTier ?? []} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalibBucketList({ rows }: { rows: Array<{ key: string; brier: number; winRate: number; count: number }> }) {
+  if (rows.length === 0) return <div className="text-[9px] text-[#475569] font-mono">—</div>;
+  return (
+    <div className="space-y-0.5">
+      {rows.slice(0, 4).map((r) => (
+        <div key={r.key} className="flex items-center justify-between text-[9px] font-mono">
+          <span className="text-[#94a3b8]">{r.key}</span>
+          <span className="text-[#475569]">
+            <span className={r.brier < 0.20 ? 'text-[#34d399]' : r.brier < 0.30 ? 'text-[#facc15]' : 'text-[#ef4444]'}>{r.brier.toFixed(3)}</span>
+            {' · '}
+            {(r.winRate * 100).toFixed(0)}%
+            {' · '}
+            n={r.count}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CorrelationMatrix({ data }: { data: CorrelationData | null }) {
+  const symbols = data?.symbols ?? [];
+  const matrix = data?.matrix ?? [];
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Network size={11} className="text-[#a78bfa]" />
+          <h3 className="text-[10px] font-bold text-[#94a3b8] font-mono uppercase tracking-wide">PnL Correlation</h3>
+        </div>
+        <span className="text-[9px] font-mono text-[#475569]">{data?.window ?? "14d"} · {data?.days ?? 0}d</span>
+      </div>
+      {symbols.length < 2 ? (
+        <div className="h-[120px] flex items-center justify-center text-[10px] text-[#475569] font-mono text-center px-2">
+          Necesitamos ≥2 símbolos con cierres en el período
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="text-[9px] font-mono w-full">
+            <thead>
+              <tr>
+                <th className="text-left text-[#475569] py-0.5"></th>
+                {symbols.map(s => (
+                  <th key={s} className="text-center text-[#94a3b8] px-1 py-0.5">{s}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {symbols.map((s, i) => (
+                <tr key={s}>
+                  <td className="text-[#94a3b8] pr-1.5 py-0.5">{s}</td>
+                  {symbols.map((_, j) => {
+                    const v = matrix[i]?.[j] ?? 0;
+                    const intensity = Math.min(1, Math.abs(v));
+                    const color = i === j
+                      ? '#1f2937'
+                      : v > 0
+                        ? `rgba(239, 68, 68, ${0.18 + intensity * 0.55})`
+                        : `rgba(34, 211, 238, ${0.18 + intensity * 0.55})`;
+                    return (
+                      <td
+                        key={j}
+                        className="text-center text-[#0a0f1a] font-bold px-1 py-1.5 border border-[#0a0f1a]"
+                        style={{ background: color, color: i === j ? '#475569' : '#0a0f1a' }}
+                        title={`${symbols[i]} ↔ ${symbols[j]}: ${v.toFixed(3)}`}
+                      >
+                        {i === j ? '—' : v.toFixed(2)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex items-center justify-end gap-2 pt-1.5 text-[9px] font-mono text-[#475569]">
+            <span><span className="inline-block w-2 h-2 align-middle" style={{ background: 'rgba(34,211,238,0.6)' }} /> neg</span>
+            <span><span className="inline-block w-2 h-2 align-middle" style={{ background: 'rgba(239,68,68,0.6)' }} /> pos</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegimeTimeline({ data }: { data: RegimeSnapshots | null }) {
+  const points = data?.points ?? [];
+  const transitions = data?.transitions ?? 0;
+  const current = data?.current ?? null;
+
+  // Build segments: from each point until the next, paint a horizontal bar.
+  const segments = (() => {
+    if (points.length === 0) return [];
+    const start = new Date(points[0].capturedAt).getTime();
+    const end = Math.max(start + 60_000, Date.now());
+    const span = end - start;
+    return points.map((p, i) => {
+      const t0 = new Date(p.capturedAt).getTime();
+      const t1 = i + 1 < points.length ? new Date(points[i + 1].capturedAt).getTime() : end;
+      const left = ((t0 - start) / span) * 100;
+      const width = Math.max(0.3, ((t1 - t0) / span) * 100);
+      return { ...p, left, width };
+    });
+  })();
+
+  return (
+    <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Layers size={11} className="text-[#22d3ee]" />
+          <h3 className="text-[10px] font-bold text-[#94a3b8] font-mono uppercase tracking-wide">Regime Timeline</h3>
+        </div>
+        <div className="flex items-center gap-3 text-[9px] font-mono text-[#94a3b8]">
+          {current && (
+            <span>
+              now <span style={{ color: REGIME_COLORS[current.regime] ?? '#94a3b8' }} className="font-bold">{current.regime}</span>
+              {" · "}vol {current.volatilityPct.toFixed(1)}%
+              {" · "}mult {current.multiplier.toFixed(2)}x
+            </span>
+          )}
+          <span>transitions <span className="text-[#facc15]">{transitions}</span></span>
+          <span className="text-[#475569]">{data?.window ?? "24h"}</span>
+        </div>
+      </div>
+      {segments.length === 0 ? (
+        <div className="h-[36px] flex items-center justify-center text-[10px] text-[#475569] font-mono">
+          Esperando snapshots del bot
+        </div>
+      ) : (
+        <>
+          <div className="relative h-[36px] bg-[#0a0f1a] rounded border border-[#1f2937]/60 overflow-hidden">
+            {segments.map((s, i) => (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0"
+                style={{
+                  left: `${s.left}%`,
+                  width: `${s.width}%`,
+                  background: REGIME_COLORS[s.regime] ?? REGIME_COLORS.UNKNOWN,
+                  opacity: 0.55 + s.consistencyScore * 0.4,
+                  borderRight: s.isTransition ? '1px solid rgba(250,204,21,0.7)' : 'none',
+                }}
+                title={`${new Date(s.capturedAt).toLocaleTimeString()} · ${s.regime} · vol ${s.volatilityPct.toFixed(1)}% · mult ${s.multiplier.toFixed(2)}x${s.previousRegime ? ` · prev ${s.previousRegime}` : ''}`}
+              />
+            ))}
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1.5 text-[9px] font-mono text-[#475569]">
+            {(['CALM', 'TRENDING', 'VOLATILE', 'CRISIS'] as const).map(r => (
+              <span key={r} className="inline-flex items-center gap-1">
+                <span className="inline-block w-2 h-2" style={{ background: REGIME_COLORS[r] }} />
+                {r}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -121,6 +121,7 @@ export class CoinarbLoop {
   private running = false;
   private lastTickLatencyMs = 0;
   private lastRegime: RegimeState | null = null;
+  private lastRegimeSnapshotAt = 0;
 
   constructor(private readonly deps: LoopDeps) {
     const c = deps.config;
@@ -256,7 +257,15 @@ export class CoinarbLoop {
     // (acts as the broad market gauge for all symbols, matches regime-detector design).
     const btcState = this.perSymbol.get('BTC-USD');
     if (btcState && btcState.samples.length >= 10) {
-      this.lastRegime = detectRegime(btcState.samples);
+      const next = detectRegime(btcState.samples);
+      const prev = this.lastRegime?.regime ?? null;
+      const isTransition = prev !== null && prev !== next.regime;
+      const isPeriodic = Date.now() - this.lastRegimeSnapshotAt >= 5 * 60 * 1000;
+      if (isTransition || isPeriodic || this.lastRegimeSnapshotAt === 0) {
+        void this.persistRegimeSnapshot(next, prev, isTransition);
+        this.lastRegimeSnapshotAt = Date.now();
+      }
+      this.lastRegime = next;
     }
 
     // Manage open positions (take-profit / stop-loss / drawdown breaker)
@@ -667,6 +676,10 @@ export class CoinarbLoop {
         computedAt: Date.now(),
       });
 
+      // Calibration: store predicted_confidence vs actual outcome for the
+      // dashboard reliability diagram + Brier score breakdown by regime/tier.
+      void this.persistCalibration(pos, closed, win, entryGap);
+
       await this.logger.log({
         agentId: c.agentId, userId: c.userId, kind: 'EXIT', symbol: pos.symbol, venue: pos.venue,
         reason: exitReason, meta: { pnlUsd: closed.pnlUsd, pnlPercent: closed.pnlPercent, exitFeeUsd },
@@ -750,6 +763,62 @@ export class CoinarbLoop {
   private drawdownPct(): number {
     if (this.state.peakEquityUsd <= 0) return 0;
     return Math.max(0, (this.state.peakEquityUsd - this.state.currentEquityUsd) / this.state.peakEquityUsd);
+  }
+
+  private async persistCalibration(
+    pos: { id: string; symbol: string; venue: Venue; entryReason: Record<string, unknown> },
+    closed: { pnlUsd: number; closedAt: number },
+    win: boolean,
+    entryGap: number,
+  ): Promise<void> {
+    const c = this.deps.config;
+    const meta = pos.entryReason ?? {};
+    const predictedRaw = Number(meta.validatorConfidence);
+    const predicted = Number.isFinite(predictedRaw)
+      ? Math.min(1, Math.max(0, predictedRaw))
+      : 0;
+    const outcome = win ? 1 : 0;
+    const brier = (predicted - outcome) ** 2;
+    const regime = typeof meta.regime === 'string' ? meta.regime : null;
+    const tier = typeof meta.tier === 'string' ? meta.tier : null;
+
+    const { error } = await getSupabase().from('coinarb_calibration').insert({
+      user_id: c.userId,
+      agent_id: c.agentId,
+      position_id: pos.id,
+      symbol: pos.symbol,
+      venue: pos.venue,
+      predicted_confidence: predicted,
+      predicted_edge: entryGap > 0 ? entryGap : null,
+      regime,
+      tier,
+      outcome,
+      pnl_usd: closed.pnlUsd,
+      brier_score: brier,
+      closed_at: new Date(closed.closedAt).toISOString(),
+    });
+    if (error) console.warn('[loop-50x] calibration insert:', error.message);
+  }
+
+  private async persistRegimeSnapshot(
+    next: RegimeState,
+    prev: string | null,
+    isTransition: boolean,
+  ): Promise<void> {
+    const c = this.deps.config;
+    const { error } = await getSupabase().from('coinarb_regime_snapshots').insert({
+      user_id: c.userId,
+      agent_id: c.agentId,
+      regime: next.regime,
+      agent_multiplier: next.agentMultiplier,
+      trend: next.trend,
+      trend_strength: next.trendStrength,
+      volatility_pct: next.volatilityPct,
+      consistency_score: next.consistencyScore,
+      previous_regime: prev,
+      is_transition: isTransition,
+    });
+    if (error) console.warn('[loop-50x] regime snapshot insert:', error.message);
   }
 }
 
