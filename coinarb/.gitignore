@@ -7,3 +7,4 @@ dist/
 
 # Build artifacts
 *.tsbuildinfo
+.DS_Store
