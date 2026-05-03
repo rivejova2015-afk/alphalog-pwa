@@ -33,7 +33,9 @@ export type AuditResourceType =
   | "progress"
   | "export"
   | "webhook"
-  | "bot_signal_engine_state";
+  | "bot_signal_engine_state"
+  | "algorithm"
+  | "algorithm_deployment";
 
 export type AuditStatus = "success" | "failure" | "partial" | "skipped";
 

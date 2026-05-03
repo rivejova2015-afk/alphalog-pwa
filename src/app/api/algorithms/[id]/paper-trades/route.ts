@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +78,14 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       .maybeSingle();
 
     if (!algo) return NextResponse.json({ error: "Algorithm not found" }, { status: 404 });
+
+    const rl = await checkAiRateLimit(user.id, "algo-paper-trade", 100);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds ?? 3600), "X-RateLimit-Limit": "100" },
+      });
+    }
 
     let body: unknown;
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }

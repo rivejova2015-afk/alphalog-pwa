@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data: algo } = await supabase
-      .from("algorithms")
+      .from("trading_algorithms")
       .select("id, name, status")
       .eq("id", id)
       .eq("user_id", user.id)
@@ -83,6 +83,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         tier:             'NOT_READY',
       },
       breakdown,
+    }, {
+      headers: { "Cache-Control": "private, no-store" },
     });
   } catch (err) {
     logError("QualityGates", { component: "GET /api/algorithms/[id]/quality-gates", message: String(err) });

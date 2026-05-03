@@ -18,17 +18,34 @@ const ALL_CHECKS = [...edgeChecks, ...capitalChecks, ...microChecks, ...opsCheck
 
 async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: string): Promise<AlgorithmRow> {
   const { data, error } = await sb
-    .from('algorithms')
-    .select('id,user_id,name,status,risk_percent,max_drawdown_pct,linked_bot_account_id,parameters,scan_config')
+    .from('trading_algorithms')
+    .select('id,user_id,name,status,parameters,deployments:algorithm_deployments(bot_account_id,status)')
     .eq('id', algorithmId)
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .single();
   if (error || !data) throw new Error(`Algorithm ${algorithmId} not found: ${error?.message ?? 'no row'}`);
+
+  const params = (data.parameters as Record<string, unknown>) ?? {};
+  const deps = (data.deployments as { bot_account_id: string | null; status: string }[] | null) ?? [];
+  const activeDep = deps.find((d) => d.status === 'active') ?? deps[0] ?? null;
+
+  const numParam = (key: string): number | null => {
+    const v = params[key];
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  };
+
   return {
-    ...data,
-    parameters:  (data.parameters  as Record<string, unknown>) ?? {},
-    scan_config: (data.scan_config as Record<string, unknown> | null) ?? null,
-  } as AlgorithmRow;
+    id:                    data.id as string,
+    user_id:               data.user_id as string,
+    name:                  data.name as string,
+    status:                data.status as string,
+    risk_percent:          numParam('risk_percent'),
+    max_drawdown_pct:      numParam('max_drawdown_pct'),
+    linked_bot_account_id: activeDep?.bot_account_id ?? null,
+    parameters:            params,
+    scan_config:           (params.scan_config as Record<string, unknown> | null) ?? null,
+  };
 }
 
 async function loadLatestBacktest(sb: SupabaseClient, algorithmId: string, userId: string): Promise<BacktestSnapshot | null> {

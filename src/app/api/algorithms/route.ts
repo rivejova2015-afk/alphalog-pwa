@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,6 +77,14 @@ export async function POST(request: NextRequest) {
     let body: unknown;
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
+    const rl = await checkAiRateLimit(user.id, "algo-create", 20);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds ?? 3600), "X-RateLimit-Limit": "20" },
+      });
+    }
+
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
@@ -111,6 +121,11 @@ export async function POST(request: NextRequest) {
       logError("Algorithms", { component: "POST /api/algorithms", message: error.message });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    await logAuditFromRequest(
+      { userId: user.id, action: "create", resourceType: "algorithm", resourceId: data.id, status: "success" },
+      request
+    );
 
     return NextResponse.json({ algorithm: data }, { status: 201 });
   } catch (err) {
