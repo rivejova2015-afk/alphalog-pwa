@@ -8,6 +8,7 @@ import {
   Flame,
   LayoutDashboard,
   Mail,
+  ShieldCheck,
 } from "lucide-react";
 
 const items = [
@@ -15,6 +16,7 @@ const items = [
   { label: "Intel", href: "/intelligence", icon: Brain },
   { label: "Business", href: "/business", icon: Building2 },
   { label: "Map Hot", href: "/map-hot", icon: Flame },
+  { label: "Sec", href: "/securities", icon: ShieldCheck },
   { label: "Inbox", href: "/inbox", icon: Mail },
 ];
 

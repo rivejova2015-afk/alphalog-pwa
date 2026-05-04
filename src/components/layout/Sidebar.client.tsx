@@ -41,6 +41,12 @@ const SECTIONS: SidebarSection[] = [
       { label: 'Future', href: '/map-hot/planning' },
     ],
   },
+  {
+    name: 'AlphaLog Securities',
+    items: [
+      { label: 'CyberSec Academy', href: '/securities/cybersec' },
+    ],
+  },
 ];
 
 export function AppSidebar() {
@@ -49,6 +55,7 @@ export function AppSidebar() {
     'Intelligence Suite': true,
     Business: false,
     'Map Hot': false,
+    'AlphaLog Securities': false,
   });
 
   return (

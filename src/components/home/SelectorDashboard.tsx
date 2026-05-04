@@ -57,6 +57,22 @@ export function SelectorDashboard() {
             </button>
           </Link>
         </Card>
+
+        {/* AlphaLog Securities */}
+        <Card hover className="flex flex-col">
+          <div className="w-12 h-12 bg-[#a78bfa]/20 border border-[#a78bfa]/30 rounded-lg flex items-center justify-center mb-4">
+            <span className="text-[#a78bfa] text-2xl">🛡️</span>
+          </div>
+          <h2 className="text-xl font-bold text-[#e2e8f0] mb-3">AlphaLog Securities</h2>
+          <p className="text-sm text-[#94a3b8] mb-4 flex-1">
+            CyberSec Academy · 58 módulos · Quizzes · Homework · Examen final
+          </p>
+          <Link href="/securities">
+            <button className="w-full px-4 py-2 bg-[#a78bfa] hover:bg-[#9061f9] text-[#0a0e1a] font-bold rounded transition-colors text-sm">
+              ENTER
+            </button>
+          </Link>
+        </Card>
       </div>
 
       {/* Quick Status Footer */}
