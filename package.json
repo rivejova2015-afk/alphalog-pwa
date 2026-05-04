@@ -11,6 +11,8 @@
     "perf:bundle-budget": "node scripts/perf/check-bundle-budget.js",
     "security:check-rls": "node scripts/security/check-rls-coverage.js",
     "audit:sprints": "node scripts/sprint-audit.js",
+    "audit:tables": "node scripts/audit-db-tables.mjs",
+    "audit:tables:offline": "node scripts/audit-db-tables.mjs --offline",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
