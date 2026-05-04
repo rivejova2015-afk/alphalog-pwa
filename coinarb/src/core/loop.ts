@@ -391,7 +391,7 @@ export class CoinarbLoop {
       const cbState = this.circuitBreaker.snapshot;
       const daily = this.dailyTracker.current.data;
       const btc = this.coinbase.getPrice('BTC');
-      await supabase.from('coinarb_telemetry').insert({
+      await supabase.from('coinarb_telemetry').upsert({
         user_id: COINARB_USER_ID,
         agent_id: COINARB_AGENT_ID,
         equity_usd: this.phaseManager.capitalNow,
@@ -413,7 +413,7 @@ export class CoinarbLoop {
         fear_greed_index: fearGreed,
         paused_until: cbState.pausedUntil ? new Date(cbState.pausedUntil).toISOString() : null,
         last_heartbeat_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'agent_id' });
     } catch (err) {
       console.error('[loop] telemetry flush failed:', err);
     }
