@@ -41,7 +41,7 @@ interface Telemetry {
   max_drawdown_pct: number | null;
   loop_latency_ms: number | null;
   ws_binance_connected: boolean | null;
-  ws_polymarket_connected: boolean | null;
+  ws_coinbase_connected: boolean | null;
   consecutive_wins: number | null;
   consecutive_losses: number | null;
   error_count_1h: number | null;
@@ -54,11 +54,11 @@ interface Position {
   venue: string;
   symbol: string;
   side: string;
-  outcome: string;
+  direction?: string | null;
   entry_price: number | null;
   exit_price: number | null;
   size_usd: number | null;
-  shares: number | null;
+  base_qty: number | null;
   pnl_usd: number | null;
   pnl_percent: number | null;
   status: string;
@@ -90,7 +90,7 @@ interface Decision {
   id: string;
   kind: 'ENTER' | 'SCALP' | 'SKIP' | 'EXIT' | 'BREAKER' | 'CASCADE' | 'TICK';
   symbol: string | null;
-  venue: 'spot' | 'perp' | null;
+  venue: 'spot' | null;
   reason: string;
   meta: Record<string, unknown>;
   createdAt: string;

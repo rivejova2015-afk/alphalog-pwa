@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('coinarb_trades')
     .select(
-      'id, position_id, trade_type, market_slug, outcome, side, price, size, size_usd, fee_usd, pnl_usd, slippage_bps, execution_latency_ms, status, executed_at',
+      'id, position_id, trade_type, symbol, direction, side, price, size, size_usd, fee_usd, pnl_usd, slippage_bps, execution_latency_ms, status, executed_at',
       { count: 'exact' },
     )
     .eq('user_id', user.id)
@@ -32,16 +32,15 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const trades = (data ?? []).map((t) => {
-    const [venue, symbol] = (t.market_slug || ':').split(':');
     const priceNum = typeof t.price === 'string' ? parseFloat(t.price) : (t.price ?? 0);
     const sizeNum = typeof t.size === 'string' ? parseFloat(t.size) : (t.size ?? 0);
     return {
       id: t.id,
       position_id: t.position_id ?? null,
       trade_type: t.trade_type ?? 'ENTRY',
-      venue: venue || 'unknown',
-      symbol: symbol || t.market_slug,
-      outcome: t.outcome,
+      venue: 'spot' as const,
+      symbol: t.symbol ?? 'unknown',
+      direction: t.direction ?? t.side,
       side: t.side,
       price: priceNum,
       size: sizeNum,

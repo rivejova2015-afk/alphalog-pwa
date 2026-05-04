@@ -1,22 +1,20 @@
 {
   "name": "coinarb-crypto-engine",
-  "version": "0.1.0",
-  "description": "Coinarb — Autonomous ultra-aggressive Coinbase trading engine (cross-venue spot + perps), built on PolyArb math foundation",
+  "version": "1.0.0",
+  "description": "Coinarb — Spot-only SMC trading bot for Coinbase Advanced (BTC-USD/ETH-USD/SOL-USD) with latency arbitrage vs Binance and capital phase compounding",
   "private": true,
   "type": "module",
-  "main": "dist/strategies/fifty-x/index.js",
+  "main": "dist/core/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/strategies/fifty-x/index.js",
-    "start:50x": "node dist/strategies/fifty-x/index.js",
-    "dev": "tsx watch src/strategies/fifty-x/index.ts",
-    "dev:50x": "tsx watch src/strategies/fifty-x/index.ts",
+    "start": "node dist/core/index.js",
+    "dev": "tsx watch src/core/index.ts",
     "boot:products": "tsx scripts/boot-products.ts",
-    "test:cdp-auth": "tsx scripts/test-cdp-auth.ts",
-    "test:intx-auth": "tsx scripts/test-intx-auth.ts"
+    "test:cdp-auth": "tsx scripts/test-cdp-auth.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
+    "dotenv": "^16.4.5",
     "jose": "^5.9.6",
     "undici": "^8.1.0",
     "ws": "^8.18.0",

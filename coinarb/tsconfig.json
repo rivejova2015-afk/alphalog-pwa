@@ -14,21 +14,5 @@
     "sourceMap": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/skills/adaptive-consensus.ts",
-    "src/skills/adaptive-profit-take.ts",
-    "src/skills/confluence-engine.ts",
-    "src/skills/dynamic-kelly-cap.ts",
-    "src/skills/event-detector.ts",
-    "src/skills/event-position-manager.ts",
-    "src/skills/orderbook-depth.ts",
-    "src/skills/settlement-engine.ts",
-    "src/skills/spoofing-detector.ts",
-    "src/strategies/fifty-x/kelly-adjuster.ts",
-    "src/trading/circuit-breaker.ts",
-    "src/telemetry/compliance.ts",
-    "src/telemetry/writer.ts"
-  ]
+  "exclude": ["node_modules", "dist"]
 }

@@ -24,10 +24,10 @@ export async function GET() {
     });
   }
 
-  // Closed positions give us pnl + tier (entry_reason.tier) + venue/symbol.
+  // Spot-only bot: venue = 'spot', symbol is direct column. Tier still in entry_reason.
   const { data: closed, error } = await supabase
     .from('coinarb_positions')
-    .select('market_slug, pnl_usd, entry_reason, closed_at')
+    .select('symbol, pnl_usd, entry_reason, closed_at')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .is('deleted_at', null)
@@ -47,13 +47,11 @@ export async function GET() {
 
   for (const p of closed ?? []) {
     const pnl = safeNumber(p.pnl_usd) ?? 0;
-    const [venueRaw, symbolRaw] = (p.market_slug || ':').split(':');
-    const venue = venueRaw || 'unknown';
-    const symbol = symbolRaw || venueRaw || 'unknown';
+    const symbol = (typeof p.symbol === 'string' && p.symbol) ? p.symbol : 'unknown';
     const meta = (p.entry_reason ?? {}) as Record<string, unknown>;
     const tier = typeof meta.tier === 'string' ? meta.tier : 'OTHER';
 
-    bumpBucket(byVenue, venue, pnl);
+    bumpBucket(byVenue, 'spot', pnl);
     bumpBucket(byTier, tier, pnl);
 
     const sym = bySymbol.get(symbol) ?? { count: 0, pnlUsd: 0, wins: 0 };

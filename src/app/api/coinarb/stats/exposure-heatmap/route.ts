@@ -23,7 +23,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('coinarb_positions')
-    .select('market_slug, side, size_usd, status')
+    .select('symbol, direction, side, size_usd, status')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .eq('status', 'OPEN')
@@ -37,11 +37,12 @@ export async function GET() {
   const symbols = new Set<string>();
   let totalNotional = 0;
 
+  // Spot-only bot: venue is constant 'spot', heatmap collapses to spot×{BTC,ETH,SOL}×{BUY,SELL}
   for (const p of data ?? []) {
-    const [venueRaw, symbolRaw] = (p.market_slug || ':').split(':');
-    const venue = venueRaw || 'unknown';
-    const symbol = symbolRaw || venueRaw || 'unknown';
-    const side: 'BUY' | 'SELL' = p.side === 'SELL' ? 'SELL' : 'BUY';
+    const venue = 'spot';
+    const symbol = (typeof p.symbol === 'string' && p.symbol) ? p.symbol : 'unknown';
+    const dir = p.direction ?? p.side;
+    const side: 'BUY' | 'SELL' = dir === 'SELL' ? 'SELL' : 'BUY';
     const notional = safeNumber(p.size_usd) ?? 0;
 
     venues.add(venue);

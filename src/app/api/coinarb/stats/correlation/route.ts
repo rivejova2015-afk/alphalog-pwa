@@ -20,7 +20,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('coinarb_positions')
-    .select('market_slug, pnl_usd, closed_at')
+    .select('symbol, pnl_usd, closed_at')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .is('deleted_at', null)
@@ -30,13 +30,12 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Group daily pnl per symbol (collapse spot+perp into the underlying coin).
+  // Group daily pnl per symbol. Spot-only bot — symbol is the underlying coin already.
   const perSymbol = new Map<string, Map<string, number>>(); // symbol → day → pnl
   const counts = new Map<string, number>();
 
   for (const p of data ?? []) {
-    const slug = String(p.market_slug ?? '');
-    const symbol = (slug.split(':')[1] ?? 'unknown').replace(/-(USD|PERP)$/, '');
+    const symbol = (typeof p.symbol === 'string' && p.symbol) ? p.symbol.replace(/-(USD|USDT)$/, '') : 'unknown';
     const pnl = safeNumber(p.pnl_usd) ?? 0;
     const closedAt = p.closed_at ? new Date(p.closed_at).getTime() : NaN;
     if (!Number.isFinite(closedAt)) continue;
@@ -48,27 +47,23 @@ export async function GET() {
     perSymbol.set(symbol, sym);
   }
 
-  // Pick the MAX_SYMBOLS most-active symbols.
   const symbols = Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, MAX_SYMBOLS)
     .map(([s]) => s);
 
-  // Union of all days for vector alignment.
   const allDays = new Set<string>();
   for (const sym of symbols) {
     for (const day of perSymbol.get(sym)?.keys() ?? []) allDays.add(day);
   }
   const days = Array.from(allDays).sort();
 
-  // Build vectors (zero-fill missing days).
   const vectors = new Map<string, number[]>();
   for (const sym of symbols) {
     const inner = perSymbol.get(sym) ?? new Map<string, number>();
     vectors.set(sym, days.map(d => inner.get(d) ?? 0));
   }
 
-  // N×N pearson correlation matrix.
   const matrix: Array<Array<number>> = [];
   for (const a of symbols) {
     const row: number[] = [];

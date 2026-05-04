@@ -45,7 +45,6 @@ const truncate = (s: string, max: number): string =>
   s.length <= max ? s : s.slice(0, Math.max(0, max - 1)) + '…';
 
 export interface EntryNotice {
-  venue: 'spot' | 'perp';
   symbol: string;
   side: 'BUY' | 'SELL';
   filledPrice: number;
@@ -58,13 +57,12 @@ export function formatEntry(p: EntryNotice): { title: string; body: string } {
   const tag = p.paper ? 'PAPER' : 'LIVE';
   const verb = p.side === 'BUY' ? 'Long' : 'Short';
   return {
-    title: `📈 Coinarb ${tag} · ${verb} ${p.symbol} @${p.filledPrice.toFixed(2)}`,
-    body:  `$${p.sizeUsd.toFixed(2)} ${p.venue} · ${truncate(p.reason, 60)}`,
+    title: `Coinarb ${tag} · ${verb} ${p.symbol} @${p.filledPrice.toFixed(2)}`,
+    body:  `$${p.sizeUsd.toFixed(2)} spot · ${truncate(p.reason, 60)}`,
   };
 }
 
 export interface ExitNotice {
-  venue: 'spot' | 'perp';
   symbol: string;
   pnlUsd: number;
   pnlPercent: number;
@@ -78,13 +76,13 @@ export function formatExit(p: ExitNotice): { title: string; body: string } {
   const win = p.pnlUsd > 0;
   const sign = win ? '+' : '';
   return {
-    title: `${win ? '✅ WIN' : '❌ LOSS'} Coinarb ${tag} ${sign}$${p.pnlUsd.toFixed(2)} (${sign}${p.pnlPercent.toFixed(1)}%)`,
-    body:  `${p.symbol} ${p.venue} cerró @${p.exitPrice.toFixed(2)} · ${truncate(p.reason, 50)}`,
+    title: `${win ? 'WIN' : 'LOSS'} Coinarb ${tag} ${sign}$${p.pnlUsd.toFixed(2)} (${sign}${p.pnlPercent.toFixed(1)}%)`,
+    body:  `${p.symbol} spot closed @${p.exitPrice.toFixed(2)} · ${truncate(p.reason, 50)}`,
   };
 }
 
 export interface BreakerNotice {
-  kind: 'drawdown' | 'cooldown' | 'daily_cap' | 'funding';
+  kind: 'loss-streak' | 'daily-cap' | 'cooldown';
   message: string;
   paper: boolean;
 }
@@ -92,7 +90,7 @@ export interface BreakerNotice {
 export function formatBreaker(p: BreakerNotice): { title: string; body: string } {
   const tag = p.paper ? 'PAPER' : 'LIVE';
   return {
-    title: `🛑 Coinarb ${tag} breaker (${p.kind})`,
+    title: `Coinarb ${tag} breaker (${p.kind})`,
     body:  truncate(p.message, 120),
   };
 }
@@ -109,7 +107,7 @@ export function formatDaily(p: DailyNotice): { title: string; body: string } {
   const tag = p.paper ? 'PAPER' : 'LIVE';
   const sign = p.pnlUsd >= 0 ? '+' : '';
   return {
-    title: `📊 Coinarb ${tag} resumen 24h: ${sign}$${p.pnlUsd.toFixed(2)}`,
+    title: `Coinarb ${tag} 24h summary: ${sign}$${p.pnlUsd.toFixed(2)}`,
     body:  `${p.trades} trades · WR ${(p.winRate * 100).toFixed(0)}% · DD ${(p.drawdownPct * 100).toFixed(1)}%`,
   };
 }

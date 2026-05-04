@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('coinarb_positions')
     .select(
-      'id, market_slug, condition_id, outcome, side, entry_price, exit_price, size_usd, shares, pnl_usd, pnl_percent, status, exit_reason, leverage_used, entry_reason, opened_at, closed_at, created_at',
+      'id, symbol, direction, side, entry_price, exit_price, size_usd, base_qty, pnl_usd, pnl_percent, status, exit_reason, entry_reason, stop_loss_price, take_profit_price, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry, opened_at, closed_at, created_at',
       { count: 'exact' },
     )
     .eq('user_id', user.id)
@@ -32,15 +32,13 @@ export async function GET(request: NextRequest) {
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Decode market_slug "venue:symbol" → { venue, symbol }; surface entry_reason as entryMeta
+  // Spot-only bot: venue is always 'spot', leverage is always 1×.
   const positions = (data ?? []).map((p) => {
-    const [venue, symbol] = (p.market_slug || ':').split(':');
-    const { entry_reason, leverage_used, exit_reason, ...rest } = p;
+    const { entry_reason, exit_reason, ...rest } = p;
     return {
       ...rest,
-      venue: venue || 'unknown',
-      symbol: symbol || p.market_slug,
-      leverageUsed: Number(leverage_used ?? 1),
+      venue: 'spot' as const,
+      leverageUsed: 1,
       exitReason: exit_reason ?? null,
       entryMeta: (entry_reason ?? {}) as Record<string, unknown>,
     };

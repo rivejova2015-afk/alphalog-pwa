@@ -15,7 +15,7 @@ export interface DecisionRow {
   userId: string;
   kind: DecisionKind;
   symbol?: string;
-  venue?: 'spot' | 'perp';
+  venue?: 'spot';
   reason: string;
   meta?: Record<string, unknown>;
 }

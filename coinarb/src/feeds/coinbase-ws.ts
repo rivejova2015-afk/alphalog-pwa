@@ -11,7 +11,11 @@
  */
 
 import WebSocket from 'ws';
-import type { PriceSample } from '../skills/velocity-detector.js';
+
+export interface PriceSample {
+  price: number;
+  timestamp: number;
+}
 
 export interface CoinbasePrice {
   last: number;

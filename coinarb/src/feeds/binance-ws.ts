@@ -9,7 +9,7 @@
  */
 
 import WebSocket from 'ws';
-import type { PriceSample } from '../skills/velocity-detector.js';
+import type { PriceSample } from './coinbase-ws.js';
 
 export interface BinancePrice {
   last: number;
