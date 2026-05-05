@@ -91,6 +91,9 @@ export class DailyTracker {
       const supabase = getSupabase();
       const winRate = this.snap.totalTrades > 0 ? this.snap.wins / this.snap.totalTrades : null;
       const fgAvg = this.snap.fearGreedSamples > 0 ? this.snap.fearGreedSum / this.snap.fearGreedSamples : null;
+      const capitalEnd = this.snap.totalTrades === 0 && this.snap.capitalStart !== null
+        ? this.snap.capitalStart
+        : this.snap.capitalEnd;
       await supabase.from('coinarb_daily_stats').upsert(
         {
           user_id: COINARB_USER_ID,
@@ -104,7 +107,7 @@ export class DailyTracker {
           best_trade_usd: this.snap.bestTradeUsd,
           worst_trade_usd: this.snap.worstTradeUsd,
           capital_start_usd: this.snap.capitalStart,
-          capital_end_usd: this.snap.capitalEnd,
+          capital_end_usd: capitalEnd,
           phase_start: this.snap.phaseStart,
           phase_end: this.snap.phaseEnd,
           circuit_breaker_triggered: this.snap.circuitTriggered,

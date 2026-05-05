@@ -1,14 +1,12 @@
 /**
- * Fear & Greed Index gate.
+ * Fear & Greed Index — telemetry only (no longer gates entries).
  *
- * Bot trades ONLY when F&G >= 65 (Greed/Extreme Greed) per spec.
- * The previous polymarket-era provider had a contrarian read; we ignore that
- * and use the raw value with a hard threshold.
+ * The pure SMC pipeline does not filter on F&G. We still poll it to write the
+ * `fear_greed_index` column on telemetry rows so the dashboard can chart
+ * sentiment context next to trades.
  *
  * Source: alternative.me /fng/?limit=1 (free, no auth, cached for 5 min).
  */
-
-import { FEAR_GREED_GATE } from '../core/config.js';
 
 const FNG_URL = 'https://api.alternative.me/fng/?limit=1';
 const CACHE_MS = 5 * 60 * 1000;
@@ -16,10 +14,9 @@ const CACHE_MS = 5 * 60 * 1000;
 let cache: { value: number; classification: string; ts: number } | null = null;
 
 export interface FearGreedResult {
-  allow: boolean;
+  allow: boolean;          // Always true — kept for backward compatibility
   value: number;
   classification: string;
-  threshold: number;
 }
 
 export async function checkFearGreed(): Promise<FearGreedResult> {
@@ -43,9 +40,8 @@ export async function checkFearGreed(): Promise<FearGreedResult> {
   }
 
   return {
-    allow: cache.value >= FEAR_GREED_GATE,
+    allow: true,
     value: cache.value,
     classification: cache.classification,
-    threshold: FEAR_GREED_GATE,
   };
 }

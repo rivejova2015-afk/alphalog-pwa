@@ -11,7 +11,8 @@
  */
 
 import type { PriceSample } from '../feeds/coinbase-ws.js';
-import type { Timeframe } from '../core/config.js';
+import type { Symbol, Timeframe } from '../core/config.js';
+import { coinbaseRestHistory } from '../feeds/coinbase-rest-history.js';
 
 export interface Candle {
   timeframe: Timeframe;
@@ -98,4 +99,18 @@ export function buildAllTimeframes(
     out.set(tf, buildCandles(samples, tf));
   }
   return out;
+}
+
+/**
+ * Returns candles for a (symbol, TF) pair.
+ *
+ * For ≥5M timeframes, REST history is the source of truth (WS buffer is too
+ * short to span 5M+). For 1M, REST is also used because it gives 200 minutes
+ * of history vs ~60 from the WS buffer.
+ */
+export async function getCandlesForTimeframe(
+  symbol: Symbol,
+  tf: Timeframe,
+): Promise<Candle[]> {
+  return coinbaseRestHistory.get(symbol, tf);
 }
