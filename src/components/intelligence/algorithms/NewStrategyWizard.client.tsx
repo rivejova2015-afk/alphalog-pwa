@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/browser';
 import type { AlgorithmTemplate } from '@/types/algorithms';
+import { AlgorithmWizardStep2 } from './AlgorithmWizardStep2.client';
+import type { EngineConfig } from '@/lib/validations/engine-config';
+import { ENGINE_CONFIG_DEFAULT } from '@/lib/validations/engine-config';
 
 interface BotAccount { id: string; label: string; account_id: string; }
 
@@ -581,124 +584,7 @@ function StepOptions({ name, setName, underlying, setUnderlying, strategy, setSt
   );
 }
 
-// ─── Step 2: Overrides — Forex ────────────────────────────────────────────────
-
-function StepOverridesForex({ overrides, set }: {
-  overrides: Record<string, string>; set: (k: string, v: string) => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <InfoBanner text="El engine ejecuta scanner, circuit breakers y señales de forma nativa. Solo ajusta aquí si necesitas cambiar algún límite puntual." />
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Límite de ops por día" hint="Engine default: 1,200 ops">
-          <NumInput value={overrides.daily_op_limit} onChange={(v) => set('daily_op_limit', v)}
-            step="100" min="100" placeholder="1200" />
-        </Field>
-        <Field label="Pérdida diaria máx. (%)" hint="Engine default: 3%">
-          <NumInput value={overrides.max_daily_loss_pct} onChange={(v) => set('max_daily_loss_pct', v)}
-            step="0.5" min="0.5" placeholder="3.0" />
-        </Field>
-        <Field label="Posiciones simultáneas máx." hint="Engine default: 5">
-          <NumInput value={overrides.max_concurrent} onChange={(v) => set('max_concurrent', v)}
-            step="1" min="1" placeholder="5" />
-        </Field>
-        <Field label="Lotes por leg" hint="Engine default: 0.01">
-          <NumInput value={overrides.lot_per_leg} onChange={(v) => set('lot_per_leg', v)}
-            step="0.01" min="0.01" placeholder="0.01" />
-        </Field>
-      </div>
-      <EmptyHint />
-    </div>
-  );
-}
-
-// ─── Step 2: Overrides — Futures ──────────────────────────────────────────────
-
-function StepOverridesFutures({ overrides, set }: {
-  overrides: Record<string, string>; set: (k: string, v: string) => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <InfoBanner text="Defaults CME optimizados para E-mini. Micro contracts requieren ajustar tick_tolerance y tamaño." />
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Contratos por operación" hint="Engine default: 1">
-          <NumInput value={overrides.contracts_per_trade} onChange={(v) => set('contracts_per_trade', v)}
-            step="1" min="1" placeholder="1" />
-        </Field>
-        <Field label="Pérdida diaria máx. ($)" hint="Engine default: $500">
-          <NumInput value={overrides.max_daily_loss_usd} onChange={(v) => set('max_daily_loss_usd', v)}
-            step="100" min="100" placeholder="500" />
-        </Field>
-        <Field label="Tick tolerance" hint="Ticks adversos antes de salir (default: 4)">
-          <NumInput value={overrides.tick_tolerance} onChange={(v) => set('tick_tolerance', v)}
-            step="1" min="1" placeholder="4" />
-        </Field>
-        <Field label="Días antes de rollover" hint="Rotar al siguiente vencimiento (default: 5)">
-          <NumInput value={overrides.rollover_days_before} onChange={(v) => set('rollover_days_before', v)}
-            step="1" min="1" placeholder="5" />
-        </Field>
-        <Field label="Límite ops por día" hint="Engine default: 200">
-          <NumInput value={overrides.daily_op_limit} onChange={(v) => set('daily_op_limit', v)}
-            step="10" min="10" placeholder="200" />
-        </Field>
-      </div>
-      <EmptyHint />
-    </div>
-  );
-}
-
-// ─── Step 2: Overrides — Options ──────────────────────────────────────────────
-
-function StepOverridesOptions({ overrides, set }: {
-  overrides: Record<string, string>; set: (k: string, v: string) => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <InfoBanner text="Defaults óptimos para opciones IBKR. Delta y DTE controlan la selección de strikes y vencimientos." />
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Delta objetivo" hint="Strike selection (default: 0.30)">
-          <NumInput value={overrides.target_delta} onChange={(v) => set('target_delta', v)}
-            step="0.05" min="0.05" placeholder="0.30" />
-        </Field>
-        <Field label="IV Rank mínimo (%)" hint="Solo entrar si IV rank ≥ X (default: 30)">
-          <NumInput value={overrides.min_iv_rank} onChange={(v) => set('min_iv_rank', v)}
-            step="5" min="5" placeholder="30" />
-        </Field>
-        <Field label="DTE mínimo" hint="Días a vencimiento mínimo (default: 21)">
-          <NumInput value={overrides.min_dte} onChange={(v) => set('min_dte', v)}
-            step="1" min="1" placeholder="21" />
-        </Field>
-        <Field label="DTE máximo" hint="Días a vencimiento máximo (default: 45)">
-          <NumInput value={overrides.max_dte} onChange={(v) => set('max_dte', v)}
-            step="1" min="1" placeholder="45" />
-        </Field>
-        <Field label="Contratos máx. por posición" hint="Engine default: 5">
-          <NumInput value={overrides.max_contracts} onChange={(v) => set('max_contracts', v)}
-            step="1" min="1" placeholder="5" />
-        </Field>
-        <Field label="Prima máx. $ por contrato" hint="Límite de debit/credit (default: $200)">
-          <NumInput value={overrides.max_premium_usd} onChange={(v) => set('max_premium_usd', v)}
-            step="25" min="25" placeholder="200" />
-        </Field>
-      </div>
-      <EmptyHint />
-    </div>
-  );
-}
-
-function InfoBanner({ text }: { text: string }) {
-  return (
-    <div className="rounded-lg border border-[#22d3ee]/20 bg-[#22d3ee]/5 px-4 py-3 text-xs text-[#22d3ee]/80">
-      {text}
-    </div>
-  );
-}
-
-function EmptyHint() {
-  return (
-    <p className="text-[10px] text-[#2d3748] text-center">Los campos vacíos usan los defaults del engine.</p>
-  );
-}
+// Step 2 overrides moved to ./AlgorithmWizardStep2.client.tsx
 
 // ─── Step extra: Latency Arb Pairing (renderiza sólo si template = latency_arb_mt5)
 
@@ -853,6 +739,9 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [forexOvr,   setForexOvr]   = useState<Record<string, string>>(FOREX_OVERRIDES_INIT);
   const [futuresOvr, setFuturesOvr] = useState<Record<string, string>>(FUTURES_OVERRIDES_INIT);
   const [optionsOvr, setOptionsOvr] = useState<Record<string, string>>(OPTIONS_OVERRIDES_INIT);
+
+  // Engine config (Base Engine v1 + modules + overlays)
+  const [engineConfig, setEngineConfig] = useState<EngineConfig>(ENGINE_CONFIG_DEFAULT);
 
   const setOvr = (market: MarketType) => (k: string, v: string) => {
     if (market === 'forex')   setForexOvr((o)   => ({ ...o, [k]: v }));
@@ -1078,6 +967,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         max_trades:            maxTrades,
         risk_percent:          riskPercent,
         parameters,
+        engine_config:         engineConfig,
         scan_config: {},
         status: 'paused',
       }).select('id').single();
@@ -1222,15 +1112,15 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
             />
           )}
 
-          {/* Step 2 — overrides differ by market */}
-          {stepIdx === 1 && marketType === 'forex' && (
-            <StepOverridesForex overrides={forexOvr} set={setOvr('forex')} />
-          )}
-          {stepIdx === 1 && marketType === 'futures' && (
-            <StepOverridesFutures overrides={futuresOvr} set={setOvr('futures')} />
-          )}
-          {stepIdx === 1 && marketType === 'options' && (
-            <StepOverridesOptions overrides={optionsOvr} set={setOvr('options')} />
+          {/* Step 2 — Base Engine + modules + overlays + market-typed overrides */}
+          {stepIdx === 1 && (
+            <AlgorithmWizardStep2
+              value={engineConfig}
+              onChange={setEngineConfig}
+              overrides={marketType === 'forex' ? forexOvr : marketType === 'futures' ? futuresOvr : optionsOvr}
+              onOverridesChange={setOvr(marketType)}
+              marketType={marketType}
+            />
           )}
         </div>
 

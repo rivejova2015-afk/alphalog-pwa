@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { EngineConfigSchema } from "@/lib/validations/engine-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,10 +11,11 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 const updateSchema = z.object({
-  name:        z.string().min(1).max(80).optional(),
-  description: z.string().max(500).optional(),
-  status:      z.enum(["draft", "paper", "approved", "live", "paused", "archived"]).optional(),
-  parameters:  z.record(z.string(), z.unknown()).optional(),
+  name:          z.string().min(1).max(80).optional(),
+  description:   z.string().max(500).optional(),
+  status:        z.enum(["draft", "paper", "approved", "live", "paused", "archived"]).optional(),
+  parameters:    z.record(z.string(), z.unknown()).optional(),
+  engine_config: EngineConfigSchema.optional(),
 });
 
 // GET /api/algorithms/[id]
@@ -68,6 +70,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     if (parsed.data.description !== undefined) payload.description = parsed.data.description;
     if (parsed.data.status !== undefined) payload.status = parsed.data.status;
     if (parsed.data.parameters !== undefined) payload.parameters = parsed.data.parameters;
+    if (parsed.data.engine_config !== undefined) payload.engine_config = parsed.data.engine_config;
 
     if (Object.keys(payload).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });

@@ -4,17 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
+import { EngineConfigSchema } from "@/lib/validations/engine-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const createSchema = z.object({
-  platform:    z.enum(["MT4", "MT5"]),
-  name:        z.string().min(1).max(80),
-  description: z.string().max(500).optional(),
-  algo_type:   z.enum(["scalping", "grid_basket", "arbitrage"]),
-  parameters:  z.record(z.string(), z.unknown()),
-  slot_number: z.number().int().min(1).max(50),
+  platform:      z.enum(["MT4", "MT5"]),
+  name:          z.string().min(1).max(80),
+  description:   z.string().max(500).optional(),
+  algo_type:     z.enum(["scalping", "grid_basket", "arbitrage"]),
+  parameters:    z.record(z.string(), z.unknown()),
+  slot_number:   z.number().int().min(1).max(50),
+  engine_config: EngineConfigSchema.optional(),
 });
 
 // GET /api/algorithms?platform=MT5
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
-    const { platform, name, description, algo_type, parameters, slot_number } = parsed.data;
+    const { platform, name, description, algo_type, parameters, slot_number, engine_config } = parsed.data;
 
     const { data: existing } = await supabase
       .from("trading_algorithms")
@@ -113,7 +115,17 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("trading_algorithms")
-      .insert({ user_id: user.id, platform, name, description, algo_type, parameters, slot_number, sort_index: slot_number })
+      .insert({
+        user_id: user.id,
+        platform,
+        name,
+        description,
+        algo_type,
+        parameters,
+        slot_number,
+        sort_index: slot_number,
+        engine_config: engine_config ?? null,
+      })
       .select()
       .single();
 
