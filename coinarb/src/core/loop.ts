@@ -118,15 +118,6 @@ export class CoinarbLoop {
             ...formatBreaker({ kind: circuitDecision.reason, message: `Trading paused (${circuitDecision.reason})`, paper: PAPER_MODE }),
           });
         }
-      } else if (!fg.allow) {
-        await this.decisions.log({
-          agentId: COINARB_AGENT_ID,
-          userId: COINARB_USER_ID,
-          kind: 'SKIP',
-          venue: 'spot',
-          reason: `F&G ${fg.value} < ${fg.threshold}`,
-          meta: { fearGreed: fg },
-        });
       } else {
         for (const symbol of SYMBOLS) {
           await this.evaluateSymbol(symbol, fg.value);
