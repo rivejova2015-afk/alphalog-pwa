@@ -43,7 +43,7 @@ import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-al
 import { getSupabase } from '../supabase.js';
 import {
   SYMBOLS, TIMEFRAMES, ARB_GAP_MIN_PCT, RR_MIN, LOOP_INTERVAL_MS, PAPER_MODE,
-  COINARB_AGENT_ID, COINARB_USER_ID, type Symbol, type Timeframe,
+  MTF_CONFIDENCE_MIN, COINARB_AGENT_ID, COINARB_USER_ID, type Symbol, type Timeframe,
 } from './config.js';
 
 const STARTING_CAPITAL = Number(process.env.COINARB_STARTING_CAPITAL ?? '100');
@@ -116,6 +116,7 @@ export class CoinarbLoop {
   private async tick(): Promise<void> {
     if (!this.running) return;
     const tickStart = Date.now();
+    let fgValue = 50;  // neutral default — kept fresh below; used by telemetry in finally even on early failure.
 
     try {
       await this.ensureHistoricalCandles();
@@ -124,8 +125,10 @@ export class CoinarbLoop {
 
       await this.manageOpenPositions();
 
+      // F&G is telemetry-only — never blocks entries, never accumulates into daily stats.
+      // Price-action SMC handles direction; external sentiment indices add no edge here.
       const fg = await checkFearGreed();
-      this.dailyTracker.recordFearGreed(fg.value);
+      fgValue = fg.value;
 
       const circuitDecision = this.circuitBreaker.canTrade(tickStart);
       if (!circuitDecision.allow) {
@@ -146,15 +149,23 @@ export class CoinarbLoop {
         }
       } else {
         for (const symbol of SYMBOLS) {
-          await this.evaluateSymbol(symbol, fg.value);
+          await this.evaluateSymbol(symbol, fgValue);
         }
       }
 
       await this.maybeRefreshLiquidity(tickStart);
-      await this.flushTelemetry(fg.value);
-      await this.dailyTracker.flush();
     } catch (err) {
       console.error('[loop] tick failed:', err);
+    } finally {
+      // Heartbeat ALWAYS — even when the tick threw mid-pipeline. Dashboard staleness
+      // had been masking healthy ticks because the telemetry upsert sat after the
+      // throwing block instead of in finally.
+      try {
+        await this.flushTelemetry(fgValue);
+        await this.dailyTracker.flush();
+      } catch (err) {
+        console.error('[loop] telemetry flush in finally failed:', err);
+      }
     }
   }
 
@@ -180,11 +191,11 @@ export class CoinarbLoop {
     const candlesByTf = mergeWithRealtimeCandles(historicalForSymbol, realtimeCandles);
     const mtf = analyzeMtf(candlesByTf);
 
-    if (mtf.bias === 'NEUTRAL' || mtf.confidence < 0.35) {
+    if (mtf.bias === 'NEUTRAL' || mtf.confidence < MTF_CONFIDENCE_MIN) {
       await this.decisions.log({
         agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
         kind: 'SKIP', symbol, venue: 'spot',
-        reason: `mtf bias=${mtf.bias} conf=${mtf.confidence.toFixed(2)} (need >=0.35 BUY/SELL)`,
+        reason: `mtf bias=${mtf.bias} conf=${mtf.confidence.toFixed(2)} (need >=${MTF_CONFIDENCE_MIN.toFixed(2)} BUY/SELL)`,
         meta: { mtf: { bias: mtf.bias, confidence: mtf.confidence } },
       });
       return;

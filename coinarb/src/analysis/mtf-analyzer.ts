@@ -16,14 +16,20 @@ import { detectSmc, type SmcBias, type SmcSignal } from './smc-detector.js';
 import type { Candle } from './candle-builder.js';
 
 const TF_WEIGHT: Record<Timeframe, number> = {
-  '1D':  0.20,
-  '4H':  0.20,
+  '1D':  0.15,
+  '4H':  0.15,
   '1H':  0.15,
   '30M': 0.15,
-  '15M': 0.12,
-  '5M':  0.10,
-  '1M':  0.08,
+  '15M': 0.15,
+  '5M':  0.15,
+  '1M':  0.10,
 };
+
+// Hard guard: weights must sum to 1.0 — fail fast at module load if drifted.
+const TOTAL_WEIGHT = Object.values(TF_WEIGHT).reduce((a, b) => a + b, 0);
+if (Math.abs(TOTAL_WEIGHT - 1.0) > 0.001) {
+  throw new Error(`[mtf-analyzer] TF_WEIGHT sum must equal 1.0, got ${TOTAL_WEIGHT}`);
+}
 
 export interface MtfAnalysis {
   bias: SmcBias;

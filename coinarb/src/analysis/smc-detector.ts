@@ -14,6 +14,7 @@
  */
 
 import type { Candle } from './candle-builder.js';
+import { PD_MACRO_BAND, PD_MICRO_BAND, PD_MACRO_DAYS, SWEEP_CONFIRM_BODY_RATIO } from '../core/config.js';
 
 export type SmcBias = 'BUY' | 'SELL' | 'NEUTRAL';
 export type SmcZoneType = 'OB-bull' | 'OB-bear' | 'FVG-bull' | 'FVG-bear' | 'EQH' | 'EQL';
@@ -260,14 +261,14 @@ export function detectLiquiditySweep(
   if (eqh && last5m.high > eqh.priceHigh && last5m.close < eqh.priceLow) {
     const body = Math.abs(last1m.close - last1m.open);
     const range = last1m.high - last1m.low;
-    if (range > 0 && body / range >= 0.50 && last1m.close < last1m.open) {
+    if (range > 0 && body / range >= SWEEP_CONFIRM_BODY_RATIO && last1m.close < last1m.open) {
       return { detected: true, type: 'BUYSIDE', sweptPrice: eqh.priceHigh };
     }
   }
   if (eql && last5m.low < eql.priceLow && last5m.close > eql.priceHigh) {
     const body = Math.abs(last1m.close - last1m.open);
     const range = last1m.high - last1m.low;
-    if (range > 0 && body / range >= 0.50 && last1m.close > last1m.open) {
+    if (range > 0 && body / range >= SWEEP_CONFIRM_BODY_RATIO && last1m.close > last1m.open) {
       return { detected: true, type: 'SELLSIDE', sweptPrice: eql.priceLow };
     }
   }
@@ -327,7 +328,8 @@ export interface PremiumDiscountResult {
   reason: string;
 }
 
-// BUY solo en DISCOUNT macro+micro | SELL solo en PREMIUM macro+micro
+// BUY when macro+micro lean DISCOUNT (or one of them sits in EQUILIBRIUM with the other aligned).
+// SELL is the mirror. Bands and macro range are env-tunable so we can soften without redeploy.
 export function evaluatePremiumDiscount(
   currentPrice: number,
   candles1D: Candle[],
@@ -337,14 +339,16 @@ export function evaluatePremiumDiscount(
   if (bias === 'NEUTRAL') {
     return { allowed: false, macroZone: 'EQUILIBRIUM', microZone: 'EQUILIBRIUM', reason: 'bias_neutral' };
   }
-  const macro = candles1D.length > 0 ? candles1D[candles1D.length - 1] : null;
-  if (!macro) {
+  const last3Days = candles1D.slice(-PD_MACRO_DAYS);
+  if (last3Days.length === 0) {
     return { allowed: true, macroZone: 'DISCOUNT', microZone: 'DISCOUNT', reason: 'no_macro_data' };
   }
-  const macroMid = (macro.high + macro.low) / 2;
+  const macroHigh = Math.max(...last3Days.map(c => c.high));
+  const macroLow  = Math.min(...last3Days.map(c => c.low));
+  const macroMid  = (macroHigh + macroLow) / 2;
   const macroZone: PriceZone =
-    currentPrice < macroMid * 0.998 ? 'DISCOUNT' :
-    currentPrice > macroMid * 1.002 ? 'PREMIUM' : 'EQUILIBRIUM';
+    currentPrice < macroMid * (1 - PD_MACRO_BAND) ? 'DISCOUNT' :
+    currentPrice > macroMid * (1 + PD_MACRO_BAND) ? 'PREMIUM' : 'EQUILIBRIUM';
 
   const recent5m = candles5m.slice(-20);
   if (recent5m.length < 5) {
@@ -354,12 +358,16 @@ export function evaluatePremiumDiscount(
   const microLow  = Math.min(...recent5m.map(c => c.low));
   const microMid  = (microHigh + microLow) / 2;
   const microZone: PriceZone =
-    currentPrice < microMid * 0.998 ? 'DISCOUNT' :
-    currentPrice > microMid * 1.002 ? 'PREMIUM' : 'EQUILIBRIUM';
+    currentPrice < microMid * (1 - PD_MICRO_BAND) ? 'DISCOUNT' :
+    currentPrice > microMid * (1 + PD_MICRO_BAND) ? 'PREMIUM' : 'EQUILIBRIUM';
 
   const allowed =
-    (bias === 'BUY'  && macroZone === 'DISCOUNT' && microZone === 'DISCOUNT') ||
-    (bias === 'SELL' && macroZone === 'PREMIUM'  && microZone === 'PREMIUM');
+    (bias === 'BUY'  && macroZone === 'DISCOUNT'    && microZone === 'DISCOUNT')    ||
+    (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'PREMIUM')     ||
+    (bias === 'BUY'  && macroZone === 'EQUILIBRIUM' && microZone === 'DISCOUNT')    ||
+    (bias === 'SELL' && macroZone === 'EQUILIBRIUM' && microZone === 'PREMIUM')     ||
+    (bias === 'BUY'  && macroZone === 'DISCOUNT'    && microZone === 'EQUILIBRIUM') ||
+    (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM');
 
   return {
     allowed,
