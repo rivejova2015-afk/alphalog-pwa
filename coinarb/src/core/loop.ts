@@ -1,18 +1,16 @@
 /**
  * Coinarb main loop — runs once per LOOP_INTERVAL_MS (60s default).
  *
- * Pure SMC pipeline (no latency arb). Per tick (per symbol):
- *   1. Killzone gate (London 07-10 UTC, NY 13-16 UTC) — entries only
- *   2. Get current Coinbase price (skip with log if missing)
- *   3. Pull REST candle history (15M + 1H + 4H), seeded once per TF refresh
- *   4. SMC detector on 15M (entry TF) + 1H (confirmation TF)
- *   5. Premium/Discount filter on 4H — strict zone-side gate
- *   6. Liquidity-grab detector on 15M — needs EQH/EQL sweep + reject wick
- *   7. Direction confluence: grab.type matches 1H bias side
- *   8. Confidence ≥ SMC_CONF_MIN, R:R ≥ RR_MIN
- *   9. ENTER: stop = swept wick ± 0.1% buffer, TP = 2R structural
- *  10. Manage open positions (TP/SL hit detection on every tick, 24/7)
- *  11. Telemetry upsert (heartbeat, ws status, phase, daily counters)
+ * Pipeline per tick (per symbol):
+ *   1. Snapshot prices (Coinbase + Binance feeds), build candles for all 7 TFs
+ *   2. SMC multi-timeframe analysis → bias + confidence
+ *   3. Latency-arb gap (Coinbase vs Binance) → must exceed ARB_GAP_MIN_PCT
+ *   4. Validators: F&G ≥65, volume-delta agrees with bias, vol profile in VA,
+ *      liquidation-heatmap (stub), exchange-flows (stub)
+ *   5. Risk gates: phase-manager riskUsd, circuit-breaker canTrade, R:R ≥ 2.0
+ *   6. ENTER: place market order (paper or live), persist position
+ *   7. Manage open positions (TP/SL hit detection on every tick)
+ *   8. Telemetry upsert (heartbeat, ws status, phase, F&G, daily counters)
  */
 
 import { CoinbaseFeed } from '../feeds/coinbase-ws.js';
@@ -23,22 +21,29 @@ import { PaperSpotBroker } from '../paper/paper-spot-broker.js';
 import { PhaseManager, computeRiskUsd } from '../risk/phase-manager.js';
 import { CircuitBreaker } from '../risk/circuit-breaker.js';
 import { DailyTracker } from '../risk/daily-tracker.js';
-import { inKillzone, currentKillzone } from '../risk/killzones.js';
 import { openPosition, closePosition, getOpenPositions, type OpenPositionRow } from '../trading/spot-positions.js';
-import { getCandlesForTimeframe } from '../analysis/candle-builder.js';
-import { coinbaseRestHistory } from '../feeds/coinbase-rest-history.js';
-import { detectSmc } from '../analysis/smc-detector.js';
-import { detectLiquidityGrab, stopForGrab, type LiquidityGrab } from '../analysis/liquidity-grab.js';
-import { computePremiumDiscount } from '../analysis/premium-discount.js';
+import { buildAllTimeframes, loadHistoricalCandles, mergeWithRealtimeCandles, type Candle } from '../analysis/candle-builder.js';
+import { analyzeMtf } from '../analysis/mtf-analyzer.js';
+import {
+  evaluateConfluence,
+  detectLiquiditySweep,
+  validateChochDisplacement,
+  evaluatePremiumDiscount,
+  type SmcBias,
+} from '../analysis/smc-detector.js';
 import { refreshLiquidityMap } from '../analysis/liquidity-map.js';
 import { checkFearGreed } from '../validators/fear-greed.js';
+import { computeVolumeDelta, deltaAgreesWith } from '../validators/volume-delta.js';
+import { computeVolumeProfile, priceInValueArea } from '../validators/volume-profile.js';
+import { fetchLiquidationHeatmap } from '../validators/liquidation-heatmap.js';
+import { fetchExchangeFlows } from '../validators/exchange-flows.js';
 import { checkRiskReward } from '../math/kelly-sizer.js';
 import { DecisionLogger } from '../ops/decision-logger.js';
 import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-alphalog.js';
 import { getSupabase } from '../supabase.js';
 import {
-  SYMBOLS, RR_MIN, SMC_CONF_MIN, LOOP_INTERVAL_MS, PAPER_MODE,
-  COINARB_AGENT_ID, COINARB_USER_ID, type Symbol,
+  SYMBOLS, TIMEFRAMES, ARB_GAP_MIN_PCT, RR_MIN, LOOP_INTERVAL_MS, PAPER_MODE,
+  COINARB_AGENT_ID, COINARB_USER_ID, type Symbol, type Timeframe,
 } from './config.js';
 
 const STARTING_CAPITAL = Number(process.env.COINARB_STARTING_CAPITAL ?? '100');
@@ -64,6 +69,9 @@ export class CoinarbLoop {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private liquidityRefreshAt = 0;
+  private historicalCandles: Map<string, Map<Timeframe, Candle[]>> = new Map();
+  private historicalLoadedAt = 0;
+  private readonly HIST_TTL_MS = 4 * 60 * 60 * 1000;
 
   constructor(deps: LoopDeps) {
     this.coinbase = deps.coinbase;
@@ -79,9 +87,6 @@ export class CoinarbLoop {
     this.coinbase.start();
     this.binance.start();
     console.log(`[loop] started — ${PAPER_MODE ? 'PAPER' : 'LIVE'} mode, ${LOOP_INTERVAL_MS}ms tick`);
-    void coinbaseRestHistory.warmup().catch((err) => {
-      console.error('[loop] REST history warmup failed (will retry on tick):', err);
-    });
     this.timer = setInterval(() => { void this.tick(); }, LOOP_INTERVAL_MS);
   }
 
@@ -93,11 +98,27 @@ export class CoinarbLoop {
     console.log('[loop] stopped');
   }
 
+  private async ensureHistoricalCandles(): Promise<void> {
+    const now = Date.now();
+    if (this.historicalLoadedAt > 0 && now - this.historicalLoadedAt < this.HIST_TTL_MS) return;
+    console.log('[loop] loading historical candles (Coinbase Exchange public API)…');
+    for (const symbol of SYMBOLS) {
+      try {
+        const hist = await loadHistoricalCandles(symbol, TIMEFRAMES);
+        this.historicalCandles.set(symbol, hist);
+      } catch (err) {
+        console.warn(`[loop] historical load failed for ${symbol}:`, err);
+      }
+    }
+    this.historicalLoadedAt = now;
+  }
+
   private async tick(): Promise<void> {
     if (!this.running) return;
     const tickStart = Date.now();
 
     try {
+      await this.ensureHistoricalCandles();
       this.dailyTracker.rolloverIfNeeded();
       this.dailyTracker.setOpeningCapital(this.phaseManager.capitalNow, this.phaseManager.phaseName);
 
@@ -139,115 +160,141 @@ export class CoinarbLoop {
 
   private async evaluateSymbol(symbol: Symbol, fearGreed: number): Promise<void> {
     const base = SYMBOL_TO_BASE[symbol];
-
-    // 1. Killzone gate — only open new entries during London + NY sessions
-    const kz = currentKillzone();
-    if (kz === 'NONE') {
+    const cbSamples = this.coinbase.getTimestampedSamples(base);
+    const bnSamples = this.binance.getTimestampedSamples(base);
+    if (cbSamples.length < 30 || bnSamples.length < 30) {
       await this.decisions.log({
         agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
         kind: 'SKIP', symbol, venue: 'spot',
-        reason: 'outside killzone (London 07-10 UTC, NY 13-16 UTC)',
+        reason: `warming up (cb=${cbSamples.length}, bn=${bnSamples.length})`,
       });
       return;
     }
 
-    // 2. Current price
     const cbPrice = this.coinbase.getPrice(base);
-    if (!cbPrice) {
+    const bnPrice = this.binance.getPrice(base);
+    if (!cbPrice || !bnPrice) return;
+
+    const realtimeCandles = buildAllTimeframes(cbSamples, TIMEFRAMES);
+    const historicalForSymbol = this.historicalCandles.get(symbol) ?? new Map<Timeframe, Candle[]>();
+    const candlesByTf = mergeWithRealtimeCandles(historicalForSymbol, realtimeCandles);
+    const mtf = analyzeMtf(candlesByTf);
+
+    if (mtf.bias === 'NEUTRAL' || mtf.confidence < 0.35) {
       await this.decisions.log({
         agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
         kind: 'SKIP', symbol, venue: 'spot',
-        reason: `no coinbase price for ${symbol}`,
+        reason: `mtf bias=${mtf.bias} conf=${mtf.confidence.toFixed(2)} (need >=0.35 BUY/SELL)`,
+        meta: { mtf: { bias: mtf.bias, confidence: mtf.confidence } },
       });
       return;
     }
 
-    // 3. REST candle history for the three TFs we care about
-    const [c15m, c1h, c4h] = await Promise.all([
-      getCandlesForTimeframe(symbol, '15M'),
-      getCandlesForTimeframe(symbol, '1H'),
-      getCandlesForTimeframe(symbol, '4H'),
+    const htfBias = mtf.bias as SmcBias;
+    const sig15m = mtf.perTimeframe.get('15M')!;
+    const sig5m  = mtf.perTimeframe.get('5M')!;
+    const sig1m  = mtf.perTimeframe.get('1M')!;
+
+    const pd = evaluatePremiumDiscount(
+      cbPrice.last,
+      candlesByTf.get('1D') ?? [],
+      candlesByTf.get('5M') ?? [],
+      htfBias,
+    );
+    if (!pd.allowed) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `premium-discount: ${pd.reason}`,
+        meta: { bias: htfBias, macroZone: pd.macroZone, microZone: pd.microZone },
+      });
+      return;
+    }
+
+    const sweep = detectLiquiditySweep(
+      candlesByTf.get('5M') ?? [],
+      candlesByTf.get('1M') ?? [],
+      sig5m,
+    );
+    if (!sweep.detected) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `liquidity-sweep: not detected`,
+        meta: { bias: htfBias },
+      });
+      return;
+    }
+
+    const choch = validateChochDisplacement(
+      sig15m,
+      sig5m,
+      sig1m,
+      htfBias,
+      candlesByTf.get('1M') ?? [],
+    );
+    if (!choch.confirmed) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `choch-displacement: ${choch.reason}`,
+        meta: { bias: htfBias, ob1m: choch.ob1mAligned ? { low: choch.ob1mAligned.priceLow, high: choch.ob1mAligned.priceHigh } : null },
+      });
+      return;
+    }
+
+    const confluence = evaluateConfluence(sig15m, htfBias, this.dailyTracker.getPaceLastTwoHours());
+    if (confluence.grade === 'NONE') {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `confluence: NONE (need OB/FVG/EQ)`,
+        meta: { bias: htfBias, pace2h: this.dailyTracker.getPaceLastTwoHours() },
+      });
+      return;
+    }
+
+    const arbGapPct = Math.abs(cbPrice.last - bnPrice.last) / bnPrice.last;
+    const arbGapMin = ARB_GAP_MIN_PCT[symbol];
+    if (arbGapPct < arbGapMin) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `arb gap ${arbGapPct.toFixed(5)} < ${arbGapMin.toFixed(5)}`,
+        meta: { cb: cbPrice.last, bn: bnPrice.last },
+      });
+      return;
+    }
+
+    const volumeDelta = computeVolumeDelta(cbSamples);
+    if (!deltaAgreesWith(mtf.bias as 'BUY' | 'SELL', volumeDelta.delta)) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `volume-delta ${volumeDelta.delta.toFixed(2)} disagrees with ${mtf.bias}`,
+        meta: { volumeDelta },
+      });
+      return;
+    }
+
+    const vp = computeVolumeProfile(cbSamples);
+    if (!priceInValueArea(cbPrice.last, vp)) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `price ${cbPrice.last} outside value area [${vp.valow}, ${vp.vahigh}]`,
+      });
+      return;
+    }
+
+    const [liqHeatmap, flows] = await Promise.all([
+      fetchLiquidationHeatmap(symbol, cbPrice.last),
+      fetchExchangeFlows(symbol),
     ]);
-    if (c15m.length < 13 || c1h.length < 13 || c4h.length < 10) {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `insufficient history (15M=${c15m.length}, 1H=${c1h.length}, 4H=${c4h.length})`,
-      });
-      return;
-    }
 
-    // 4. SMC structure on 15M (entry) + 1H (confirmation)
-    const smc15m = detectSmc(c15m);
-    const smc1h = detectSmc(c1h);
-
-    // 5. Premium/Discount filter on 4H
-    const pd = computePremiumDiscount(c4h, cbPrice.last);
-    if (!pd) {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: 'premium/discount unavailable (insufficient 4H range)',
-      });
-      return;
-    }
-
-    // 6. Liquidity-grab detector on 15M
-    const grab = detectLiquidityGrab(c15m, smc15m.zones);
-    if (!grab) {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `no liquidity grab on 15M (zones=${smc15m.zones.length})`,
-        meta: { smc15mBias: smc15m.bias, smc15mConf: smc15m.confidence, pd: pd.zone },
-      });
-      return;
-    }
-
-    const direction: 'BUY' | 'SELL' = grab.type === 'BUY_GRAB' ? 'BUY' : 'SELL';
-
-    // 7. Strict P/D gate
-    if (direction === 'BUY' && pd.zone !== 'DISCOUNT') {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `BUY rejected: price ${cbPrice.last.toFixed(2)} not in DISCOUNT (zone=${pd.zone}, eq=${pd.equilibrium.toFixed(2)})`,
-      });
-      return;
-    }
-    if (direction === 'SELL' && pd.zone !== 'PREMIUM') {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `SELL rejected: price ${cbPrice.last.toFixed(2)} not in PREMIUM (zone=${pd.zone}, eq=${pd.equilibrium.toFixed(2)})`,
-      });
-      return;
-    }
-
-    // 8. 1H bias must agree (or be NEUTRAL — don't fight, but allow if no read)
-    if (smc1h.bias !== 'NEUTRAL' && smc1h.bias !== direction) {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `1H bias ${smc1h.bias} disagrees with grab direction ${direction}`,
-      });
-      return;
-    }
-
-    // 9. Confidence gate
-    const confidence = grab.confidence;
-    if (confidence < SMC_CONF_MIN) {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `grab confidence ${confidence.toFixed(2)} < ${SMC_CONF_MIN}`,
-      });
-      return;
-    }
-
-    // 10. Risk sizing
+    const direction: 'BUY' | 'SELL' = mtf.bias as 'BUY' | 'SELL';
     const riskUsd = computeRiskUsd(this.phaseManager.capitalNow, this.phaseManager.riskPct);
-    const sizeUsd = Math.min(riskUsd * 10, this.phaseManager.capitalNow * 0.5);
+    const sizeUsd = Math.min(riskUsd * 10 * confluence.kellyMultiplier, this.phaseManager.capitalNow * 0.5);
     if (sizeUsd < 5) {
       await this.decisions.log({
         agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
@@ -257,22 +304,10 @@ export class CoinarbLoop {
       return;
     }
 
-    // 11. Structural stop = swept wick ± 0.1% buffer
-    const stopLoss = stopForGrab(grab);
-    const stopDistance = Math.abs(cbPrice.last - stopLoss);
-    if (stopDistance / cbPrice.last < 0.0005) {
-      await this.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `stop distance too small (${(stopDistance / cbPrice.last * 100).toFixed(3)}%) — likely stale grab`,
-      });
-      return;
-    }
-
-    // 12. TP = RR_MIN × stop distance, structural projection
-    const takeProfit = direction === 'BUY'
-      ? cbPrice.last + stopDistance * RR_MIN
-      : cbPrice.last - stopDistance * RR_MIN;
+    const stopDistancePct = direction === 'BUY' ? 0.005 : 0.005;
+    const stopLoss = direction === 'BUY' ? cbPrice.last * (1 - stopDistancePct) : cbPrice.last * (1 + stopDistancePct);
+    const tpDistancePct = stopDistancePct * RR_MIN;
+    const takeProfit = direction === 'BUY' ? cbPrice.last * (1 + tpDistancePct) : cbPrice.last * (1 - tpDistancePct);
 
     if (!checkRiskReward(cbPrice.last, stopLoss, takeProfit, RR_MIN)) {
       await this.decisions.log({
@@ -283,7 +318,6 @@ export class CoinarbLoop {
       return;
     }
 
-    // 13. ENTER
     const fill = this.paperBroker.placeMarket({ symbol, side: direction, sizeUsd, markPrice: cbPrice.last });
     if (!fill) {
       await this.decisions.log({
@@ -310,6 +344,7 @@ export class CoinarbLoop {
 
     this.circuitBreaker.recordOpen();
 
+    const liquidityZone = mtf.perTimeframe.get('15M')?.zones?.[0];
     const position = await openPosition({
       symbol,
       direction,
@@ -318,21 +353,19 @@ export class CoinarbLoop {
       sizeUsd,
       stopLoss,
       takeProfit,
-      smcZoneType: grab.zone.type,
-      smcZonePrice: (grab.zone.priceLow + grab.zone.priceHigh) / 2,
-      arbGapPct: 0,  // arb gate removed; column kept for schema compatibility
+      smcZoneType: liquidityZone?.type ?? 'none',
+      smcZonePrice: liquidityZone ? (liquidityZone.priceLow + liquidityZone.priceHigh) / 2 : cbPrice.last,
+      arbGapPct,
       fearGreedAtEntry: fearGreed,
       phaseAtEntry: this.phaseManager.phaseName,
       entryReason: {
-        regime: smc1h.bias,
-        tier: tierFor(confidence),
-        validatorConfidence: confidence,
-        grabType: grab.type,
-        grabRejectionPct: grab.rejectionPct,
-        sweptLevel: grab.sweptLevel,
-        pdZone: pd.zone,
-        equilibrium: pd.equilibrium,
-        killzone: kz,
+        regime: mtf.bias,
+        tier: tierFor(mtf.confidence),
+        validatorConfidence: mtf.confidence,
+        arbGapPct,
+        volumeDelta: volumeDelta.delta,
+        liqHeatmap: liqHeatmap.available,
+        flows: flows.available,
       },
       feeUsd: fill.feeUsd,
       externalOrderId: fill.orderId,
@@ -341,12 +374,10 @@ export class CoinarbLoop {
     await this.decisions.log({
       agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
       kind: 'ENTER', symbol, venue: 'spot',
-      reason: `${direction} @${fill.fillPrice.toFixed(2)} size=$${sizeUsd.toFixed(2)} conf=${confidence.toFixed(2)} grab=${grab.type} kz=${kz}`,
+      reason: `${direction} @${fill.fillPrice.toFixed(2)} size=$${sizeUsd.toFixed(2)} conf=${mtf.confidence.toFixed(2)}`,
       meta: {
-        regime: smc1h.bias, tier: tierFor(confidence),
-        grabType: grab.type, sweptLevel: grab.sweptLevel,
-        pdZone: pd.zone, killzone: kz,
-        phase: this.phaseManager.phaseName,
+        regime: mtf.bias, tier: tierFor(mtf.confidence),
+        arbGapPct, fearGreed, phase: this.phaseManager.phaseName,
         positionId: position.id,
       },
     });
@@ -355,7 +386,7 @@ export class CoinarbLoop {
       userId: COINARB_USER_ID,
       ...formatEntry({
         symbol, side: direction, filledPrice: fill.fillPrice, sizeUsd,
-        reason: `${grab.type} ${kz} conf=${confidence.toFixed(2)}`, paper: PAPER_MODE,
+        reason: `${mtf.bias} conf=${mtf.confidence.toFixed(2)}`, paper: PAPER_MODE,
       }),
     });
   }

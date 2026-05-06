@@ -30,6 +30,7 @@ export interface DailySnapshot {
 export class DailyTracker {
   private dayUtc: string = todayUtc();
   private snap: DailySnapshot = blank();
+  private tradeTimestamps: number[] = [];
 
   hydrate(s: Partial<DailySnapshot>): void {
     this.snap = { ...blank(), ...s };
@@ -70,6 +71,14 @@ export class DailyTracker {
     if (this.snap.worstTradeUsd === null || pnlUsd < this.snap.worstTradeUsd) this.snap.worstTradeUsd = pnlUsd;
     this.snap.capitalEnd = capitalAfter;
     this.snap.phaseEnd = phaseAfter;
+    this.tradeTimestamps.push(Date.now());
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    this.tradeTimestamps = this.tradeTimestamps.filter(ts => ts > cutoff);
+  }
+
+  getPaceLastTwoHours(): number {
+    const twoHAgo = Date.now() - 2 * 60 * 60 * 1000;
+    return this.tradeTimestamps.filter(ts => ts > twoHAgo).length;
   }
 
   recordFearGreed(value: number): void {
@@ -91,9 +100,6 @@ export class DailyTracker {
       const supabase = getSupabase();
       const winRate = this.snap.totalTrades > 0 ? this.snap.wins / this.snap.totalTrades : null;
       const fgAvg = this.snap.fearGreedSamples > 0 ? this.snap.fearGreedSum / this.snap.fearGreedSamples : null;
-      const capitalEnd = this.snap.totalTrades === 0 && this.snap.capitalStart !== null
-        ? this.snap.capitalStart
-        : this.snap.capitalEnd;
       await supabase.from('coinarb_daily_stats').upsert(
         {
           user_id: COINARB_USER_ID,
@@ -107,7 +113,7 @@ export class DailyTracker {
           best_trade_usd: this.snap.bestTradeUsd,
           worst_trade_usd: this.snap.worstTradeUsd,
           capital_start_usd: this.snap.capitalStart,
-          capital_end_usd: capitalEnd,
+          capital_end_usd: this.snap.capitalEnd,
           phase_start: this.snap.phaseStart,
           phase_end: this.snap.phaseEnd,
           circuit_breaker_triggered: this.snap.circuitTriggered,

@@ -198,3 +198,173 @@ function clusterByPct(values: number[], tolerance: number): number[][] {
 function lastOf<T>(arr: T[]): T | null {
   return arr.length > 0 ? arr[arr.length - 1] : null;
 }
+
+// ============================================================
+// SMC POTENCIADO — 4 elementos
+// ============================================================
+
+export type ConfluenceGrade = 'A' | 'B' | 'FALLBACK' | 'NONE';
+
+export interface ConfluenceResult {
+  grade: ConfluenceGrade;
+  kellyMultiplier: number;
+  ob: SmcZone | null;
+  fvg: SmcZone | null;
+  eql: SmcZone | null;
+  entryPrice: number;
+}
+
+// Grade A = OB+FVG+EQH/EQL → Kelly 1.5x
+// Grade B = OB+FVG → Kelly 1.0x
+// FALLBACK = OB solo (si pace < 8 ops/2h) → Kelly 0.8x
+export function evaluateConfluence(
+  signal: SmcSignal,
+  bias: SmcBias,
+  currentPace: number,
+): ConfluenceResult {
+  const dirSuffix = bias === 'BUY' ? 'bull' : 'bear';
+  const eqlType   = bias === 'BUY' ? 'EQL'  : 'EQH';
+
+  const ob  = signal.zones.find(z => z.type === `OB-${dirSuffix}`) ?? null;
+  const fvg = signal.zones.find(z => z.type === `FVG-${dirSuffix}`) ?? null;
+  const eql = signal.zones.find(z => z.type === eqlType) ?? null;
+  const entryPrice = ob ? (bias === 'BUY' ? ob.priceHigh : ob.priceLow) : 0;
+
+  if (ob && fvg && eql) return { grade: 'A', kellyMultiplier: 1.5, ob, fvg, eql, entryPrice };
+  if (ob && fvg)        return { grade: 'B', kellyMultiplier: 1.0, ob, fvg, eql: null, entryPrice };
+  if (ob && currentPace < 8) return { grade: 'FALLBACK', kellyMultiplier: 0.8, ob, fvg: null, eql: null, entryPrice };
+
+  return { grade: 'NONE', kellyMultiplier: 0, ob: null, fvg: null, eql: null, entryPrice: 0 };
+}
+
+export interface SweepResult {
+  detected: boolean;
+  type: 'BUYSIDE' | 'SELLSIDE' | null;
+  sweptPrice: number | null;
+}
+
+// 5min detecta sweep + 1min confirma reversion
+export function detectLiquiditySweep(
+  candles5m: Candle[],
+  candles1m: Candle[],
+  signal5m: SmcSignal,
+): SweepResult {
+  if (candles5m.length < 5 || candles1m.length < 3) {
+    return { detected: false, type: null, sweptPrice: null };
+  }
+  const last5m = candles5m[candles5m.length - 1];
+  const last1m  = candles1m[candles1m.length - 1];
+  const eqh = signal5m.zones.find(z => z.type === 'EQH');
+  const eql = signal5m.zones.find(z => z.type === 'EQL');
+
+  if (eqh && last5m.high > eqh.priceHigh && last5m.close < eqh.priceLow) {
+    const body = Math.abs(last1m.close - last1m.open);
+    const range = last1m.high - last1m.low;
+    if (range > 0 && body / range >= 0.50 && last1m.close < last1m.open) {
+      return { detected: true, type: 'BUYSIDE', sweptPrice: eqh.priceHigh };
+    }
+  }
+  if (eql && last5m.low < eql.priceLow && last5m.close > eql.priceHigh) {
+    const body = Math.abs(last1m.close - last1m.open);
+    const range = last1m.high - last1m.low;
+    if (range > 0 && body / range >= 0.50 && last1m.close > last1m.open) {
+      return { detected: true, type: 'SELLSIDE', sweptPrice: eql.priceLow };
+    }
+  }
+  return { detected: false, type: null, sweptPrice: null };
+}
+
+export interface ChochDisplacementResult {
+  confirmed: boolean;
+  ob1mAligned: SmcZone | null;
+  reason: string;
+}
+
+// CHOCH en 15m/5m alineado con HTF + impulso 1m que toca OB de 1m
+export function validateChochDisplacement(
+  signal15m: SmcSignal,
+  signal5m: SmcSignal,
+  signal1m: SmcSignal,
+  htfBias: SmcBias,
+  candles1m: Candle[],
+): ChochDisplacementResult {
+  if (htfBias === 'NEUTRAL') {
+    return { confirmed: false, ob1mAligned: null, reason: 'htf_neutral' };
+  }
+  const chochAligned =
+    (signal15m.choch && signal15m.bias === htfBias) ||
+    (signal5m.choch  && signal5m.bias  === htfBias);
+
+  if (!chochAligned) {
+    return { confirmed: false, ob1mAligned: null, reason: 'no_choch_aligned' };
+  }
+  const dirSuffix = htfBias === 'BUY' ? 'bull' : 'bear';
+  const ob1m = signal1m.zones.find(z => z.type === `OB-${dirSuffix}`) ?? null;
+  if (!ob1m) {
+    return { confirmed: false, ob1mAligned: null, reason: 'no_ob_1m' };
+  }
+  const impulse = candles1m.slice(-5).find(c => {
+    const body  = Math.abs(c.close - c.open);
+    const range = c.high - c.low;
+    if (range === 0) return false;
+    const isDir = htfBias === 'BUY' ? c.close > c.open : c.close < c.open;
+    return (body / range) >= 0.60 && isDir;
+  });
+  if (!impulse) return { confirmed: false, ob1mAligned: ob1m, reason: 'no_impulse_candle' };
+
+  const touchesOB = impulse.low <= ob1m.priceHigh && impulse.high >= ob1m.priceLow;
+  if (!touchesOB) return { confirmed: false, ob1mAligned: ob1m, reason: 'impulse_misses_ob' };
+
+  return { confirmed: true, ob1mAligned: ob1m, reason: 'confirmed' };
+}
+
+export type PriceZone = 'PREMIUM' | 'DISCOUNT' | 'EQUILIBRIUM';
+
+export interface PremiumDiscountResult {
+  allowed: boolean;
+  macroZone: PriceZone;
+  microZone: PriceZone;
+  reason: string;
+}
+
+// BUY solo en DISCOUNT macro+micro | SELL solo en PREMIUM macro+micro
+export function evaluatePremiumDiscount(
+  currentPrice: number,
+  candles1D: Candle[],
+  candles5m: Candle[],
+  bias: SmcBias,
+): PremiumDiscountResult {
+  if (bias === 'NEUTRAL') {
+    return { allowed: false, macroZone: 'EQUILIBRIUM', microZone: 'EQUILIBRIUM', reason: 'bias_neutral' };
+  }
+  const macro = candles1D.length > 0 ? candles1D[candles1D.length - 1] : null;
+  if (!macro) {
+    return { allowed: true, macroZone: 'DISCOUNT', microZone: 'DISCOUNT', reason: 'no_macro_data' };
+  }
+  const macroMid = (macro.high + macro.low) / 2;
+  const macroZone: PriceZone =
+    currentPrice < macroMid * 0.998 ? 'DISCOUNT' :
+    currentPrice > macroMid * 1.002 ? 'PREMIUM' : 'EQUILIBRIUM';
+
+  const recent5m = candles5m.slice(-20);
+  if (recent5m.length < 5) {
+    return { allowed: true, macroZone, microZone: 'DISCOUNT', reason: 'no_micro_data' };
+  }
+  const microHigh = Math.max(...recent5m.map(c => c.high));
+  const microLow  = Math.min(...recent5m.map(c => c.low));
+  const microMid  = (microHigh + microLow) / 2;
+  const microZone: PriceZone =
+    currentPrice < microMid * 0.998 ? 'DISCOUNT' :
+    currentPrice > microMid * 1.002 ? 'PREMIUM' : 'EQUILIBRIUM';
+
+  const allowed =
+    (bias === 'BUY'  && macroZone === 'DISCOUNT' && microZone === 'DISCOUNT') ||
+    (bias === 'SELL' && macroZone === 'PREMIUM'  && microZone === 'PREMIUM');
+
+  return {
+    allowed,
+    macroZone,
+    microZone,
+    reason: allowed ? 'zone_aligned' : `macro=${macroZone}_micro=${microZone}`,
+  };
+}

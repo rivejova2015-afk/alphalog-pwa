@@ -33,8 +33,17 @@ export const PHASES: readonly PhaseConfig[] = [
   { name: '$5M',    capitalMin: 5_000_000, riskPct: 0.15 },
 ] as const;
 
-export const RR_MIN = 1.5;                    // Min R:R 1:1.5 (structural stops can be tight)
-export const SMC_CONF_MIN = 0.55;             // Min liquidity-grab confidence to enter
+// Latency-arb gap thresholds (Coinbase vs Binance), in pct (e.g. 0.003 = 0.003%).
+// Below these gaps the SMC zone tap doesn't get the velocity confirmation we
+// need to enter — skip and wait.
+export const ARB_GAP_MIN_PCT: Record<Symbol, number> = {
+  'BTC-USD': 0.003,
+  'ETH-USD': 0.005,
+  'SOL-USD': 0.008,
+};
+
+export const RR_MIN = 2.0;                    // Min R:R 1:2 (TP / SL distance)
+export const FEAR_GREED_GATE = 65;            // Bot trades only when F&G >= 65
 export const CIRCUIT_LOSS_LIMIT = 6;          // 6 consecutive losses → 3h pause
 export const CIRCUIT_PAUSE_MS = 3 * 60 * 60 * 1000;
 export const DAILY_TRADE_CAP = 100;           // Hard stop at 100 trades/day
