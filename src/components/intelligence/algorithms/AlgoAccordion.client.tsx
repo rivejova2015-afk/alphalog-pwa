@@ -65,7 +65,10 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
   const handleDelete = async (id: string, name: string) => {
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/algorithms/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/algorithms/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         toast.error(j.error || 'No se pudo eliminar la estrategia');

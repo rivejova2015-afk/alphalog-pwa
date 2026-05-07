@@ -27,14 +27,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data, error } = await supabase
-      .from("trading_algorithms")
-      .select(`
-        *,
-        deployments:algorithm_deployments(
-          id, status, bot_account_id,
-          bot_accounts(label, account_id)
-        )
-      `)
+      .from("algorithms")
+      .select("*")
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null)
@@ -77,7 +71,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     }
 
     const { data, error } = await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .update(payload)
       .eq("id", id)
       .eq("user_id", user.id)
@@ -129,14 +123,18 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { error } = await supabase
-      .from("trading_algorithms")
+    const { data, error } = await supabase
+      .from("algorithms")
       .update({ deleted_at: new Date().toISOString(), status: "archived" })
       .eq("id", id)
       .eq("user_id", user.id)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .select("id");
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: "Algorithm not found or unauthorized" }, { status: 404 });
+    }
 
     await logAuditFromRequest(
       { userId: user.id, action: "delete", resourceType: "trade", resourceId: id, status: "success" },

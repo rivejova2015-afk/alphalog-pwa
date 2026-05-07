@@ -74,7 +74,10 @@ export default function AlgorithmCard({ algo, onRefresh, onDeploy }: Props) {
     setConfirmDelete(false);
     setLoading(true);
     try {
-      const res = await fetch(`/api/algorithms/${algo.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/algorithms/${algo.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
       if (!res.ok) { toast.error("Error al eliminar"); return; }
       toast.success(`"${algo.name}" eliminado`);
       onRefresh();

@@ -88,13 +88,21 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Content-Type validation for API mutations (Level 9.1)
+  // Content-Type validation for API mutations (Level 9.1).
+  // Skipped for DELETE and other bodyless requests: per RFC 9110, DELETE often
+  // has no payload and most clients (including window.fetch) don't set
+  // Content-Type when there is no body. Enforcing it here yielded a silent 415
+  // on every DELETE fired from the UI — including the algorithms-delete flow.
   if (isApi && isMutating && !isPublicApi) {
-    const ct = request.headers.get("content-type") || "";
-    const isJson = ct.includes("application/json");
-    const isFormData = ct.includes("multipart/form-data") || ct.includes("application/x-www-form-urlencoded");
-    if (!isJson && !isFormData) {
-      return NextResponse.json({ error: "Invalid Content-Type" }, { status: 415 });
+    const cl = request.headers.get("content-length");
+    const hasBody = (cl !== null && cl !== "0") || request.headers.get("transfer-encoding") !== null;
+    if (request.method !== "DELETE" && hasBody) {
+      const ct = request.headers.get("content-type") || "";
+      const isJson = ct.includes("application/json");
+      const isFormData = ct.includes("multipart/form-data") || ct.includes("application/x-www-form-urlencoded");
+      if (!isJson && !isFormData) {
+        return NextResponse.json({ error: "Invalid Content-Type" }, { status: 415 });
+      }
     }
   }
 
