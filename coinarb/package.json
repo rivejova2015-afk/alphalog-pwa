@@ -10,7 +10,8 @@
     "start": "node dist/core/index.js",
     "dev": "tsx watch src/core/index.ts",
     "boot:products": "tsx scripts/boot-products.ts",
-    "test:cdp-auth": "tsx scripts/test-cdp-auth.ts"
+    "test:cdp-auth": "tsx scripts/test-cdp-auth.ts",
+    "backtest": "tsx scripts/backtest.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

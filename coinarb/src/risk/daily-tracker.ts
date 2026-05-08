@@ -28,9 +28,12 @@ export interface DailySnapshot {
 }
 
 export class DailyTracker {
+  private readonly DAILY_CAP_PER_SYMBOL = 33;
+  private readonly DAILY_CAP_TOTAL = 100;
   private dayUtc: string = todayUtc();
   private snap: DailySnapshot = blank();
   private tradeTimestamps: number[] = [];
+  private tradeCountBySymbol: Map<string, number> = new Map();
 
   hydrate(s: Partial<DailySnapshot>): void {
     this.snap = { ...blank(), ...s };
@@ -48,14 +51,34 @@ export class DailyTracker {
     if (today !== this.dayUtc) {
       this.dayUtc = today;
       this.snap = blank();
+      this.tradeCountBySymbol.clear();
       return true;
     }
     return false;
   }
 
-  recordTrade(pnlUsd: number, capitalAfter: number, phaseAfter: string): void {
+  isSymbolCapReached(symbol: string): boolean {
+    return (this.tradeCountBySymbol.get(symbol) ?? 0) >= this.DAILY_CAP_PER_SYMBOL;
+  }
+
+  isTotalCapReached(): boolean {
+    return this.snap.totalTrades >= this.DAILY_CAP_TOTAL;
+  }
+
+  getCountBySymbol(symbol: string): number {
+    return this.tradeCountBySymbol.get(symbol) ?? 0;
+  }
+
+  getAllCountsBySymbol(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [sym, n] of this.tradeCountBySymbol) out[sym] = n;
+    return out;
+  }
+
+  recordTrade(symbol: string, pnlUsd: number, capitalAfter: number, phaseAfter: string): void {
     this.rolloverIfNeeded();
     this.snap.totalTrades += 1;
+    this.tradeCountBySymbol.set(symbol, (this.tradeCountBySymbol.get(symbol) ?? 0) + 1);
     if (pnlUsd > 0) {
       this.snap.wins += 1;
       this.snap.consecutiveLossCurrent = 0;

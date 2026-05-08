@@ -71,6 +71,7 @@ export class CoinarbLoop {
   private liquidityRefreshAt = 0;
   private historicalCandles: Map<string, Map<Timeframe, Candle[]>> = new Map();
   private historicalLoadedAt = 0;
+  private historicalReloading = false;
   private readonly HIST_TTL_MS = 4 * 60 * 60 * 1000;
 
   constructor(deps: LoopDeps) {
@@ -100,8 +101,35 @@ export class CoinarbLoop {
 
   private async ensureHistoricalCandles(): Promise<void> {
     const now = Date.now();
-    if (this.historicalLoadedAt > 0 && now - this.historicalLoadedAt < this.HIST_TTL_MS) return;
-    console.log('[loop] loading historical candles (Coinbase Exchange public API)…');
+    const fresh = this.historicalLoadedAt > 0 && now - this.historicalLoadedAt < this.HIST_TTL_MS;
+    if (fresh) return;
+
+    // CAMBIO 3a/b/c — Stale-data background reload.
+    // First load blocks (we need data to evaluate). Subsequent stale reloads run in
+    // the background so the 15s tick isn't held up by a multi-second Coinbase REST burst.
+    if (this.historicalReloading) return; // already in flight (covers both first-load and background)
+
+    const isFirstLoad = this.historicalCandles.size === 0;
+    if (isFirstLoad) {
+      console.log('[loop] loading historical candles (first load — blocking)…');
+      this.historicalReloading = true;
+      try {
+        await this.reloadHistorical();
+      } finally {
+        this.historicalReloading = false;
+      }
+      return;
+    }
+
+    this.historicalReloading = true;
+    console.log('[loop] historical data stale — kicking off background reload…');
+    void this.reloadHistorical()
+      .catch(err => console.warn('[loop] background historical reload failed:', err))
+      .finally(() => { this.historicalReloading = false; });
+  }
+
+  private async reloadHistorical(): Promise<void> {
+    const start = Date.now();
     for (const symbol of SYMBOLS) {
       try {
         const hist = await loadHistoricalCandles(symbol, TIMEFRAMES);
@@ -110,7 +138,8 @@ export class CoinarbLoop {
         console.warn(`[loop] historical load failed for ${symbol}:`, err);
       }
     }
-    this.historicalLoadedAt = now;
+    this.historicalLoadedAt = Date.now();
+    console.log(`[loop] historical reload complete in ${Date.now() - start}ms`);
   }
 
   private async tick(): Promise<void> {
@@ -148,9 +177,27 @@ export class CoinarbLoop {
           });
         }
       } else {
-        for (const symbol of SYMBOLS) {
-          await this.evaluateSymbol(symbol, fgValue);
+        // CAMBIO 1b — Parallel symbol evaluation. With a 15s tick, sequential awaits
+        // chew through the budget; allSettled keeps one slow symbol from blocking the rest.
+        const evalStart = Date.now();
+        const results = await Promise.allSettled(
+          SYMBOLS.map(symbol => this.evaluateSymbol(symbol, fgValue)),
+        );
+        const evalMs = Date.now() - evalStart;
+        const failed = results
+          .map((r, i) => r.status === 'rejected' ? { symbol: SYMBOLS[i], reason: r.reason } : null)
+          .filter((x): x is { symbol: Symbol; reason: unknown } => x !== null);
+        if (failed.length > 0) {
+          for (const f of failed) {
+            console.error(`[loop] evaluateSymbol(${f.symbol}) rejected:`, f.reason);
+          }
         }
+        // CAMBIO 1c — Per-tick eval log so the dashboard tail shows which symbols
+        // are firing and how long the cycle takes (target <2s on a 15s tick).
+        const trades = this.dailyTracker.current.data.totalTrades;
+        const counts = this.dailyTracker.getAllCountsBySymbol();
+        const countsStr = SYMBOLS.map(s => `${s.split('-')[0]}=${counts[s] ?? 0}`).join(' ');
+        console.log(`[loop] eval ${evalMs}ms | trades=${trades}/100 | ${countsStr} | failed=${failed.length}`);
       }
 
       await this.maybeRefreshLiquidity(tickStart);
@@ -170,6 +217,24 @@ export class CoinarbLoop {
   }
 
   private async evaluateSymbol(symbol: Symbol, fearGreed: number): Promise<void> {
+    // Daily caps (CAMBIO 2b) — per-symbol auto-stop avoids one pair eating the whole budget.
+    if (this.dailyTracker.isTotalCapReached()) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `daily total cap reached (${this.dailyTracker.current.data.totalTrades}/100)`,
+      });
+      return;
+    }
+    if (this.dailyTracker.isSymbolCapReached(symbol)) {
+      await this.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `symbol cap reached (${this.dailyTracker.getCountBySymbol(symbol)}/33)`,
+      });
+      return;
+    }
+
     const base = SYMBOL_TO_BASE[symbol];
     const cbSamples = this.coinbase.getTimestampedSamples(base);
     const bnSamples = this.binance.getTimestampedSamples(base);
@@ -448,7 +513,7 @@ export class CoinarbLoop {
         this.circuitBreaker.recordClose(pnlUsd);
         const newCapital = this.phaseManager.capitalNow + pnlUsd;
         const newPhaseState = await this.phaseManager.recordClose(newCapital);
-        this.dailyTracker.recordTrade(pnlUsd, newCapital, newPhaseState.phase.name);
+        this.dailyTracker.recordTrade(pos.symbol, pnlUsd, newCapital, newPhaseState.phase.name);
 
         await this.decisions.log({
           agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID,
@@ -485,6 +550,10 @@ export class CoinarbLoop {
       const cbState = this.circuitBreaker.snapshot;
       const daily = this.dailyTracker.current.data;
       const btc = this.coinbase.getPrice('BTC');
+      // CAMBIO 2c — per-symbol counts go in payload JSONB (no dedicated column).
+      // daily_trades_count gets the DailyTracker total (source of truth for caps),
+      // not the circuit-breaker counter (resets on circuit-pause).
+      const tradesBySymbol = this.dailyTracker.getAllCountsBySymbol();
       await supabase.from('coinarb_telemetry').upsert({
         user_id: COINARB_USER_ID,
         agent_id: COINARB_AGENT_ID,
@@ -498,7 +567,7 @@ export class CoinarbLoop {
         ws_binance_connected_spot: this.binance.isConnected,
         btc_spot_price: btc?.last ?? null,
         consecutive_losses: cbState.consecutiveLosses,
-        daily_trades_count: cbState.dailyTrades,
+        daily_trades_count: daily.totalTrades,
         daily_wins: daily.wins,
         daily_losses: daily.losses,
         phase_current: this.phaseManager.phaseName,
@@ -507,6 +576,11 @@ export class CoinarbLoop {
         fear_greed_index: fearGreed,
         paused_until: cbState.pausedUntil ? new Date(cbState.pausedUntil).toISOString() : null,
         last_heartbeat_at: new Date().toISOString(),
+        payload: {
+          trades_by_symbol: tradesBySymbol,
+          total_cap: 100,
+          per_symbol_cap: 33,
+        },
       }, { onConflict: 'agent_id' });
     } catch (err) {
       console.error('[loop] telemetry flush failed:', err);

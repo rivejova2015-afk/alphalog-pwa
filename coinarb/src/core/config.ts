@@ -47,7 +47,21 @@ export const FEAR_GREED_GATE = 65;            // Legacy constant; F&G is telemet
 export const CIRCUIT_LOSS_LIMIT = 6;          // 6 consecutive losses → 3h pause
 export const CIRCUIT_PAUSE_MS = 3 * 60 * 60 * 1000;
 export const DAILY_TRADE_CAP = 100;           // Hard stop at 100 trades/day
-export const LOOP_INTERVAL_MS = 60_000;       // 1 tick per minute
+export const LOOP_INTERVAL_MS = 15_000;       // 4 ticks per minute (parallel symbol eval)
+
+// =============================================================================
+// CONFIG SPLIT (CAMBIO 5c)
+// =============================================================================
+// • Operational toggles → Fly secrets (this file via process.env). Hot-rotated
+//   without code change: thresholds, caps, paper-mode flag, CDP creds.
+// • Documentation/dashboard mirror → coinarb_agents.config jsonb in Supabase.
+//   The runtime does NOT read Supabase config; it's there so the dashboard and
+//   future audits show what the bot is actually running.
+// • Code-only constants → exported here as `const` (PHASES, SYMBOLS, etc).
+//   Changing these requires a redeploy.
+// • Real paper/live switch lives in COINARB_50X_PAPER_MODE (env, line below);
+//   `coinarb_agents.config.paper_mode_default` is purely cosmetic.
+// =============================================================================
 
 // Tunable thresholds — overridable via Fly secrets without redeploy.
 export const MTF_CONFIDENCE_MIN = Number(process.env.MTF_CONFIDENCE_MIN ?? '0.30');
