@@ -16,6 +16,7 @@ const updateSchema = z.object({
   status:        z.enum(["draft", "paper", "approved", "live", "paused", "archived"]).optional(),
   parameters:    z.record(z.string(), z.unknown()).optional(),
   engine_config: EngineConfigSchema.optional(),
+  instruments:   z.array(z.string().min(1)).min(1).max(10).optional(),
 });
 
 // GET /api/algorithms/[id]
@@ -65,6 +66,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     if (parsed.data.status !== undefined) payload.status = parsed.data.status;
     if (parsed.data.parameters !== undefined) payload.parameters = parsed.data.parameters;
     if (parsed.data.engine_config !== undefined) payload.engine_config = parsed.data.engine_config;
+    if (parsed.data.instruments !== undefined)   payload.instrument    = parsed.data.instruments;
 
     if (Object.keys(payload).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });

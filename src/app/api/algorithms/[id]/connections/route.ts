@@ -73,7 +73,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         id: algo.id,
         name: algo.name,
         market_type: marketType,
-        instrument: algo.instrument ?? "",
+        instrument: Array.isArray(algo.instrument)
+          ? (algo.instrument[0] ?? "")
+          : (algo.instrument ?? ""),
         platform: algo.platform === 'MT4' ? 'MT4' : 'MT5',
       },
       mt5: null,

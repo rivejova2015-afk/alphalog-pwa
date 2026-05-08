@@ -21,7 +21,7 @@ interface AlgoData {
   id: string;
   name: string;
   marketType: MarketType;
-  instrument: string;
+  instrument: string[];
   direction?: Direction;
   parameters?: Record<string, unknown>;
   status: 'ACTIVE' | 'PAUSED' | 'ERROR';
@@ -37,6 +37,12 @@ interface AlgoData {
 
 interface AlgoAccordionProps {
   algos: AlgoData[];
+}
+
+function formatInstruments(xs: string[]): string {
+  if (!xs || xs.length === 0) return '—';
+  if (xs.length <= 3) return xs.join(', ');
+  return `${xs.slice(0, 3).join(', ')} +${xs.length - 3} más`;
 }
 
 export function AlgoAccordion({ algos }: AlgoAccordionProps) {
@@ -190,7 +196,7 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                     </button>
                   </div>
                   <span className="text-xs text-[#475569]">
-                    {algo.instrument}
+                    {formatInstruments(algo.instrument)}
                     {algo.direction && algo.direction !== 'both' && ` · ${algo.direction === 'long' ? 'Long bias' : 'Short bias'}`}
                   </span>
                 </div>
@@ -217,7 +223,7 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
               <div className="border-t border-[#1f2937] p-4 space-y-5">
                 {/* Stats card + equity curve side by side */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <AlgoCard {...algo} status={currentStatus} />
+                  <AlgoCard {...algo} instrument={formatInstruments(algo.instrument)} status={currentStatus} />
                   <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4">
                     <p className="text-xs text-[#475569] mb-3 uppercase tracking-wider font-medium">
                       Equity Curve (30 days)
@@ -255,7 +261,7 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                 {/* Backtest & Validation */}
                 <BacktestPanel
                   algorithmId={algo.id}
-                  defaultSymbol={algo.instrument}
+                  defaultSymbol={algo.instrument[0] ?? 'XAUUSD'}
                   defaultParameters={algo.parameters}
                 />
 

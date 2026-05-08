@@ -17,6 +17,7 @@ const createSchema = z.object({
   parameters:    z.record(z.string(), z.unknown()),
   slot_number:   z.number().int().min(1).max(50),
   engine_config: EngineConfigSchema.optional(),
+  instruments:   z.array(z.string().min(1)).min(1).max(10).optional(),
 });
 
 // GET /api/algorithms?platform=MT5
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
-    const { platform, name, description, algo_type, parameters, slot_number, engine_config } = parsed.data;
+    const { platform, name, description, algo_type, parameters, slot_number, engine_config, instruments } = parsed.data;
 
     const { data: existing } = await supabase
       .from("trading_algorithms")
@@ -113,6 +114,12 @@ export async function POST(request: NextRequest) {
 
     if ((count ?? 0) >= 50) return NextResponse.json({ error: "Límite de 50 algoritmos por plataforma alcanzado" }, { status: 409 });
 
+    // Legacy `trading_algorithms` has no `instrument` column — the field lives
+    // inside `parameters`. Stash the array there so callers don't lose context.
+    const mergedParameters: Record<string, unknown> = instruments
+      ? { ...parameters, instruments }
+      : parameters;
+
     const { data, error } = await supabase
       .from("trading_algorithms")
       .insert({
@@ -121,7 +128,7 @@ export async function POST(request: NextRequest) {
         name,
         description,
         algo_type,
-        parameters,
+        parameters: mergedParameters,
         slot_number,
         sort_index: slot_number,
         engine_config: engine_config ?? null,

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/browser';
 import type { AlgorithmTemplate } from '@/types/algorithms';
 import { AlgorithmWizardStep2 } from './AlgorithmWizardStep2.client';
+import { InstrumentMultiSelect } from './InstrumentMultiSelect.client';
 import type { EngineConfig } from '@/lib/validations/engine-config';
 import { ENGINE_CONFIG_DEFAULT } from '@/lib/validations/engine-config';
 
@@ -26,15 +27,9 @@ interface CmeAccount {
 type MarketType = 'forex' | 'futures' | 'options';
 type Direction  = 'long'  | 'short'  | 'both';
 
-const FOREX_INSTRUMENT_GROUPS: { label: string; symbols: string[] }[] = [
-  { label: 'Metales',         symbols: ['XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD'] },
-  { label: 'Forex Majors',    symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD'] },
-  { label: 'Forex Crosses',   symbols: ['GBPJPY', 'EURJPY', 'EURGBP', 'AUDJPY', 'CHFJPY', 'EURAUD', 'GBPAUD', 'AUDNZD'] },
-  { label: 'Índices US',      symbols: ['US30', 'US500', 'USTEC', 'US2000'] },
-  { label: 'Índices EU/Asia', symbols: ['GER40', 'UK100', 'FRA40', 'ESP35', 'JPN225', 'HK50'] },
-  { label: 'Energía',         symbols: ['USOIL', 'UKOIL', 'NGAS'] },
-  { label: 'Crypto',          symbols: ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD'] },
-];
+// FOREX_INSTRUMENT_GROUPS removed — instruments now come from /api/instruments
+// (see InstrumentMultiSelect). FUTURES_CONTRACTS kept locally because it
+// carries tick/margin metadata not present in the instruments table.
 
 const FUTURES_CONTRACTS = [
   { symbol: 'ES',  name: 'E-mini S&P 500',     tick: '$12.50', margin: '$12,600' },
@@ -47,9 +42,7 @@ const FUTURES_CONTRACTS = [
   { symbol: 'M2K', name: 'Micro E-mini Russell',tick: '$0.50',  margin: '$700'    },
 ];
 
-const OPTIONS_UNDERLYINGS = [
-  'SPX','SPY','QQQ','GLD','/ES','AAPL','TSLA','NVDA','MSFT','AMZN',
-];
+// OPTIONS_UNDERLYINGS removed — instruments now come from /api/instruments.
 
 const OPTIONS_STRATEGIES = [
   { value: 'vertical_spread',   label: 'Vertical Spread',    desc: 'Debit/credit con 2 strikes' },
@@ -144,7 +137,8 @@ function DirectionChips({ value, onChange, options }: {
 
 // ─── Step 1: Forex ────────────────────────────────────────────────────────────
 
-function StepForex({ name, setName, legA, setLegA,
+function StepForex({ name, setName,
+  instruments, setInstruments, instrumentsError,
   direction, setDirection, botAccountId, setBotAccountId, botAccounts,
   showAddAccount, setShowAddAccount,
   newAccNumber, setNewAccNumber,
@@ -154,7 +148,7 @@ function StepForex({ name, setName, legA, setLegA,
   templates, selectedTemplateKey, onTemplateChange,
   selectedPlatform, setSelectedPlatform }: {
   name: string; setName: (v: string) => void;
-  legA: string; setLegA: (v: string) => void;
+  instruments: string[]; setInstruments: (v: string[]) => void; instrumentsError: string;
   direction: Direction; setDirection: (v: Direction) => void;
   botAccountId: string; setBotAccountId: (v: string) => void;
   botAccounts: BotAccount[];
@@ -236,14 +230,8 @@ function StepForex({ name, setName, legA, setLegA,
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
-      <Field label="Instrumento">
-        <Select value={legA} onChange={setLegA}>
-          {FOREX_INSTRUMENT_GROUPS.map((g) => (
-            <optgroup key={g.label} label={g.label}>
-              {g.symbols.map((s) => <option key={s} value={s}>{s}</option>)}
-            </optgroup>
-          ))}
-        </Select>
+      <Field label="Instrumentos *" hint="Hasta 10 simbolos. El primero se usa como referencia para los campos derivados.">
+        <InstrumentMultiSelect value={instruments} onChange={setInstruments} error={instrumentsError} />
       </Field>
 
       <Field label="Dirección">
@@ -309,7 +297,8 @@ function StepForex({ name, setName, legA, setLegA,
 
 function StepFutures({
   name, setName,
-  contract, setContract,
+  contract, setContract: _setContract,
+  instruments, setInstruments, instrumentsError,
   direction, setDirection,
   hedgeEnabled, setHedgeEnabled,
   hedgeContract, setHedgeContract,
@@ -326,6 +315,7 @@ function StepFutures({
 }: {
   name: string; setName: (v: string) => void;
   contract: string; setContract: (v: string) => void;
+  instruments: string[]; setInstruments: (v: string[]) => void; instrumentsError: string;
   direction: Direction; setDirection: (v: Direction) => void;
   hedgeEnabled: boolean; setHedgeEnabled: (v: boolean) => void;
   hedgeContract: string; setHedgeContract: (v: string) => void;
@@ -352,12 +342,8 @@ function StepFutures({
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
-      <Field label="Contrato CME">
-        <Select value={contract} onChange={setContract}>
-          {FUTURES_CONTRACTS.map((c) => (
-            <option key={c.symbol} value={c.symbol}>{c.symbol} — {c.name}</option>
-          ))}
-        </Select>
+      <Field label="Instrumentos *" hint="Hasta 10 simbolos. El primero define el contrato CME principal y los datos de tick/margen.">
+        <InstrumentMultiSelect value={instruments} onChange={setInstruments} error={instrumentsError} />
         {selected && (
           <div className="mt-1.5 flex gap-3 text-[10px] text-[#475569]">
             <span>Tick: <span className="text-[#22d3ee]">{selected.tick}</span></span>
@@ -530,10 +516,13 @@ function StepFutures({
 
 type OptionsDirection = 'bullish' | 'bearish' | 'neutral' | 'both';
 
-function StepOptions({ name, setName, underlying, setUnderlying, strategy, setStrategy,
+function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _setUnderlying,
+  instruments, setInstruments, instrumentsError,
+  strategy, setStrategy,
   direction, setDirection, ibkrAccount, setIbkrAccount }: {
   name: string; setName: (v: string) => void;
   underlying: string; setUnderlying: (v: string) => void;
+  instruments: string[]; setInstruments: (v: string[]) => void; instrumentsError: string;
   strategy: string; setStrategy: (v: string) => void;
   direction: OptionsDirection; setDirection: (v: OptionsDirection) => void;
   ibkrAccount: string; setIbkrAccount: (v: string) => void;
@@ -548,20 +537,16 @@ function StepOptions({ name, setName, underlying, setUnderlying, strategy, setSt
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Subyacente">
-          <Select value={underlying} onChange={setUnderlying}>
-            {OPTIONS_UNDERLYINGS.map((u) => <option key={u} value={u}>{u}</option>)}
-          </Select>
-        </Field>
-        <Field label="Estrategia">
-          <Select value={strategy} onChange={setStrategy}>
-            {OPTIONS_STRATEGIES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      <Field label="Subyacentes *" hint="Hasta 10 simbolos. El primero se usa como referencia.">
+        <InstrumentMultiSelect value={instruments} onChange={setInstruments} error={instrumentsError} />
+      </Field>
+      <Field label="Estrategia">
+        <Select value={strategy} onChange={setStrategy}>
+          {OPTIONS_STRATEGIES.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </Select>
+      </Field>
 
       {selectedStrat && (
         <p className="text-[10px] text-[#475569] -mt-1">{selectedStrat.desc}</p>
@@ -711,7 +696,6 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [direction,  setDirection]  = useState<Direction>('both');
 
   // Forex-specific
-  const [legA,         setLegA]         = useState('XAUUSD');
   const [botAccountId, setBotAccountId] = useState('');
 
   // Latency-arb specific (only used when selectedTemplateKey === 'latency_arb_mt5')
@@ -742,6 +726,10 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
 
   // Engine config (Base Engine v1 + modules + overlays)
   const [engineConfig, setEngineConfig] = useState<EngineConfig>(ENGINE_CONFIG_DEFAULT);
+
+  // Multi-instrument selection (replaces legA/contract/underlying as the source of truth)
+  const [instruments, setInstruments]               = useState<string[]>(['XAUUSD']);
+  const [instrumentsError, setInstrumentsError]     = useState<string>('');
 
   const setOvr = (market: MarketType) => (k: string, v: string) => {
     if (market === 'forex')   setForexOvr((o)   => ({ ...o, [k]: v }));
@@ -778,7 +766,8 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
     if (!t) return;
 
     if (!name.trim()) setName(t.name);
-    setLegA(t.default_instrument);
+    setInstruments([t.default_instrument]);
+    setInstrumentsError('');
     if (t.default_direction !== 'both') setDirection(t.default_direction);
 
     // Auto-select the only supported platform if the template restricts it.
@@ -878,6 +867,13 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
 
   async function handleCreate() {
     if (!name.trim()) { toast.error('El nombre es obligatorio'); setStepIdx(0); return; }
+    if (instruments.length === 0) {
+      setInstrumentsError('Selecciona al menos un instrumento');
+      toast.error('Selecciona al menos un instrumento');
+      setStepIdx(0);
+      return;
+    }
+    setInstrumentsError('');
     setSaving(true);
     try {
       const supabase = createClient();
@@ -889,8 +885,10 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
       const engineOverrides: Record<string, number> = {};
       Object.entries(ovr).forEach(([k, v]) => { if (v !== '') engineOverrides[k] = Number(v); });
 
-      // Derive instrument (Leg A / contract / underlying)
-      const instrument = marketType === 'forex' ? legA : marketType === 'futures' ? contract : underlying;
+      // Primary instrument drives derived fields (parameters.leg_a_instrument,
+      // parameters.contract, parameters.underlying, latency-arb pair symbol).
+      // The full array goes to algorithms.instrument (text[]).
+      const primary = instruments[0];
 
       // Build parameters JSONB — engine overrides first; if a template is selected,
       // its base parameters are merged underneath so the engine has full context
@@ -905,9 +903,9 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         if (selectedTemplate.source_path)         parameters.source_path  = selectedTemplate.source_path;
       }
       if (marketType === 'forex') {
-        parameters.leg_a_instrument = legA;
+        parameters.leg_a_instrument = primary;
       } else if (marketType === 'futures') {
-        parameters.contract        = contract;
+        parameters.contract        = contract || primary;
         parameters.hedge_enabled   = hedgeEnabled;
         if (hedgeEnabled) parameters.hedge_contract = hedgeContract;
         // Linked CME account
@@ -919,7 +917,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
           parameters.cme_type        = selectedCme.account_type;
         }
       } else {
-        parameters.underlying        = underlying;
+        parameters.underlying        = primary;
         parameters.options_strategy  = optionsStrategy;
         parameters.ibkr_account      = ibkrAccount || null;
         parameters.options_direction = optionsDirection;
@@ -958,7 +956,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
       const { data: created, error } = await supabase.from('algorithms').insert({
         user_id:               user.id,
         name:                  name.trim(),
-        instrument,
+        instrument:            instruments,
         market_type:           marketType,
         direction:             dbDirection,
         platform:              marketType === 'forex' ? selectedPlatform : 'MT5',
@@ -980,7 +978,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
           algorithm_id:        created.id,
           fast_bot_account_id: botAccountId,
           slow_bot_account_id: slowBotAccountId,
-          symbol:              legA,
+          symbol:              primary,
           max_skew_points:     Number(latencyArbCfg.max_skew_points)  || 30,
           min_pulse_ticks:     Number(latencyArbCfg.min_pulse_ticks)  || 5,
           pulse_window_ms:     Number(latencyArbCfg.pulse_window_ms)  || 800,
@@ -1049,7 +1047,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
           {stepIdx === 0 && marketType === 'forex' && (
             <StepForex
               name={name} setName={setName}
-              legA={legA} setLegA={setLegA}
+              instruments={instruments} setInstruments={setInstruments} instrumentsError={instrumentsError}
               direction={direction} setDirection={setDirection}
               botAccountId={botAccountId} setBotAccountId={setBotAccountId}
               botAccounts={botAccounts}
@@ -1086,6 +1084,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
                   setHedgeContract(fallback?.symbol ?? '');
                 }
               }}
+              instruments={instruments} setInstruments={setInstruments} instrumentsError={instrumentsError}
               direction={direction} setDirection={setDirection}
               hedgeEnabled={hedgeEnabled} setHedgeEnabled={setHedgeEnabled}
               hedgeContract={hedgeContract} setHedgeContract={setHedgeContract}
@@ -1106,6 +1105,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
             <StepOptions
               name={name} setName={setName}
               underlying={underlying} setUnderlying={setUnderlying}
+              instruments={instruments} setInstruments={setInstruments} instrumentsError={instrumentsError}
               strategy={optionsStrategy} setStrategy={setOptionsStrategy}
               direction={optionsDirection} setDirection={setOptionsDirection}
               ibkrAccount={ibkrAccount} setIbkrAccount={setIbkrAccount}

@@ -37,7 +37,15 @@ export default async function AlgorithmsPage() {
       id: a.id as string,
       name: a.name as string,
       marketType,
-      instrument: (a.instrument as string) ?? (params.instrument as string) ?? (params.trade_symbol as string) ?? "XAUUSD",
+      instrument: Array.isArray(a.instrument)
+        ? (a.instrument as string[])
+        : a.instrument
+          ? [a.instrument as string]
+          : params.instrument
+            ? [params.instrument as string]
+            : params.trade_symbol
+              ? [params.trade_symbol as string]
+              : ["XAUUSD"],
       direction: (["long","short","both"].includes(a.direction as string) ? a.direction : "both") as Direction,
       parameters: params,
       status,
