@@ -330,12 +330,25 @@ export interface PremiumDiscountResult {
 
 // BUY when macro+micro lean DISCOUNT (or one of them sits in EQUILIBRIUM with the other aligned).
 // SELL is the mirror. Bands and macro range are env-tunable so we can soften without redeploy.
+//
+// Structural override: when smcSignal carries an active BOS or CHOCH and bias != NEUTRAL,
+// EQUILIBRIUM+EQUILIBRIUM is allowed — the structure has already validated direction so the
+// "price is in the middle of the range" block stops contradicting the SMC verdict.
 export function evaluatePremiumDiscount(
   currentPrice: number,
   candles1D: Candle[],
   candles5m: Candle[],
   bias: SmcBias,
+  smcSignal?: SmcSignal,
 ): PremiumDiscountResult {
+  if (smcSignal && (smcSignal.bos || smcSignal.choch) && bias !== 'NEUTRAL') {
+    return {
+      allowed: true,
+      macroZone: 'EQUILIBRIUM',
+      microZone: 'EQUILIBRIUM',
+      reason: `bos_choch_override bos=${smcSignal.bos} choch=${smcSignal.choch}`,
+    };
+  }
   if (bias === 'NEUTRAL') {
     return { allowed: false, macroZone: 'EQUILIBRIUM', microZone: 'EQUILIBRIUM', reason: 'bias_neutral' };
   }

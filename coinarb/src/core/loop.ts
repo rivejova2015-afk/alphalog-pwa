@@ -276,6 +276,7 @@ export class CoinarbLoop {
       candlesByTf.get('1D') ?? [],
       candlesByTf.get('5M') ?? [],
       htfBias,
+      sig1m,  // structural override: BOS/CHOCH on 1M lets EQUILIBRIUM+EQUILIBRIUM through
     );
     if (!pd.allowed) {
       await this.decisions.log({
