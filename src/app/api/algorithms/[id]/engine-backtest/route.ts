@@ -103,6 +103,33 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       },
     );
 
+    // Persist the run — best-effort, never blocks the response.
+    const { data: runRow } = await supabase
+      .from("engine_backtest_runs")
+      .insert({
+        user_id:      user.id,
+        algorithm_id: algo.id,
+        symbol,
+        range_from:   from,
+        range_to:     to,
+        params: {
+          starting_equity:        parsed.data.starting_equity ?? null,
+          sl_atr_mult:            parsed.data.sl_atr_mult ?? null,
+          tp_atr_mult:            parsed.data.tp_atr_mult ?? null,
+          monte_carlo_iterations: parsed.data.monte_carlo_iterations ?? 0,
+          walk_forward_windows:   parsed.data.walk_forward_windows ?? 0,
+        },
+        bars_loaded:      tfBars.map((e) => ({ tf: e.tf, count: e.bars.length })),
+        baseline_metrics: full.baseline.metrics,
+        final_balance:    full.baseline.finalBalance,
+        total_trades:     full.baseline.metrics.totalTrades,
+        duration_ms:      full.baseline.durationMs,
+        monte_carlo:      full.monteCarlo,
+        walk_forward:     full.walkForward,
+      })
+      .select("id, created_at")
+      .maybeSingle();
+
     return NextResponse.json({
       algorithm: { id: algo.id, name: algo.name, status: algo.status },
       symbol,
@@ -112,6 +139,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       result: full.baseline,
       monte_carlo: full.monteCarlo,
       walk_forward: full.walkForward,
+      run_id:     runRow?.id ?? null,
+      created_at: runRow?.created_at ?? null,
     }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (err) {
     logError("EngineBacktest", { component: "POST /api/algorithms/[id]/engine-backtest", message: String(err) });

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History } from "lucide-react";
 import { toast } from "sonner";
 import { EquityCurve } from "./EquityCurve";
 
@@ -66,6 +66,24 @@ interface BacktestResponse {
   };
   monte_carlo: MonteCarloPayload | null;
   walk_forward: WalkForwardPayload | null;
+  run_id?: string | null;
+  created_at?: string | null;
+}
+
+interface HistoryRow {
+  id: string;
+  symbol: string;
+  range_from: string;
+  range_to: string;
+  params: Record<string, unknown>;
+  baseline_metrics: BacktestMetrics;
+  final_balance: number | null;
+  total_trades: number | null;
+  duration_ms: number | null;
+  monte_carlo: MonteCarloPayload | null;
+  walk_forward: WalkForwardPayload | null;
+  bars_loaded: { tf: string; count: number }[];
+  created_at: string;
 }
 
 interface Props {
@@ -102,6 +120,47 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
+  const [history, setHistory]         = useState<HistoryRow[]>([]);
+
+  // Load history on mount + refresh after each successful run.
+  const refreshHistory = async () => {
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/engine-backtest/history?limit=20`, { cache: "no-store" });
+      if (!res.ok) return;
+      const json = await res.json() as { runs: HistoryRow[] };
+      setHistory(json.runs ?? []);
+    } catch { /* non-critical */ }
+  };
+
+  useEffect(() => {
+    refreshHistory();
+  }, [algorithmId]);
+
+  function loadRun(run: HistoryRow) {
+    // Reconstruct a BacktestResponse-shaped payload from the stored row so
+    // the UI re-renders without a fresh sim. Trades + equity curve aren't
+    // persisted (heavy + bounded value) — we leave them empty.
+    setData({
+      algorithm: { id: algorithmId, name: "", status: "" },
+      symbol: run.symbol,
+      from: run.range_from,
+      to:   run.range_to,
+      bars_loaded: run.bars_loaded ?? [],
+      result: {
+        metrics: run.baseline_metrics,
+        equityCurve: [],
+        finalBalance: run.final_balance ?? 0,
+        durationMs: run.duration_ms ?? 0,
+        trades: [],
+      },
+      monte_carlo: run.monte_carlo,
+      walk_forward: run.walk_forward,
+      run_id: run.id,
+      created_at: run.created_at,
+    });
+    setError(null);
+    toast.message(`Cargado run del ${new Date(run.created_at).toLocaleString()}`);
+  }
 
   async function run() {
     if (instruments.length === 0) {
@@ -134,6 +193,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       const json = (await res.json()) as BacktestResponse;
       setData(json);
       toast.success(`Backtest completado en ${json.result.durationMs}ms`);
+      refreshHistory();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error de conexión";
       setError(msg);
@@ -151,14 +211,36 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
 
   return (
     <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-[#a78bfa]" />
           <p className="text-xs text-[#475569] uppercase tracking-wider font-medium">Engine v1 — Backtest Validator</p>
         </div>
-        {data && (
-          <span className="text-[10px] font-mono text-[#475569]">{data.result.durationMs}ms · {data.result.trades.length} trades</span>
-        )}
+        <div className="flex items-center gap-3">
+          {history.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <History size={11} className="text-[#475569]" />
+              <select
+                value=""
+                onChange={(e) => {
+                  const run = history.find((h) => h.id === e.target.value);
+                  if (run) loadRun(run);
+                }}
+                className="rounded-md bg-[#0a0e1a] border border-[#1f2937] text-[#94a3b8] text-[10px] px-2 py-1 focus:outline-none font-mono"
+              >
+                <option value="">Cargar run anterior ({history.length})…</option>
+                {history.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {new Date(r.created_at).toLocaleString()} · {r.symbol} · {r.total_trades ?? 0}tr · ${Number(r.final_balance ?? 0).toFixed(0)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {data && (
+            <span className="text-[10px] font-mono text-[#475569]">{data.result.durationMs}ms · {data.result.trades.length} trades</span>
+          )}
+        </div>
       </div>
 
       {/* Form */}
