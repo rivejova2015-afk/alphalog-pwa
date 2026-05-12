@@ -11,6 +11,7 @@ import { ControlPanel } from './ControlPanel.client';
 import { QuantModelsPanel } from './QuantModelsPanel';
 import { OpenPositionsPanel } from './OpenPositionsPanel.client';
 import { BacktestPanel } from './BacktestPanel.client';
+import { EngineBacktestPanel } from './EngineBacktestPanel.client';
 import { Badge } from '@/components/shared/Badge';
 import AlgorithmDetailsModal from './AlgorithmDetailsModal.client';
 
@@ -263,6 +264,12 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   algorithmId={algo.id}
                   defaultSymbol={algo.instrument[0] ?? 'XAUUSD'}
                   defaultParameters={algo.parameters}
+                />
+
+                {/* Engine v1 backtest — direct evaluator + ATR-sized trades */}
+                <EngineBacktestPanel
+                  algorithmId={algo.id}
+                  instruments={algo.instrument}
                 />
 
                 {/* Recent trades */}
