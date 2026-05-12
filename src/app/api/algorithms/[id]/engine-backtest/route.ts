@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
-import { simulateEngineV1FromBars } from "@/lib/engine/v1/backtest";
+import { runEngineV1FullValidation } from "@/lib/engine/v1/backtest";
 import { extractMultiTf } from "@/lib/engine/v1/index";
 import { logError } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
@@ -26,12 +26,14 @@ export const maxDuration = 120;
 type Ctx = { params: Promise<{ id: string }> };
 
 const bodySchema = z.object({
-  symbol:           z.string().min(1).max(20).optional(),
-  from:             z.string().datetime().optional(),
-  to:               z.string().datetime().optional(),
-  starting_equity:  z.number().positive().optional(),
-  sl_atr_mult:      z.number().positive().optional(),
-  tp_atr_mult:      z.number().positive().optional(),
+  symbol:                  z.string().min(1).max(20).optional(),
+  from:                    z.string().datetime().optional(),
+  to:                      z.string().datetime().optional(),
+  starting_equity:         z.number().positive().optional(),
+  sl_atr_mult:             z.number().positive().optional(),
+  tp_atr_mult:             z.number().positive().optional(),
+  monte_carlo_iterations:  z.number().int().min(0).max(5000).optional(),
+  walk_forward_windows:    z.number().int().min(0).max(12).optional(),
 });
 
 const VALID_TFS: Timeframe[] = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"];
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       }),
     );
 
-    const result = await simulateEngineV1FromBars(
+    const full = await runEngineV1FullValidation(
       {
         id: algo.id as string,
         lot_size: algo.lot_size as number | null,
@@ -96,6 +98,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         startingEquity: parsed.data.starting_equity,
         slAtrMult: parsed.data.sl_atr_mult,
         tpAtrMult: parsed.data.tp_atr_mult,
+        monteCarloIterations: parsed.data.monte_carlo_iterations,
+        walkForwardWindows: parsed.data.walk_forward_windows,
       },
     );
 
@@ -105,7 +109,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       from,
       to,
       bars_loaded: tfBars.map((e) => ({ tf: e.tf, count: e.bars.length })),
-      result,
+      result: full.baseline,
+      monte_carlo: full.monteCarlo,
+      walk_forward: full.walkForward,
     }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (err) {
     logError("EngineBacktest", { component: "POST /api/algorithms/[id]/engine-backtest", message: String(err) });

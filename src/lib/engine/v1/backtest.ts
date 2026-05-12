@@ -9,9 +9,10 @@
 //   5. computeMetrics returns the same BacktestMetrics shape as the existing
 //      backtest engine, so downstream UI / robustness can reuse it.
 
-import type { Bar, SimulatedTrade, EquityPoint, BacktestResult, Side } from "@/types/backtest";
+import type { Bar, SimulatedTrade, EquityPoint, BacktestResult, BacktestMetrics, Side } from "@/types/backtest";
 import { computeMetrics } from "@/lib/backtest/statistics";
 import { atr } from "@/lib/backtest/indicators";
+import { runMonteCarlo, type MonteCarloResult } from "@/lib/backtest/monte-carlo";
 import { evaluateEngineV1, type EvaluatorAlgorithm } from "./evaluator";
 import { extractMultiTf } from "./index";
 import type { BarsByTf, MultiTfConfig } from "./types";
@@ -287,3 +288,142 @@ export async function simulateEngineV1FromBars(
     ...opts,
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Walk-Forward — splits the driver TF into N non-overlapping windows, runs
+// the engine on each, and reports per-window metrics + stability across them.
+// Engine v1 has no parameter-optimization step, so "training" is just running
+// on each window; the diagnostic value is consistency check (does Sharpe stay
+// stable across regimes?).
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface WalkForwardWindowResult {
+  window: number;          // 1-indexed
+  from: string;
+  to: string;
+  trades: number;
+  pnl: number;
+  winRate: number;
+  sharpe: number;
+  maxDrawdownPct: number;
+}
+
+export interface EngineV1WalkForward {
+  windows: WalkForwardWindowResult[];
+  avgSharpe: number;
+  sharpeStdDev: number;     // dispersion of Sharpe across windows
+  consistency: number;      // fraction of windows that were profitable
+  profitableWindows: number;
+}
+
+function pickDriverTf(bars: { tf: string; bars: Bar[] }[], mtf: MultiTfConfig): string {
+  const ranks: Record<string, number> = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440, W1: 10080, MN1: 43200 };
+  const sorted = [...mtf.timeframes].sort((a, b) => (ranks[a.tf] ?? 99999) - (ranks[b.tf] ?? 99999));
+  for (const t of sorted) {
+    const found = bars.find((b) => b.tf === t.tf);
+    if (found && found.bars.length > 0) return t.tf;
+  }
+  return sorted[0]?.tf ?? "M15";
+}
+
+function sliceWindow(bars: Bar[], fromTs: number, toTs: number): Bar[] {
+  const out: Bar[] = [];
+  for (const b of bars) {
+    const t = new Date(b.ts).getTime();
+    if (t >= fromTs && t < toTs) out.push(b);
+  }
+  return out;
+}
+
+export async function runEngineV1WalkForward(
+  algorithm: EvaluatorAlgorithm,
+  symbol: string,
+  barsByTf: { tf: string; bars: Bar[] }[],
+  windows = 4,
+  opts: { startingEquity?: number; slAtrMult?: number; tpAtrMult?: number } = {},
+): Promise<EngineV1WalkForward> {
+  const mtf = extractMultiTf(algorithm.parameters);
+  const driverTf = pickDriverTf(barsByTf, mtf);
+  const driverEntry = barsByTf.find((b) => b.tf === driverTf);
+  if (!driverEntry || driverEntry.bars.length < 200 * windows) {
+    return { windows: [], avgSharpe: 0, sharpeStdDev: 0, consistency: 0, profitableWindows: 0 };
+  }
+
+  const driver = driverEntry.bars;
+  const startMs = new Date(driver[0].ts).getTime();
+  const endMs   = new Date(driver[driver.length - 1].ts).getTime();
+  const windowSpan = (endMs - startMs) / windows;
+
+  const results: WalkForwardWindowResult[] = [];
+  for (let w = 0; w < windows; w++) {
+    const fromMs = startMs + w * windowSpan;
+    const toMs = w === windows - 1 ? endMs + 1 : startMs + (w + 1) * windowSpan;
+    const windowBars = barsByTf.map((e) => ({
+      tf: e.tf,
+      bars: sliceWindow(e.bars, fromMs, toMs),
+    }));
+    const sim = await simulateEngineV1FromBars(algorithm, symbol, windowBars, opts);
+    results.push({
+      window: w + 1,
+      from: new Date(fromMs).toISOString(),
+      to:   new Date(toMs).toISOString(),
+      trades: sim.metrics.totalTrades,
+      pnl: sim.metrics.totalPnl,
+      winRate: sim.metrics.winRate,
+      sharpe: sim.metrics.sharpe,
+      maxDrawdownPct: sim.metrics.maxDrawdownPct,
+    });
+  }
+
+  const sharpes = results.map((r) => r.sharpe).filter(Number.isFinite);
+  const avgSharpe = sharpes.length > 0 ? sharpes.reduce((s, v) => s + v, 0) / sharpes.length : 0;
+  const variance = sharpes.length > 1
+    ? sharpes.reduce((s, v) => s + (v - avgSharpe) ** 2, 0) / (sharpes.length - 1)
+    : 0;
+  const sharpeStdDev = Math.sqrt(variance);
+  const profitableWindows = results.filter((r) => r.pnl > 0).length;
+  const consistency = results.length > 0 ? profitableWindows / results.length : 0;
+
+  return { windows: results, avgSharpe, sharpeStdDev, consistency, profitableWindows };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Full validation — baseline + monte carlo + walk-forward in one call.
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface EngineV1FullResult {
+  baseline: BacktestResult;
+  monteCarlo: MonteCarloResult | null;
+  walkForward: EngineV1WalkForward | null;
+}
+
+export async function runEngineV1FullValidation(
+  algorithm: EvaluatorAlgorithm,
+  symbol: string,
+  barsByTf: { tf: string; bars: Bar[] }[],
+  opts: {
+    startingEquity?: number;
+    slAtrMult?: number;
+    tpAtrMult?: number;
+    monteCarloIterations?: number;
+    walkForwardWindows?: number;
+  } = {},
+): Promise<EngineV1FullResult> {
+  const baseline = await simulateEngineV1FromBars(algorithm, symbol, barsByTf, opts);
+
+  let monteCarlo: MonteCarloResult | null = null;
+  if ((opts.monteCarloIterations ?? 0) > 0 && baseline.trades.length >= 10) {
+    const initialBalance = opts.startingEquity ?? 10_000;
+    monteCarlo = runMonteCarlo(baseline.trades, initialBalance, opts.monteCarloIterations);
+  }
+
+  let walkForward: EngineV1WalkForward | null = null;
+  if ((opts.walkForwardWindows ?? 0) > 0) {
+    walkForward = await runEngineV1WalkForward(algorithm, symbol, barsByTf, opts.walkForwardWindows, opts);
+  }
+
+  return { baseline, monteCarlo, walkForward };
+}
+
+// Re-export metric type for callers (UI / API) to use without importing /types/backtest directly.
+export type { BacktestMetrics };

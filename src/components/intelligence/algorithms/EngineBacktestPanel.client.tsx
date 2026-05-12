@@ -24,6 +24,33 @@ interface BacktestMetrics {
 
 interface EquityRow { ts: string; equity: number; drawdown: number }
 
+interface MonteCarloPayload {
+  iterations: number;
+  finalEquityPercentiles: { p5: number; p25: number; p50: number; p75: number; p95: number };
+  maxDrawdownPercentiles: { p5: number; p25: number; p50: number; p75: number; p95: number };
+  probProfitable: number;
+  probRuin: number;
+}
+
+interface WalkForwardWindow {
+  window: number;
+  from: string;
+  to: string;
+  trades: number;
+  pnl: number;
+  winRate: number;
+  sharpe: number;
+  maxDrawdownPct: number;
+}
+
+interface WalkForwardPayload {
+  windows: WalkForwardWindow[];
+  avgSharpe: number;
+  sharpeStdDev: number;
+  consistency: number;
+  profitableWindows: number;
+}
+
 interface BacktestResponse {
   algorithm: { id: string; name: string; status: string };
   symbol: string;
@@ -37,6 +64,8 @@ interface BacktestResponse {
     durationMs: number;
     trades: { id: number; side: string; pnl: number }[];
   };
+  monte_carlo: MonteCarloPayload | null;
+  walk_forward: WalkForwardPayload | null;
 }
 
 interface Props {
@@ -68,6 +97,8 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [startingEquity, setStarting] = useState("10000");
   const [slAtrMult, setSl]            = useState("1.5");
   const [tpAtrMult, setTp]            = useState("3.0");
+  const [mcIters, setMcIters]         = useState("0");
+  const [wfWindows, setWfWindows]     = useState("0");
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
@@ -90,6 +121,8 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           starting_equity: Number(startingEquity) || 10000,
           sl_atr_mult: Number(slAtrMult) || 1.5,
           tp_atr_mult: Number(tpAtrMult) || 3.0,
+          monte_carlo_iterations: Number(mcIters) || 0,
+          walk_forward_windows: Number(wfWindows) || 0,
         }),
       });
       if (!res.ok) {
@@ -163,6 +196,16 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           <input type="number" value={tpAtrMult} onChange={(e) => setTp(e.target.value)} step="0.1" min="0.1"
             className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
         </div>
+        <div>
+          <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1" title="0 = saltar. 500-1000 recomendado.">Monte Carlo iters</label>
+          <input type="number" value={mcIters} onChange={(e) => setMcIters(e.target.value)} step="100" min="0" max="5000"
+            className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
+        </div>
+        <div>
+          <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1" title="0 = saltar. 4 ventanas recomendado.">Walk-Fwd ventanas</label>
+          <input type="number" value={wfWindows} onChange={(e) => setWfWindows(e.target.value)} step="1" min="0" max="12"
+            className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -205,6 +248,65 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
             <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3">
               <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2">Equity Curve</p>
               <EquityCurve points={equityPoints} height={120} algoId={algorithmId} />
+            </div>
+          )}
+
+          {data.monte_carlo && data.monte_carlo.iterations > 0 && (
+            <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3 space-y-2">
+              <p className="text-[10px] text-[#475569] uppercase tracking-wider">Monte Carlo · {data.monte_carlo.iterations} iters</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Metric label="Prob profitable" value={formatPct(data.monte_carlo.probProfitable)} accent="emerald" />
+                <Metric label="Prob ruin" value={formatPct(data.monte_carlo.probRuin)} accent="red" />
+                <Metric label="Equity p5" value={`$${formatNum(data.monte_carlo.finalEquityPercentiles.p5)}`} />
+                <Metric label="Equity p95" value={`$${formatNum(data.monte_carlo.finalEquityPercentiles.p95)}`} accent="emerald" />
+                <Metric label="DD p5" value={formatPct(data.monte_carlo.maxDrawdownPercentiles.p5)} />
+                <Metric label="DD p50" value={formatPct(data.monte_carlo.maxDrawdownPercentiles.p50)} />
+                <Metric label="DD p95" value={formatPct(data.monte_carlo.maxDrawdownPercentiles.p95)} accent="red" />
+                <Metric label="Equity p50" value={`$${formatNum(data.monte_carlo.finalEquityPercentiles.p50)}`} accent="cyan" />
+              </div>
+            </div>
+          )}
+
+          {data.walk_forward && data.walk_forward.windows.length > 0 && (
+            <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-[#475569] uppercase tracking-wider">Walk-Forward · {data.walk_forward.windows.length} ventanas</p>
+                <div className="flex items-center gap-3 text-[10px] text-[#475569] font-mono">
+                  <span>avg Sharpe: <span className="text-[#22d3ee]">{formatNum(data.walk_forward.avgSharpe)}</span></span>
+                  <span>±{formatNum(data.walk_forward.sharpeStdDev)}</span>
+                  <span>consistency: <span className="text-[#34d399]">{formatPct(data.walk_forward.consistency)}</span></span>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px] font-mono">
+                  <thead className="text-[#475569]">
+                    <tr>
+                      <th className="text-left py-1 px-2">#</th>
+                      <th className="text-left py-1 px-2">Desde</th>
+                      <th className="text-left py-1 px-2">Hasta</th>
+                      <th className="text-right py-1 px-2">Trades</th>
+                      <th className="text-right py-1 px-2">PnL</th>
+                      <th className="text-right py-1 px-2">Win Rate</th>
+                      <th className="text-right py-1 px-2">Sharpe</th>
+                      <th className="text-right py-1 px-2">Max DD</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.walk_forward.windows.map((w) => (
+                      <tr key={w.window} className="border-t border-[#1f2937]">
+                        <td className="py-1 px-2">{w.window}</td>
+                        <td className="py-1 px-2">{w.from.slice(0, 10)}</td>
+                        <td className="py-1 px-2">{w.to.slice(0, 10)}</td>
+                        <td className="py-1 px-2 text-right">{w.trades}</td>
+                        <td className={`py-1 px-2 text-right ${w.pnl >= 0 ? "text-[#34d399]" : "text-[#ef4444]"}`}>${formatNum(w.pnl)}</td>
+                        <td className="py-1 px-2 text-right">{formatPct(w.winRate)}</td>
+                        <td className="py-1 px-2 text-right text-[#22d3ee]">{formatNum(w.sharpe)}</td>
+                        <td className="py-1 px-2 text-right text-[#ef4444]">{formatPct(w.maxDrawdownPct)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
