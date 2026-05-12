@@ -42,20 +42,12 @@ function scan(): Hit[] {
 // Run `npm run audit:tables:offline` to see the full list. This baseline blocks
 // new violations without forcing a big-bang migration.
 const LEGACY_TRADING_ALGORITHMS_FILES = new Set<string>([
+  // POST surface kept on legacy table — wizard inserts directly into algorithms.
   "app/api/algorithms/route.ts",
-  "app/api/algorithms/[id]/route.ts",
-  "app/api/algorithms/[id]/approve/route.ts",
-  "app/api/algorithms/[id]/backtest/route.ts",
-  "app/api/algorithms/[id]/connections/route.ts",
-  "app/api/algorithms/[id]/deploy/route.ts",
-  "app/api/algorithms/[id]/paper-trades/route.ts",
+  // Pending migration to canonical:
   "app/api/algorithms/[id]/pairing-token/route.ts",
-  "app/api/algorithms/[id]/promote-to-live/route.ts",
-  "app/api/algorithms/[id]/quality-gates/route.ts",
   "app/api/algorithms/[id]/quality-gates/recompute/route.ts",
-  "app/api/webhooks/algo-trade/route.ts",
   "app/api/webhooks/mt/route.ts",
-  "lib/quality-gates/runner.ts",
   "lib/bot/arbitrage/risk-guard.ts",
 ]);
 

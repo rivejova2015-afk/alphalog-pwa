@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     // Algorithm must be approved or live
     const { data: algo } = await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .select("id, status, platform")
       .eq("id", id)
       .eq("user_id", user.id)
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     // Mark algorithm as live
     await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .update({ status: "live" })
       .eq("id", id)
       .eq("user_id", user.id);
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest, { params }: Ctx) {
 
     if ((count ?? 0) === 0) {
       await supabase
-        .from("trading_algorithms")
+        .from("algorithms")
         .update({ status: "approved" })
         .eq("id", id)
         .eq("user_id", user.id);

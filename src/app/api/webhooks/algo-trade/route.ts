@@ -36,9 +36,9 @@ export async function POST(req: NextRequest) {
   const d = parsed.data;
   const svc = createServiceClient();
 
-  // Verify algorithm exists and belongs to userId
+  // Verify algorithm exists and belongs to userId (canonical table)
   const { data: algo } = await svc
-    .from("trading_algorithms")
+    .from("algorithms")
     .select("id, status")
     .eq("id", d.algorithmId)
     .eq("user_id", d.userId)
@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
 
   if (!algo) return NextResponse.json({ error: "Algorithm not found" }, { status: 404 });
 
-  // Only route to paper trades if algo is in paper mode
+  let routed: "paper_trade" | "live_trade" | "ignored" = "ignored";
+
   if (algo.status === "paper") {
     const { error } = await svc.from("algo_paper_trades").insert({
       user_id:     d.userId,
@@ -63,13 +64,34 @@ export async function POST(req: NextRequest) {
       opened_at:   d.timestamp ?? new Date().toISOString(),
       closed_at:   d.exitPrice != null ? (d.timestamp ?? new Date().toISOString()) : null,
     });
-
     if (error) {
-      logError("AlgoTradeWebhook", { component: "POST /api/webhooks/algo-trade", message: error.message });
+      logError("AlgoTradeWebhook", { component: "paper-insert", message: error.message });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
+    routed = "paper_trade";
     logInfo("AlgoTradeWebhook", `Paper trade recorded for algo ${d.algorithmId}`, {
+      component: "webhook", meta: { algorithmId: d.algorithmId, symbol: d.symbol, pnl: d.pnl },
+    });
+  } else if (algo.status === "live" || algo.status === "running") {
+    const { error } = await svc.from("algorithm_trades").insert({
+      user_id:      d.userId,
+      algorithm_id: d.algorithmId,
+      instrument:   d.symbol,
+      direction:    d.direction,
+      entry_price:  d.entryPrice,
+      exit_price:   d.exitPrice,
+      lots:         d.lots,
+      pnl:          d.pnl,
+      status:       d.exitPrice != null ? "closed" : "open",
+      opened_at:    d.timestamp ?? new Date().toISOString(),
+      closed_at:    d.exitPrice != null ? (d.timestamp ?? new Date().toISOString()) : null,
+    });
+    if (error) {
+      logError("AlgoTradeWebhook", { component: "live-insert", message: error.message });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    routed = "live_trade";
+    logInfo("AlgoTradeWebhook", `Live trade recorded for algo ${d.algorithmId}`, {
       component: "webhook", meta: { algorithmId: d.algorithmId, symbol: d.symbol, pnl: d.pnl },
     });
   }
@@ -81,10 +103,10 @@ export async function POST(req: NextRequest) {
       resourceType: "trade",
       resourceId: d.algorithmId,
       status: "success",
-      changes: { symbol: d.symbol, direction: d.direction, pnl: d.pnl, algoStatus: algo.status },
+      changes: { symbol: d.symbol, direction: d.direction, pnl: d.pnl, algoStatus: algo.status, routed },
     },
     req
   );
 
-  return NextResponse.json({ ok: true, routed: algo.status === "paper" ? "paper_trade" : "ignored" });
+  return NextResponse.json({ ok: true, routed });
 }

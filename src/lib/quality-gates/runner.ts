@@ -18,8 +18,8 @@ const ALL_CHECKS = [...edgeChecks, ...capitalChecks, ...microChecks, ...opsCheck
 
 async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: string): Promise<AlgorithmRow> {
   const { data, error } = await sb
-    .from('trading_algorithms')
-    .select('id,user_id,name,status,parameters,deployments:algorithm_deployments(bot_account_id,status)')
+    .from('algorithms')
+    .select('id,user_id,name,status,parameters,risk_percent,max_drawdown_pct,linked_bot_account_id,scan_config,deployments:algorithm_deployments(bot_account_id,status)')
     .eq('id', algorithmId)
     .eq('user_id', userId)
     .is('deleted_at', null)
@@ -30,21 +30,19 @@ async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: st
   const deps = (data.deployments as { bot_account_id: string | null; status: string }[] | null) ?? [];
   const activeDep = deps.find((d) => d.status === 'active') ?? deps[0] ?? null;
 
-  const numParam = (key: string): number | null => {
-    const v = params[key];
-    return typeof v === 'number' && Number.isFinite(v) ? v : null;
-  };
+  const num = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
 
   return {
     id:                    data.id as string,
     user_id:               data.user_id as string,
     name:                  data.name as string,
     status:                data.status as string,
-    risk_percent:          numParam('risk_percent'),
-    max_drawdown_pct:      numParam('max_drawdown_pct'),
-    linked_bot_account_id: activeDep?.bot_account_id ?? null,
+    risk_percent:          num(data.risk_percent),
+    max_drawdown_pct:      num(data.max_drawdown_pct),
+    linked_bot_account_id: (data.linked_bot_account_id as string | null) ?? activeDep?.bot_account_id ?? null,
     parameters:            params,
-    scan_config:           (params.scan_config as Record<string, unknown> | null) ?? null,
+    scan_config:           (data.scan_config as Record<string, unknown> | null) ?? null,
   };
 }
 

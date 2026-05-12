@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { data: algo } = await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .select("id, name, status")
       .eq("id", id)
       .eq("user_id", user.id)

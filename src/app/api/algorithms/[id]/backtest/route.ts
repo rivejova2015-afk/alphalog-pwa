@@ -37,7 +37,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
     const { data: algo } = await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .select("id")
       .eq("id", id)
       .eq("user_id", user.id)

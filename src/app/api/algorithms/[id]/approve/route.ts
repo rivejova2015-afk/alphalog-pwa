@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     }
 
     const { data: algo } = await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .select("id, status")
       .eq("id", id)
       .eq("user_id", user.id)
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     }
 
     const { data, error } = await supabase
-      .from("trading_algorithms")
+      .from("algorithms")
       .update({ status: "approved" })
       .eq("id", id)
       .eq("user_id", user.id)
