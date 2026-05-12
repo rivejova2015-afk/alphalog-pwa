@@ -15,6 +15,7 @@ import type {
 import { loadBarsForTfs } from "./bar-loader";
 import { checkBreaker } from "./circuit-breaker";
 import { evaluateEngineV1 } from "./evaluator";
+import type { MlModel } from "@/lib/backtest/ml-signal";
 
 interface AlgorithmRow {
   id: string;
@@ -85,6 +86,39 @@ export async function runEngineV1(
     breakerState = { tripped: r.tripped, reason: r.reason };
   }
 
+  // ML model — load the latest trained logreg for this algorithm if any.
+  // No-op overlay when no model exists (graceful default).
+  let mlModel: MlModel | null = null;
+  try {
+    const { data: row } = await supabase
+      .from("ml_models")
+      .select("weights, feature_names, train_acc, valid_acc")
+      .eq("algorithm_id", algorithm.id)
+      .eq("user_id", algorithm.user_id)
+      .eq("kind", "logreg")
+      .order("trained_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (row?.weights) {
+      const w = row.weights as {
+        weights: number[];
+        bias: number;
+        featureMeans: number[];
+        featureStds: number[];
+        featureNames: string[];
+      };
+      mlModel = {
+        weights:      w.weights,
+        bias:         w.bias,
+        featureMeans: w.featureMeans,
+        featureStds:  w.featureStds,
+        featureNames: w.featureNames,
+        trainAcc:     Number(row.train_acc ?? 0),
+        validAcc:     Number(row.valid_acc ?? 0),
+      };
+    }
+  } catch { /* non-critical — overlay degrades to pass-through */ }
+
   return evaluateEngineV1(
     {
       id: algorithm.id,
@@ -95,6 +129,6 @@ export async function runEngineV1(
     ctx,
     mtf,
     barsByTf,
-    breakerState,
+    { breakerState, mlModel },
   );
 }

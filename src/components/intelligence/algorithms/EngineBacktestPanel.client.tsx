@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, History } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain } from "lucide-react";
 import { toast } from "sonner";
 import { EquityCurve } from "./EquityCurve";
 
@@ -121,6 +121,8 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
   const [history, setHistory]         = useState<HistoryRow[]>([]);
+  const [trainingMl, setTrainingMl]   = useState(false);
+  const [mlStatus, setMlStatus]       = useState<string | null>(null);
 
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
@@ -160,6 +162,36 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
     });
     setError(null);
     toast.message(`Cargado run del ${new Date(run.created_at).toLocaleString()}`);
+  }
+
+  async function trainMl() {
+    if (instruments.length === 0) {
+      toast.error("La estrategia no tiene instrumentos");
+      return;
+    }
+    setTrainingMl(true);
+    setMlStatus(null);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/ml-train`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol, timeframe: "M15", lookback_days: 180, epochs: 200 }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || "Entrenamiento falló");
+        setMlStatus(`error: ${json.error ?? "unknown"}`);
+        return;
+      }
+      toast.success(`Modelo entrenado · train ${(json.train_acc * 100).toFixed(1)}% / valid ${(json.valid_acc * 100).toFixed(1)}%`);
+      setMlStatus(`Entrenado: train ${(json.train_acc * 100).toFixed(1)}% · valid ${(json.valid_acc * 100).toFixed(1)}% · ${json.bars_used} bars`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error de conexión";
+      toast.error(msg);
+      setMlStatus(`error: ${msg}`);
+    } finally {
+      setTrainingMl(false);
+    }
   }
 
   async function run() {
@@ -290,7 +322,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
           onClick={run}
@@ -300,6 +332,19 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
           {loading ? "Corriendo…" : "Validar Engine"}
         </button>
+        <button
+          type="button"
+          onClick={trainMl}
+          disabled={trainingMl || !symbol}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f2937] border border-[#a78bfa]/30 text-[#a78bfa] text-xs font-bold transition-all hover:border-[#a78bfa]/60 disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Entrena un modelo logreg sobre los últimos 180 días de M15. Se aplica como overlay en live polling."
+        >
+          {trainingMl ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
+          {trainingMl ? "Entrenando…" : "Entrenar ML"}
+        </button>
+        {mlStatus && (
+          <span className="text-[10px] font-mono text-[#475569]">{mlStatus}</span>
+        )}
         {data && (
           <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
             <CheckCircle2 size={10} className="text-[#34d399]" />

@@ -20,6 +20,8 @@ import { checkDecisionEngine } from "./overlays/decision-engine";
 import { checkRangeGate } from "./overlays/range-gate";
 import { checkOrderFlow } from "./overlays/order-flow";
 import { checkPulseEngine } from "./overlays/pulse-engine";
+import { checkMlSignal, type MlOverlayConfig } from "./overlays/ml-signal";
+import type { MlModel } from "@/lib/backtest/ml-signal";
 
 const STRUCTURE_TFS = new Set(["M15", "H1"]);
 
@@ -56,13 +58,29 @@ function signalIdFor(algoId: string, symbol: string, lastBarTs: string | undefin
   return `eng1-${Math.abs(h).toString(36)}`;
 }
 
+const ML_DEFAULT_THRESHOLD = 0.55;
+
+export interface EvaluatorExtras {
+  breakerState?: BreakerState;
+  mlModel?: MlModel | null;
+  mlMinProbability?: number;
+}
+
 export function evaluateEngineV1(
   algorithm: EvaluatorAlgorithm,
   ctx: EngineContext,
   mtf: MultiTfConfig,
   barsByTf: BarsByTf,
-  breakerState: BreakerState = { tripped: false },
+  breakerStateOrExtras: BreakerState | EvaluatorExtras = { tripped: false },
 ): SignalResult {
+  // Back-compat: accept either a bare BreakerState (legacy) or an
+  // EvaluatorExtras envelope. New callers (engine v1 live runner) pass extras.
+  const extras: EvaluatorExtras = "tripped" in breakerStateOrExtras
+    ? { breakerState: breakerStateOrExtras as BreakerState }
+    : breakerStateOrExtras as EvaluatorExtras;
+  const breakerState = extras.breakerState ?? { tripped: false };
+  const mlModel = extras.mlModel ?? null;
+  const mlMinProb = extras.mlMinProbability ?? ML_DEFAULT_THRESHOLD;
   const modules: ModuleStatus[] = [];
   const cfg = algorithm.engine_config;
 
@@ -144,6 +162,14 @@ export function evaluateEngineV1(
     modules.push({ name: "pulse_engine", enabled: cfg.overlays.pulse_engine.enabled, tripped: !pulse.passed, reason: pulse.reason });
     if (!pulse.passed) return holdResult(`pulse_engine:${pulse.reason ?? "blocked"}`, modules, { bias_score: cascade.score, tfs: tfStates });
   }
+
+  // ML overlay — only active when a trained model is supplied. Off by default
+  // for users who never trained one (no surprise gating).
+  const mlCfg: MlOverlayConfig = { enabled: !!mlModel, min_probability: mlMinProb };
+  const mlBars = m15.length > 0 ? m15 : (h1.length > 0 ? h1 : m5);
+  const ml = checkMlSignal(mlCfg, cascade.side, mlBars, mlModel);
+  modules.push({ name: "ml_signal", enabled: mlCfg.enabled, tripped: !ml.passed, reason: ml.reason });
+  if (!ml.passed) return holdResult(`ml_signal:${ml.reason ?? "blocked"}`, modules, { bias_score: cascade.score, tfs: tfStates });
 
   const confidence = Math.min(1, Math.abs(cascade.score - 50) / 50);
 
