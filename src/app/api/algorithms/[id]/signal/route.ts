@@ -93,8 +93,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const instruments = Array.isArray(algo.instrument)
       ? (algo.instrument as string[])
       : algo.instrument ? [algo.instrument as string] : [];
-    const symbol = parsed.data.symbol ?? instruments[0];
-    if (!symbol) {
+
+    if (instruments.length === 0) {
       return NextResponse.json({
         action: "HOLD",
         lots: 0,
@@ -107,44 +107,104 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       }, { status: 200 });
     }
 
-    let signal: SignalResult;
-    try {
-      signal = await runEngineV1(supabase, {
-        id:           algo.id as string,
-        user_id:      algo.user_id as string,
-        name:         algo.name as string,
-        status:       algo.status as string,
-        engine_config: cfg,
-        parameters:   (algo.parameters as Record<string, unknown> | null) ?? null,
-        instrument:   instruments,
-        lot_size:     algo.lot_size as number | null,
-        risk_percent: algo.risk_percent as number | null,
-      }, {
-        now: new Date(),
-        symbol,
-        currentEquity: parsed.data.current_equity,
-        baseLots: (algo.lot_size as number | null) ?? 0.01,
-      });
-    } catch (engErr) {
-      logError("AlgorithmSignal", {
-        component: "runEngineV1",
-        message: engErr instanceof Error ? engErr.message : String(engErr),
-        meta: { algorithm_id: id, symbol },
-      });
-      return NextResponse.json({
-        action: "HOLD",
-        lots: 0,
-        confidence: 0,
-        signalId: "",
-        reason: "engine_error",
-        modules: [],
-        algorithm: { id: algo.id, name: algo.name, status: algo.status },
-        engine: engineInfo,
-      }, { status: 200 });
+    // Single-symbol path: the EA passed `symbol`, evaluate just that one and
+    // return the SignalResult flat (backward-compatible with the existing EA).
+    if (parsed.data.symbol) {
+      const symbol = parsed.data.symbol;
+      try {
+        const signal = await runEngineV1(supabase, {
+          id:           algo.id as string,
+          user_id:      algo.user_id as string,
+          name:         algo.name as string,
+          status:       algo.status as string,
+          engine_config: cfg,
+          parameters:   (algo.parameters as Record<string, unknown> | null) ?? null,
+          instrument:   instruments,
+          lot_size:     algo.lot_size as number | null,
+          risk_percent: algo.risk_percent as number | null,
+        }, {
+          now: new Date(),
+          symbol,
+          currentEquity: parsed.data.current_equity,
+          baseLots: (algo.lot_size as number | null) ?? 0.01,
+        });
+        return NextResponse.json({
+          ...signal,
+          algorithm: { id: algo.id, name: algo.name, status: algo.status },
+          engine: engineInfo,
+        }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
+      } catch (engErr) {
+        logError("AlgorithmSignal", {
+          component: "runEngineV1",
+          message: engErr instanceof Error ? engErr.message : String(engErr),
+          meta: { algorithm_id: id, symbol },
+        });
+        return NextResponse.json({
+          action: "HOLD",
+          lots: 0,
+          confidence: 0,
+          signalId: "",
+          reason: "engine_error",
+          modules: [],
+          algorithm: { id: algo.id, name: algo.name, status: algo.status },
+          engine: engineInfo,
+        }, { status: 200 });
+      }
     }
 
+    // Multi-symbol path: no `symbol` in body → evaluate ALL instruments of
+    // the algorithm in parallel and return an array. The caller picks which
+    // to act on (e.g. highest confidence, first BUY, etc.).
+    const results = await Promise.all(
+      instruments.map(async (sym): Promise<SignalResult & { symbol: string }> => {
+        try {
+          const sig = await runEngineV1(supabase, {
+            id:           algo.id as string,
+            user_id:      algo.user_id as string,
+            name:         algo.name as string,
+            status:       algo.status as string,
+            engine_config: cfg,
+            parameters:   (algo.parameters as Record<string, unknown> | null) ?? null,
+            instrument:   instruments,
+            lot_size:     algo.lot_size as number | null,
+            risk_percent: algo.risk_percent as number | null,
+          }, {
+            now: new Date(),
+            symbol: sym,
+            currentEquity: parsed.data.current_equity,
+            baseLots: (algo.lot_size as number | null) ?? 0.01,
+          });
+          return { ...sig, symbol: sym };
+        } catch (engErr) {
+          logError("AlgorithmSignal", {
+            component: "runEngineV1[multi]",
+            message: engErr instanceof Error ? engErr.message : String(engErr),
+            meta: { algorithm_id: id, symbol: sym },
+          });
+          return {
+            action: "HOLD",
+            lots: 0,
+            confidence: 0,
+            signalId: "",
+            reason: "engine_error",
+            modules: [],
+            symbol: sym,
+          };
+        }
+      }),
+    );
+
+    // Best pick: highest-confidence non-HOLD; otherwise first HOLD.
+    const best = [...results].sort((a, b) => {
+      if (a.action !== "HOLD" && b.action === "HOLD") return -1;
+      if (b.action !== "HOLD" && a.action === "HOLD") return 1;
+      return b.confidence - a.confidence;
+    })[0];
+
     return NextResponse.json({
-      ...signal,
+      multi: true,
+      best: { ...best, symbol: best.symbol },
+      signals: results,
       algorithm: { id: algo.id, name: algo.name, status: algo.status },
       engine: engineInfo,
     }, { status: 200, headers: { "Cache-Control": "private, no-store" } });

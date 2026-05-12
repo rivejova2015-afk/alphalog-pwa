@@ -20,6 +20,10 @@ import { combineBiasWeighted } from "./cascade";
 import { inAnySession } from "./sessions";
 import { checkBreaker } from "./circuit-breaker";
 import { lotsForPhase } from "./capital-phases";
+import { structureBias } from "./structure";
+
+// Structure (OB/FVG) only applied to lower TFs where it carries signal.
+const STRUCTURE_TFS = new Set(["M15", "H1"]);
 
 interface AlgorithmRow {
   id: string;
@@ -115,14 +119,17 @@ export async function runEngineV1(
     return holdResult("bar_loader_failed", modules);
   }
 
-  // 4. Compute per-TF bias
+  // 4. Compute per-TF bias (trend + optional structure overlay on lower TFs)
   const tfStates: TfState[] = mtf.timeframes.map((t) => {
     const bars = barsByTf.get(t.tf) ?? [];
+    const trend = tfTrendBias(bars);
+    const struct = STRUCTURE_TFS.has(t.tf) ? structureBias(bars).bias : 0;
+    const combined = Math.max(-100, Math.min(100, trend + struct));
     return {
       tf: t.tf,
       weight: t.weight,
       role: t.role,
-      bias: tfTrendBias(bars),
+      bias: combined,
       bars: bars.length,
     };
   });
