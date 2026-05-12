@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
 
 type ConnectionStatus = "live" | "stale" | "synced" | "pending";
+
+interface AlgorithmRow {
+  id: string;
+  name: string;
+  market_type: "forex" | "futures" | "options" | "crypto";
+  platform: string;
+  status: string;
+  parameters: Record<string, unknown> | null;
+  engine_config: Record<string, unknown> | null;
+}
 
 interface ConnectionsResponse {
   algorithm: {
@@ -50,22 +60,39 @@ interface Props {
 }
 
 export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onClose }: Props) {
-  const [data, setData]       = useState<ConnectionsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [pairing, setPairing] = useState<{ token: string; expiresAt: string } | null>(null);
+  const [algorithm, setAlgorithm] = useState<AlgorithmRow | null>(null);
+  const [data, setData]           = useState<ConnectionsResponse | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [pairing, setPairing]     = useState<{ token: string; expiresAt: string } | null>(null);
 
-  async function fetchConnections() {
+  async function fetchAll() {
     setLoading(true);
     setError(null);
     try {
+      // Always fetch the canonical algorithm row to decide which section to render.
+      // For crypto we skip the connections endpoint (it normalizes market_type to
+      // forex|futures|options and doesn't know about Fly bots).
+      const algoRes = await fetch(`/api/algorithms/${algorithmId}`, { cache: "no-store" });
+      if (!algoRes.ok) {
+        const body = await algoRes.json().catch(() => ({}));
+        throw new Error(body?.error ?? `HTTP ${algoRes.status}`);
+      }
+      const algoJson = await algoRes.json();
+      const algo = algoJson.algorithm as AlgorithmRow;
+      setAlgorithm(algo);
+
+      if (algo.market_type === "crypto") {
+        setData(null);  // crypto section pulls everything from the algorithm row directly
+        return;
+      }
+
       const res = await fetch(`/api/algorithms/${algorithmId}/connections`, { cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? `HTTP ${res.status}`);
       }
-      const json: ConnectionsResponse = await res.json();
-      setData(json);
+      setData(await res.json());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error desconocido");
     } finally {
@@ -74,7 +101,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
   }
 
   useEffect(() => {
-    fetchConnections();
+    fetchAll();
   }, [algorithmId]);
 
   return (
@@ -116,7 +143,11 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
               </div>
             )}
 
-            {!loading && !error && data && (
+            {!loading && !error && algorithm?.market_type === "crypto" && (
+              <CoinarbSection algorithm={algorithm} onSaved={fetchAll} />
+            )}
+
+            {!loading && !error && data && algorithm?.market_type !== "crypto" && (
               <>
                 {data.algorithm.market_type === "forex" && data.mt5 && (
                   <Mt5Section
@@ -124,7 +155,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                     algorithmId={algorithmId}
                     defaultPlatform={data.algorithm.platform}
                     onTokenGenerated={(t) => setPairing(t)}
-                    onRefresh={fetchConnections}
+                    onRefresh={fetchAll}
                   />
                 )}
                 {data.algorithm.market_type === "futures" && data.cme && (
@@ -151,7 +182,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
           expiresInMinutes={10}
           onClose={() => {
             setPairing(null);
-            fetchConnections();
+            fetchAll();
           }}
         />
       )}
@@ -357,6 +388,144 @@ function OptionsSection() {
       </div>
     </div>
   );
+}
+
+// ─── Coinarb / Crypto section ───────────────────────────────────────────────
+//
+// Edits the 4 scalar tunables + 3 per-symbol arb gap thresholds that live in
+// `algorithms.parameters`. PUT to /api/algorithms/[id] validates against
+// CoinarbParametersSchema.partial() and inserts a bot_commands row so the
+// running Fly bot picks up the change within ~30s (no restart).
+//
+function CoinarbSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved: () => void }) {
+  const initial = (algorithm.parameters ?? {}) as Record<string, unknown>;
+  const initialGap = (initial.arb_gap_min ?? {}) as Record<string, number>;
+
+  const [mtfMin, setMtfMin]     = useState<string>(num(initial.mtf_confidence_min, 0.30));
+  const [pdMacro, setPdMacro]   = useState<string>(num(initial.pd_macro_band, 0.005));
+  const [pdMicro, setPdMicro]   = useState<string>(num(initial.pd_micro_band, 0.005));
+  const [sweep, setSweep]       = useState<string>(num(initial.sweep_confirm_body_ratio, 0.40));
+  const [gapBtc, setGapBtc]     = useState<string>(num(initialGap['BTC-USD'], 0.0005));
+  const [gapEth, setGapEth]     = useState<string>(num(initialGap['ETH-USD'], 0.0008));
+  const [gapSol, setGapSol]     = useState<string>(num(initialGap['SOL-USD'], 0.0010));
+  const [saving, setSaving]     = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const parameters: Record<string, unknown> = {
+        mtf_confidence_min:        Number(mtfMin),
+        pd_macro_band:             Number(pdMacro),
+        pd_micro_band:             Number(pdMicro),
+        sweep_confirm_body_ratio:  Number(sweep),
+        arb_gap_min: {
+          'BTC-USD': Number(gapBtc),
+          'ETH-USD': Number(gapEth),
+          'SOL-USD': Number(gapSol),
+        },
+      };
+
+      const res = await fetch(`/api/algorithms/${algorithm.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parameters }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const issues = json.issues ? `: ${JSON.stringify(json.issues)}` : '';
+        toast.error(`${json.error ?? 'Error'}${issues}`);
+        return;
+      }
+      toast.success('Parámetros guardados — el bot los aplica en ≤30s');
+      onSaved();
+    } catch (e) {
+      toast.error(`Error: ${e instanceof Error ? e.message : 'desconocido'}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const engine = (algorithm.engine_config ?? {}) as Record<string, unknown>;
+  const pairs = (engine.spot_pairs ?? ['BTC-USD','ETH-USD','SOL-USD']) as string[];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-slate-500 font-medium">
+        <Bitcoin className="w-3 h-3" />
+        Plataforma · Coinbase Spot · Fly.io
+      </div>
+
+      <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-100">Bot status</span>
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-emerald-950 text-emerald-400 border-emerald-800">
+            {algorithm.status}
+          </span>
+        </div>
+        <dl className="grid grid-cols-2 gap-y-2 text-xs">
+          <Row label="Pares"           value={pairs.join(', ')} />
+          <Row label="Tick (ms)"       value={String(engine.tick_ms ?? '—')} mono />
+          <Row label="Cap diario"      value={`${engine.daily_trade_cap_total ?? '—'} (max ${engine.daily_trade_cap_per_symbol ?? '—'}/símbolo)`} />
+          <Row label="Capital inicial" value={`$${String(engine.starting_capital_usd ?? '—')}`} mono />
+        </dl>
+      </div>
+
+      <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-100">Tunables (hot-reload ≤30s)</span>
+          <span className="text-[10px] text-slate-500 font-mono">algorithms.parameters</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <NumField label="MTF confidence min" value={mtfMin} onChange={setMtfMin} step="0.01" hint="0.20–0.50 típico" />
+          <NumField label="Sweep body ratio"   value={sweep}  onChange={setSweep}  step="0.01" hint="0.30–0.50 típico" />
+          <NumField label="PD macro band"      value={pdMacro} onChange={setPdMacro} step="0.001" hint="0.005 default" />
+          <NumField label="PD micro band"      value={pdMicro} onChange={setPdMicro} step="0.001" hint="0.005 default" />
+        </div>
+
+        <div className="pt-3 border-t border-[#1f2937]">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Arb gap min (Coinbase vs Binance)</p>
+          <div className="grid grid-cols-3 gap-3">
+            <NumField label="BTC-USD" value={gapBtc} onChange={setGapBtc} step="0.0001" mono />
+            <NumField label="ETH-USD" value={gapEth} onChange={setGapEth} step="0.0001" mono />
+            <NumField label="SOL-USD" value={gapSol} onChange={setGapSol} step="0.0001" mono />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-sm font-semibold transition disabled:opacity-50"
+        >
+          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'Guardando…' : 'Guardar y propagar al bot'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NumField({ label, value, onChange, step, hint, mono }: {
+  label: string; value: string; onChange: (v: string) => void; step: string; hint?: string; mono?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">{label}</span>
+      <input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full px-2 py-1.5 rounded bg-[#0a0e1a] border border-[#1f2937] text-slate-100 text-sm focus:border-cyan-700 focus:outline-none ${mono ? 'font-mono' : ''}`}
+      />
+      {hint && <span className="block text-[10px] text-slate-600 mt-0.5">{hint}</span>}
+    </label>
+  );
+}
+
+function num(v: unknown, fallback: number): string {
+  return typeof v === 'number' ? String(v) : String(fallback);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

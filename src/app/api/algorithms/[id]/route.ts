@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
-import { EngineConfigSchema } from "@/lib/validations/engine-config";
+import { EngineConfigSchema, CoinarbParametersSchema } from "@/lib/validations/engine-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +59,30 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
 
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
+
+    // For crypto algorithms, re-validate `parameters` against the strict
+    // CoinarbParametersSchema (partial — UI sends only the edited field).
+    // This prevents bad ranges (e.g. mtf_confidence_min=2.5) reaching the bot.
+    if (parsed.data.parameters !== undefined) {
+      const { data: existing } = await supabase
+        .from("algorithms")
+        .select("market_type")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (existing?.market_type === "crypto") {
+        const coinarbParse = CoinarbParametersSchema.partial().safeParse(parsed.data.parameters);
+        if (!coinarbParse.success) {
+          return NextResponse.json(
+            { error: "Crypto parameters validation failed", issues: coinarbParse.error.issues },
+            { status: 400 },
+          );
+        }
+        // Use the parsed (and coerced) shape so defaults / number coercions land cleanly.
+        parsed.data.parameters = coinarbParse.data as Record<string, unknown>;
+      }
+    }
 
     const payload: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) payload.name = parsed.data.name;
