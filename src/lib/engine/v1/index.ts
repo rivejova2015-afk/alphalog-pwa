@@ -21,6 +21,10 @@ import { inAnySession } from "./sessions";
 import { checkBreaker } from "./circuit-breaker";
 import { lotsForPhase } from "./capital-phases";
 import { structureBias } from "./structure";
+import { checkDecisionEngine } from "./overlays/decision-engine";
+import { checkRangeGate } from "./overlays/range-gate";
+import { checkOrderFlow } from "./overlays/order-flow";
+import { checkPulseEngine } from "./overlays/pulse-engine";
 
 // Structure (OB/FVG) only applied to lower TFs where it carries signal.
 const STRUCTURE_TFS = new Set(["M15", "H1"]);
@@ -154,6 +158,33 @@ export async function runEngineV1(
       bias_score: cascade.score,
       tfs: tfStates,
     });
+  }
+
+  // 5b. Overlays — each gates the cascade decision. Any failure → HOLD.
+  // Range gate prefers M15 (intraday volatility), Order flow uses H1, Pulse
+  // uses M1/M5 momentum bars.
+  const m15 = barsByTf.get("M15") ?? [];
+  const h1  = barsByTf.get("H1")  ?? [];
+  const m5  = barsByTf.get("M5")  ?? [];
+  const m1  = barsByTf.get("M1")  ?? [];
+
+  if (cfg?.overlays) {
+    const decision = checkDecisionEngine(cfg.overlays.decision_engine, cascade.side, cascade.score);
+    modules.push({ name: "decision_engine", enabled: cfg.overlays.decision_engine.enabled, tripped: !decision.passed, reason: decision.reason });
+    if (!decision.passed) return holdResult(`decision_engine:${decision.reason ?? "blocked"}`, modules, { bias_score: cascade.score, tfs: tfStates });
+
+    const rangeBars = m15.length > 15 ? m15 : h1;
+    const range = checkRangeGate(cfg.overlays.range_gate, rangeBars);
+    modules.push({ name: "range_gate", enabled: cfg.overlays.range_gate.enabled, tripped: !range.passed, reason: range.reason });
+    if (!range.passed) return holdResult(`range_gate:${range.reason ?? "blocked"}`, modules, { bias_score: cascade.score, tfs: tfStates });
+
+    const flow = checkOrderFlow(cfg.overlays.order_flow, cascade.side, h1.length > 0 ? h1 : m15);
+    modules.push({ name: "order_flow", enabled: cfg.overlays.order_flow.enabled, tripped: !flow.passed, reason: flow.reason });
+    if (!flow.passed) return holdResult(`order_flow:${flow.reason ?? "blocked"}`, modules, { bias_score: cascade.score, tfs: tfStates });
+
+    const pulse = checkPulseEngine(cfg.overlays.pulse_engine, cascade.side, m1, m5);
+    modules.push({ name: "pulse_engine", enabled: cfg.overlays.pulse_engine.enabled, tripped: !pulse.passed, reason: pulse.reason });
+    if (!pulse.passed) return holdResult(`pulse_engine:${pulse.reason ?? "blocked"}`, modules, { bias_score: cascade.score, tfs: tfStates });
   }
 
   // Confidence: distance from neutral, clipped to [0, 1].
