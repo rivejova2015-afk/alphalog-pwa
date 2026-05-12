@@ -75,19 +75,60 @@ export let SWEEP_CONFIRM_BODY_RATIO = Number(process.env.SWEEP_CONFIRM_BODY_RATI
 
 export const COINARB_AGENT_ID = process.env.COINARB_AGENT_ID ?? 'a667d400-065f-4415-9609-373c3749e5fd';
 export const COINARB_USER_ID = process.env.COINARB_USER_ID ?? '';
+
+// Bot identity for the bot_commands lifecycle (Fase C). Defaults match
+// the rows created by migration 099/100; envs override for parity tests.
+export const COINARB_BOT_ID = process.env.COINARB_BOT_ID ?? '11111111-c01a-4b00-9001-000000000001';
+export const COINARB_BOT_ACCOUNT_ID = process.env.COINARB_BOT_ACCOUNT_ID ?? '22222222-c01a-4b00-9002-000000000001';
 // PAPER_MODE: env var COINARB_50X_PAPER_MODE has ABSOLUTE priority over Supabase config.
 // To go live: flyctl secrets set COINARB_50X_PAPER_MODE=false -a coinarb-50x
 // (additionally requires COINBASE_CDP_API_KEY/SECRET to actually trade real money)
 export const PAPER_MODE = (process.env.COINARB_50X_PAPER_MODE ?? 'true') === 'true';
 
 // =============================================================================
-// loadConfigFromDb (Fase B) — pull tunables from algorithms.parameters /
-// algorithms.engine_config so the trader can edit them from the UI without
-// flyctl secrets set. Called once at process startup from index.ts.
-//
-// Precedence: DB row → env var → hardcoded default. If the DB query fails or
-// the row is missing, we keep the env-var values silently (no hard dependency
-// on Supabase to boot — the bot must always start).
+// applyParameters (Fase B+C) — mutate this module's `let` bindings from a
+// jsonb-shaped object. Used both at startup (loadConfigFromDb) and at runtime
+// by the command-poller when bot_commands.update_parameters arrives. Returns
+// the list of fields that actually changed so callers can log/audit.
+// =============================================================================
+export function applyParameters(params: Record<string, unknown>): string[] {
+  const changes: string[] = [];
+
+  if (typeof params.mtf_confidence_min === 'number' && params.mtf_confidence_min !== MTF_CONFIDENCE_MIN) {
+    MTF_CONFIDENCE_MIN = params.mtf_confidence_min;
+    changes.push(`mtf_confidence_min=${MTF_CONFIDENCE_MIN}`);
+  }
+  if (typeof params.pd_macro_band === 'number' && params.pd_macro_band !== PD_MACRO_BAND) {
+    PD_MACRO_BAND = params.pd_macro_band;
+    changes.push(`pd_macro_band=${PD_MACRO_BAND}`);
+  }
+  if (typeof params.pd_micro_band === 'number' && params.pd_micro_band !== PD_MICRO_BAND) {
+    PD_MICRO_BAND = params.pd_micro_band;
+    changes.push(`pd_micro_band=${PD_MICRO_BAND}`);
+  }
+  if (typeof params.sweep_confirm_body_ratio === 'number' && params.sweep_confirm_body_ratio !== SWEEP_CONFIRM_BODY_RATIO) {
+    SWEEP_CONFIRM_BODY_RATIO = params.sweep_confirm_body_ratio;
+    changes.push(`sweep_confirm_body_ratio=${SWEEP_CONFIRM_BODY_RATIO}`);
+  }
+
+  const gaps = params.arb_gap_min as Record<string, number> | undefined;
+  if (gaps && typeof gaps === 'object') {
+    for (const sym of SYMBOLS) {
+      const v = gaps[sym];
+      if (typeof v === 'number' && v > 0 && v !== ARB_GAP_MIN_PCT[sym]) {
+        ARB_GAP_MIN_PCT[sym] = v;
+        changes.push(`arb_gap[${sym}]=${v}`);
+      }
+    }
+  }
+
+  return changes;
+}
+
+// =============================================================================
+// loadConfigFromDb (Fase B) — pull tunables from algorithms.parameters at
+// startup so the trader can edit them from the UI without flyctl secrets set.
+// Precedence: DB row → env var → hardcoded default. DB failure keeps env values.
 // =============================================================================
 export async function loadConfigFromDb(): Promise<void> {
   const { getSupabase } = await import('../supabase.js');
@@ -110,23 +151,10 @@ export async function loadConfigFromDb(): Promise<void> {
 
     const params = (data.parameters ?? {}) as Record<string, unknown>;
     const engine = (data.engine_config ?? {}) as Record<string, unknown>;
+    // Back-compat: arb_gap_min historically lived in engine_config too.
+    if (!params.arb_gap_min && engine.arb_gap_min) params.arb_gap_min = engine.arb_gap_min;
 
-    // parameters — hot-tunable thresholds the UI will edit in Fase C
-    if (typeof params.mtf_confidence_min === 'number')       MTF_CONFIDENCE_MIN = params.mtf_confidence_min;
-    if (typeof params.pd_macro_band === 'number')            PD_MACRO_BAND = params.pd_macro_band;
-    if (typeof params.pd_micro_band === 'number')            PD_MICRO_BAND = params.pd_micro_band;
-    if (typeof params.sweep_confirm_body_ratio === 'number') SWEEP_CONFIRM_BODY_RATIO = params.sweep_confirm_body_ratio;
-
-    // arb_gap_min lives in parameters too; mutate the existing record so any
-    // consumer that captured a reference (none today, but defensive) still sees
-    // updates. Fall back to engine_config.arb_gap_min for backwards compat.
-    const gaps = (params.arb_gap_min ?? engine.arb_gap_min) as Record<string, number> | undefined;
-    if (gaps && typeof gaps === 'object') {
-      for (const sym of SYMBOLS) {
-        const v = gaps[sym];
-        if (typeof v === 'number' && v > 0) ARB_GAP_MIN_PCT[sym] = v;
-      }
-    }
+    applyParameters(params);
 
     console.log(
       `[config] loaded from algorithms.parameters — ` +

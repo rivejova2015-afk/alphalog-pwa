@@ -39,6 +39,7 @@ import { fetchLiquidationHeatmap } from '../validators/liquidation-heatmap.js';
 import { fetchExchangeFlows } from '../validators/exchange-flows.js';
 import { checkRiskReward } from '../math/kelly-sizer.js';
 import { DecisionLogger } from '../ops/decision-logger.js';
+import { CommandPoller } from '../ops/command-poller.js';
 import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-alphalog.js';
 import { getSupabase } from '../supabase.js';
 import {
@@ -66,6 +67,7 @@ export class CoinarbLoop {
   private readonly circuitBreaker = new CircuitBreaker();
   private readonly dailyTracker = new DailyTracker();
   private readonly decisions = new DecisionLogger();
+  private readonly commandPoller = new CommandPoller();
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private liquidityRefreshAt = 0;
@@ -87,6 +89,7 @@ export class CoinarbLoop {
     this.running = true;
     this.coinbase.start();
     this.binance.start();
+    this.commandPoller.start();
     console.log(`[loop] started — ${PAPER_MODE ? 'PAPER' : 'LIVE'} mode, ${LOOP_INTERVAL_MS}ms tick`);
     this.timer = setInterval(() => { void this.tick(); }, LOOP_INTERVAL_MS);
   }
@@ -94,6 +97,7 @@ export class CoinarbLoop {
   stop(): void {
     this.running = false;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.commandPoller.stop();
     this.coinbase.stop();
     this.binance.stop();
     console.log('[loop] stopped');
