@@ -548,6 +548,26 @@ export class CoinarbLoop {
     }
   }
 
+  private lastSyncedStatus: 'live' | 'paused' | null = null;
+
+  private async syncAlgorithmStatus(supabase: ReturnType<typeof getSupabase>, paused: boolean): Promise<void> {
+    // Sync algorithms.status with the bot's actual runtime state so the UI
+    // doesn't lie. Only writes when status actually flips — a pasive bot
+    // shouldn't churn updated_at every 15s.
+    const desired: 'live' | 'paused' = paused ? 'paused' : 'live';
+    if (desired === this.lastSyncedStatus) return;
+    const { error } = await supabase
+      .from('algorithms')
+      .update({ status: desired, updated_at: new Date().toISOString() })
+      .eq('id', COINARB_AGENT_ID);
+    if (error) {
+      console.warn(`[loop] algorithms.status sync failed:`, error.message);
+      return;
+    }
+    this.lastSyncedStatus = desired;
+    console.log(`[loop] algorithms.status -> ${desired}`);
+  }
+
   private async flushTelemetry(fearGreed: number): Promise<void> {
     if (!COINARB_USER_ID) return;
     try {
@@ -555,6 +575,11 @@ export class CoinarbLoop {
       const cbState = this.circuitBreaker.snapshot;
       const daily = this.dailyTracker.current.data;
       const btc = this.coinbase.getPrice('BTC');
+      // Status sync — paused if circuit pause is currently active OR daily cap hit.
+      const paused =
+        (cbState.pausedUntil !== null && cbState.pausedUntil > Date.now()) ||
+        this.dailyTracker.isTotalCapReached();
+      await this.syncAlgorithmStatus(supabase, paused);
       // CAMBIO 2c — per-symbol counts go in payload JSONB (no dedicated column).
       // daily_trades_count gets the DailyTracker total (source of truth for caps),
       // not the circuit-breaker counter (resets on circuit-pause).
