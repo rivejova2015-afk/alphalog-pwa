@@ -14,7 +14,7 @@ import { BacktestPanel } from './BacktestPanel.client';
 import { Badge } from '@/components/shared/Badge';
 import AlgorithmDetailsModal from './AlgorithmDetailsModal.client';
 
-type MarketType = 'forex' | 'futures' | 'options';
+type MarketType = 'forex' | 'futures' | 'options' | 'crypto';
 type Direction  = 'long' | 'short' | 'both';
 
 interface AlgoData {

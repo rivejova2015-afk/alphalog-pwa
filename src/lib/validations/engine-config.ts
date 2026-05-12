@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// MT4/MT5 EA engine config. Used by forex/futures/options algorithms.
+// Crypto/Fly bots use `CoinarbEngineConfigSchema` (sibling, not unioned —
+// existing MT5 call sites would have to narrow on a union, so we keep the
+// canonical EngineConfigSchema as the MT5 shape and let coinarb callers
+// import CoinarbEngineConfigSchema explicitly).
 export const EngineConfigSchema = z.object({
   base_engine: z.object({
     multi_tf: z.literal(true),
@@ -55,6 +60,54 @@ export const EngineConfigSchema = z.object({
 });
 
 export type EngineConfig = z.infer<typeof EngineConfigSchema>;
+
+// Coinarb crypto-bot engine config. Mirrors `coinarb_agents.config` and the
+// `algorithms.engine_config` JSONB that the Fly worker reads (Fase B). Sibling
+// of EngineConfigSchema — coinarb callers import this directly. Tunable
+// thresholds (mtf_confidence_min, pd_*) live in `algorithms.parameters` so
+// they can be edited from the UI without touching the engine shape.
+const SymbolKey = z.string().regex(/^[A-Z]+-[A-Z]+$/);  // e.g. BTC-USD
+export const CoinarbEngineConfigSchema = z.object({
+  kind: z.literal('coinarb'),
+  venue: z.enum(['coinbase_spot']).default('coinbase_spot'),
+  tick_ms: z.number().int().min(1_000).max(120_000).default(15_000),
+  spot_pairs: z.array(SymbolKey).min(1).default(['BTC-USD', 'ETH-USD', 'SOL-USD']),
+  paper_mode_default: z.boolean().default(true),  // cosmetic; runtime brake is COINARB_50X_PAPER_MODE
+  phases: z.number().int().min(1).max(11).default(11),
+  starting_capital_usd: z.number().positive().default(100),
+  rr_min: z.number().min(0.5).max(10).default(2),
+  mtf_weights: z.record(z.string(), z.union([z.string(), z.number()])).default({
+    '1D': '0.15', '4H': '0.15', '1H': '0.15', '30M': '0.15', '15M': '0.15', '5M': '0.15', '1M': '0.10',
+  }),
+  pd_macro_days: z.number().int().min(1).max(30).default(3),
+  daily_trade_cap_total: z.number().int().min(0).max(1000).default(100),
+  daily_trade_cap_per_symbol: z.number().int().min(0).max(1000).default(33),
+  consecutive_loss_limit: z.number().int().min(1).max(50).default(6),
+  circuit_pause_ms: z.number().int().min(0).default(10_800_000),
+  historical_ttl_h: z.number().min(0.1).max(48).default(4),
+  historical_reload_strategy: z.enum(['blocking', 'background_after_first_load'])
+    .default('background_after_first_load'),
+  parallel_symbol_eval: z.boolean().default(true),
+});
+
+export type CoinarbEngineConfig = z.infer<typeof CoinarbEngineConfigSchema>;
+
+// Tunable per-algorithm parameters that hot-rotate (Fase C). These live in
+// `algorithms.parameters` and can be edited from the UI; the bot polls
+// `bot_commands` to apply updates without restart.
+export const CoinarbParametersSchema = z.object({
+  mtf_confidence_min:       z.number().min(0).max(1).default(0.30),
+  pd_macro_band:            z.number().min(0).max(0.2).default(0.005),
+  pd_micro_band:            z.number().min(0).max(0.2).default(0.005),
+  sweep_confirm_body_ratio: z.number().min(0).max(1).default(0.40),
+  arb_gap_min:              z.record(SymbolKey, z.number().min(0).max(1)).default({
+    'BTC-USD': 0.00050,
+    'ETH-USD': 0.00080,
+    'SOL-USD': 0.00100,
+  }),
+});
+
+export type CoinarbParameters = z.infer<typeof CoinarbParametersSchema>;
 
 export const ENGINE_CONFIG_DEFAULT: EngineConfig = {
   base_engine: {

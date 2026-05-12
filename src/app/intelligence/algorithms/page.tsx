@@ -8,7 +8,7 @@ export default async function AlgorithmsPage() {
   const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
 
-  type MarketType = 'forex' | 'futures' | 'options';
+  type MarketType = 'forex' | 'futures' | 'options' | 'crypto';
   type Direction  = 'long' | 'short' | 'both';
 
   const algorithms = userData?.user

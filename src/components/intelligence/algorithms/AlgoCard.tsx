@@ -1,6 +1,6 @@
 import { Badge } from '@/components/shared/Badge';
 
-type MarketType = 'forex' | 'futures' | 'options';
+type MarketType = 'forex' | 'futures' | 'options' | 'crypto';
 type Direction  = 'long' | 'short' | 'both';
 
 interface AlgoCardProps {
@@ -24,6 +24,7 @@ const MARKET_STYLE: Record<MarketType, { label: string; color: string }> = {
   forex:   { label: 'Forex/MT',  color: '#34d399' },
   futures: { label: 'Futures',   color: '#f59e0b' },
   options: { label: 'Options',   color: '#a78bfa' },
+  crypto:  { label: 'Crypto',    color: '#22d3ee' },
 };
 
 const DIRECTION_LABEL: Record<Direction, string> = {

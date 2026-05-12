@@ -8,7 +8,7 @@
 
 import 'dotenv/config';
 import { buildLoop } from './loop.js';
-import { PAPER_MODE } from './config.js';
+import { PAPER_MODE, loadConfigFromDb } from './config.js';
 import type { CdpCredentials } from '../trading/coinbase-cdp-auth.js';
 
 function readCdpCreds(): CdpCredentials | undefined {
@@ -19,6 +19,11 @@ function readCdpCreds(): CdpCredentials | undefined {
 }
 
 async function main(): Promise<void> {
+  // Fase B — Pull tunable thresholds from algorithms.parameters before the
+  // loop is constructed. Live ES-module bindings mean callers don't need
+  // refactoring; if this throws, we keep the env-var defaults.
+  await loadConfigFromDb();
+
   const creds = readCdpCreds();
   if (!PAPER_MODE && !creds) {
     console.warn('[coinarb] LIVE mode requested but COINBASE_CDP_* not set — falling back to paper');

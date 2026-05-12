@@ -1,6 +1,6 @@
 'use client';
 
-type MarketType = 'forex' | 'futures' | 'options';
+type MarketType = 'forex' | 'futures' | 'options' | 'crypto';
 
 interface Props {
   marketType: MarketType;
