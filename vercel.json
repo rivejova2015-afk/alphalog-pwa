@@ -37,6 +37,10 @@
     {
       "path": "/api/cron/backtest/daemon",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/bars/ingest",
+      "schedule": "10 * * * *"
     }
   ]
 }

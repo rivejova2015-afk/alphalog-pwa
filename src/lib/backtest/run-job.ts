@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { runFullBacktest } from "@/lib/backtest/orchestrator";
+import { computeGates } from "@/lib/quality-gates/runner";
 import { logError, logInfo } from "@/lib/log";
 import type { BacktestConfig } from "@/types/backtest";
 
@@ -9,7 +10,7 @@ const ENGINE_VERSION = "v1";
 export async function runBacktestJob(supabase: SupabaseClient, jobId: string): Promise<void> {
   const { data: job, error: jobErr } = await supabase
     .from("backtest_jobs")
-    .select("id, user_id, config, status")
+    .select("id, user_id, config, status, algorithm_id")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -79,6 +80,22 @@ export async function runBacktestJob(supabase: SupabaseClient, jobId: string): P
         error: result.warnings.length > 0 ? `Completed with warnings: ${result.warnings.join("; ")}` : null,
       })
       .eq("id", job.id);
+
+    // Auto-recompute quality gates so the user sees fresh pass/fail breakdown
+    // without manual recompute, and so promote-to-live can succeed immediately
+    // after a successful backtest.
+    if (job.algorithm_id) {
+      try {
+        const score = await computeGates(supabase, job.algorithm_id, job.user_id);
+        logInfo("BacktestWorker", "quality gates recomputed", {
+          component: "run-job",
+          meta: { jobId: job.id, algorithm_id: job.algorithm_id, gates_passed: score.score.gates_passed, tier: score.score.tier },
+        });
+      } catch (gateErr) {
+        const msg = gateErr instanceof Error ? gateErr.message : String(gateErr);
+        logError("BacktestWorker", { component: "auto-recompute-gates", message: msg, meta: { jobId: job.id, algorithm_id: job.algorithm_id } });
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logError("BacktestWorker", { component: "run-job", message: msg, meta: { jobId: job.id } });
