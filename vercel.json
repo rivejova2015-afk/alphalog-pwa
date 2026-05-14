@@ -41,6 +41,10 @@
     {
       "path": "/api/cron/bars/ingest",
       "schedule": "10 * * * *"
+    },
+    {
+      "path": "/api/cron/algorithms/paper-review",
+      "schedule": "45 5 * * *"
     }
   ]
 }
