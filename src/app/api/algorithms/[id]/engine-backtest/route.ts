@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { runEngineV1FullValidation } from "@/lib/engine/v1/backtest";
 import { extractMultiTf } from "@/lib/engine/v1/index";
+import { evaluateEngineGates } from "@/lib/engine/v1/quality-gates";
 import { logError } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
 import type { Timeframe } from "@/types/backtest";
@@ -131,8 +132,28 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       .select("id, created_at")
       .maybeSingle();
 
+    // Quality gates — auto-promote a draft strategy to paper once its engine
+    // backtest clears every "must" gate. Only draft → paper; later lifecycle
+    // transitions (paper → approved → live) stay manual / gated separately.
+    const gates = evaluateEngineGates(full.baseline.metrics);
+    let promoted = false;
+    if (gates.eligibleForPaper && algo.status === "draft") {
+      const { error: promoteErr } = await supabase
+        .from("algorithms")
+        .update({ status: "paper" })
+        .eq("id", algo.id)
+        .eq("user_id", user.id)
+        .eq("status", "draft");
+      if (!promoteErr) promoted = true;
+      else logError("EngineBacktest", { component: "auto-promote", message: promoteErr.message });
+    }
+
     return NextResponse.json({
-      algorithm: { id: algo.id, name: algo.name, status: algo.status },
+      algorithm: {
+        id: algo.id,
+        name: algo.name,
+        status: promoted ? "paper" : algo.status,
+      },
       symbol,
       from,
       to,
@@ -140,6 +161,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       result: full.baseline,
       monte_carlo: full.monteCarlo,
       walk_forward: full.walkForward,
+      gates,
+      promoted,
       run_id:     runRow?.id ?? null,
       created_at: runRow?.created_at ?? null,
     }, { status: 200, headers: { "Cache-Control": "private, no-store" } });

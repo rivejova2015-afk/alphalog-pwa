@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { EquityCurve } from "./EquityCurve";
 
@@ -51,6 +51,24 @@ interface WalkForwardPayload {
   profitableWindows: number;
 }
 
+interface GateResult {
+  key: string;
+  label: string;
+  tier: "must" | "should";
+  value: number | null;
+  passed: boolean;
+}
+
+interface GateEvaluation {
+  results: GateResult[];
+  mustPassed: number;
+  mustTotal: number;
+  shouldPassed: number;
+  shouldTotal: number;
+  allMustPassed: boolean;
+  eligibleForPaper: boolean;
+}
+
 interface BacktestResponse {
   algorithm: { id: string; name: string; status: string };
   symbol: string;
@@ -66,6 +84,8 @@ interface BacktestResponse {
   };
   monte_carlo: MonteCarloPayload | null;
   walk_forward: WalkForwardPayload | null;
+  gates?: GateEvaluation | null;
+  promoted?: boolean;
   run_id?: string | null;
   created_at?: string | null;
 }
@@ -242,6 +262,9 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       const json = (await res.json()) as BacktestResponse;
       setData(json);
       toast.success(`Backtest completado en ${json.result.durationMs}ms`);
+      if (json.promoted) {
+        toast.success("Estrategia promovida a Paper — pasó todos los quality gates");
+      }
       refreshHistory();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error de conexión";
@@ -417,6 +440,39 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
             <Metric label="Max DD %"      value={formatPct(metrics.maxDrawdownPct)} accent="red" />
             <Metric label="Profit Factor" value={formatNum(metrics.profitFactor)} accent="cyan" />
           </div>
+
+          {data.gates && (
+            <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck size={12} className={data.gates.allMustPassed ? "text-[#34d399]" : "text-[#f59e0b]"} />
+                  <p className="text-[10px] text-[#475569] uppercase tracking-wider">
+                    Quality Gates · must {data.gates.mustPassed}/{data.gates.mustTotal} · should {data.gates.shouldPassed}/{data.gates.shouldTotal}
+                  </p>
+                </div>
+                {data.promoted ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#34d399]/15 border border-[#34d399]/40 text-[#34d399]">
+                    <ArrowUpCircle size={10} /> Promovida a Paper
+                  </span>
+                ) : data.gates.eligibleForPaper ? (
+                  <span className="text-[10px] font-mono text-[#475569]">elegible (ya no es draft)</span>
+                ) : (
+                  <span className="text-[10px] font-mono text-[#f59e0b]">no elegible para Paper</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                {data.gates.results.map((g) => (
+                  <div key={g.key} className="flex items-center gap-1.5 text-[10px] font-mono">
+                    {g.passed
+                      ? <CheckCircle2 size={11} className="text-[#34d399] flex-shrink-0" />
+                      : <XCircle size={11} className="text-[#ef4444] flex-shrink-0" />}
+                    <span className={g.passed ? "text-[#94a3b8]" : "text-[#64748b]"}>{g.label}</span>
+                    {g.tier === "should" && <span className="text-[#2d3748] text-[9px]">(opc)</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {equityPoints.length > 1 && (
             <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3">
