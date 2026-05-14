@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: Ctx) {
 
     const { data, error } = await supabase
       .from("engine_backtest_runs")
-      .select("id, symbol, range_from, range_to, params, baseline_metrics, final_balance, total_trades, duration_ms, monte_carlo, walk_forward, bars_loaded, created_at")
+      .select("id, symbol, range_from, range_to, params, baseline_metrics, equity_curve, final_balance, total_trades, duration_ms, monte_carlo, walk_forward, bars_loaded, created_at")
       .eq("algorithm_id", id)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })

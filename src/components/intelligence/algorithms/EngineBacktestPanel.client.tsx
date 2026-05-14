@@ -77,6 +77,7 @@ interface HistoryRow {
   range_to: string;
   params: Record<string, unknown>;
   baseline_metrics: BacktestMetrics;
+  equity_curve: EquityRow[];
   final_balance: number | null;
   total_trades: number | null;
   duration_ms: number | null;
@@ -85,6 +86,9 @@ interface HistoryRow {
   bars_loaded: { tf: string; count: number }[];
   created_at: string;
 }
+
+// Higher-is-better for every metric except drawdown.
+const LOWER_IS_BETTER = new Set(["maxDrawdownPct", "maxDrawdown", "avgLoss"]);
 
 interface Props {
   algorithmId: string;
@@ -123,6 +127,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [history, setHistory]         = useState<HistoryRow[]>([]);
   const [trainingMl, setTrainingMl]   = useState(false);
   const [mlStatus, setMlStatus]       = useState<string | null>(null);
+  const [compareIds, setCompareIds]   = useState<string[]>([]);
 
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
@@ -150,7 +155,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       bars_loaded: run.bars_loaded ?? [],
       result: {
         metrics: run.baseline_metrics,
-        equityCurve: [],
+        equityCurve: run.equity_curve ?? [],
         finalBalance: run.final_balance ?? 0,
         durationMs: run.duration_ms ?? 0,
         trades: [],
@@ -163,6 +168,18 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
     setError(null);
     toast.message(`Cargado run del ${new Date(run.created_at).toLocaleString()}`);
   }
+
+  function toggleCompare(runId: string) {
+    setCompareIds((prev) => {
+      if (prev.includes(runId)) return prev.filter((x) => x !== runId);
+      if (prev.length >= 2) return [prev[1], runId];  // keep last 2, FIFO
+      return [...prev, runId];
+    });
+  }
+
+  const compareRuns = compareIds
+    .map((cid) => history.find((h) => h.id === cid))
+    .filter((r): r is HistoryRow => r != null);
 
   async function trainMl() {
     if (instruments.length === 0) {
@@ -274,6 +291,36 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           )}
         </div>
       </div>
+
+      {/* Compare: pick up to 2 runs from history */}
+      {history.length >= 2 && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider">Comparar runs — elige hasta 2</p>
+          <div className="flex flex-wrap gap-1.5">
+            {history.slice(0, 12).map((r) => {
+              const selected = compareIds.includes(r.id);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => toggleCompare(r.id)}
+                  className={`px-2 py-1 rounded-md border text-[10px] font-mono transition-all ${
+                    selected
+                      ? "border-[#a78bfa] bg-[#a78bfa]/10 text-[#a78bfa]"
+                      : "border-[#1f2937] bg-[#0a0e1a] text-[#475569] hover:border-[#2d3748]"
+                  }`}
+                >
+                  {new Date(r.created_at).toLocaleDateString()} · {r.symbol} · ${Number(r.final_balance ?? 0).toFixed(0)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {compareRuns.length === 2 && (
+        <CompareView a={compareRuns[0]} b={compareRuns[1]} algorithmId={algorithmId} />
+      )}
 
       {/* Form */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -451,6 +498,94 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
     <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-2">
       <div className="text-[9px] text-[#475569] uppercase tracking-wider mb-0.5">{label}</div>
       <div className="text-sm font-bold font-mono" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+// ── Side-by-side run comparison ──────────────────────────────────────────────
+
+const COMPARE_METRICS: { key: keyof BacktestMetrics; label: string; kind: "pct" | "num" | "money" }[] = [
+  { key: "totalTrades",    label: "Total Trades",   kind: "num"   },
+  { key: "winRate",        label: "Win Rate",       kind: "pct"   },
+  { key: "totalPnl",       label: "Total PnL",      kind: "money" },
+  { key: "sharpe",         label: "Sharpe",         kind: "num"   },
+  { key: "sortino",        label: "Sortino",        kind: "num"   },
+  { key: "profitFactor",   label: "Profit Factor",  kind: "num"   },
+  { key: "maxDrawdownPct", label: "Max DD %",       kind: "pct"   },
+  { key: "expectancy",     label: "Expectancy",     kind: "money" },
+];
+
+function fmt(v: number | undefined, kind: "pct" | "num" | "money"): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  if (kind === "pct")   return `${(v * 100).toFixed(2)}%`;
+  if (kind === "money") return `$${v.toFixed(2)}`;
+  return v.toFixed(2);
+}
+
+function CompareView({ a, b, algorithmId }: { a: HistoryRow; b: HistoryRow; algorithmId: string }) {
+  const aEquity = (a.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity }));
+  const bEquity = (b.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity }));
+
+  return (
+    <div className="bg-[#151b28] border border-[#a78bfa]/30 rounded-lg p-3 space-y-3">
+      <p className="text-[10px] text-[#a78bfa] uppercase tracking-wider font-medium">Comparación A vs B</p>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-[11px] font-mono">
+          <thead className="text-[#475569]">
+            <tr>
+              <th className="text-left py-1 px-2">Métrica</th>
+              <th className="text-right py-1 px-2">
+                A · {new Date(a.created_at).toLocaleDateString()} · {a.symbol}
+              </th>
+              <th className="text-right py-1 px-2">
+                B · {new Date(b.created_at).toLocaleDateString()} · {b.symbol}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARE_METRICS.map((m) => {
+              const av = a.baseline_metrics[m.key] as number | undefined;
+              const bv = b.baseline_metrics[m.key] as number | undefined;
+              let aWins = false;
+              let bWins = false;
+              if (av != null && bv != null && Number.isFinite(av) && Number.isFinite(bv) && av !== bv) {
+                const lowerBetter = LOWER_IS_BETTER.has(m.key as string);
+                aWins = lowerBetter ? av < bv : av > bv;
+                bWins = !aWins;
+              }
+              return (
+                <tr key={m.key as string} className="border-t border-[#1f2937]">
+                  <td className="py-1 px-2 text-[#94a3b8]">{m.label}</td>
+                  <td className={`py-1 px-2 text-right ${aWins ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
+                    {fmt(av, m.kind)}{aWins ? " ◄" : ""}
+                  </td>
+                  <td className={`py-1 px-2 text-right ${bWins ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
+                    {fmt(bv, m.kind)}{bWins ? " ◄" : ""}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {(aEquity.length > 1 || bEquity.length > 1) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
+            <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity A</p>
+            {aEquity.length > 1
+              ? <EquityCurve points={aEquity} height={100} algoId={`${algorithmId}-cmp-a`} />
+              : <p className="text-[10px] text-[#2d3748] text-center py-8">sin equity curve</p>}
+          </div>
+          <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
+            <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity B</p>
+            {bEquity.length > 1
+              ? <EquityCurve points={bEquity} height={100} algoId={`${algorithmId}-cmp-b`} />
+              : <p className="text-[10px] text-[#2d3748] text-center py-8">sin equity curve</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

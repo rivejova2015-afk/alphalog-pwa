@@ -121,6 +121,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         },
         bars_loaded:      tfBars.map((e) => ({ tf: e.tf, count: e.bars.length })),
         baseline_metrics: full.baseline.metrics,
+        equity_curve:     full.baseline.equityCurve,
         final_balance:    full.baseline.finalBalance,
         total_trades:     full.baseline.metrics.totalTrades,
         duration_ms:      full.baseline.durationMs,
