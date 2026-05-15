@@ -23,7 +23,16 @@ import { checkPulseEngine } from "./overlays/pulse-engine";
 import { checkMlSignal, type MlOverlayConfig } from "./overlays/ml-signal";
 import type { MlModel } from "@/lib/backtest/ml-signal";
 
-const STRUCTURE_TFS = new Set(["M15", "H1"]);
+// Order Block / FVG detection runs on whichever timeframe the template tags
+// with role "order_blocks" (M15 in Base Engine v1) — driven by the data model,
+// not a hardcoded TF set.
+//
+// Declared-but-unbuilt roles (no detector yet — do NOT fake them with OB/FVG):
+//   - "structure_liquidity" (H4): liquidity pools / equal highs-lows
+//   - "structure_session"   (H1): session highs/lows, killzone levels
+//   - "impulse_confirm"     (M5): impulse-leg confirmation
+//   - "execution"           (M1): the EA places the order here — no scan
+const ORDER_BLOCK_ROLE = "order_blocks";
 
 export interface EvaluatorAlgorithm {
   id: string;
@@ -101,11 +110,12 @@ export function evaluateEngineV1(
     modules.push({ name: "circuit_breaker", enabled: false });
   }
 
-  // Per-TF bias (trend + optional structure overlay on lower TFs)
+  // Per-TF bias: trend everywhere, plus OB/FVG structure ONLY on the timeframe
+  // the template tags as role "order_blocks" (M15 in Base Engine v1).
   const tfStates: TfState[] = mtf.timeframes.map((t) => {
     const bars = barsByTf.get(t.tf) ?? [];
     const trend = tfTrendBias(bars);
-    const struct = STRUCTURE_TFS.has(t.tf) ? structureBias(bars).bias : 0;
+    const struct = t.role === ORDER_BLOCK_ROLE ? structureBias(bars).bias : 0;
     const combined = Math.max(-100, Math.min(100, trend + struct));
     return {
       tf: t.tf,
