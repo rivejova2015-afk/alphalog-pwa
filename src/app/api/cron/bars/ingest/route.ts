@@ -1,9 +1,14 @@
 // Phase B — historical bar feed cron.
-// Walks all running/live algorithms, expands their `instrument[]` to the symbol
-// set we care about, and calls loadHistoricalBars on each (symbol × timeframe)
-// pair. loadHistoricalBars already falls back to Yahoo and upserts into
-// historical_bars, so this cron just exercises the lazy-fetch path on a
-// schedule so engine queries always have fresh data ready.
+// Walks all running/live/paper algorithms, expands their `instrument[]` to the
+// symbol set, and calls loadHistoricalBars on every (symbol × timeframe) pair
+// the engine actually reads. loadHistoricalBars falls back to Yahoo and upserts
+// into historical_bars.
+//
+// Base Engine v1 evaluates SIX timeframes (D1/H4/H1/M15/M5/M1) and tfTrendBias
+// needs >= 200 bars per TF to emit signal. A uniform short lookback (the old
+// 7-day flat value) could never bootstrap 200 D1 bars (= 200 trading days), so
+// each TF gets a lookback sized to reach ~220 bars while respecting Yahoo's
+// intraday history limits (1m: ~7d, 5m/15m/60m: ~60d, 1d: years).
 
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
@@ -16,11 +21,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Timeframes the engine cares about. Multi-TF Base Engine v1 uses D1/H4/H1/M15.
-// Yahoo intraday only goes back ~60d on M5/M15, so we focus on the higher TFs
-// per ingest run; lower TFs warm up on first query.
-const TIMEFRAMES: Timeframe[] = ["D1", "H1"];
-const LOOKBACK_DAYS = 7;
+// Every timeframe the Base Engine v1 template declares. Lookback per TF is
+// calendar days chosen so a fetch reaches ~220 bars (with weekend/session
+// padding) without exceeding Yahoo's per-interval history cap.
+const LOOKBACK_DAYS_BY_TF: Record<Timeframe, number> = {
+  D1:  400,   // ~220 trading days + weekends
+  H4:  55,    // fetched as H1 then aggregated; Yahoo 60m cap is 60d
+  H1:  30,    // ~220 H1 bars over trading hours
+  M15: 14,    // ~220 M15 bars; Yahoo 15m cap is 60d
+  M5:  7,     // ~220 M5 bars; Yahoo 5m cap is 60d
+  M1:  6,     // ~220+ M1 bars; Yahoo 1m cap is ~7d — stay just under
+  M30: 30,
+  W1:  3650,
+  MN1: 3650,
+};
+
+const ENGINE_TIMEFRAMES: Timeframe[] = ["D1", "H4", "H1", "M15", "M5", "M1"];
 
 function authorize(req: NextRequest): boolean {
   const sent = req.headers.get("x-cron-secret");
@@ -65,12 +81,12 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date();
-  const from = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const to = now.toISOString();
 
   const summary: { symbol: string; timeframe: Timeframe; bars: number; error?: string }[] = [];
   for (const symbol of symbols) {
-    for (const tf of TIMEFRAMES) {
+    for (const tf of ENGINE_TIMEFRAMES) {
+      const from = new Date(now.getTime() - LOOKBACK_DAYS_BY_TF[tf] * 24 * 60 * 60 * 1000).toISOString();
       try {
         const bars = await loadHistoricalBars(svc, symbol, tf, from, to);
         summary.push({ symbol, timeframe: tf, bars: bars.length });
