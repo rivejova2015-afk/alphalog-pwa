@@ -27,6 +27,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/ops/cron/coinarb-heartbeat",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/ops/cron/polyarb-daily-report",
       "schedule": "0 22 * * *"
     },
