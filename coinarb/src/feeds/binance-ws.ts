@@ -24,6 +24,9 @@ export interface BinancePrice {
 const WS_URL = 'wss://stream.binance.com:9443/stream?streams=btcusdt@ticker/ethusdt@ticker/solusdt@ticker';
 const RECONNECT_DELAY_MS = 3_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
+const RECONNECT_JITTER_MS = 1_000;          // ±jitter to desync reconnect storms
+const SILENCE_THRESHOLD_MS = 60_000;        // no message in 60s → likely silent hang
+const WATCHDOG_INTERVAL_MS = 30_000;
 const PRICE_HISTORY_MAX = 240;        // 60s plain buffer for vol calc
 const TIMESTAMPED_HISTORY_MS = 3_600_000; // 1h timestamped buffer per asset
 
@@ -40,6 +43,8 @@ export class BinanceFeed {
   private connected = false;
   private reconnectDelay = RECONNECT_DELAY_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  private lastMessageAt = 0;
   private shouldRun = true;
 
   // Per-asset state
@@ -72,13 +77,30 @@ export class BinanceFeed {
   start(): void {
     this.shouldRun = true;
     this.connect();
+    if (!this.watchdogTimer) {
+      this.watchdogTimer = setInterval(() => this.watchdog(), WATCHDOG_INTERVAL_MS);
+    }
   }
 
   stop(): void {
     this.shouldRun = false;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.watchdogTimer) { clearInterval(this.watchdogTimer); this.watchdogTimer = null; }
     if (this.ws) { this.ws.close(); this.ws = null; }
     this.connected = false;
+  }
+
+  // Silent-hang detector. Binance combined streams sometimes go quiet without
+  // closing the socket; isConnected reports true while prices freeze. Force a
+  // reconnect when no message arrives for SILENCE_THRESHOLD_MS.
+  private watchdog(): void {
+    if (!this.connected || this.lastMessageAt === 0) return;
+    const silenceMs = Date.now() - this.lastMessageAt;
+    if (silenceMs > SILENCE_THRESHOLD_MS) {
+      console.warn(`[binance-ws] watchdog: ${Math.round(silenceMs / 1000)}s silence, forcing reconnect`);
+      try { this.ws?.close(); } catch { /* close errors are fine — reconnect picks up */ }
+      this.connected = false;
+    }
   }
 
   private connect(): void {
@@ -94,6 +116,7 @@ export class BinanceFeed {
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
+        this.lastMessageAt = Date.now();
         try {
           // Combined stream format: { stream: "btcusdt@ticker", data: {...} }
           const envelope = JSON.parse(data.toString()) as {
@@ -162,8 +185,10 @@ export class BinanceFeed {
 
   private scheduleReconnect(): void {
     if (!this.shouldRun) return;
-    console.log(`[binance-ws] Reconnecting in ${this.reconnectDelay}ms...`);
-    this.reconnectTimer = setTimeout(() => { this.connect(); }, this.reconnectDelay);
+    const jitter = Math.floor(Math.random() * RECONNECT_JITTER_MS);
+    const delay = this.reconnectDelay + jitter;
+    console.log(`[binance-ws] Reconnecting in ${delay}ms (base=${this.reconnectDelay}ms +jitter=${jitter}ms)...`);
+    this.reconnectTimer = setTimeout(() => { this.connect(); }, delay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }
 }

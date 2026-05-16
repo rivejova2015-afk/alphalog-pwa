@@ -29,6 +29,9 @@ export interface CoinbasePrice {
 const WS_URL = 'wss://ws-feed.exchange.coinbase.com';
 const RECONNECT_DELAY_MS = 3_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
+const RECONNECT_JITTER_MS = 1_000;          // ±jitter to avoid thundering-herd reconnects
+const SILENCE_THRESHOLD_MS = 60_000;        // no message in 60s → likely silent hang
+const WATCHDOG_INTERVAL_MS = 30_000;
 const PRICE_HISTORY_MAX = 240;
 const TIMESTAMPED_HISTORY_MS = 3_600_000;
 
@@ -58,6 +61,8 @@ export class CoinbaseFeed {
   private subscribed = false;
   private reconnectDelay = RECONNECT_DELAY_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  private lastMessageAt = 0;
   private shouldRun = true;
 
   private prices: Map<AssetSymbol, CoinbasePrice> = new Map();
@@ -83,14 +88,32 @@ export class CoinbaseFeed {
   start(): void {
     this.shouldRun = true;
     this.connect();
+    if (!this.watchdogTimer) {
+      this.watchdogTimer = setInterval(() => this.watchdog(), WATCHDOG_INTERVAL_MS);
+    }
   }
 
   stop(): void {
     this.shouldRun = false;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.watchdogTimer) { clearInterval(this.watchdogTimer); this.watchdogTimer = null; }
     if (this.ws) { this.ws.close(); this.ws = null; }
     this.connected = false;
     this.subscribed = false;
+  }
+
+  // Silent-hang detector: WebSocket can be "open" but the upstream went quiet
+  // (TLS keep-alive only). Without this, prices freeze while isConnected lies
+  // true, the loop ticks on stale data, and trades happen at wrong prices.
+  private watchdog(): void {
+    if (!this.connected || this.lastMessageAt === 0) return;
+    const silenceMs = Date.now() - this.lastMessageAt;
+    if (silenceMs > SILENCE_THRESHOLD_MS) {
+      console.warn(`[coinbase-ws] watchdog: ${Math.round(silenceMs / 1000)}s silence, forcing reconnect`);
+      try { this.ws?.close(); } catch { /* close failures are fine — reconnect will fire */ }
+      this.connected = false;
+      this.subscribed = false;
+    }
   }
 
   private connect(): void {
@@ -107,6 +130,7 @@ export class CoinbaseFeed {
       });
 
       this.ws.on('message', (data: WebSocket.Data) => {
+        this.lastMessageAt = Date.now();
         try {
           const msg = JSON.parse(data.toString()) as CoinbaseTickerMessage;
           if (msg.type !== 'ticker' || !msg.product_id) return;
@@ -173,8 +197,10 @@ export class CoinbaseFeed {
 
   private scheduleReconnect(): void {
     if (!this.shouldRun) return;
-    console.log(`[coinbase-ws] Reconnecting in ${this.reconnectDelay}ms...`);
-    this.reconnectTimer = setTimeout(() => { this.connect(); }, this.reconnectDelay);
+    const jitter = Math.floor(Math.random() * RECONNECT_JITTER_MS);
+    const delay = this.reconnectDelay + jitter;
+    console.log(`[coinbase-ws] Reconnecting in ${delay}ms (base=${this.reconnectDelay}ms +jitter=${jitter}ms)...`);
+    this.reconnectTimer = setTimeout(() => { this.connect(); }, delay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }
 }
