@@ -131,7 +131,7 @@ function sleep(ms: number): Promise<void> {
  * Formato respuesta: [[timestamp_unix, low, high, open, close, volume], ...]
  * Más reciente primero — se invierte al procesar.
  */
-async function fetchExchangeCandles(
+export async function fetchExchangeCandles(
   symbol: string,       // 'BTC-USD', 'ETH-USD', 'SOL-USD'
   granularitySec: number,
   neededCandles: number,
@@ -231,16 +231,56 @@ function synthesizeCandles(
  * Llamar UNA VEZ al arranque y cada 4 horas.
  * No requiere credenciales CDP ni variables de entorno adicionales.
  */
+/**
+ * Default per-TF candle count for the live bot (warmup window). Overridable
+ * via loadHistoricalCandlesForDays for backtests that need deeper history.
+ */
+const DEFAULT_TARGET_PER_TF = 200;
+
 export async function loadHistoricalCandles(
   symbol: string,
   timeframes: readonly Timeframe[],
 ): Promise<Map<Timeframe, Candle[]>> {
+  return loadHistoricalCandlesWithTarget(symbol, timeframes, DEFAULT_TARGET_PER_TF);
+}
+
+/**
+ * Convenience helper for backtests. `days=30` → 30 days of candles per TF
+ * (e.g. 1M = 43200 rows, 1D = 30 rows). Pagination via fetchExchangeCandles
+ * handles the 300-per-request Coinbase Exchange limit transparently.
+ *
+ * Hard limits: 1M is capped at 7d (10080 candles) to keep one symbol load
+ * under ~30s and avoid running into hourly rate limits.
+ */
+export async function loadHistoricalCandlesForDays(
+  symbol: string,
+  timeframes: readonly Timeframe[],
+  days: number,
+): Promise<Map<Timeframe, Candle[]>> {
+  const target = (tf: Timeframe): number => {
+    const granSec = EXCHANGE_GRANULARITY_SEC[tf] ?? 86400;  // synth TFs hit their source's helper
+    const ideal = Math.ceil((days * 86400) / granSec);
+    // 1m intra-day data balloons fast; cap to a 7-day rolling window.
+    if (tf === '1M') return Math.min(ideal, 10_080);
+    return ideal;
+  };
+  // Compute per-TF target before delegating so the helper has uniform shape.
+  return loadHistoricalCandlesWithTarget(symbol, timeframes, undefined, target);
+}
+
+async function loadHistoricalCandlesWithTarget(
+  symbol: string,
+  timeframes: readonly Timeframe[],
+  staticTarget: number | undefined,
+  dynamicTarget?: (tf: Timeframe) => number,
+): Promise<Map<Timeframe, Candle[]>> {
   const result = new Map<Timeframe, Candle[]>();
+  const targetFor = (tf: Timeframe): number => dynamicTarget ? dynamicTarget(tf) : (staticTarget ?? DEFAULT_TARGET_PER_TF);
 
   // Primero descargar los TFs nativos
   for (const tf of timeframes) {
     const synth = SYNTHETIC_TF[tf];
-    if (synth) continue; // los sintéticos se calculan después
+    if (synth) continue;
 
     const granSec = EXCHANGE_GRANULARITY_SEC[tf];
     if (!granSec) continue;
@@ -248,14 +288,15 @@ export async function loadHistoricalCandles(
     try {
       // Para 1H y 15M pedir más para poder sintetizar 4H y 30M
       const extra = tf === '1H' ? 4 : tf === '15M' ? 2 : 1;
-      const needed = 200 * extra;
+      const finalTarget = targetFor(tf);
+      const needed = finalTarget * extra;
 
       const raw = await fetchExchangeCandles(symbol, granSec, needed);
       const candles = raw.map(c => ({ ...c, timeframe: tf }));
-      result.set(tf, candles.slice(-200));
+      result.set(tf, candles.slice(-finalTarget));
 
-      console.log(`[candle-builder] ${symbol} ${tf}: ${candles.length} candles loaded`);
-      await sleep(150); // pausa entre TFs
+      console.log(`[candle-builder] ${symbol} ${tf}: ${candles.length} candles loaded (target=${finalTarget})`);
+      await sleep(150);
     } catch (err) {
       console.warn(`[candle-builder] failed ${tf} for ${symbol}:`, err);
       result.set(tf, []);
@@ -264,23 +305,25 @@ export async function loadHistoricalCandles(
 
   // Sintetizar 4H desde 1H
   if (timeframes.includes('4H')) {
-    const source1H = await fetchExchangeCandles(symbol, 3600, 800)
+    const target4H = targetFor('4H');
+    const source1H = await fetchExchangeCandles(symbol, 3600, target4H * 4)
       .then(raw => raw.map(c => ({ ...c, timeframe: '1H' as Timeframe })))
       .catch(() => [] as Candle[]);
     const synth4H = synthesizeCandles(source1H, 4, '4H');
-    result.set('4H', synth4H.slice(-200));
-    console.log(`[candle-builder] ${symbol} 4H: ${synth4H.length} synthesized candles`);
+    result.set('4H', synth4H.slice(-target4H));
+    console.log(`[candle-builder] ${symbol} 4H: ${synth4H.length} synthesized candles (target=${target4H})`);
     await sleep(150);
   }
 
   // Sintetizar 30M desde 15M
   if (timeframes.includes('30M')) {
-    const source15M = await fetchExchangeCandles(symbol, 900, 400)
+    const target30M = targetFor('30M');
+    const source15M = await fetchExchangeCandles(symbol, 900, target30M * 2)
       .then(raw => raw.map(c => ({ ...c, timeframe: '15M' as Timeframe })))
       .catch(() => [] as Candle[]);
     const synth30M = synthesizeCandles(source15M, 2, '30M');
-    result.set('30M', synth30M.slice(-200));
-    console.log(`[candle-builder] ${symbol} 30M: ${synth30M.length} synthesized candles`);
+    result.set('30M', synth30M.slice(-target30M));
+    console.log(`[candle-builder] ${symbol} 30M: ${synth30M.length} synthesized candles (target=${target30M})`);
   }
 
   return result;
