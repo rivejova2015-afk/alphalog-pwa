@@ -4,11 +4,16 @@
 // the engine actually reads. loadHistoricalBars falls back to Yahoo and upserts
 // into historical_bars.
 //
-// Base Engine v1 evaluates SIX timeframes (D1/H4/H1/M15/M5/M1) and tfTrendBias
-// needs >= 200 bars per TF to emit signal. A uniform short lookback (the old
-// 7-day flat value) could never bootstrap 200 D1 bars (= 200 trading days), so
-// each TF gets a lookback sized to reach ~220 bars while respecting Yahoo's
-// intraday history limits (1m: ~7d, 5m/15m/60m: ~60d, 1d: years).
+// Base Engine v1 is a SMC funnel over four timeframes:
+//   D1  → previous day high/low + sweep
+//   H1  → session structure + nearby liquidity
+//   M15 → break of structure + order block
+//   M1  → entry into the OB or an FVG
+//
+// Each TF gets a lookback sized for what the funnel actually needs (D1 wants
+// a couple of days, H1/M15 want enough bars for clean swing detection, M1
+// just enough to spot a fresh FVG / current zone) while respecting Yahoo's
+// intraday history caps (1m: ~7d, 5m/15m/60m: ~60d, 1d: years).
 
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
@@ -21,22 +26,22 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Every timeframe the Base Engine v1 template declares. Lookback per TF is
-// calendar days chosen so a fetch reaches ~220 bars (with weekend/session
-// padding) without exceeding Yahoo's per-interval history cap.
+// Per-TF lookback sized for the SMC funnel's needs while staying within
+// Yahoo's intraday history caps (1m: ~7d, 5m/15m/60m: ~60d, 1d: years).
 const LOOKBACK_DAYS_BY_TF: Record<Timeframe, number> = {
-  D1:  400,   // ~220 trading days + weekends
-  H4:  55,    // fetched as H1 then aggregated; Yahoo 60m cap is 60d
-  H1:  30,    // ~220 H1 bars over trading hours
-  M15: 14,    // ~220 M15 bars; Yahoo 15m cap is 60d
-  M5:  7,     // ~220 M5 bars; Yahoo 5m cap is 60d
-  M1:  6,     // ~220+ M1 bars; Yahoo 1m cap is ~7d — stay just under
+  D1:  30,    // D1 step only needs prev day; 30 gives swing context too
+  H1:  30,    // H1 structure + liquidity — wide window for clean swings
+  M15: 14,    // M15 BOS + OB detection
+  M1:  6,     // M1 entry — Yahoo 1m cap is ~7d, stay just under
+  // Below: not in the SMC funnel today, kept for legacy/optional callers.
+  H4:  55,
+  M5:  7,
   M30: 30,
   W1:  3650,
   MN1: 3650,
 };
 
-const ENGINE_TIMEFRAMES: Timeframe[] = ["D1", "H4", "H1", "M15", "M5", "M1"];
+const ENGINE_TIMEFRAMES: Timeframe[] = ["D1", "H1", "M15", "M1"];
 
 function authorize(req: NextRequest): boolean {
   const sent = req.headers.get("x-cron-secret");

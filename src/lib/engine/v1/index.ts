@@ -29,13 +29,15 @@ interface AlgorithmRow {
   risk_percent?: number | null;
 }
 
+// Base Engine v1 — the four timeframes of the SMC funnel. `weight` is kept in
+// the shape for schema compatibility but the funnel is sequential, not a
+// weighted score — the evaluator gates D1 → H1 → M15 → M1 in order. What
+// matters is `role`, which the evaluator resolves against.
 const DEFAULT_TIMEFRAMES: TimeframeWeight[] = [
-  { tf: "D1",  weight: 0.30, role: "trend_liquidity" },
-  { tf: "H4",  weight: 0.25, role: "structure_liquidity" },
-  { tf: "H1",  weight: 0.20, role: "structure_session" },
-  { tf: "M15", weight: 0.15, role: "order_blocks" },
-  { tf: "M5",  weight: 0.07, role: "impulse_confirm" },
-  { tf: "M1",  weight: 0.03, role: "execution" },
+  { tf: "D1",  weight: 0, role: "daily_levels" },       // prev day high/low + sweep
+  { tf: "H1",  weight: 0, role: "session_structure" },  // session bias + liquidity
+  { tf: "M15", weight: 0, role: "bos_ob" },             // break of structure + OB
+  { tf: "M1",  weight: 0, role: "entry" },              // entry into OB / FVG
 ];
 
 export function extractMultiTf(parameters: Record<string, unknown> | null): MultiTfConfig {

@@ -12,13 +12,25 @@ export interface ModuleStatus {
   reason?: string;
 }
 
+// Trace of the D1 → H1 → M15 → M1 SMC funnel for a single evaluation.
+export interface FunnelTrace {
+  pdh: number | null;
+  pdl: number | null;
+  swept: "PDH" | "PDL" | null;
+  h1Bias: "bull" | "bear" | "neutral";
+  setupSide: "bull" | "bear" | null;        // null = no valid D1+H1 setup
+  bosDirection: "bull" | "bear" | null;
+  bosKind: "a_favor" | "en_contra" | null;  // BOS vs H1 structure
+  entryZone: "ob" | "fvg" | null;
+}
+
 export interface SignalResult {
   action: SignalAction;
   lots: number;
   confidence: number;       // 0..1
   signalId: string;         // deterministic — same input → same id
   reason: string;
-  bias_score?: number;      // 0..100, 50=neutral, >50=BUY skew
+  funnel?: FunnelTrace;     // SMC funnel trace (Base Engine v1)
   tfs?: TfState[];
   modules: ModuleStatus[];
 }
