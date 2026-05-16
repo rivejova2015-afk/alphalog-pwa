@@ -2,8 +2,13 @@ import type { Bar, Timeframe } from "@/types/backtest";
 
 // Maps the symbols our wizard exposes (MT5-style) to Yahoo Finance tickers.
 const SYMBOL_MAP: Record<string, string> = {
-  // Metales
-  XAUUSD: "XAUUSD=X", XAGUSD: "XAGUSD=X", XPTUSD: "XPTUSD=X", XPDUSD: "XPDUSD=X",
+  // Metales — Yahoo killed XAUUSD=X/XAGUSD=X/XPTUSD=X/XPDUSD=X in 2024.
+  // Falling back to the corresponding CME futures continuous contract:
+  //   GC=F (gold, basis vs spot ~$1-5), SI=F (silver), PL=F (platinum), PA=F (palladium).
+  // Surface this clearly in the registry's `notes` so the user knows they're
+  // getting a futures proxy, not pure spot. For fidelity-critical work
+  // (live execution of an MT5 strategy), import the broker's XAUUSD CSV.
+  XAUUSD: "GC=F", XAGUSD: "SI=F", XPTUSD: "PL=F", XPDUSD: "PA=F",
   // Forex Majors
   EURUSD: "EURUSD=X", GBPUSD: "GBPUSD=X", USDJPY: "USDJPY=X", USDCHF: "USDCHF=X",
   AUDUSD: "AUDUSD=X", USDCAD: "USDCAD=X", NZDUSD: "NZDUSD=X",

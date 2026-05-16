@@ -64,21 +64,24 @@ const DEFAULTS: Record<AssetClass, { apiSources: DataSource[]; csvSources: DataS
 // actually exposes; unknown symbols fall back to assetClass=unknown chain.
 
 const REGISTRY: Record<string, SymbolEntry> = {
-  // ── Metals spot (Yahoo killed XAUUSD=X et al; CSV-only) ─────────────────────
+  // ── Metals spot — Yahoo XAUUSD=X et al están muertos. Como proxy se usa el
+  // contrato futuro CME (GC=F gold, SI=F silver, etc). Basis vs spot pequeño
+  // (~$1-5 en gold, proporcionales en otros). Suficiente para backtest de
+  // señal técnica; para fidelity exacta del broker importar CSV MT4/MT5.
   XAUUSD: {
     assetClass: "metals-spot",
-    apiSources: [],
+    apiSources: ["yahoo"],
     csvSources: ["mt5", "mt4", "dukascopy", "histdata"],
-    notes: "Yahoo XAUUSD=X retorna 404 desde 2024. Importar CSV de MT5/Dukascopy/HistData.",
+    notes: "Yahoo sirve GC=F (gold futures continuo) como proxy de XAUUSD spot. Basis ~$1-5. Para fidelity exacta importar CSV de MT5 broker.",
   },
   XAGUSD: {
     assetClass: "metals-spot",
-    apiSources: [],
+    apiSources: ["yahoo"],
     csvSources: ["mt5", "mt4", "dukascopy", "histdata"],
-    notes: "Yahoo XAGUSD=X no responde. Importar CSV.",
+    notes: "Yahoo sirve SI=F (silver futures) como proxy de XAGUSD spot. Para fidelity exacta importar CSV.",
   },
-  XPTUSD: { assetClass: "metals-spot", apiSources: [], csvSources: ["mt5", "mt4", "dukascopy"], notes: "Yahoo no soporta platino spot. Importar CSV." },
-  XPDUSD: { assetClass: "metals-spot", apiSources: [], csvSources: ["mt5", "mt4", "dukascopy"], notes: "Yahoo no soporta paladio spot. Importar CSV." },
+  XPTUSD: { assetClass: "metals-spot", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy"], notes: "Yahoo sirve PL=F (platinum futures) como proxy. Para fidelity exacta importar CSV." },
+  XPDUSD: { assetClass: "metals-spot", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy"], notes: "Yahoo sirve PA=F (palladium futures) como proxy. Para fidelity exacta importar CSV." },
 
   // ── Forex majors + crosses (Yahoo works, broker CSV is canonical) ─────────
   EURUSD: { assetClass: "forex", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },

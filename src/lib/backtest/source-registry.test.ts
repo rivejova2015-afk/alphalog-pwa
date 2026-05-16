@@ -12,8 +12,10 @@ describe("resolveSymbol", () => {
   it("returns explicit entry for known symbols", () => {
     const xau = resolveSymbol("XAUUSD");
     expect(xau.assetClass).toBe("metals-spot");
-    expect(xau.apiSources).toEqual([]);
-    expect(xau.notes).toContain("XAUUSD=X");
+    // XAUUSD uses Yahoo via GC=F proxy (spot ticker was discontinued); CSV
+    // alternatives remain available for users who want broker fidelity.
+    expect(xau.apiSources).toEqual(["yahoo"]);
+    expect(xau.notes).toContain("GC=F");
   });
 
   it("normalizes case", () => {
@@ -42,9 +44,9 @@ describe("resolveSymbol", () => {
 });
 
 describe("getApiSourcesForTf", () => {
-  it("XAUUSD returns [] for any TF (Yahoo dead, no other API)", () => {
-    expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual([]);
-    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual([]);
+  it("XAUUSD returns [yahoo] via GC=F proxy for any TF Yahoo supports", () => {
+    expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual(["yahoo"]);
+    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["yahoo"]);
   });
 
   it("EURUSD returns yahoo for any TF it supports", () => {
@@ -97,17 +99,22 @@ describe("hasApiCoverage", () => {
     expect(hasApiCoverage("SPY", "M15")).toBe(true);
   });
 
-  it("returns false for CSV-only symbols", () => {
-    expect(hasApiCoverage("XAUUSD", "M1")).toBe(false);
-    expect(hasApiCoverage("XAGUSD", "D1")).toBe(false);
+  it("returns false for symbols with no API source registered", () => {
+    expect(hasApiCoverage("UNKNOWN_PAIR_123", "D1")).toBe(false);
+  });
+
+  it("returns true for metals via futures proxy (XAUUSD->GC=F, XAGUSD->SI=F)", () => {
+    expect(hasApiCoverage("XAUUSD", "M1")).toBe(true);
+    expect(hasApiCoverage("XAGUSD", "D1")).toBe(true);
   });
 });
 
 describe("nextStepsForEmpty", () => {
-  it("XAUUSD: surfaces the Yahoo-dead note and CSV options", () => {
+  it("XAUUSD: surfaces the proxy note and CSV options when Yahoo fails", () => {
     const steps = nextStepsForEmpty("XAUUSD", "M1");
     expect(steps.length).toBeGreaterThanOrEqual(2);
-    expect(steps.some((s) => s.includes("404"))).toBe(true);
+    // Note now describes the GC=F proxy fallback rather than '404'.
+    expect(steps.some((s) => s.includes("GC=F") || s.includes("proxy"))).toBe(true);
     expect(steps.some((s) => s.includes("mt5") || s.includes("dukascopy"))).toBe(true);
   });
 
