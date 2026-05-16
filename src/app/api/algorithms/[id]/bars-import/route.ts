@@ -14,8 +14,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseMt5Csv, detectSymbolTfFromFilename, SUPPORTED_TIMEFRAMES } from "@/lib/backtest/mt5-csv-parser";
+import { parseTradovateCsv, detectSymbolTfFromTradovateFilename } from "@/lib/backtest/tradovate-csv-parser";
 import { logError, logInfo } from "@/lib/log";
 import type { Timeframe } from "@/types/backtest";
+
+type Source = "mt4" | "mt5" | "tradovate";
+const VALID_SOURCES: Source[] = ["mt4", "mt5", "tradovate"];
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,10 +56,21 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: `File too large (max ${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB)` }, { status: 413 });
     }
 
+    // Source selection — mt5 (default) covers MT4 too (same CSV shape).
+    // tradovate has different columns and date format → separate parser.
+    const sourceRaw = (form.get("source") as string | null)?.trim().toLowerCase() ?? "mt5";
+    if (!VALID_SOURCES.includes(sourceRaw as Source)) {
+      return NextResponse.json({ error: `Invalid source (one of ${VALID_SOURCES.join(", ")})` }, { status: 400 });
+    }
+    const source = sourceRaw as Source;
+
     // Resolve symbol + timeframe: explicit form fields override filename detection.
+    // Tradovate uses a different filename convention than MT4/MT5 — pick detector.
     const explicitSymbol = (form.get("symbol") as string | null)?.trim().toUpperCase();
     const explicitTf     = (form.get("timeframe") as string | null)?.trim().toUpperCase();
-    const fromFilename   = detectSymbolTfFromFilename(file.name);
+    const fromFilename   = source === "tradovate"
+      ? detectSymbolTfFromTradovateFilename(file.name)
+      : detectSymbolTfFromFilename(file.name);
 
     const symbol = explicitSymbol || fromFilename?.symbol;
     const timeframe = (explicitTf || fromFilename?.tf) as Timeframe | undefined;
@@ -71,7 +86,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }
 
     const text = await file.text();
-    const parsed = parseMt5Csv(text, { tzOffsetMinutes });
+    const parsed = source === "tradovate"
+      ? parseTradovateCsv(text, { tzOffsetMinutes })
+      : parseMt5Csv(text, { tzOffsetMinutes });
     if (parsed.bars.length === 0) {
       return NextResponse.json({
         error: "No valid bars parsed",
@@ -86,7 +103,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       symbol, timeframe, ts: b.ts,
       open: b.open, high: b.high, low: b.low, close: b.close,
       volume: b.volume, spread: b.spread,
-      source: "mt5",
+      source,
       uploaded_by: user.id,
     }));
     for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
@@ -100,7 +117,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       }
     }
 
-    logInfo("BarsImport", `imported ${rows.length} ${symbol} ${timeframe} bars for algo ${id}`, {
+    logInfo("BarsImport", `imported ${rows.length} ${symbol} ${timeframe} bars (${source}) for algo ${id}`, {
       component: "POST /api/algorithms/[id]/bars-import",
     });
 
@@ -108,13 +125,14 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       ok: true,
       symbol,
       timeframe,
+      source,
       bars_inserted: rows.length,
       from_ts: parsed.bars[0].ts,
       to_ts: parsed.bars[parsed.bars.length - 1].ts,
       errors: parsed.errors.slice(0, 20),
       delimiter: parsed.delimiter,
       hasHeader: parsed.hasHeader,
-      hasSpread: parsed.hasSpread,
+      hasSpread: "hasSpread" in parsed ? parsed.hasSpread : false,
     }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (err) {
     logError("BarsImport", { component: "POST", message: String(err) });

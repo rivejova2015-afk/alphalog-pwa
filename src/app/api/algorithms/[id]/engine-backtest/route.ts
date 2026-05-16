@@ -16,9 +16,10 @@ import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { runEngineV1FullValidation } from "@/lib/engine/v1/backtest";
 import { extractMultiTf } from "@/lib/engine/v1/index";
 import { evaluateEngineGates } from "@/lib/engine/v1/quality-gates";
+import { theoreticalOptionPnl } from "@/lib/backtest/options-overlay";
 import { logError } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
-import type { Timeframe } from "@/types/backtest";
+import type { Timeframe, SimulatedTrade } from "@/types/backtest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     const { data: algo, error: algoErr } = await supabase
       .from("algorithms")
-      .select("id, name, status, engine_config, parameters, instrument, lot_size")
+      .select("id, name, status, engine_config, parameters, instrument, lot_size, market_type")
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null)
@@ -104,6 +105,54 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       },
     );
 
+    // Options overlay: when the algorithm is market_type='options', augment
+    // each trade with theoretical Black-Scholes P&L on an ATM contract.
+    // Underlying-level entry/exit is what the engine evaluates; the contract
+    // P&L is just a teórico-aproximado layer (IV constant, expiry fixed).
+    let optionsOverlay: {
+      total_theoretical_pnl: number;
+      avg_pnl_per_contract:  number;
+      iv_used:               number;
+      expiry_days:           number;
+      strike_offset_pct:     number;
+      enriched_trades:       Array<SimulatedTrade & { theoretical_pnl: number; strike: number; type: string }>;
+    } | null = null;
+
+    if (algo.market_type === "options") {
+      const params = (algo.parameters as Record<string, unknown> | null) ?? {};
+      const opts = {
+        iv:                Number(params.iv_assumption ?? 0.25),
+        risk_free:         Number(params.risk_free_rate ?? 0.045),
+        expiry_days:       Number(params.expiry_days ?? 30),
+        strike_offset_pct: Number(params.strike_offset_pct ?? 0),
+      };
+      const enriched = full.baseline.trades.map((t) => {
+        const theo = theoreticalOptionPnl({
+          entry_price: t.entryPrice,
+          exit_price:  t.exitPrice,
+          entry_ts:    t.entryTs,
+          exit_ts:     t.exitTs,
+          direction:   t.side,
+          opts,
+        });
+        return {
+          ...t,
+          theoretical_pnl: theo.pnl_per_contract,
+          strike:          theo.strike,
+          type:            theo.type,
+        };
+      });
+      const totalTheo = enriched.reduce((acc, t) => acc + t.theoretical_pnl, 0);
+      optionsOverlay = {
+        total_theoretical_pnl: totalTheo,
+        avg_pnl_per_contract:  enriched.length > 0 ? totalTheo / enriched.length : 0,
+        iv_used:               opts.iv,
+        expiry_days:           opts.expiry_days,
+        strike_offset_pct:     opts.strike_offset_pct,
+        enriched_trades:       enriched,
+      };
+    }
+
     // Persist the run — best-effort, never blocks the response.
     const { data: runRow } = await supabase
       .from("engine_backtest_runs")
@@ -121,7 +170,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           walk_forward_windows:   parsed.data.walk_forward_windows ?? 0,
         },
         bars_loaded:      tfBars.map((e) => ({ tf: e.tf, count: e.bars.length })),
-        baseline_metrics: full.baseline.metrics,
+        baseline_metrics: optionsOverlay
+          ? { ...full.baseline.metrics, options_overlay: { ...optionsOverlay, enriched_trades: undefined } }
+          : full.baseline.metrics,
         equity_curve:     full.baseline.equityCurve,
         final_balance:    full.baseline.finalBalance,
         total_trades:     full.baseline.metrics.totalTrades,
@@ -152,6 +203,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       algorithm: {
         id: algo.id,
         name: algo.name,
+        market_type: algo.market_type,
         status: promoted ? "paper" : algo.status,
       },
       symbol,
@@ -159,6 +211,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       to,
       bars_loaded: tfBars.map((e) => ({ tf: e.tf, count: e.bars.length })),
       result: full.baseline,
+      options_overlay: optionsOverlay,
       monte_carlo: full.monteCarlo,
       walk_forward: full.walkForward,
       gates,

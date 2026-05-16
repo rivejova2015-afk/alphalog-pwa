@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database, Trash2, Info } from "lucide-react";
 import { toast } from "sonner";
 import { EquityCurve } from "./EquityCurve";
 import { Mt5BarsImport } from "./Mt5BarsImport.client";
@@ -151,6 +151,9 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [compareIds, setCompareIds]   = useState<string[]>([]);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<string | null>(null);
+  const [manageOpen, setManageOpen]   = useState(false);
+  const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<HistoryRow | null>(null);
 
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
@@ -198,6 +201,30 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       if (prev.length >= 2) return [prev[1], runId];  // keep last 2, FIFO
       return [...prev, runId];
     });
+  }
+
+  async function deleteRun(runId: string) {
+    setDeletingId(runId);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/engine-backtest/runs/${runId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      toast.success("Backtest borrado");
+      // Drop from compare + clear the currently-loaded view if it was the deleted one.
+      setCompareIds((prev) => prev.filter((id) => id !== runId));
+      if (data?.run_id === runId) setData(null);
+      await refreshHistory();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
+    }
   }
 
   const compareRuns = compareIds
@@ -354,6 +381,14 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
 
   return (
     <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4 space-y-4">
+      {/* Stats isolation banner — backtest never bleeds into algorithm.pnl_today/win_rate */}
+      <div className="flex items-start gap-2 rounded border border-[#22d3ee]/20 bg-[#22d3ee]/5 px-3 py-1.5">
+        <Info size={11} className="text-[#22d3ee] mt-0.5 flex-shrink-0" />
+        <p className="text-[10px] text-[#22d3ee] uppercase tracking-wider font-mono">
+          Resultados de backtest — no afectan las estadísticas reales del algoritmo
+        </p>
+      </div>
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-[#a78bfa]" />
@@ -378,6 +413,16 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => setManageOpen((o) => !o)}
+                title="Administrar historial (borrar runs)"
+                aria-label="Administrar historial de backtests"
+                aria-expanded={manageOpen}
+                className={`p-1 rounded transition-colors ${manageOpen ? "text-[#ef4444] bg-[#ef4444]/10" : "text-[#475569] hover:text-[#ef4444]"}`}
+              >
+                <Trash2 size={11} />
+              </button>
             </div>
           )}
           {data && (
@@ -385,6 +430,85 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           )}
         </div>
       </div>
+
+      {/* Manage history panel — list with delete buttons */}
+      {manageOpen && history.length > 0 && (
+        <div className="rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-2 max-h-60 overflow-y-auto">
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1.5 px-1">
+            Borrar runs individualmente (hard-delete, sin papelera)
+          </p>
+          <div className="space-y-1">
+            {history.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#151b28]">
+                <span className="text-[10px] font-mono text-[#94a3b8] flex-1 truncate">
+                  {new Date(r.created_at).toLocaleString()} · {r.symbol} · {r.total_trades ?? 0}tr · ${Number(r.final_balance ?? 0).toFixed(0)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(r)}
+                  disabled={deletingId === r.id}
+                  className="p-1 rounded text-[#475569] hover:text-[#ef4444] hover:bg-[#ef4444]/10 transition-colors disabled:opacity-40"
+                  aria-label={`Borrar backtest del ${new Date(r.created_at).toLocaleString()}`}
+                  title="Borrar este run"
+                >
+                  {deletingId === r.id
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <Trash2 size={11} />}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => deletingId !== confirmDelete.id && setConfirmDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#0a0e1a] border border-[#ef4444]/40 rounded-lg p-5 max-w-md w-full mx-4 shadow-2xl"
+          >
+            <h3 id="confirm-delete-title" className="text-sm font-bold text-[#ef4444] mb-2 flex items-center gap-2">
+              <Trash2 size={14} /> Borrar este backtest
+            </h3>
+            <p className="text-[11px] text-[#94a3b8] mb-3">
+              <span className="font-mono">{new Date(confirmDelete.created_at).toLocaleString()}</span> ·
+              <span className="font-mono"> {confirmDelete.symbol}</span> ·
+              <span className="font-mono"> {confirmDelete.total_trades ?? 0} trades</span> ·
+              <span className="font-mono"> ${Number(confirmDelete.final_balance ?? 0).toFixed(0)}</span>
+            </p>
+            <p className="text-[10px] text-[#475569] mb-4">
+              El run se borra de forma definitiva — no hay papelera. Las estadísticas reales del algoritmo no se ven afectadas.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                disabled={deletingId === confirmDelete.id}
+                className="px-3 py-1.5 rounded-lg border border-[#1f2937] text-[#475569] text-xs hover:border-[#475569] transition-colors disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteRun(confirmDelete.id)}
+                disabled={deletingId === confirmDelete.id}
+                className="px-3 py-1.5 rounded-lg bg-[#ef4444] text-white text-xs font-semibold hover:bg-[#dc2626] transition-colors disabled:opacity-40 flex items-center gap-1.5"
+              >
+                {deletingId === confirmDelete.id
+                  ? <><Loader2 size={11} className="animate-spin" /> Borrando…</>
+                  : <><Trash2 size={11} /> Borrar definitivamente</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MT5 CSV import — broker-fidelity data, beats Yahoo on collision */}
       <Mt5BarsImport
@@ -407,18 +531,31 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
             {history.slice(0, 12).map((r) => {
               const selected = compareIds.includes(r.id);
               return (
-                <button
+                <span
                   key={r.id}
-                  type="button"
-                  onClick={() => toggleCompare(r.id)}
-                  className={`px-2 py-1 rounded-md border text-[10px] font-mono transition-all ${
+                  className={`inline-flex items-center rounded-md border text-[10px] font-mono transition-all overflow-hidden ${
                     selected
                       ? "border-[#a78bfa] bg-[#a78bfa]/10 text-[#a78bfa]"
                       : "border-[#1f2937] bg-[#0a0e1a] text-[#475569] hover:border-[#2d3748]"
                   }`}
                 >
-                  {new Date(r.created_at).toLocaleDateString()} · {r.symbol} · ${Number(r.final_balance ?? 0).toFixed(0)}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleCompare(r.id)}
+                    className="px-2 py-1"
+                  >
+                    {new Date(r.created_at).toLocaleDateString()} · {r.symbol} · ${Number(r.final_balance ?? 0).toFixed(0)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(r)}
+                    title="Borrar este run"
+                    aria-label={`Borrar backtest del ${new Date(r.created_at).toLocaleString()}`}
+                    className="px-1.5 py-1 border-l border-current/30 text-[#475569] hover:text-[#ef4444] hover:bg-[#ef4444]/10 transition-colors"
+                  >
+                    <Trash2 size={9} />
+                  </button>
+                </span>
               );
             })}
           </div>

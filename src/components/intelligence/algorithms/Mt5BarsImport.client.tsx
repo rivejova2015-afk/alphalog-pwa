@@ -9,10 +9,19 @@ interface Props {
   onSuccess?: () => void;
 }
 
-// Mirror of the parser's filename regex (longest-first, lookahead for boundary).
-const FILENAME_RE = /^([A-Z0-9]+)[._\-](M15|M30|M5|M1|H4|H1|MN1|D1|W1)(?=[._\-]|$)/i;
+// Mirror of the parsers' filename regexes (longest-first, lookahead for boundary).
+const MT_FILENAME_RE        = /^([A-Z0-9]+)[._\-](M15|M30|M5|M1|H4|H1|MN1|D1|W1)(?=[._\-]|$)/i;
+const TRADOVATE_FILENAME_RE = /^([A-Z0-9]+)[._\-](240Min|15Min|30Min|60Min|1Min|5Min|Daily|Weekly)(?=[._\-]|$)/i;
+const TRADOVATE_TF_MAP: Record<string, Tf> = {
+  "1MIN": "M1", "5MIN": "M5", "15MIN": "M15", "30MIN": "M30",
+  "60MIN": "H1", "240MIN": "H4", "DAILY": "D1", "WEEKLY": "W1",
+};
+
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
 type Tf = typeof TIMEFRAMES[number];
+
+const SOURCES = ["mt5", "mt4", "tradovate"] as const;
+type Source = typeof SOURCES[number];
 
 interface FileEntry {
   file: File;
@@ -23,15 +32,24 @@ interface FileEntry {
   bars?: number;
 }
 
-function detectFromName(name: string): { symbol: string; tf: Tf } | null {
+function detectFromName(name: string, source: Source): { symbol: string; tf: Tf } | null {
   const base = name.replace(/^.*[\\/]/, "");
-  const m = base.match(FILENAME_RE);
+  if (source === "tradovate") {
+    const m = base.match(TRADOVATE_FILENAME_RE);
+    if (!m) return null;
+    const tf = TRADOVATE_TF_MAP[m[2].toUpperCase()];
+    if (!tf) return null;
+    return { symbol: m[1].toUpperCase(), tf };
+  }
+  // MT4 + MT5 share the same export filename convention.
+  const m = base.match(MT_FILENAME_RE);
   if (!m) return null;
   return { symbol: m[1].toUpperCase(), tf: m[2].toUpperCase() as Tf };
 }
 
 export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
   const [open, setOpen]               = useState(false);
+  const [source, setSource]           = useState<Source>("mt5");
   const [tzOffset, setTzOffset]       = useState("0");
   const [entries, setEntries]         = useState<FileEntry[]>([]);
   const [running, setRunning]         = useState(false);
@@ -43,7 +61,7 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
     const next: FileEntry[] = [];
     for (const f of Array.from(files)) {
       if (!f.name.toLowerCase().endsWith(".csv")) continue;
-      const det = detectFromName(f.name);
+      const det = detectFromName(f.name, source);
       next.push({
         file: f,
         symbol: det?.symbol ?? "",
@@ -72,6 +90,7 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
     fd.append("file", entry.file);
     fd.append("symbol", entry.symbol);
     fd.append("timeframe", entry.tf);
+    fd.append("source", source);
     fd.append("tz_offset_minutes", String(Number(tzOffset) || 0));
 
     try {
@@ -123,7 +142,7 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
         className="w-full flex items-center justify-between px-3 py-2 text-xs font-mono uppercase tracking-wider text-[#22d3ee] hover:bg-[#22d3ee]/5 transition-colors"
       >
         <span className="flex items-center gap-1.5">
-          <Upload size={12} /> Importar barras MT5 (CSV)
+          <Upload size={12} /> Importar barras (MT4 / MT5 / Tradovate)
           {entries.length > 0 && <span className="text-[10px] text-[#475569]">— {entries.length} archivo{entries.length === 1 ? "" : "s"}</span>}
         </span>
         {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -145,8 +164,12 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
             }`}
           >
             <Upload size={18} className="text-[#475569] mb-1.5" />
-            <p className="text-[11px] text-[#94a3b8]">Arrastrá CSVs de MT5 acá o click para abrir</p>
-            <p className="text-[9px] text-[#475569] mt-1">Formato: <code>SYMBOL_TF.csv</code> (ej. <code>XAUUSD_M15.csv</code>)</p>
+            <p className="text-[11px] text-[#94a3b8]">Arrastrá CSVs acá o click para abrir</p>
+            <p className="text-[9px] text-[#475569] mt-1">
+              {source === "tradovate"
+                ? <>Formato: <code>SYMBOL_TF.csv</code> (ej. <code>ES_15Min.csv</code>, <code>NQ_5Min.csv</code>)</>
+                : <>Formato: <code>SYMBOL_TF.csv</code> (ej. <code>XAUUSD_M15.csv</code>, <code>EURUSD_H1.csv</code>)</>}
+            </p>
             <input
               ref={inputRef}
               type="file"
@@ -157,7 +180,30 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-[10px] text-[#475569] uppercase tracking-wider">
+              Fuente
+              <select
+                value={source}
+                onChange={(e) => {
+                  const next = e.target.value as Source;
+                  setSource(next);
+                  // Re-detect symbol/tf for any pending entries with the new convention.
+                  setEntries((prev) => prev.map((entry) => {
+                    if (entry.status !== "pending") return entry;
+                    const det = detectFromName(entry.file.name, next);
+                    return { ...entry, symbol: det?.symbol ?? entry.symbol, tf: det?.tf ?? entry.tf };
+                  }));
+                }}
+                disabled={running}
+                className="ml-2 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1 focus:outline-none disabled:opacity-40"
+                title="MT5 y MT4 comparten el mismo formato de CSV. Tradovate usa columnas y nombres distintos."
+              >
+                <option value="mt5">MT5</option>
+                <option value="mt4">MT4</option>
+                <option value="tradovate">Tradovate</option>
+              </select>
+            </label>
             <label className="text-[10px] text-[#475569] uppercase tracking-wider">
               TZ offset (min)
               <input

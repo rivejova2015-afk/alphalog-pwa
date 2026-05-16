@@ -508,6 +508,13 @@ function StepFutures({
           </div>
         )}
       </Field>
+
+      {/* Execution platform badge — futures always route through Tradovate */}
+      <div className="flex items-center gap-2 rounded-lg border border-[#f59e0b]/20 bg-[#f59e0b]/5 px-3 py-2">
+        <span className="text-[10px] text-[#475569] uppercase tracking-wider">Plataforma de ejecución</span>
+        <span className="text-xs font-bold text-[#f59e0b] font-mono">TRADOVATE</span>
+        <span className="text-[10px] text-[#2d3748] ml-auto">Auto-seleccionada por mercado=futures</span>
+      </div>
     </div>
   );
 }
@@ -565,6 +572,13 @@ function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _s
       <Field label="Cuenta IBKR" hint="Formato: U1234567">
         <TextInput value={ibkrAccount} onChange={setIbkrAccount} placeholder="U1234567" />
       </Field>
+
+      {/* Execution platform badge — options always route through IBKR */}
+      <div className="flex items-center gap-2 rounded-lg border border-[#a78bfa]/20 bg-[#a78bfa]/5 px-3 py-2">
+        <span className="text-[10px] text-[#475569] uppercase tracking-wider">Plataforma de ejecución</span>
+        <span className="text-xs font-bold text-[#a78bfa] font-mono">IBKR</span>
+        <span className="text-[10px] text-[#2d3748] ml-auto">Auto-seleccionada por mercado=options</span>
+      </div>
     </div>
   );
 }
@@ -953,13 +967,23 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         }
       }
 
+      // Auto-bind execution platform from market_type. Futures propfirm =
+      // Tradovate (only venue that interfaces with the major prop firms);
+      // options = IBKR; forex respects the user's MT4/MT5 choice. Without
+      // this the algorithm dispatcher has no way to know where to route.
+      const resolvedPlatform: 'MT4' | 'MT5' | 'Tradovate' | 'IBKR' =
+        marketType === 'forex'   ? selectedPlatform :
+        marketType === 'futures' ? 'Tradovate' :
+        marketType === 'options' ? 'IBKR' :
+                                   'MT5';
+
       const { data: created, error } = await supabase.from('algorithms').insert({
         user_id:               user.id,
         name:                  name.trim(),
         instrument:            instruments,
         market_type:           marketType,
         direction:             dbDirection,
-        platform:              marketType === 'forex' ? selectedPlatform : 'MT5',
+        platform:              resolvedPlatform,
         linked_bot_account_id: marketType === 'forex' ? (botAccountId || null) : null,
         lot_size:              lotSize,
         max_trades:            maxTrades,

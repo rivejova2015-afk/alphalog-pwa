@@ -18,6 +18,21 @@ const SYMBOL_MAP: Record<string, string> = {
   USOIL: "CL=F", UKOIL: "BZ=F", NGAS: "NG=F",
   // Crypto
   BTCUSD: "BTC-USD", ETHUSD: "ETH-USD", SOLUSD: "SOL-USD", XRPUSD: "XRP-USD",
+  // Futuros CME (continuos front-month). Tradovate is the live venue; Yahoo
+  // serves as fallback data source for backtest when no MT5/Tradovate CSV
+  // has been imported.
+  ES: "ES=F", NQ: "NQ=F", YM: "YM=F", RTY: "RTY=F",
+  GC: "GC=F", SI: "SI=F", HG: "HG=F", PL: "PL=F",
+  CL: "CL=F", NG: "NG=F", BZ: "BZ=F", HO: "HO=F", RB: "RB=F",
+  ZB: "ZB=F", ZN: "ZN=F", ZF: "ZF=F", ZT: "ZT=F",
+  ZC: "ZC=F", ZS: "ZS=F", ZW: "ZW=F", ZL: "ZL=F", ZM: "ZM=F",
+  // Opciones — el engine backtest evalúa señal sobre el subyacente (ETF o
+  // stock). El P&L teórico del contrato se calcula con Black-Scholes en
+  // options-overlay.ts.
+  SPY: "SPY", QQQ: "QQQ", IWM: "IWM", DIA: "DIA",
+  AAPL: "AAPL", TSLA: "TSLA", NVDA: "NVDA", MSFT: "MSFT",
+  AMZN: "AMZN", GOOGL: "GOOGL", META: "META", NFLX: "NFLX",
+  AMD: "AMD", INTC: "INTC", BABA: "BABA", DIS: "DIS",
 };
 
 const INTERVAL_MAP: Record<Timeframe, string> = {
