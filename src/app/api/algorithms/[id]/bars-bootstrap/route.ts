@@ -1,15 +1,15 @@
-// Bars bootstrap — forces a Yahoo round-trip for every (symbol × engine TF)
-// the algorithm needs, so the first backtest run isn't slow or starved for
-// data. The bars-ingest cron keeps things fresh after the fact; this is the
-// one-shot "populate now" trigger the user can fire from the validator panel.
+// Bars bootstrap — forces a data fetch for every (symbol × engine TF) the
+// algorithm needs, walking the per-symbol source chain from the registry so
+// we never blindly hit Yahoo for symbols Yahoo doesn't support.
 //
-// loadHistoricalBars already does the local → Yahoo fallback + upsert into
-// historical_bars, so this endpoint is mostly a parallel loop with the
-// per-TF lookbacks tuned for the Base Engine v1 SMC funnel.
+// Response shape includes structured diagnostics (`symbol_status`) so the UI
+// can render exactly which sources worked, which failed, and what to do next
+// when a symbol has zero bars available via any API source.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
+import { loadHistoricalBarsDetailed } from "@/lib/backtest/bars-loader";
+import { resolveSymbol, hasApiCoverage, nextStepsForEmpty } from "@/lib/backtest/source-registry";
 import { logError, logInfo } from "@/lib/log";
 import type { Timeframe } from "@/types/backtest";
 
@@ -19,9 +19,6 @@ export const maxDuration = 180;
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// Per-TF lookback sized for the funnel. D1 needs only a few bars but a wider
-// window also gives session-structure context for H1 swings derived from D1
-// dailies later; intraday TFs respect Yahoo's caps (1m: ~7d, 5m/15m/60m: ~60d).
 const TF_LOOKBACK_DAYS: { tf: Timeframe; days: number }[] = [
   { tf: "D1",  days: 365 },
   { tf: "H1",  days: 90 },
@@ -52,8 +49,8 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "Algorithm has no instruments" }, { status: 400 });
     }
 
-    const now = Date.now();
-    const startedAt = now;
+    const startedAt = Date.now();
+
     interface SummaryRow {
       symbol: string;
       tf: Timeframe;
@@ -61,32 +58,81 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
       days: number;
       from_ts: string | null;
       to_ts: string | null;
+      effective_source: string | null;
+      attempts: Array<{ source: string; ok: boolean; bars: number; message?: string }>;
       error?: string;
     }
     const summary: SummaryRow[] = [];
 
-    // Sequential per (symbol × tf) — keeps it inside Yahoo's per-IP rate
-    // budget and surfaces failures one at a time in the response. Date ranges
-    // come back as the actual oldest/newest bar ts Yahoo returned, so the UI
-    // can auto-set the backtest form to a window that has real data.
+    // Per-symbol aggregated diagnostics. Built incrementally as we walk TFs.
+    const symbolStatus: Record<string, {
+      assetClass: string;
+      apiCoverage: boolean;
+      totalBars: number;
+      barsByTf: Record<string, number>;
+      sourcesUsed: string[];
+      hasAnyData: boolean;
+      nextSteps: string[];
+      notes?: string;
+    }> = {};
+
     for (const symbol of instruments) {
+      const entry = resolveSymbol(symbol);
+      symbolStatus[symbol] = {
+        assetClass: entry.assetClass,
+        apiCoverage: TF_LOOKBACK_DAYS.some((t) => hasApiCoverage(symbol, t.tf)),
+        totalBars: 0,
+        barsByTf: {},
+        sourcesUsed: [],
+        hasAnyData: false,
+        nextSteps: [],
+        notes: entry.notes,
+      };
+
       for (const { tf, days } of TF_LOOKBACK_DAYS) {
+        const now = Date.now();
         const to = new Date(now).toISOString();
         const from = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
         try {
-          const bars = await loadHistoricalBars(supabase, symbol, tf, from, to);
+          const result = await loadHistoricalBarsDetailed(supabase, symbol, tf, from, to);
           summary.push({
             symbol,
             tf,
             days,
-            bars: bars.length,
-            from_ts: bars.length > 0 ? bars[0].ts : null,
-            to_ts: bars.length > 0 ? bars[bars.length - 1].ts : null,
+            bars: result.bars.length,
+            from_ts: result.bars.length > 0 ? result.bars[0].ts : null,
+            to_ts: result.bars.length > 0 ? result.bars[result.bars.length - 1].ts : null,
+            effective_source: result.effectiveSource,
+            attempts: result.attempts.map((a) => ({ source: a.source, ok: a.ok, bars: a.bars, message: a.message })),
           });
+
+          symbolStatus[symbol].totalBars += result.bars.length;
+          symbolStatus[symbol].barsByTf[tf] = result.bars.length;
+          if (result.effectiveSource && result.effectiveSource !== "local") {
+            if (!symbolStatus[symbol].sourcesUsed.includes(result.effectiveSource)) {
+              symbolStatus[symbol].sourcesUsed.push(result.effectiveSource);
+            }
+          }
+          if (result.bars.length > 0) symbolStatus[symbol].hasAnyData = true;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          summary.push({ symbol, tf, days, bars: 0, from_ts: null, to_ts: null, error: msg });
+          summary.push({
+            symbol, tf, days,
+            bars: 0, from_ts: null, to_ts: null,
+            effective_source: null,
+            attempts: [],
+            error: msg,
+          });
+          symbolStatus[symbol].barsByTf[tf] = 0;
         }
+      }
+
+      // If any TF for this symbol still has zero bars, surface next steps.
+      const zeroTfs = TF_LOOKBACK_DAYS.filter((t) => (symbolStatus[symbol].barsByTf[t.tf] ?? 0) === 0);
+      if (zeroTfs.length > 0) {
+        // Use the worst-case TF's suggestions (M1 typically has fewest sources).
+        const worstTf = zeroTfs[zeroTfs.length - 1].tf;
+        symbolStatus[symbol].nextSteps = nextStepsForEmpty(symbol, worstTf);
       }
     }
 
@@ -107,6 +153,7 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
       errors,
       duration_ms: durationMs,
       summary,
+      symbol_status: symbolStatus,
     }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
   } catch (err) {
     logError("BarsBootstrap", { component: "POST", message: String(err) });

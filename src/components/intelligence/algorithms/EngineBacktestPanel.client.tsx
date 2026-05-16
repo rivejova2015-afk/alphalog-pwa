@@ -91,6 +91,17 @@ interface BacktestResponse {
   created_at?: string | null;
 }
 
+interface SymbolStatus {
+  assetClass: string;
+  apiCoverage: boolean;
+  totalBars: number;
+  barsByTf: Record<string, number>;
+  sourcesUsed: string[];
+  hasAnyData: boolean;
+  nextSteps: string[];
+  notes?: string;
+}
+
 interface HistoryRow {
   id: string;
   symbol: string;
@@ -154,6 +165,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [manageOpen, setManageOpen]   = useState(false);
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<HistoryRow | null>(null);
+  const [symbolStatus, setSymbolStatus] = useState<Record<string, SymbolStatus> | null>(null);
 
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
@@ -249,6 +261,10 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
         setBootstrapStatus(`error: ${json.error ?? "unknown"}`);
         return;
       }
+
+      // Capture per-symbol status from the registry-driven response.
+      // Used to render the data availability panel below the form.
+      if (json.symbol_status) setSymbolStatus(json.symbol_status as Record<string, SymbolStatus>);
 
       // Auto-align the form date range to what Yahoo actually returned for the
       // currently-selected symbol. We take the intersection across the 4 TFs:
@@ -520,6 +536,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           // to re-pick after importing a wider window.
           refreshHistory();
           setBootstrapStatus(null);
+          setSymbolStatus(null);
         }}
       />
 
@@ -656,6 +673,79 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           </div>
         )}
       </div>
+
+      {/* Data availability panel — driven by the per-symbol registry. Surfaces
+          actionable warnings when a symbol has zero API coverage (e.g. XAUUSD
+          on Yahoo) so the user knows EXACTLY what to do, not just that
+          "0 trades" happened. */}
+      {symbolStatus && symbolStatus[symbol] && (() => {
+        const st = symbolStatus[symbol];
+        const tfs = ["D1", "H1", "M15", "M1"];
+        const allEmpty = st.totalBars === 0;
+        const partial  = !allEmpty && tfs.some((tf) => (st.barsByTf[tf] ?? 0) === 0);
+
+        const tone = allEmpty
+          ? { bg: "bg-[#ef4444]/5", border: "border-[#ef4444]/30", text: "text-[#ef4444]", icon: <XCircle size={12} /> }
+          : partial
+          ? { bg: "bg-[#f59e0b]/5", border: "border-[#f59e0b]/30", text: "text-[#f59e0b]", icon: <AlertCircle size={12} /> }
+          : { bg: "bg-[#34d399]/5", border: "border-[#34d399]/30", text: "text-[#34d399]", icon: <CheckCircle2 size={12} /> };
+
+        return (
+          <div className={`rounded-lg border ${tone.border} ${tone.bg} p-3 space-y-2`}>
+            <div className={`flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider ${tone.text}`}>
+              {tone.icon}
+              <span>Disponibilidad de data · {symbol}</span>
+              <span className="text-[9px] text-[#475569] normal-case">({st.assetClass})</span>
+              {st.sourcesUsed.length > 0 && (
+                <span className="ml-auto text-[9px] text-[#475569] normal-case">
+                  fuentes: {st.sourcesUsed.join(", ")}
+                </span>
+              )}
+            </div>
+
+            {/* Per-TF bar coverage chips */}
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
+              {tfs.map((tf) => {
+                const n = st.barsByTf[tf] ?? 0;
+                const ok = n > 0;
+                return (
+                  <span
+                    key={tf}
+                    className={`px-2 py-0.5 rounded border ${
+                      ok ? "border-[#34d399]/40 bg-[#34d399]/10 text-[#34d399]"
+                         : "border-[#ef4444]/40 bg-[#ef4444]/10 text-[#ef4444]"
+                    }`}
+                  >
+                    {tf}: {n.toLocaleString()}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Notes from registry (e.g. "Yahoo XAUUSD=X retorna 404") */}
+            {st.notes && (
+              <p className="text-[10px] text-[#94a3b8] italic">ⓘ {st.notes}</p>
+            )}
+
+            {/* Actionable next steps when data is missing */}
+            {(allEmpty || partial) && st.nextSteps.length > 0 && (
+              <div className="border-t border-current/20 pt-2 space-y-1">
+                <p className={`text-[10px] font-bold uppercase tracking-wider ${tone.text}`}>
+                  ¿Qué hacer ahora?
+                </p>
+                <ul className="space-y-0.5 text-[10px] text-[#e2e8f0]">
+                  {st.nextSteps.map((step, i) => (
+                    <li key={i} className="flex gap-1.5">
+                      <span className="text-[#475569]">▸</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {error && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#ef4444]/10 border border-[#ef4444]/30 text-[#ef4444] text-xs">
