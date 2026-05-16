@@ -44,7 +44,8 @@ import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-al
 import { getSupabase } from '../supabase.js';
 import {
   SYMBOLS, TIMEFRAMES, ARB_GAP_MIN_PCT, RR_MIN, LOOP_INTERVAL_MS, PAPER_MODE,
-  MTF_CONFIDENCE_MIN, COINARB_AGENT_ID, COINARB_USER_ID, type Symbol, type Timeframe,
+  MTF_CONFIDENCE_MIN, TRADING_PAUSED, COINARB_AGENT_ID, COINARB_USER_ID,
+  type Symbol, type Timeframe,
 } from './config.js';
 
 const STARTING_CAPITAL = Number(process.env.COINARB_STARTING_CAPITAL ?? '100');
@@ -221,6 +222,11 @@ export class CoinarbLoop {
   }
 
   private async evaluateSymbol(symbol: Symbol, fearGreed: number): Promise<void> {
+    // User-driven pause (Fase #10) — silent early-return so we don't spam
+    // 17k SKIP rows/day. The flag flip is logged once by the command-poller,
+    // and the paused state surfaces in algorithms.status via syncAlgorithmStatus.
+    if (TRADING_PAUSED) return;
+
     // Daily caps (CAMBIO 2b) — per-symbol auto-stop avoids one pair eating the whole budget.
     if (this.dailyTracker.isTotalCapReached()) {
       await this.decisions.log({
@@ -575,8 +581,9 @@ export class CoinarbLoop {
       const cbState = this.circuitBreaker.snapshot;
       const daily = this.dailyTracker.current.data;
       const btc = this.coinbase.getPrice('BTC');
-      // Status sync — paused if circuit pause is currently active OR daily cap hit.
+      // Status sync — paused covers user pause, circuit pause, daily cap saturation.
       const paused =
+        TRADING_PAUSED ||
         (cbState.pausedUntil !== null && cbState.pausedUntil > Date.now()) ||
         this.dailyTracker.isTotalCapReached();
       await this.syncAlgorithmStatus(supabase, paused);

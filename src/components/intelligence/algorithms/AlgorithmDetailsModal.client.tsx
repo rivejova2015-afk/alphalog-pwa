@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
@@ -458,7 +458,11 @@ function CoinarbSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSav
       <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-slate-100">Bot status</span>
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-emerald-950 text-emerald-400 border-emerald-800">
+          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+            algorithm.status === 'live'
+              ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+              : 'bg-amber-950 text-amber-400 border-amber-800'
+          }`}>
             {algorithm.status}
           </span>
         </div>
@@ -468,6 +472,7 @@ function CoinarbSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSav
           <Row label="Cap diario"      value={`${engine.daily_trade_cap_total ?? '—'} (max ${engine.daily_trade_cap_per_symbol ?? '—'}/símbolo)`} />
           <Row label="Capital inicial" value={`$${String(engine.starting_capital_usd ?? '—')}`} mono />
         </dl>
+        <ControlButton algorithmId={algorithm.id} currentStatus={algorithm.status} onChanged={onSaved} />
       </div>
 
       <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
@@ -503,6 +508,53 @@ function CoinarbSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSav
         </button>
       </div>
     </div>
+  );
+}
+
+function ControlButton({ algorithmId, currentStatus, onChanged }: {
+  algorithmId: string; currentStatus: string; onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const isPaused = currentStatus !== 'live';
+
+  async function dispatch(action: 'pause' | 'resume') {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error ?? `Error ${res.status}`);
+        return;
+      }
+      toast.success(json.message ?? 'Comando enviado');
+      // Status will flip on next bot tick (≤30s); refetch after a short delay
+      // so the user sees movement, but the bot is the source of truth.
+      setTimeout(onChanged, 35_000);
+    } catch (e) {
+      toast.error(`Error: ${e instanceof Error ? e.message : 'desconocido'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => dispatch(isPaused ? 'resume' : 'pause')}
+      disabled={busy}
+      className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition disabled:opacity-50 ${
+        isPaused
+          ? 'bg-emerald-700 hover:bg-emerald-600'
+          : 'bg-amber-700 hover:bg-amber-600'
+      }`}
+    >
+      {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+      {busy ? 'Enviando…' : isPaused ? 'Reanudar bot' : 'Pausar bot'}
+    </button>
   );
 }
 

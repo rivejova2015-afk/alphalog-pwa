@@ -145,9 +145,10 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                       style={
                         algo.marketType === 'futures' ? { color: '#f59e0b', background: '#f59e0b15', border: '1px solid #f59e0b30' } :
                         algo.marketType === 'options' ? { color: '#a78bfa', background: '#a78bfa15', border: '1px solid #a78bfa30' } :
+                        algo.marketType === 'crypto'  ? { color: '#22d3ee', background: '#22d3ee15', border: '1px solid #22d3ee30' } :
                         { color: '#34d399', background: '#34d39915', border: '1px solid #34d39930' }
                       }>
-                      {algo.marketType === 'forex' ? 'Forex' : algo.marketType === 'futures' ? 'Futures' : 'Options'}
+                      {algo.marketType === 'forex' ? 'Forex' : algo.marketType === 'futures' ? 'Futures' : algo.marketType === 'crypto' ? 'Crypto' : 'Options'}
                     </span>
                     <Badge variant={statusVariant}>{currentStatus}</Badge>
                     {(() => {
@@ -204,7 +205,12 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right hidden sm:block">
-                  <div className="text-xs text-[#475569]">P&L Today</div>
+                  <div className="text-xs text-[#475569] flex items-center justify-end gap-1">
+                    P&L Today
+                    <span className="text-[7px] font-bold font-mono px-1 py-px rounded border border-[#34d399]/40 bg-[#34d399]/10 text-[#34d399] uppercase tracking-wider">
+                      Live
+                    </span>
+                  </div>
                   <div className={`text-sm font-bold font-mono ${algo.pnlToday >= 0 ? 'text-[#34d399]' : 'text-[#ef4444]'}`}>
                     {algo.pnlToday >= 0 ? '+' : ''}${algo.pnlToday.toFixed(2)}
                   </div>

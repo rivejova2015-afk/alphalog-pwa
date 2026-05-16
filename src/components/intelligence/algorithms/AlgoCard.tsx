@@ -86,9 +86,14 @@ export function AlgoCard({
         </div>
       </div>
 
-      {/* P&L Today — prominent */}
+      {/* P&L Today — prominent. LIVE chip differentiates these from backtest results. */}
       <div className="mb-4 p-3 bg-[#0a0e1a] rounded-lg">
-        <div className="text-xs text-[#475569] mb-1">P&L Today</div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-[#475569]">P&L Today</span>
+          <span className="text-[8px] font-bold font-mono px-1.5 py-0.5 rounded border border-[#34d399]/40 bg-[#34d399]/10 text-[#34d399] uppercase tracking-wider">
+            ● Live
+          </span>
+        </div>
         <div
           className={`text-2xl font-bold font-mono ${
             pnlToday >= 0 ? 'text-[#34d399]' : 'text-[#ef4444]'

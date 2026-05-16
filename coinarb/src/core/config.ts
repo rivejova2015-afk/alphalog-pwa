@@ -80,6 +80,16 @@ export const COINARB_USER_ID = process.env.COINARB_USER_ID ?? '';
 // the rows created by migration 099/100; envs override for parity tests.
 export const COINARB_BOT_ID = process.env.COINARB_BOT_ID ?? '11111111-c01a-4b00-9001-000000000001';
 export const COINARB_BOT_ACCOUNT_ID = process.env.COINARB_BOT_ACCOUNT_ID ?? '22222222-c01a-4b00-9002-000000000001';
+
+// User-driven pause state — set by bot_commands command_type='pause'/'resume'
+// from the UI. Loop checks this before entering any position. Independent of
+// circuit breaker (machine self-protection) and daily cap (rate limit).
+export let TRADING_PAUSED = false;
+export function setTradingPaused(paused: boolean): boolean {
+  if (paused === TRADING_PAUSED) return false;
+  TRADING_PAUSED = paused;
+  return true;
+}
 // PAPER_MODE: env var COINARB_50X_PAPER_MODE has ABSOLUTE priority over Supabase config.
 // To go live: flyctl secrets set COINARB_50X_PAPER_MODE=false -a coinarb-50x
 // (additionally requires COINBASE_CDP_API_KEY/SECRET to actually trade real money)

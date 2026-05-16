@@ -17,6 +17,7 @@
 import { getSupabase } from '../supabase.js';
 import {
   applyParameters,
+  setTradingPaused,
   COINARB_BOT_ID,
   COINARB_BOT_ACCOUNT_ID,
 } from '../core/config.js';
@@ -96,6 +97,18 @@ export class CommandPoller {
             resultMessage = `applied: ${changes.join(' ')}`;
             console.log(`[command-poller] applied — ${changes.join(' ')}`);
           }
+          break;
+        }
+        case 'pause': {
+          const flipped = setTradingPaused(true);
+          resultMessage = flipped ? 'trading paused (no new entries until resume)' : 'no-op (already paused)';
+          if (flipped) console.log('[command-poller] trading paused by user');
+          break;
+        }
+        case 'resume': {
+          const flipped = setTradingPaused(false);
+          resultMessage = flipped ? 'trading resumed' : 'no-op (already running)';
+          if (flipped) console.log('[command-poller] trading resumed by user');
           break;
         }
         default:
