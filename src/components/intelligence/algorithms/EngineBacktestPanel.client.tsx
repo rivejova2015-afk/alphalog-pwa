@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database } from "lucide-react";
 import { toast } from "sonner";
 import { EquityCurve } from "./EquityCurve";
 
@@ -148,6 +148,8 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [trainingMl, setTrainingMl]   = useState(false);
   const [mlStatus, setMlStatus]       = useState<string | null>(null);
   const [compareIds, setCompareIds]   = useState<string[]>([]);
+  const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapStatus, setBootstrapStatus] = useState<string | null>(null);
 
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
@@ -200,6 +202,36 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const compareRuns = compareIds
     .map((cid) => history.find((h) => h.id === cid))
     .filter((r): r is HistoryRow => r != null);
+
+  async function bootstrapBars() {
+    if (instruments.length === 0) {
+      toast.error("La estrategia no tiene instrumentos");
+      return;
+    }
+    setBootstrapping(true);
+    setBootstrapStatus(null);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/bars-bootstrap`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || "Bootstrap falló");
+        setBootstrapStatus(`error: ${json.error ?? "unknown"}`);
+        return;
+      }
+      const errs = json.errors > 0 ? ` · ${json.errors} errores` : "";
+      toast.success(`Data lista: ${json.total_bars} barras en ${(json.duration_ms / 1000).toFixed(1)}s${errs}`);
+      setBootstrapStatus(`${json.total_bars} bars · ${json.symbols.length} sym × ${json.timeframes.join("/")}${errs}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error de conexión";
+      toast.error(msg);
+      setBootstrapStatus(`error: ${msg}`);
+    } finally {
+      setBootstrapping(false);
+    }
+  }
 
   async function trainMl() {
     if (instruments.length === 0) {
@@ -404,6 +436,16 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
         </button>
         <button
           type="button"
+          onClick={bootstrapBars}
+          disabled={bootstrapping || instruments.length === 0}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f2937] border border-[#22d3ee]/30 text-[#22d3ee] text-xs font-bold transition-all hover:border-[#22d3ee]/60 disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Trae el histórico Yahoo para los 4 TFs del funnel: D1 = 1 año, H1 = 90d, M15 = 30d, M1 = 6d. Primera vez puede tardar ~30s."
+        >
+          {bootstrapping ? <Loader2 size={12} className="animate-spin" /> : <Database size={12} />}
+          {bootstrapping ? "Cargando data…" : "Bootstrap data"}
+        </button>
+        <button
+          type="button"
           onClick={trainMl}
           disabled={trainingMl || !symbol}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f2937] border border-[#a78bfa]/30 text-[#a78bfa] text-xs font-bold transition-all hover:border-[#a78bfa]/60 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -412,6 +454,9 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           {trainingMl ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
           {trainingMl ? "Entrenando…" : "Entrenar ML"}
         </button>
+        {bootstrapStatus && (
+          <span className="text-[10px] font-mono text-[#475569]">{bootstrapStatus}</span>
+        )}
         {mlStatus && (
           <span className="text-[10px] font-mono text-[#475569]">{mlStatus}</span>
         )}
