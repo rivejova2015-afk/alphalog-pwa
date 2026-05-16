@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play, Activity, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
@@ -475,6 +475,8 @@ function CoinarbSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSav
         <ControlButton algorithmId={algorithm.id} currentStatus={algorithm.status} onChanged={onSaved} />
       </div>
 
+      <TelemetryPanel algorithmId={algorithm.id} pairs={pairs} />
+
       <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-slate-100">Tunables (hot-reload ≤30s)</span>
@@ -556,6 +558,148 @@ function ControlButton({ algorithmId, currentStatus, onChanged }: {
       {busy ? 'Enviando…' : isPaused ? 'Reanudar bot' : 'Pausar bot'}
     </button>
   );
+}
+
+// Live telemetry — pulls /api/algorithms/[id]/telemetry every 15s and renders
+// per-symbol capacity, WS connectivity, heartbeat age, and equity/positions.
+// The endpoint reads the latest coinarb_telemetry row that the Fly bot upserts
+// each tick, so this panel mirrors the bot's runtime state at ~bot-tick cadence.
+interface Telemetry {
+  equityUsd: number | null;
+  availableBalanceUsd: number | null;
+  openPositionsCount: number | null;
+  totalPnlUsd: number | null;
+  winRate: number | null;
+  wsCoinbaseConnected: boolean;
+  wsBinanceConnected: boolean;
+  btcSpotPrice: number | null;
+  consecutiveLosses: number | null;
+  dailyTradesCount: number | null;
+  dailyWins: number | null;
+  dailyLosses: number | null;
+  phaseCurrent: string | null;
+  capitalCurrent: number | null;
+  lastHeartbeatAt: string | null;
+  tradesBySymbol: Record<string, number>;
+  totalCap: number;
+  perSymbolCap: number;
+}
+
+function TelemetryPanel({ algorithmId, pairs }: { algorithmId: string; pairs: string[] }) {
+  const [tele, setTele] = useState<Telemetry | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchTele() {
+      try {
+        const res = await fetch(`/api/algorithms/${algorithmId}/telemetry`, { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setTele(json.telemetry);
+      } catch { /* network blip — keep last good values */ }
+      finally { if (!cancelled) setLoaded(true); }
+    }
+    fetchTele();
+    const id = setInterval(fetchTele, 15_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [algorithmId]);
+
+  if (!loaded) {
+    return (
+      <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4">
+        <div className="h-3 bg-slate-800 rounded w-1/3 animate-pulse" />
+      </div>
+    );
+  }
+  if (!tele) {
+    return (
+      <div className="rounded-lg bg-[#151b28] border border-dashed border-[#1f2937] p-4 text-center">
+        <p className="text-xs text-slate-500">Esperando primer heartbeat del bot…</p>
+      </div>
+    );
+  }
+
+  const hbAge = tele.lastHeartbeatAt ? Date.now() - new Date(tele.lastHeartbeatAt).getTime() : null;
+  const hbStale = hbAge !== null && hbAge > 60_000;  // >1min counts as stale at 15s tick cadence
+
+  return (
+    <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-100 flex items-center gap-1.5">
+          <Activity className="w-4 h-4 text-cyan-400" /> Live telemetry
+        </span>
+        <span className="text-[10px] text-slate-500 font-mono">refresh 15s</span>
+      </div>
+
+      {/* Top row: heartbeat + WS */}
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="bg-[#0a0e1a] rounded p-2">
+          <div className="text-[10px] text-slate-500 mb-0.5">Heartbeat</div>
+          <div className={`text-sm font-mono font-bold ${hbStale ? 'text-amber-400' : 'text-emerald-400'}`}>
+            {hbAge === null ? '—' : hbAge < 60_000 ? `${Math.round(hbAge / 1000)}s` : `${Math.round(hbAge / 60_000)}m`}
+          </div>
+        </div>
+        <WsTile label="Coinbase" connected={tele.wsCoinbaseConnected} />
+        <WsTile label="Binance"  connected={tele.wsBinanceConnected} />
+      </div>
+
+      {/* Per-symbol capacity bars */}
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">
+          Capacidad diaria · {tele.dailyTradesCount ?? 0}/{tele.totalCap} total
+        </p>
+        <div className="space-y-1.5">
+          {pairs.map((sym) => {
+            const used = tele.tradesBySymbol[sym] ?? 0;
+            const pct = Math.min(100, (used / tele.perSymbolCap) * 100);
+            const color =
+              pct >= 90 ? 'bg-red-500' :
+              pct >= 70 ? 'bg-amber-500' :
+              pct > 0   ? 'bg-emerald-500' :
+                          'bg-slate-700';
+            return (
+              <div key={sym} className="flex items-center gap-2">
+                <span className="w-16 text-[11px] font-mono text-slate-400">{sym.split('-')[0]}</span>
+                <div className="flex-1 h-2 bg-[#0a0e1a] rounded overflow-hidden">
+                  <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+                </div>
+                <span className="w-12 text-[11px] font-mono text-slate-400 text-right">{used}/{tele.perSymbolCap}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Equity + positions + phase */}
+      <dl className="grid grid-cols-2 gap-y-2 text-xs pt-2 border-t border-[#1f2937]">
+        <Row label="Equity"          value={fmt$(tele.equityUsd)} mono />
+        <Row label="Open positions"  value={String(tele.openPositionsCount ?? 0)} mono />
+        <Row label="Pnl hoy"         value={fmt$(tele.totalPnlUsd, true)} mono />
+        <Row label="Win rate"        value={tele.winRate !== null ? `${(tele.winRate * 100).toFixed(1)}%` : '—'} mono />
+        <Row label="Fase"            value={tele.phaseCurrent ?? '—'} />
+        <Row label="Pérdidas seguidas" value={String(tele.consecutiveLosses ?? 0)} mono />
+      </dl>
+    </div>
+  );
+}
+
+function WsTile({ label, connected }: { label: string; connected: boolean }) {
+  return (
+    <div className="bg-[#0a0e1a] rounded p-2">
+      <div className="text-[10px] text-slate-500 mb-0.5">{label} WS</div>
+      <div className={`text-sm font-mono font-bold flex items-center gap-1 ${connected ? 'text-emerald-400' : 'text-red-400'}`}>
+        {connected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+        {connected ? 'OK' : 'DOWN'}
+      </div>
+    </div>
+  );
+}
+
+function fmt$(v: number | null, signed = false): string {
+  if (v === null) return '—';
+  const sign = signed && v > 0 ? '+' : '';
+  return `${sign}$${v.toFixed(2)}`;
 }
 
 function NumField({ label, value, onChange, step, hint, mono }: {
