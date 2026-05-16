@@ -54,20 +54,38 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
 
     const now = Date.now();
     const startedAt = now;
-    const summary: { symbol: string; tf: Timeframe; bars: number; days: number; error?: string }[] = [];
+    interface SummaryRow {
+      symbol: string;
+      tf: Timeframe;
+      bars: number;
+      days: number;
+      from_ts: string | null;
+      to_ts: string | null;
+      error?: string;
+    }
+    const summary: SummaryRow[] = [];
 
     // Sequential per (symbol × tf) — keeps it inside Yahoo's per-IP rate
-    // budget and surfaces failures one at a time in the response.
+    // budget and surfaces failures one at a time in the response. Date ranges
+    // come back as the actual oldest/newest bar ts Yahoo returned, so the UI
+    // can auto-set the backtest form to a window that has real data.
     for (const symbol of instruments) {
       for (const { tf, days } of TF_LOOKBACK_DAYS) {
         const to = new Date(now).toISOString();
         const from = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
         try {
           const bars = await loadHistoricalBars(supabase, symbol, tf, from, to);
-          summary.push({ symbol, tf, days, bars: bars.length });
+          summary.push({
+            symbol,
+            tf,
+            days,
+            bars: bars.length,
+            from_ts: bars.length > 0 ? bars[0].ts : null,
+            to_ts: bars.length > 0 ? bars[bars.length - 1].ts : null,
+          });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          summary.push({ symbol, tf, days, bars: 0, error: msg });
+          summary.push({ symbol, tf, days, bars: 0, from_ts: null, to_ts: null, error: msg });
         }
       }
     }

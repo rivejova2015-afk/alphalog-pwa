@@ -221,9 +221,47 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
         setBootstrapStatus(`error: ${json.error ?? "unknown"}`);
         return;
       }
+
+      // Auto-align the form date range to what Yahoo actually returned for the
+      // currently-selected symbol. We take the intersection across the 4 TFs:
+      // the latest `from` and the earliest `to` — that's the window where ALL
+      // TFs have data, so the funnel can evaluate every step. Without this
+      // the user is left guessing why the backtest returns 0 trades.
+      interface BootstrapRow {
+        symbol: string;
+        tf: string;
+        bars: number;
+        from_ts: string | null;
+        to_ts: string | null;
+        error?: string;
+      }
+      const rowsForSymbol: BootstrapRow[] = (json.summary ?? []).filter(
+        (r: BootstrapRow) => r.symbol === symbol && r.bars > 0,
+      );
+      let synced = "";
+      if (rowsForSymbol.length === 4) {
+        const fromTs = rowsForSymbol
+          .map((r) => new Date(r.from_ts ?? "").getTime())
+          .reduce((a, b) => Math.max(a, b));
+        const toTs = rowsForSymbol
+          .map((r) => new Date(r.to_ts ?? "").getTime())
+          .reduce((a, b) => Math.min(a, b));
+        if (Number.isFinite(fromTs) && Number.isFinite(toTs) && toTs > fromTs) {
+          const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+          setFrom(fmt(fromTs));
+          setTo(fmt(toTs));
+          synced = ` · rango aplicado: ${fmt(fromTs)} → ${fmt(toTs)}`;
+        }
+      }
       const errs = json.errors > 0 ? ` · ${json.errors} errores` : "";
       toast.success(`Data lista: ${json.total_bars} barras en ${(json.duration_ms / 1000).toFixed(1)}s${errs}`);
-      setBootstrapStatus(`${json.total_bars} bars · ${json.symbols.length} sym × ${json.timeframes.join("/")}${errs}`);
+
+      // Detail line — bars per TF for the current symbol, so the user sees
+      // what Yahoo actually delivered before clicking Validar.
+      const perTfDetail = rowsForSymbol.length > 0
+        ? rowsForSymbol.map((r) => `${r.tf}:${r.bars}`).join(" · ")
+        : "(sin data para este símbolo)";
+      setBootstrapStatus(`${json.total_bars} bars total · ${symbol}: ${perTfDetail}${synced}${errs}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error de conexión";
       toast.error(msg);
