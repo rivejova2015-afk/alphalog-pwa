@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database } from "lucide-react";
 import { toast } from "sonner";
 import { EquityCurve } from "./EquityCurve";
+import { Mt5BarsImport } from "./Mt5BarsImport.client";
 
 interface BacktestMetrics {
   totalTrades?: number;
@@ -384,6 +385,19 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           )}
         </div>
       </div>
+
+      {/* MT5 CSV import — broker-fidelity data, beats Yahoo on collision */}
+      <Mt5BarsImport
+        algorithmId={algorithmId}
+        onSuccess={() => {
+          // Refresh history (a fresh backtest will see the new bars) and clear
+          // any cached bootstrap status so the user re-runs Bootstrap on
+          // demand. The form date range stays as-is — the user usually wants
+          // to re-pick after importing a wider window.
+          refreshHistory();
+          setBootstrapStatus(null);
+        }}
+      />
 
       {/* Compare: pick up to 2 runs from history */}
       {history.length >= 2 && (
