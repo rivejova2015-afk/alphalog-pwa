@@ -61,7 +61,7 @@ async function ingestYahooBars(
     close: b.close,
     volume: b.volume,
     spread: b.spread ?? null,
-    source: "histdata" as const,
+    source: "yahoo" as const,
     uploaded_by: null,
   }));
   // Upsert in chunks to avoid payload limits
@@ -80,7 +80,7 @@ async function ingestYahooBars(
     {
       symbol,
       timeframe,
-      source: "histdata",
+      source: "yahoo",
       range_start: new Date(Math.min(...tsValues)).toISOString(),
       range_end: new Date(Math.max(...tsValues)).toISOString(),
       bar_count: bars.length,

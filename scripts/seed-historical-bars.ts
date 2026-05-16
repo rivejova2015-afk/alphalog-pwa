@@ -41,7 +41,7 @@ async function ingest(
     symbol, timeframe: tf, ts: b.ts,
     open: b.open, high: b.high, low: b.low, close: b.close,
     volume: b.volume, spread: b.spread ?? null,
-    source: "histdata", uploaded_by: null,
+    source: "yahoo", uploaded_by: null,
   }));
   for (let i = 0; i < rows.length; i += 1000) {
     const { error } = await sb

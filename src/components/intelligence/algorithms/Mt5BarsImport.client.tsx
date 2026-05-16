@@ -10,18 +10,42 @@ interface Props {
 }
 
 // Mirror of the parsers' filename regexes (longest-first, lookahead for boundary).
-const MT_FILENAME_RE        = /^([A-Z0-9]+)[._\-](M15|M30|M5|M1|H4|H1|MN1|D1|W1)(?=[._\-]|$)/i;
-const TRADOVATE_FILENAME_RE = /^([A-Z0-9]+)[._\-](240Min|15Min|30Min|60Min|1Min|5Min|Daily|Weekly)(?=[._\-]|$)/i;
+const MT_FILENAME_RE         = /^([A-Z0-9]+)[._\-](M15|M30|M5|M1|H4|H1|MN1|D1|W1)(?=[._\-]|$)/i;
+const TRADOVATE_FILENAME_RE  = /^([A-Z0-9]+)[._\-](240Min|15Min|30Min|60Min|1Min|5Min|Daily|Weekly)(?=[._\-]|$)/i;
 const TRADOVATE_TF_MAP: Record<string, Tf> = {
   "1MIN": "M1", "5MIN": "M5", "15MIN": "M15", "30MIN": "M30",
   "60MIN": "H1", "240MIN": "H4", "DAILY": "D1", "WEEKLY": "W1",
 };
+// Dukascopy renamed exports: `<SYMBOL>_Candlestick_<N>_<U>_BID_<range>.csv` or simpler `<SYMBOL>_<TF>.csv`.
+const DUKASCOPY_FILENAME_RE  = /^([A-Z]{6,7})[._\-].*?(Candlestick[_-]?(\d+)[_-]?(M|H|D|W|MN)|M15|M30|M5|M1|H4|H1|D1|W1|MN1)/i;
+// HistData: `DAT_ASCII_<SYMBOL>_M1_<YYYY>[MM].csv` — always M1.
+const HISTDATA_FILENAME_RE   = /^DAT_ASCII_([A-Z0-9]+)_M1_(\d{4})(?:\d{2})?\.csv$/i;
+// CME daily settlement: `settle.YYYYMMDD.s.csv` — no symbol in filename (multi-contract file).
+const CME_FILENAME_RE        = /^settle\.\d{8}\.s\.csv$/i;
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
 type Tf = typeof TIMEFRAMES[number];
 
-const SOURCES = ["mt5", "mt4", "tradovate"] as const;
+const SOURCES = ["mt5", "mt4", "tradovate", "dukascopy", "histdata", "cme"] as const;
 type Source = typeof SOURCES[number];
+
+const SOURCE_LABELS: Record<Source, string> = {
+  mt5:       "MT5 (broker)",
+  mt4:       "MT4 (broker)",
+  tradovate: "Tradovate (futures)",
+  dukascopy: "Dukascopy (forex)",
+  histdata:  "HistData (forex M1)",
+  cme:       "CME settlement (futures D1)",
+};
+
+const SOURCE_HINTS: Record<Source, string> = {
+  mt5:       "Formato: SYMBOL_TF.csv (ej. XAUUSD_M15.csv, EURUSD_H1.csv)",
+  mt4:       "Mismo formato que MT5 (ej. XAUUSD_M15.csv)",
+  tradovate: "Formato: SYMBOL_TF.csv (ej. ES_15Min.csv, NQ_5Min.csv)",
+  dukascopy: "Formato: SYMBOL_Candlestick_N_U_BID_*.csv (ej. EURUSD_Candlestick_15_M_BID_*.csv) o renombrado SYMBOL_TF.csv",
+  histdata:  "Formato: DAT_ASCII_SYMBOL_M1_YYYYMM.csv (ej. DAT_ASCII_EURUSD_M1_202401.csv)",
+  cme:       "Formato: settle.YYYYMMDD.s.csv — el filename trae solo la fecha, completá Symbol (ej. ES) manualmente",
+};
 
 interface FileEntry {
   file: File;
@@ -34,6 +58,7 @@ interface FileEntry {
 
 function detectFromName(name: string, source: Source): { symbol: string; tf: Tf } | null {
   const base = name.replace(/^.*[\\/]/, "");
+
   if (source === "tradovate") {
     const m = base.match(TRADOVATE_FILENAME_RE);
     if (!m) return null;
@@ -41,6 +66,41 @@ function detectFromName(name: string, source: Source): { symbol: string; tf: Tf 
     if (!tf) return null;
     return { symbol: m[1].toUpperCase(), tf };
   }
+
+  if (source === "dukascopy") {
+    const m = base.match(DUKASCOPY_FILENAME_RE);
+    if (!m) return null;
+    const raw = m[2].toUpperCase();
+    // Try MT-style direct first (when user renamed).
+    if ((TIMEFRAMES as readonly string[]).includes(raw)) {
+      return { symbol: m[1].toUpperCase(), tf: raw as Tf };
+    }
+    // Otherwise parse Dukascopy "Candlestick_N_U" → MT TF.
+    const cs = raw.match(/CANDLESTICK[_-]?(\d+)[_-]?(M|H|D|W|MN)/);
+    if (!cs) return null;
+    const [, n, unit] = cs;
+    let tf: Tf | null = null;
+    if (unit === "M"  && ["1","5","15","30"].includes(n))  tf = `M${n}` as Tf;
+    else if (unit === "H" && ["1","4"].includes(n))         tf = `H${n}` as Tf;
+    else if (unit === "D" && n === "1")                     tf = "D1";
+    else if (unit === "W" && n === "1")                     tf = "W1";
+    else if (unit === "MN" && n === "1")                    tf = "MN1";
+    if (!tf) return null;
+    return { symbol: m[1].toUpperCase(), tf };
+  }
+
+  if (source === "histdata") {
+    const m = base.match(HISTDATA_FILENAME_RE);
+    if (!m) return null;
+    return { symbol: m[1].toUpperCase(), tf: "M1" };
+  }
+
+  if (source === "cme") {
+    // CME files don't embed a symbol — user must specify. We only return tf.
+    if (!CME_FILENAME_RE.test(base)) return null;
+    return { symbol: "", tf: "D1" };
+  }
+
   // MT4 + MT5 share the same export filename convention.
   const m = base.match(MT_FILENAME_RE);
   if (!m) return null;
@@ -142,7 +202,7 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
         className="w-full flex items-center justify-between px-3 py-2 text-xs font-mono uppercase tracking-wider text-[#22d3ee] hover:bg-[#22d3ee]/5 transition-colors"
       >
         <span className="flex items-center gap-1.5">
-          <Upload size={12} /> Importar barras (MT4 / MT5 / Tradovate)
+          <Upload size={12} /> Importar barras (MT4/MT5/Tradovate/Dukascopy/HistData/CME)
           {entries.length > 0 && <span className="text-[10px] text-[#475569]">— {entries.length} archivo{entries.length === 1 ? "" : "s"}</span>}
         </span>
         {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -165,11 +225,7 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
           >
             <Upload size={18} className="text-[#475569] mb-1.5" />
             <p className="text-[11px] text-[#94a3b8]">Arrastrá CSVs acá o click para abrir</p>
-            <p className="text-[9px] text-[#475569] mt-1">
-              {source === "tradovate"
-                ? <>Formato: <code>SYMBOL_TF.csv</code> (ej. <code>ES_15Min.csv</code>, <code>NQ_5Min.csv</code>)</>
-                : <>Formato: <code>SYMBOL_TF.csv</code> (ej. <code>XAUUSD_M15.csv</code>, <code>EURUSD_H1.csv</code>)</>}
-            </p>
+            <p className="text-[9px] text-[#475569] mt-1 text-center px-2">{SOURCE_HINTS[source]}</p>
             <input
               ref={inputRef}
               type="file"
@@ -197,11 +253,11 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
                 }}
                 disabled={running}
                 className="ml-2 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1 focus:outline-none disabled:opacity-40"
-                title="MT5 y MT4 comparten el mismo formato de CSV. Tradovate usa columnas y nombres distintos."
+                title="Cada fuente tiene su propio formato CSV. Elegí la que coincide con el origen del archivo."
               >
-                <option value="mt5">MT5</option>
-                <option value="mt4">MT4</option>
-                <option value="tradovate">Tradovate</option>
+                {SOURCES.map((s) => (
+                  <option key={s} value={s}>{SOURCE_LABELS[s]}</option>
+                ))}
               </select>
             </label>
             <label className="text-[10px] text-[#475569] uppercase tracking-wider">

@@ -15,11 +15,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseMt5Csv, detectSymbolTfFromFilename, SUPPORTED_TIMEFRAMES } from "@/lib/backtest/mt5-csv-parser";
 import { parseTradovateCsv, detectSymbolTfFromTradovateFilename } from "@/lib/backtest/tradovate-csv-parser";
+import { parseDukascopyCsv, detectSymbolTfFromDukascopyFilename } from "@/lib/backtest/dukascopy-csv-parser";
+import { parseHistDataCsv, detectSymbolTfFromHistDataFilename } from "@/lib/backtest/histdata-csv-parser";
+import { parseCmeCsv, detectTfFromCmeFilename } from "@/lib/backtest/cme-csv-parser";
 import { logError, logInfo } from "@/lib/log";
-import type { Timeframe } from "@/types/backtest";
+import type { Bar, Timeframe } from "@/types/backtest";
 
-type Source = "mt4" | "mt5" | "tradovate";
-const VALID_SOURCES: Source[] = ["mt4", "mt5", "tradovate"];
+type Source = "mt4" | "mt5" | "tradovate" | "dukascopy" | "histdata" | "cme";
+const VALID_SOURCES: Source[] = ["mt4", "mt5", "tradovate", "dukascopy", "histdata", "cme"];
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,16 +68,39 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const source = sourceRaw as Source;
 
     // Resolve symbol + timeframe: explicit form fields override filename detection.
-    // Tradovate uses a different filename convention than MT4/MT5 — pick detector.
+    // Each source has its own filename convention → pick the matching detector.
     const explicitSymbol = (form.get("symbol") as string | null)?.trim().toUpperCase();
     const explicitTf     = (form.get("timeframe") as string | null)?.trim().toUpperCase();
-    const fromFilename   = source === "tradovate"
-      ? detectSymbolTfFromTradovateFilename(file.name)
-      : detectSymbolTfFromFilename(file.name);
 
-    const symbol = explicitSymbol || fromFilename?.symbol;
+    let fromFilename: { symbol: string | null; tf: Timeframe } | null = null;
+    if (source === "tradovate") {
+      const det = detectSymbolTfFromTradovateFilename(file.name);
+      fromFilename = det ? { symbol: det.symbol, tf: det.tf } : null;
+    } else if (source === "dukascopy") {
+      const det = detectSymbolTfFromDukascopyFilename(file.name);
+      fromFilename = det ? { symbol: det.symbol, tf: det.tf } : null;
+    } else if (source === "histdata") {
+      const det = detectSymbolTfFromHistDataFilename(file.name);
+      fromFilename = det ? { symbol: det.symbol, tf: det.tf } : null;
+    } else if (source === "cme") {
+      // CME files are multi-symbol — filename only tells us tf=D1.
+      // The user must pick the symbol via the form field (or we filter by it).
+      const det = detectTfFromCmeFilename(file.name);
+      fromFilename = det ? { symbol: null, tf: det.tf } : null;
+    } else {
+      // mt4/mt5 share the MT5 detector
+      const det = detectSymbolTfFromFilename(file.name);
+      fromFilename = det ? { symbol: det.symbol, tf: det.tf } : null;
+    }
+
+    const symbol = explicitSymbol || fromFilename?.symbol || undefined;
     const timeframe = (explicitTf || fromFilename?.tf) as Timeframe | undefined;
-    if (!symbol) return NextResponse.json({ error: "Could not determine symbol (provide explicit or rename to SYMBOL_TF.csv)" }, { status: 400 });
+    if (!symbol) {
+      const hint = source === "cme"
+        ? "CME files include many contracts — pass symbol (e.g. ES, NQ) via form field"
+        : "provide explicit or rename to SYMBOL_TF.csv";
+      return NextResponse.json({ error: `Could not determine symbol (${hint})` }, { status: 400 });
+    }
     if (!timeframe || !(SUPPORTED_TIMEFRAMES as string[]).includes(timeframe)) {
       return NextResponse.json({ error: `Invalid or missing timeframe (one of ${SUPPORTED_TIMEFRAMES.join(", ")})` }, { status: 400 });
     }
@@ -86,15 +112,32 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     }
 
     const text = await file.text();
-    const parsed = source === "tradovate"
-      ? parseTradovateCsv(text, { tzOffsetMinutes })
-      : parseMt5Csv(text, { tzOffsetMinutes });
+    let parsed: {
+      bars: Bar[];
+      errors: Array<{ row: number; message: string }>;
+      delimiter: string;
+      hasHeader: boolean;
+      hasSpread?: boolean;
+      contractsSeen?: string[];
+    };
+    if (source === "tradovate") {
+      parsed = parseTradovateCsv(text, { tzOffsetMinutes });
+    } else if (source === "dukascopy") {
+      parsed = parseDukascopyCsv(text, { tzOffsetMinutes });
+    } else if (source === "histdata") {
+      parsed = parseHistDataCsv(text, { tzOffsetMinutes });
+    } else if (source === "cme") {
+      parsed = parseCmeCsv(text, { filterSymbol: symbol });
+    } else {
+      parsed = parseMt5Csv(text, { tzOffsetMinutes });
+    }
     if (parsed.bars.length === 0) {
       return NextResponse.json({
         error: "No valid bars parsed",
         errors: parsed.errors.slice(0, 20),
         delimiter: parsed.delimiter,
         hasHeader: parsed.hasHeader,
+        contractsSeen: parsed.contractsSeen,  // useful for CME when symbol mismatch
       }, { status: 422 });
     }
 
@@ -132,7 +175,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       errors: parsed.errors.slice(0, 20),
       delimiter: parsed.delimiter,
       hasHeader: parsed.hasHeader,
-      hasSpread: "hasSpread" in parsed ? parsed.hasSpread : false,
+      hasSpread: parsed.hasSpread ?? false,
+      contractsSeen: parsed.contractsSeen,
     }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (err) {
     logError("BarsImport", { component: "POST", message: String(err) });
