@@ -80,12 +80,15 @@ const nextConfig: NextConfig = {
       { source: '/intelligence/algo-trading', destination: '/intelligence/algorithms', permanent: true },
       { source: '/intelligence/algo-trading/:path*', destination: '/intelligence/algorithms', permanent: true },
 
-      // Old intelligence tabs → deleted (send to intelligence hub)
-      { source: '/intelligence/tabs/:path*', destination: '/intelligence', permanent: true },
-      { source: '/intelligence/capital-levels', destination: '/intelligence', permanent: true },
-      { source: '/intelligence/constraint-solver', destination: '/intelligence', permanent: true },
-      { source: '/intelligence/mindops', destination: '/intelligence', permanent: true },
-      { source: '/intelligence/knowledge-factory', destination: '/intelligence', permanent: true },
+      // Legacy intelligence paths from the 2.1 refactor → hub. Do NOT add a
+      // wildcard /intelligence/tabs/:path* here — that would also clobber
+      // capital-levels / constraint-monitor / mindops / knowledge-factory
+      // which all live under /intelligence/tabs/* and are real pages.
+      { source: '/intelligence/capital-levels', destination: '/intelligence/tabs/capital-levels', permanent: true },
+      { source: '/intelligence/constraint-solver', destination: '/intelligence/tabs/constraint-monitor', permanent: true },
+      { source: '/intelligence/tabs/constraint-solver', destination: '/intelligence/tabs/constraint-monitor', permanent: true },
+      { source: '/intelligence/mindops', destination: '/intelligence/tabs/mindops', permanent: true },
+      { source: '/intelligence/knowledge-factory', destination: '/intelligence/tabs/knowledge-factory', permanent: true },
       { source: '/intelligence/overview', destination: '/intelligence', permanent: true },
 
       // Dashboard duplicates → Intelligence / Map Hot

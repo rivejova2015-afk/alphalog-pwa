@@ -41,7 +41,7 @@ const AGENTS = [
   { id: 'perf-optimizer',    name: 'Perf Optimizer',    model: 'Sonnet', letter: 'PO', module: '_db',         desc: 'Queries, bundle size, caching, CWV',               pct: 95 },
   { id: 'test-engineer',     name: 'Test Engineer',     model: 'Sonnet', letter: 'TE', module: '_test',       desc: '19 unit tests Vitest, E2E Playwright',             pct: 85 },
   { id: 'bot-specialist',    name: 'Bot Specialist',    model: 'Sonnet', letter: 'BT', module: 'bot',         desc: 'MT5 heartbeat, telemetría, Copy Groups',           pct: 75 },
-  { id: 'feature-completer', name: 'Feature Completer', model: 'Opus',   letter: 'FC', module: 'intelligence',desc: 'P&L, Copy Groups UI, ConstraintSolver',            pct: 50 },
+  { id: 'feature-completer', name: 'Feature Completer', model: 'Opus',   letter: 'FC', module: 'intelligence',desc: 'P&L, Copy Groups UI, ConstraintMonitor',           pct: 75 },
 ] as const;
 
 const DEFAULT_VERCEL: VercelData = {
