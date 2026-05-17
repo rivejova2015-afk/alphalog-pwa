@@ -783,7 +783,6 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 ### ⚠️ Parcialmente implementado / TODOs conocidos
 
 - Copy Groups: ya tiene UI dedicada (sprint 3 — `/dashboard/copy-groups` lista + `/dashboard/copy-groups/[id]` detalle con grafo SVG + AabRightPanel). Pendiente: link directo desde MainNav (actualmente se accede solo por URL o desde el flujo AAB).
-- Componentes UI duplicados entre `src/components/ui/` (canónico, lowercase) y `src/components/shared/` (legacy, PascalCase). Conviven; APIs distintas en `Badge`. Cleanup futuro de imports + eliminar duplicados de `shared/`.
 - Operations panel (`/business/operations`) es solo nav-hub (40% madurez). Pendiente convertir en mini-dashboard agregando # decisions pendientes, # SOPs por hacer, último P&L, runway actual.
 
 ### 🔴 Pendiente / No implementado
@@ -817,6 +816,12 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
   - `coinarb/tests/` — circuit-breaker (12) y daily-tracker (14) sumados a los 35 ya existentes.
   - UI: `/dashboard/copy-groups` lista + detalle creados (sprint 3) — los 6 endpoints `/api/copy-groups/*` ahora son consumidos por la UI.
   - Quality-gates table fix crítico: runner.ts + promote-to-live + quality-gates route ahora leen de `trading_algorithms` (sprint 2).
+- **Sprint 5-8 (2026-05-03): higiene final, cobertura wide, audit batch** — de 623 → 929 tests verde (root 789 + coinarb 140):
+  - Sprint 5: validation tests (68), rl-engine (28), heston-pricer (15), CLAUDE.md sync, Copy Groups quick link.
+  - Sprint 6: intelligence refactor (extrae 14 helpers a `src/lib/intelligence/helpers.ts` + 59 tests), coinarb segunda capa (analysis + validators + phase-manager, 79 tests), capital-algorithm (22 tests).
+  - Sprint 7: `runSkillLearningCycle(instrument, userId)` ya no hardcodea owner UUID; llm-rules tests (10); Cache-Control batch en 6 GET routes (copy-groups graph, coinarb agents/trades, algorithms backtest, polyarb agents).
+  - Sprint 8: 11 audit log sites nuevos en 12 rutas mutadoras críticas (accounts CRUD, categories, agents create/update, algo control/pairing-token, CME signal/risk-config, treasury configs). `AuditResourceType` extendido con 7 tipos nuevos.
+- **Sprint 9 — `shared/` consolidado** (2026-05-03): `src/components/shared/` eliminado por completo. Los 2 archivos finales (`Button.tsx`, `Card.tsx`) eran código muerto sin importadores en `src/`. Única ubicación canónica ahora: `src/components/ui/`.
 - **Map Hot module completo end-to-end** (2026-05): pasó de UI con mock data (~35% madurez) a 95% funcional.
   - Schema: migration `109_map_hot_schema.sql` con 3 tablas (`map_hot_goals`, `map_hot_goal_links`, `map_hot_milestones`), RLS owner-only, soft-delete, indexes parciales.
   - API: `/api/map-hot/goals` (GET/POST) + `/api/map-hot/goals/[id]` (GET/PUT/DELETE) + `/api/map-hot/milestones` (GET/POST) + `/api/map-hot/milestones/[id]` (PUT/DELETE) + `/api/algorithms/lite` (GET liviano para selector). Todos con Zod + autoFix + contractGuard + audit + recordBugFromRequest.
