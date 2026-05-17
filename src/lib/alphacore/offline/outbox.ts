@@ -180,12 +180,8 @@ export class OutboxManager {
    * Sync a single outbox entry
    */
   private async syncEntry(entry: IDBOutboxEntry): Promise<void> {
-    // TODO: Call API endpoint based on table + operation
-    // POST /api/alphacore/{table}/create
-    // PATCH /api/alphacore/{table}/{id}/update
-    // DELETE /api/alphacore/{table}/{id}/delete
-    // etc.
-
+    // Endpoint shape: POST/PATCH/DELETE on /api/alphacore/{table}/{id?}/{op}.
+    // Both helpers below resolve verb + path from the entry's operation.
     const endpoint = this.buildEndpoint(entry);
     const method = this.buildMethod(entry.operation);
 

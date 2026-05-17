@@ -518,6 +518,23 @@ Cada tabla usa `auth.uid() = user_id` para todas las operaciones. Algunos casos 
 | `GET/POST /api/intelligence/capital-accounts` | GET, POST | Capital accounts |
 | `GET/PUT/DELETE /api/intelligence/capital-accounts/[id]` | — | CRUD capital account |
 
+### Algorithms (canonical strategy registry — incluye coinarb desde Fase A)
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `GET/POST /api/algorithms` | GET, POST | Lista/crea algoritmos (MT5 / CME / crypto) |
+| `GET/PUT/DELETE /api/algorithms/[id]` | — | CRUD. PUT con `parameters` dispara `bot_commands.update_parameters` |
+| `GET /api/algorithms/[id]/connections` | GET | Estado de pairing MT5/CME/options (no crypto) |
+| `POST /api/algorithms/[id]/control` | POST | `{action:'pause'\|'resume'}` → `bot_commands` |
+| `GET /api/algorithms/[id]/telemetry` | GET | Snapshot live `coinarb_telemetry` (solo crypto) |
+| `POST /api/algorithms/[id]/deploy` | POST | Crea `algorithm_deployments` (algo → bot_account) |
+| `POST /api/algorithms/[id]/approve` | POST | Lifecycle status transition |
+| `POST /api/algorithms/[id]/promote-to-live` | POST | paper → live |
+| `POST /api/algorithms/[id]/pairing-token` | POST | Genera token para MT5/MT4 |
+| `GET/POST /api/algorithms/[id]/backtest` | — | Single-shot backtest |
+| `POST /api/algorithms/[id]/engine-backtest` | POST | Engine v1 multi-symbol backtest |
+| `GET/POST /api/algorithms/[id]/quality-gates` | — | Quality gates tier-1 |
+| `GET/POST /api/algorithms/[id]/signal` | — | Manual signal trigger |
+
 ### Logs
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
@@ -544,6 +561,12 @@ Cada tabla usa `auth.uid() = user_id` para todas las operaciones. Algunos casos 
 | `POST /api/copy-groups/[id]/rollback` | POST | Rollback de copy group |
 
 ### Ops / Cron
+
+**Naming convention** (no migrar — la inconsistencia es semántica):
+- `/api/ops/cron/*` — crons que monitorean **bots** (heartbeat, SLO, recovery, daily verify). Auth: `Authorization: Bearer ${OPS_CRON_SECRET}`.
+- `/api/cron/*` — crons de **dominio de negocio** (business alerts, treasury reminders, terminal fetchers). Auth: `x-cron-secret` header con `CRON_SECRET`.
+- Vercel schedule en `vercel.json`.
+
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `GET/POST /api/ops/bot-daily-report` | GET, POST | Reporte diario del bot |
@@ -552,6 +575,8 @@ Cada tabla usa `auth.uid() = user_id` para todas las operaciones. Algunos casos 
 | `POST /api/ops/cron/bot-slo-monitor` | POST | Monitor SLO programado |
 | `POST /api/ops/cron/bot-auto-recovery` | POST | Auto-recuperación del bot |
 | `POST /api/ops/cron/bot-daily-verify` | POST | Verificación diaria del bot |
+| `POST /api/ops/cron/polyarb-heartbeat` | POST | Polyarb heartbeat stale → push |
+| `POST /api/ops/cron/coinarb-heartbeat` | POST | Coinarb heartbeat stale → push (dedup 30min vía app_logs.fingerprint) |
 | `POST /api/cron/business/alerts` | POST | Alertas de negocio (recurring costs, LLC) |
 | `POST /api/cron/business/recurring-costs` | POST | Genera costos recurrentes del mes |
 | `POST /api/cron/treasury/withdrawal-reminders` | POST | Recordatorios de retiro push |
@@ -729,16 +754,21 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 
 ### ⚠️ Parcialmente implementado / TODOs conocidos
 
-- `src/lib/alphacore/conflict-resolution.ts:428` — rollback logic pendiente
-- `src/lib/alphacore/offline/outbox.ts:183` — API endpoint call pendiente
-- P&L periódico (daily/weekly/monthly) en `getPerformanceMetrics` devuelve null (requiere aggregate por fecha)
-- Copy Groups: API completa pero UI del grafo parcialmente terminada
-- Intelligence: ConstraintSolver y KnowledgeFactory son features en desarrollo
+- Copy Groups: API completa (6 endpoints en `/api/copy-groups/*`) pero **UI ausente** — ningún componente consume el endpoint `/graph`. Validar si sigue en roadmap antes de invertir; el API se construyó hace meses y nunca se usó.
+- Intelligence ConstraintSolver: **no existe** (solo tipos en `src/lib/intelligence/metrics.ts` para `ConstraintStatus`/`ConstraintItem`). Requiere spec antes de implementar.
+- Intelligence KnowledgeFactory: backend (`/api/intelligence/knowledge-factory/synthesize`) + componente (`KnowledgeFactorySynthesis.client.tsx`) existen, pero **falta page route** en `src/app/intelligence/tabs/knowledge-factory/page.tsx` para que sea accesible.
 
 ### 🔴 Pendiente / No implementado
-- Sentry/error monitoring externo (hay un import de `captureException` en mirroring.ts que no está conectado)
-- Suscripción multi-usuario real (actualmente 1 usuario)
-- Tests E2E para módulos de negocio (solo auth + smoke)
+- Sentry/error monitoring externo: SDK `@sentry/nextjs` no instalado. `src/lib/sentry.ts` es un stub que falla silente; `captureException` import en `src/lib/copygroups/mirroring.ts` es código muerto.
+- Suscripción multi-usuario real (actualmente 1 usuario).
+- Tests E2E para módulos de negocio: solo `/business/journal` cubierto (`tests/e2e/business.spec.ts` + `tests/e2e/journal.spec.ts`). Falta cobertura para decisions/health/kpis/llc/pl/roadmap/runway/sops.
+- Tests unitarios coinarb: subproyecto `coinarb/` sin test suite. `command-poller.ts`, `applyParameters`, `setTradingPaused`, WS watchdog, replay backtest sin coverage.
+- UI ack verification: `/api/algorithms/[id]/control` dispara comando pero `ControlButton` no polea `bot_command_status` — si el poller falla el usuario no se entera.
+
+### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
+- `src/lib/alphacore/conflict-resolution.ts:434–489` `rollbackToSnapshot()` implementado y testeable.
+- `src/lib/alphacore/offline/outbox.ts:189–228` outbox sync implementado (POST/PATCH/DELETE vía `buildEndpoint`+`buildMethod`).
+- P&L periódico (daily/weekly/monthly) en `getPerformanceMetrics` calcula vía `pnlForPeriod()` + `startOfUtcDay/Week/Month` helpers.
 
 ---
 
@@ -768,6 +798,46 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - Comunicación app → bot: Supabase Edge Functions (bot-maintenance) + `bot_commands` table
 - Heartbeat: `bot_instances.last_heartbeat_at`, threshold configurable por env
 - Copy Groups: sistema de mirroring de trades entre cuentas con árbol de descendientes
+
+### Coinarb ↔ Algorithms unification (Fase A/B/C — 2026-05)
+Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentro del framework `algorithms`** desde la Fase A. No es un sistema paralelo.
+
+**Identidad:**
+- Una fila en `public.algorithms` con `id='a667d400-065f-4415-9609-373c3749e5fd'`, `kind='coinarb'` (en `engine_config`), `market_type='crypto'`, `platform='fly'`, `status='live'|'paused'`.
+- `bot` + `bot_account` + `algorithm_deployments` (active) creados por migrations 099 + 100. IDs deterministas: bot `11111111-c01a-4b00-9001-000000000001`, bot_account `22222222-c01a-4b00-9002-000000000001`, deployment `33333333-c01a-4b00-9003-000000000001`.
+
+**Config flow (Fase B):**
+- `coinarb/src/core/index.ts` await `loadConfigFromDb()` antes de `buildLoop()`.
+- Lee `algorithms.parameters` (4 thresholds tunables + `arb_gap_min` jsonb) y muta `let` exports en `coinarb/src/core/config.ts`. ES module live bindings hacen que loop.ts/smc-detector.ts/etc lean el valor nuevo sin refactor.
+- `PAPER_MODE` sigue siendo env-only (`COINARB_50X_PAPER_MODE`) como safety brake.
+
+**Hot-rotate flow (Fase C):**
+- `PUT /api/algorithms/[id]` con `parameters` jsonb dispara `bot_commands.insert(command_type='update_parameters', payload={algorithm_id, parameters})`.
+- `coinarb/src/ops/command-poller.ts` polea cada 30s: maneja `update_parameters` / `pause` / `resume`. Mutación in-memory via `applyParameters()` / `setTradingPaused()`. Ack en `bot_commands.status` + `bot_command_status` row.
+- Tiempo total UI→bot: ≤30s sin restart/redeploy.
+
+**Status sync (Fase #11):**
+- En cada `flushTelemetry()`, si circuit-breaker disparó / daily cap alcanzado / `TRADING_PAUSED`, el bot escribe `algorithms.status='paused'`. Sin esos: `'live'`. Debounce in-memory: solo escribe en flip.
+
+**Endpoints nuevos en este sprint:**
+| Ruta | Método | Descripción |
+|---|---|---|
+| `/api/algorithms/[id]/control` | POST | `{action:'pause'\|'resume'}` → bot_commands |
+| `/api/algorithms/[id]/telemetry` | GET | Latest `coinarb_telemetry` row (crypto-only) |
+| `/api/ops/cron/coinarb-heartbeat` | POST | Cron Vercel cada minuto, dedup 30min via app_logs.fingerprint, push si heartbeat >5min stale |
+
+**Componentes nuevos:**
+- `AlgorithmDetailsModal.client.tsx` → `CoinarbSection` con 3 paneles: status+ControlButton, TelemetryPanel (refresh 15s), Tunables form (4 scalars + 3 per-symbol arb gaps).
+- `ControlButton` POST a `/control`. `TelemetryPanel` GET a `/telemetry` con auto-refresh.
+
+**Resiliencia (Fase #7):**
+- `coinbase-ws.ts` + `binance-ws.ts`: silent-hang watchdog (60s sin mensaje → force close → reconnect) + reconnect jitter (±1s) sobre el exponential backoff existente.
+
+**Backtest (Fase #8):**
+- `coinarb/scripts/backtest.ts --days=N`: replay de N días con forward TP/SL scoring. Usa `loadHistoricalCandlesForDays()` (nuevo) que pagina vía Coinbase REST. 1m capped a 7d.
+
+**UI legacy paralela:**
+- `/intelligence/agents` sigue activa y lee `coinarb_agents` (tabla previa a la unificación). Decision pendiente: deprecar esa página y dropear la tabla, o mantenerla.
 
 ### Validación en capas
 1. **Zod schema** — valida shape y tipos del request body
