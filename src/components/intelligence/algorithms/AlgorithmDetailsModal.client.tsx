@@ -513,13 +513,61 @@ function CoinarbSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSav
   );
 }
 
+interface CommandLifecycle {
+  id: string;
+  command_type: string;
+  status: string;  // 'PENDING' | 'pending' | 'DONE' | 'FAILED'
+  ack: { status: string; message: string | null; acked_at: string | null } | null;
+}
+
 function ControlButton({ algorithmId, currentStatus, onChanged }: {
   algorithmId: string; currentStatus: string; onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [awaitingAck, setAwaitingAck] = useState(false);
   const isPaused = currentStatus !== 'live';
 
+  // After POST /control, the bot has up to ~30s to pick the command up.
+  // Poll bot_commands.status every 5s until DONE/FAILED or 60s timeout, so
+  // the user sees real ack state instead of an optimistic "Comando enviado"
+  // that may hide a dead poller. Returns the message the bot wrote.
+  async function pollAck(commandId: string, label: string): Promise<void> {
+    const startedAt = Date.now();
+    const TIMEOUT_MS = 60_000;
+    const INTERVAL_MS = 5_000;
+
+    setAwaitingAck(true);
+    try {
+      while (Date.now() - startedAt < TIMEOUT_MS) {
+        await new Promise((r) => setTimeout(r, INTERVAL_MS));
+        try {
+          const res = await fetch(`/api/algorithms/${algorithmId}/commands/recent?limit=10`, { cache: 'no-store' });
+          if (!res.ok) continue;
+          const json = await res.json();
+          const cmd = (json.commands ?? []).find((c: CommandLifecycle) => c.id === commandId);
+          if (!cmd) continue;
+          // Lifecycle status is what we wait on. ack row carries the message.
+          const lifecycleDone = cmd.status === 'DONE' || cmd.status === 'FAILED';
+          if (!lifecycleDone) continue;
+
+          if (cmd.status === 'DONE') {
+            toast.success(cmd.ack?.message ?? `${label} aplicado`);
+          } else {
+            toast.error(cmd.ack?.message ?? `${label} falló en el bot`);
+          }
+          onChanged();
+          return;
+        } catch { /* keep polling on transient errors */ }
+      }
+      toast.warning(`${label} enviado pero sin ack en 60s — verificar logs de Fly`);
+      onChanged();
+    } finally {
+      setAwaitingAck(false);
+    }
+  }
+
   async function dispatch(action: 'pause' | 'resume') {
+    const label = action === 'pause' ? 'Pause' : 'Resume';
     setBusy(true);
     try {
       const res = await fetch(`/api/algorithms/${algorithmId}/control`, {
@@ -532,10 +580,15 @@ function ControlButton({ algorithmId, currentStatus, onChanged }: {
         toast.error(json.error ?? `Error ${res.status}`);
         return;
       }
-      toast.success(json.message ?? 'Comando enviado');
-      // Status will flip on next bot tick (≤30s); refetch after a short delay
-      // so the user sees movement, but the bot is the source of truth.
-      setTimeout(onChanged, 35_000);
+      const commandId = json.command?.id as string | undefined;
+      if (!commandId) {
+        toast.warning(`${label} enviado, pero respuesta sin command id — no se puede verificar ack`);
+        setTimeout(onChanged, 35_000);
+        return;
+      }
+      toast.info(`${label} enviado — esperando ack del bot (≤60s)…`);
+      // Don't await — let the user keep using the UI while the poll runs.
+      void pollAck(commandId, label);
     } catch (e) {
       toast.error(`Error: ${e instanceof Error ? e.message : 'desconocido'}`);
     } finally {
@@ -543,19 +596,22 @@ function ControlButton({ algorithmId, currentStatus, onChanged }: {
     }
   }
 
+  const disabled = busy || awaitingAck;
+  const labelBusy = busy ? 'Enviando…' : awaitingAck ? 'Esperando ack…' : null;
+
   return (
     <button
       type="button"
       onClick={() => dispatch(isPaused ? 'resume' : 'pause')}
-      disabled={busy}
+      disabled={disabled}
       className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition disabled:opacity-50 ${
         isPaused
           ? 'bg-emerald-700 hover:bg-emerald-600'
           : 'bg-amber-700 hover:bg-amber-600'
       }`}
     >
-      {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-      {busy ? 'Enviando…' : isPaused ? 'Reanudar bot' : 'Pausar bot'}
+      {disabled ? <RefreshCw className="w-4 h-4 animate-spin" /> : isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+      {labelBusy ?? (isPaused ? 'Reanudar bot' : 'Pausar bot')}
     </button>
   );
 }

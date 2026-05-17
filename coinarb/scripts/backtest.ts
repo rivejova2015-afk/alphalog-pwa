@@ -38,14 +38,12 @@ import {
   evaluateConfluence,
   type SmcBias,
 } from '../src/analysis/smc-detector.js';
+import { scoreOutcome, STOP_PCT, FORWARD_HORIZON_5M_BARS } from '../src/backtest/scoring.js';
 
 const args = process.argv.slice(2);
 const daysArg = args.find(a => a.startsWith('--days='));
 const DAYS = daysArg ? Math.max(1, Math.min(30, Number(daysArg.split('=')[1] ?? '30'))) : null;
 const STEP_MIN = 15;                              // simulate one decision per 15 minutes
-const FORWARD_HORIZON_5M_BARS = 48;               // 4h max holding period (48 × 5m)
-const STOP_PCT = 0.005;                           // ±0.5% stop distance (matches live loop)
-const TP_PCT = STOP_PCT * RR_MIN;                 // 2R take profit
 
 // ─── Snapshot mode (legacy default) ──────────────────────────────────────────
 
@@ -182,34 +180,6 @@ function sliceByTf(full: Map<Timeframe, Candle[]>, asOfTs: number): Map<Timefram
     out.set(tf, arr.slice(0, lo));
   }
   return out;
-}
-
-/**
- * Forward-scan 5m bars from the given index for up to FORWARD_HORIZON_5M_BARS,
- * returning 'TP' if take-profit hits first, 'SL' if stop hits first, 'TIMEOUT' otherwise.
- */
-function scoreOutcome(
-  allFive: Candle[],
-  fromIdx: number,
-  direction: 'BUY' | 'SELL',
-  entryPrice: number,
-): 'TP' | 'SL' | 'TIMEOUT' {
-  const stop = direction === 'BUY' ? entryPrice * (1 - STOP_PCT) : entryPrice * (1 + STOP_PCT);
-  const target = direction === 'BUY' ? entryPrice * (1 + TP_PCT) : entryPrice * (1 - TP_PCT);
-  const lastIdx = Math.min(allFive.length - 1, fromIdx + FORWARD_HORIZON_5M_BARS);
-  for (let j = fromIdx; j <= lastIdx; j++) {
-    const c = allFive[j];
-    if (direction === 'BUY') {
-      // If both stop and target are inside the same bar, give the stop priority
-      // (conservative — real bots can't tell which hit first intrabar).
-      if (c.low  <= stop)   return 'SL';
-      if (c.high >= target) return 'TP';
-    } else {
-      if (c.high >= stop)   return 'SL';
-      if (c.low  <= target) return 'TP';
-    }
-  }
-  return 'TIMEOUT';
 }
 
 function printReplay(r: ReplayResult): void {
