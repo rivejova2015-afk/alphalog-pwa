@@ -21,7 +21,7 @@
 
 import type { Timeframe } from "@/types/backtest";
 
-export type DataSource = "yahoo" | "dukascopy" | "histdata" | "mt5" | "mt4" | "tradovate" | "cme" | "oanda";
+export type DataSource = "yahoo" | "dukascopy" | "histdata" | "mt5" | "mt4" | "tradovate" | "cme" | "oanda" | "fxratesapi";
 
 export type AssetClass =
   | "forex"           // EURUSD, GBPUSD, ...
@@ -70,18 +70,31 @@ const REGISTRY: Record<string, SymbolEntry> = {
   // señal técnica; para fidelity exacta del broker importar CSV MT4/MT5.
   XAUUSD: {
     assetClass: "metals-spot",
-    apiSources: ["yahoo"],
+    // Yahoo first (covers all TFs via GC=F futures proxy). fxratesapi as D1
+    // backup with real spot price (no futures basis) — only kicks in if
+    // Yahoo fails entirely.
+    apiSources: ["yahoo", "fxratesapi"],
     csvSources: ["mt5", "mt4", "dukascopy", "histdata"],
-    notes: "Yahoo sirve GC=F (gold futures continuo) como proxy de XAUUSD spot. Basis ~$1-5. Para fidelity exacta importar CSV de MT5 broker.",
+    notes: "Yahoo sirve GC=F (gold futures continuo) como proxy de XAUUSD spot — basis ~$1-5. fxratesapi como respaldo D1 spot real (sin basis). Para fidelity intraday exacta importar CSV de MT5 broker.",
   },
   XAGUSD: {
     assetClass: "metals-spot",
-    apiSources: ["yahoo"],
+    apiSources: ["yahoo", "fxratesapi"],
     csvSources: ["mt5", "mt4", "dukascopy", "histdata"],
-    notes: "Yahoo sirve SI=F (silver futures) como proxy de XAGUSD spot. Para fidelity exacta importar CSV.",
+    notes: "Yahoo sirve SI=F (silver futures) como proxy. fxratesapi como respaldo D1 spot real. Para fidelity exacta importar CSV.",
   },
-  XPTUSD: { assetClass: "metals-spot", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy"], notes: "Yahoo sirve PL=F (platinum futures) como proxy. Para fidelity exacta importar CSV." },
-  XPDUSD: { assetClass: "metals-spot", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy"], notes: "Yahoo sirve PA=F (palladium futures) como proxy. Para fidelity exacta importar CSV." },
+  XPTUSD: {
+    assetClass: "metals-spot",
+    apiSources: ["yahoo", "fxratesapi"],
+    csvSources: ["mt5", "mt4", "dukascopy"],
+    notes: "Yahoo sirve PL=F como proxy. fxratesapi D1 spot real como respaldo. Para fidelity exacta importar CSV.",
+  },
+  XPDUSD: {
+    assetClass: "metals-spot",
+    apiSources: ["yahoo", "fxratesapi"],
+    csvSources: ["mt5", "mt4", "dukascopy"],
+    notes: "Yahoo sirve PA=F como proxy. fxratesapi D1 spot real como respaldo. Para fidelity exacta importar CSV.",
+  },
 
   // ── Forex majors + crosses (Yahoo works, broker CSV is canonical) ─────────
   EURUSD: { assetClass: "forex", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
@@ -170,14 +183,15 @@ const REGISTRY: Record<string, SymbolEntry> = {
 // can't serve the requested resolution (e.g. CME settlement is D1 only).
 
 const SOURCE_TF_SUPPORT: Record<DataSource, Set<Timeframe>> = {
-  yahoo:     new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
-  dukascopy: new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
-  histdata:  new Set<Timeframe>(["M1"]),
-  mt5:       new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
-  mt4:       new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
-  tradovate: new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"]),
-  cme:       new Set<Timeframe>(["D1"]),
-  oanda:     new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
+  yahoo:      new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
+  dukascopy:  new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
+  histdata:   new Set<Timeframe>(["M1"]),
+  mt5:        new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
+  mt4:        new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
+  tradovate:  new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"]),
+  cme:        new Set<Timeframe>(["D1"]),
+  oanda:      new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
+  fxratesapi: new Set<Timeframe>(["D1"]),  // metales spot, single-point per day → degenerate OHLC
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────

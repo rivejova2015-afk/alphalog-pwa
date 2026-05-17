@@ -12,9 +12,9 @@ describe("resolveSymbol", () => {
   it("returns explicit entry for known symbols", () => {
     const xau = resolveSymbol("XAUUSD");
     expect(xau.assetClass).toBe("metals-spot");
-    // XAUUSD uses Yahoo via GC=F proxy (spot ticker was discontinued); CSV
-    // alternatives remain available for users who want broker fidelity.
-    expect(xau.apiSources).toEqual(["yahoo"]);
+    // XAUUSD uses Yahoo via GC=F proxy (spot ticker was discontinued), with
+    // fxratesapi as D1 spot-real fallback. CSV alternatives remain available.
+    expect(xau.apiSources).toEqual(["yahoo", "fxratesapi"]);
     expect(xau.notes).toContain("GC=F");
   });
 
@@ -44,9 +44,12 @@ describe("resolveSymbol", () => {
 });
 
 describe("getApiSourcesForTf", () => {
-  it("XAUUSD returns [yahoo] via GC=F proxy for any TF Yahoo supports", () => {
+  it("XAUUSD M1 returns only [yahoo] (fxratesapi is D1-only, filtered out)", () => {
     expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual(["yahoo"]);
-    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["yahoo"]);
+  });
+
+  it("XAUUSD D1 returns [yahoo, fxratesapi] — Yahoo first, fxratesapi backup", () => {
+    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["yahoo", "fxratesapi"]);
   });
 
   it("EURUSD returns yahoo for any TF it supports", () => {

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
-const SOURCES = ["mt4", "mt5", "dukascopy", "histdata", "tradovate", "yahoo", "cme", "oanda"] as const;
+const SOURCES = ["mt4", "mt5", "dukascopy", "histdata", "tradovate", "yahoo", "cme", "oanda", "fxratesapi"] as const;
 
 const barSchema = z.object({
   ts: z.string(),
