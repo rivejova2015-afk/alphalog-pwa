@@ -187,7 +187,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
                         <div className="text-right mr-3">
                           <div className="text-white">${cost.amount.toFixed(2)}</div>
                         </div>
-                        <button onClick={() => setConfirmDeleteId(cost.id)} className="p-1 text-red-400">
+                        <button onClick={() => setConfirmDeleteId(cost.id)} className="p-1 text-red-400" aria-label="Eliminar costo">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>

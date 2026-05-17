@@ -105,6 +105,11 @@ export default function EvidenceVault() {
 
   const [formData, setFormData] = useState<EvidenceForm>(INITIAL_FORM);
 
+  // Client-side filters. Sólo afectan la lista visible — no re-fetch del API.
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "image" | "pdf" | "other">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | Evidence["validation_status"]>("all");
+
   const fetchAccounts = useCallback(async () => {
     try {
       const response = await fetch("/api/accounts");
@@ -219,6 +224,39 @@ export default function EvidenceVault() {
     if (!formData.accountId) return trades;
     return trades.filter((trade) => trade.account_id === formData.accountId);
   }, [formData.accountId, trades]);
+
+  const filteredEvidence = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return evidence.filter((item) => {
+      // Status filter
+      if (filterStatus !== "all" && item.validation_status !== filterStatus) return false;
+
+      // Type filter
+      if (filterType !== "all") {
+        const mime = item.mime_type ?? "";
+        const path = item.file_path || item.image_path || "";
+        const isImage = mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(path);
+        const isPdf = mime === "application/pdf" || /\.pdf$/i.test(path);
+        if (filterType === "image" && !isImage) return false;
+        if (filterType === "pdf" && !isPdf) return false;
+        if (filterType === "other" && (isImage || isPdf)) return false;
+      }
+
+      // Text search across title + notes + linked account/trade
+      if (q) {
+        const haystack = [
+          item.title ?? "",
+          item.user_notes ?? "",
+          item.account?.name ?? "",
+          item.trade?.symbol ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [evidence, search, filterType, filterStatus]);
 
   const isSelectedEvidenceImage = useMemo(() => {
     if (!selectedEvidence) return false;
@@ -434,15 +472,60 @@ export default function EvidenceVault() {
         </div>
       )}
 
+      {/* Filtros */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar título, notas, cuenta o símbolo…"
+          className="flex-1 min-w-[200px] rounded border border-slate-600 bg-slate-700/50 px-3 py-2 text-sm text-white placeholder-slate-400"
+          aria-label="Buscar evidencia"
+        />
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+          className="rounded border border-slate-600 bg-slate-700/50 px-3 py-2 text-sm text-white"
+          aria-label="Filtrar por tipo"
+        >
+          <option value="all">Todos los tipos</option>
+          <option value="image">Imágenes</option>
+          <option value="pdf">PDFs</option>
+          <option value="other">Otros</option>
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+          className="rounded border border-slate-600 bg-slate-700/50 px-3 py-2 text-sm text-white"
+          aria-label="Filtrar por estado"
+        >
+          <option value="all">Todos los estados</option>
+          <option value="needs_review">Necesita revisión</option>
+          <option value="valid">Válida</option>
+          <option value="invalid">Inválida</option>
+        </select>
+        {(search || filterType !== "all" || filterStatus !== "all") && (
+          <button
+            onClick={() => { setSearch(""); setFilterType("all"); setFilterStatus("all"); }}
+            className="rounded px-2 py-2 text-xs text-slate-400 hover:text-slate-100"
+          >
+            Limpiar
+          </button>
+        )}
+        <span className="text-xs text-slate-500">{filteredEvidence.length} / {evidence.length}</span>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           {loading ? (
             <div className="text-slate-400">Cargando evidencia...</div>
           ) : evidence.length === 0 ? (
             <div className="py-8 text-center text-slate-400">No hay evidencia guardada.</div>
+          ) : filteredEvidence.length === 0 ? (
+            <div className="py-8 text-center text-slate-400">Ningún resultado con los filtros activos.</div>
           ) : (
             <div className="max-h-96 space-y-2 overflow-y-auto">
-              {evidence.map((item) => (
+              {filteredEvidence.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => setSelectedEvidence(item)}

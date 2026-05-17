@@ -12,7 +12,7 @@ import { QuantModelsPanel } from './QuantModelsPanel';
 import { OpenPositionsPanel } from './OpenPositionsPanel.client';
 import { BacktestPanel } from './BacktestPanel.client';
 import { EngineBacktestPanel } from './EngineBacktestPanel.client';
-import { Badge } from '@/components/shared/Badge';
+import { Badge } from '@/components/ui/badge';
 import AlgorithmDetailsModal from './AlgorithmDetailsModal.client';
 
 type MarketType = 'forex' | 'futures' | 'options' | 'crypto';
@@ -113,8 +113,8 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
       {algos.map((algo) => {
         const isOpen = expanded === algo.id;
         const currentStatus = statuses[algo.id] ?? algo.status;
-        const statusVariant =
-          currentStatus === 'ACTIVE' ? 'success' : currentStatus === 'ERROR' ? 'error' : 'warning';
+        const statusVariant: 'running' | 'error' | 'warning' =
+          currentStatus === 'ACTIVE' ? 'running' : currentStatus === 'ERROR' ? 'error' : 'warning';
 
         return (
           <div

@@ -264,7 +264,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
                     <div key={it.id} className="flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
                       <div className="text-sm text-slate-300">{it.label}</div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => setConfirmDeleteItemId(it.id)} className="p-1 text-red-400 hover:text-red-300">
+                        <button onClick={() => setConfirmDeleteItemId(it.id)} className="p-1 text-red-400 hover:text-red-300" aria-label="Eliminar ítem">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>

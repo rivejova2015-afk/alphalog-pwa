@@ -1,7 +1,7 @@
 'use client';
 
 import { Pause, Play, Settings } from 'lucide-react';
-import { Badge } from '@/components/shared/Badge';
+import { Badge } from '@/components/ui/badge';
 
 interface AgentCardProps {
   id: string;
@@ -33,8 +33,8 @@ export function AgentCard({
   onPause,
   onSettings,
 }: AgentCardProps) {
-  const statusVariant =
-    status === 'ACTIVE' ? 'success' : status === 'ERROR' ? 'error' : 'warning';
+  const statusVariant: 'running' | 'error' | 'warning' =
+    status === 'ACTIVE' ? 'running' : status === 'ERROR' ? 'error' : 'warning';
 
   return (
     <div className="bg-[#151b28] border border-[#1f2937] rounded-lg p-4 hover:border-[#22d3ee]/30 transition-colors">

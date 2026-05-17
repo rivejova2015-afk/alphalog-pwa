@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ProgressDistributionDonut } from "@/components/map-hot/ProgressDistributionDonut";
 import { ProgressTimeframeTable } from "@/components/map-hot/ProgressTimeframeTable";
 import { AtRiskGoalsList } from "@/components/map-hot/AtRiskGoalsList";
+import { GoalHistoryChart } from "@/components/map-hot/GoalHistoryChart.client";
 
 type GoalRow = {
   id: string;
@@ -58,6 +59,17 @@ export default async function ProgressPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <ProgressDistributionDonut goals={goals} />
         <ProgressTimeframeTable goals={goals} />
+      </div>
+
+      <div className="mb-4">
+        <GoalHistoryChart
+          goals={goals.map((g) => ({
+            id: g.id,
+            name: g.name,
+            target_value: g.target_value,
+            unit: g.unit,
+          }))}
+        />
       </div>
 
       <AtRiskGoalsList goals={goals} />

@@ -1,5 +1,5 @@
 import { formatDate } from '@/utils/formatters';
-import { Badge } from '@/components/shared/Badge';
+import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 
 interface DecisionTask {
@@ -65,9 +65,9 @@ const DEMO_DECISIONS: Decision[] = [
 ];
 
 const STATUS_CONFIG = {
-  ACTIVE: { variant: 'success' as const, icon: CheckCircle2, color: '#34d399' },
-  COMPLETED: { variant: 'info' as const, icon: CheckCircle2, color: '#22d3ee' },
-  PENDING: { variant: 'warning' as const, icon: Clock, color: '#eab308' },
+  ACTIVE:    { variant: 'running' as const, icon: CheckCircle2, color: '#34d399' },
+  COMPLETED: { variant: 'default' as const, icon: CheckCircle2, color: '#22d3ee' },
+  PENDING:   { variant: 'warning' as const, icon: Clock,        color: '#eab308' },
 };
 
 export function DecisionsTimeline({ decisions = DEMO_DECISIONS }: DecisionsTimelineProps) {

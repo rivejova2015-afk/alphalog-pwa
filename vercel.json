@@ -53,6 +53,10 @@
     {
       "path": "/api/cron/algorithms/tradovate-poll",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/map-hot/snapshot",
+      "schedule": "5 0 * * *"
     }
   ]
 }

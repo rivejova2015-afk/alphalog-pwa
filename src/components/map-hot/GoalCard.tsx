@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Badge } from '@/components/shared/Badge';
+import { Badge } from '@/components/ui/badge';
 import { Target, TrendingUp, Calendar, Edit2, Trash2 } from 'lucide-react';
 
 type GoalStatus = 'ON_TRACK' | 'BELOW_PACE' | 'EXCEEDED' | 'WARNING';
@@ -32,9 +32,9 @@ const algoStatusColor = (status: string | null): string => {
   return '#475569';
 };
 
-const STATUS_CONFIG: Record<GoalStatus, { variant: 'success' | 'warning' | 'error' | 'info'; color: string }> = {
-  ON_TRACK:   { variant: 'success', color: '#34d399' },
-  EXCEEDED:   { variant: 'info',    color: '#22d3ee' },
+const STATUS_CONFIG: Record<GoalStatus, { variant: 'running' | 'warning' | 'error' | 'default'; color: string }> = {
+  ON_TRACK:   { variant: 'running', color: '#34d399' },
+  EXCEEDED:   { variant: 'default', color: '#22d3ee' },
   BELOW_PACE: { variant: 'warning', color: '#eab308' },
   WARNING:    { variant: 'error',   color: '#ef4444' },
 };

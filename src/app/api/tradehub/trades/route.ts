@@ -10,6 +10,7 @@ import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { asString } from "@/lib/validation/nullGuards";
 import { autoFixTradeCreate } from "@/lib/validation/autoFix";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * GET /api/tradehub/trades
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      console.error("Error fetching trades:", error);
+      logError("TradeHub", { component: "GET trades", message: "Fetch error", error: error.message });
       await recordBugFromRequest(request, {
         userId: userData.user.id,
         status: 500,
@@ -142,7 +143,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradehub/trades:", err);
+    logError("TradeHub", { component: "GET trades", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
           changes: { auto_fix: fixed.changes },
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log auto-fix:", e));
+      ).catch(e => logWarn("TradeHub", "Audit: failed to log auto-fix", { error: String(e) }));
     }
 
     const validation = validatePayloadSafe(tradeCreateSchema, fixed.data);
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
           errorMessage: `Validation failed: ${Object.values(validation.errors).join("; ")}`,
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log validation error:", e));
+      ).catch(e => logWarn("TradeHub", "Audit: failed to log validation error", { error: String(e) }));
 
       return NextResponse.json(
         validationErrorResponse(validation.errors),
@@ -284,7 +285,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Error creating trade:", error);
+      logError("TradeHub", { component: "POST trades", message: "Create error", error: error.message });
       await recordBugFromRequest(request, {
         userId: userData.user.id,
         status: 500,
@@ -304,7 +305,7 @@ export async function POST(request: NextRequest) {
         userId: userData.user.id,
       });
     } catch (mirrorError) {
-      console.warn("[TradeHub] Mirroring failed:", mirrorError);
+      logWarn("TradeHub", "Mirroring failed", { error: String(mirrorError) });
     }
 
     const progressUpdate = await onTradeClosedSaved(supabase, userData.user.id, {
@@ -327,7 +328,7 @@ export async function POST(request: NextRequest) {
         },
       },
       request
-    ).catch(e => console.warn("[Audit] Failed to log trade create:", e));
+    ).catch(e => logWarn("TradeHub", "Audit: failed to log trade create", { error: String(e) }));
 
     return NextResponse.json({
       ...data,
@@ -335,7 +336,7 @@ export async function POST(request: NextRequest) {
       progress_update: progressUpdate,
     });
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradehub/trades:", err);
+    logError("TradeHub", { component: "POST trades", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

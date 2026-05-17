@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { accountResponseSchema, accountCreateSchema } from "@/lib/validation/schemas";
 import { logError, logWarn } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 /**
  * GET /api/accounts?trash=false
@@ -243,6 +244,11 @@ export async function POST(request: NextRequest) {
     if (!contractResult.ok) {
       logWarn("Accounts", "ContractGuard POST violation", { errors: contractResult.errors });
     }
+
+    await logAuditFromRequest(
+      { userId: userData.user.id, action: "create", resourceType: "account", resourceId: account.id, status: "success" },
+      request
+    );
 
     return NextResponse.json(account, { status: 201 });
   } catch (err: unknown) {

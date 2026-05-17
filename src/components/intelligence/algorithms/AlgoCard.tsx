@@ -1,4 +1,4 @@
-import { Badge } from '@/components/shared/Badge';
+import { Badge } from '@/components/ui/badge';
 
 type MarketType = 'forex' | 'futures' | 'options' | 'crypto';
 type Direction  = 'long' | 'short' | 'both';
@@ -48,8 +48,8 @@ export function AlgoCard({
   maxDrawdown,
   onClick,
 }: AlgoCardProps) {
-  const statusVariant =
-    status === 'ACTIVE' ? 'success' : status === 'ERROR' ? 'error' : 'warning';
+  const statusVariant: 'running' | 'error' | 'warning' =
+    status === 'ACTIVE' ? 'running' : status === 'ERROR' ? 'error' : 'warning';
 
   const mStyle = MARKET_STYLE[marketType];
 

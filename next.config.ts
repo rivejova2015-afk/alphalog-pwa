@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 import withPWA from "next-pwa";
 import runtimeCaching from "next-pwa/cache";
 import { withSentryConfig } from "@sentry/nextjs";
+import bundleAnalyzer from "@next/bundle-analyzer";
+
+// Wrap the config in `withBundleAnalyzer` when ANALYZE=true is set. Run with:
+//   ANALYZE=true npm run build
+// Outputs reports at .next/analyze/{client.html,server.html}.
+const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === "true" });
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -131,7 +137,7 @@ const withPWAConfig = withPWA({
 // Sentry build wrapper. Without SENTRY_AUTH_TOKEN it still works — the
 // webpack plugin warns and skips source-map upload but the build succeeds.
 // `silent: true` suppresses noise in local dev.
-export default withSentryConfig(withPWAConfig(nextConfig), {
+export default withSentryConfig(withBundleAnalyzer(withPWAConfig(nextConfig)), {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,

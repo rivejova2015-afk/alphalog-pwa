@@ -6,12 +6,13 @@ import { journalEntryResponseSchema, journalEntrySchema, validatePayloadSafe, va
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { autoFixJournalEntry } from "@/lib/validation/autoFix";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { logError, logWarn } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value) || "";
   } catch (error) {
-    console.warn("[Journal] Decrypt failed:", error);
+    logWarn("Journal", "Decrypt failed", { component: "safeDecrypt", error: String(error) });
     return value || "";
   }
 };
@@ -20,7 +21,7 @@ const safeEncrypt = (value: string) => {
   try {
     return encryptText(value);
   } catch (error) {
-    console.error("[Journal] Encrypt failed:", error);
+    logError("Journal", { component: "safeEncrypt", message: "Encrypt failed", error: String(error) });
     return null;
   }
 };
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
       .limit(50);
 
     if (error) {
-      console.error("[Journal] Fetch error:", error);
+      logError("Journal", { component: "GET", message: "Fetch error", error: error.message });
       await recordBugFromRequest(request, {
         userId: userData.user.id,
         status: 500,
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (error) {
-    console.error("[Journal] GET error:", error);
+    logError("Journal", { component: "GET", message: "Unexpected error", error: String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
           changes: { auto_fix: fixed.changes },
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log auto-fix:", e));
+      ).catch(e => logWarn("Journal", "Audit: failed to log auto-fix", { error: String(e) }));
     }
 
     const validation = validatePayloadSafe(journalEntrySchema, fixed.data);
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
           errorMessage: `Validation failed: ${Object.values(validation.errors).join("; ")}`,
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log validation error:", e));
+      ).catch(e => logWarn("Journal", "Audit: failed to log validation error", { error: String(e) }));
 
       return NextResponse.json(
         validationErrorResponse(validation.errors),
@@ -208,14 +209,14 @@ export async function POST(request: NextRequest) {
 
     if (error || !data) {
       if (error?.code === "42501") {
-        console.warn("[Journal] Insert blocked by RLS policy:", error.message);
+        logWarn("Journal", "Insert blocked by RLS policy", { error: error.message });
         return NextResponse.json(
           { error: "No tienes permisos para crear entradas de journal. Verifica la politica RLS en Supabase." },
           { status: 403 }
         );
       }
 
-      console.error("[Journal] Insert error:", error);
+      logError("Journal", { component: "POST", message: "Insert error", error: error?.message ?? "no data" });
       await recordBugFromRequest(request, {
         userId: userData.user.id,
         status: 500,
@@ -236,7 +237,7 @@ export async function POST(request: NextRequest) {
         changes: { mood, tags, is_private: contentPayload.is_private },
       },
       request
-    ).catch(e => console.warn("[Audit] Failed to log journal create:", e));
+    ).catch(e => logWarn("Journal", "Audit: failed to log journal create", { error: String(e) }));
 
     const responsePayload = {
       id: data.id,
@@ -282,7 +283,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    console.error("[Journal] POST error:", error);
+    logError("Journal", { component: "POST", message: "Unexpected error", error: String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -319,18 +320,18 @@ export async function DELETE(request: NextRequest) {
       .eq("user_id", userData.user.id);
 
     if (error) {
-      console.error("[Journal] Delete error:", error);
+      logError("Journal", { component: "DELETE", message: "Delete error", error: error.message });
       return NextResponse.json({ error: "Failed to delete entry" }, { status: 500 });
     }
 
     logAuditFromRequest(
       { userId: userData.user.id, action: "delete", resourceType: "journal", resourceId: id, status: "success" },
       request
-    ).catch((e) => console.warn("[Audit] journal delete log failed:", e));
+    ).catch((e) => logWarn("Journal", "Audit: journal delete log failed", { error: String(e) }));
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("[Journal] DELETE error:", error);
+    logError("Journal", { component: "DELETE", message: "Unexpected error", error: String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
