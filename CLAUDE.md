@@ -711,6 +711,13 @@ RUNWAY_THRESHOLD_MONTHS=3
 RATE_LIMIT_WINDOW_SECONDS=60
 RATE_LIMIT_MAX=120
 NODE_ENV=production
+
+# Tradovate dispatcher cron (Sprint A). 'shadow' (default) loggea decisiones
+# en cme_signals (status='skipped', reject_reason='shadow_mode') pero NO
+# coloca órdenes reales en Tradovate. Flippear a 'live' SOLO después de
+# validar shadow logs. Cualquier valor que no sea 'live' (incluyendo typos
+# y string vacío) se interpreta como shadow — defensa contra accidentes.
+DISPATCH_MODE=shadow
 ```
 
 ### Testing

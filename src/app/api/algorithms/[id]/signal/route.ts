@@ -57,7 +57,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     const { data: algo, error: algoErr } = await supabase
       .from("algorithms")
-      .select("id, user_id, name, status, engine_config, parameters, instrument, lot_size, risk_percent")
+      .select("id, user_id, name, status, platform, engine_config, parameters, instrument, lot_size, risk_percent")
       .eq("id", id)
       .eq("user_id", user.id)
       .is("deleted_at", null)
@@ -65,6 +65,24 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 
     if (algoErr || !algo) {
       return NextResponse.json({ error: "Algorithm not found" }, { status: 404 });
+    }
+
+    // Platform guard — this endpoint is the EA polling path for MT4/MT5 only.
+    // Tradovate/IBKR algos are dispatched server-side via cron (see
+    // /api/cron/algorithms/tradovate-poll). Returning HOLD here prevents a
+    // mis-paired EA from double-firing an order that the dispatcher already
+    // owns.
+    const platform = (algo as { platform?: string }).platform;
+    if (platform && platform !== "MT4" && platform !== "MT5") {
+      return NextResponse.json({
+        action: "HOLD",
+        lots: 0,
+        confidence: 0,
+        signalId: "",
+        reason: `wrong_platform:${platform}_dispatched_server_side`,
+        modules: [],
+        algorithm: { id: algo.id, name: algo.name, status: algo.status },
+      }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
     }
 
     const cfg = algo.engine_config as EngineConfig | null;
