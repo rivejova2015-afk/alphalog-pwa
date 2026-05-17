@@ -1751,10 +1751,15 @@ function RegimeTimeline({ data }: { data: RegimeSnapshots | null }) {
   const current = data?.current ?? null;
 
   // Build segments: from each point until the next, paint a horizontal bar.
+  // End the timeline at the most recent data point (NOT Date.now, which would
+  // make this component impure during render and trip React Compiler purity
+  // rules). For live data this is functionally equivalent — the last point is
+  // ~now anyway — and for stale data it correctly shrinks the bar to match.
   const segments = (() => {
     if (points.length === 0) return [];
     const start = new Date(points[0].capturedAt).getTime();
-    const end = Math.max(start + 60_000, Date.now());
+    const lastPointTime = new Date(points[points.length - 1].capturedAt).getTime();
+    const end = Math.max(start + 60_000, lastPointTime);
     const span = end - start;
     return points.map((p, i) => {
       const t0 = new Date(p.capturedAt).getTime();

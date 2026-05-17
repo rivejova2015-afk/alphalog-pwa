@@ -6,11 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 
 function resolveFallback(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "/dashboard";
-  if (pathname.startsWith("/trading")) return "/trading";
   if (pathname.startsWith("/business")) return "/business";
   if (pathname.startsWith("/intelligence")) return "/intelligence";
   if (pathname.startsWith("/inbox")) return "/inbox";
-  if (pathname.startsWith("/map")) return "/map";
+  if (pathname.startsWith("/map-hot")) return "/map-hot";
+  if (pathname.startsWith("/securities")) return "/securities/cybersec";
   if (pathname.startsWith("/auth")) return "/auth";
   return "/dashboard";
 }

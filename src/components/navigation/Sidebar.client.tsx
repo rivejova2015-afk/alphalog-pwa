@@ -11,13 +11,15 @@ import {
   Flame,
   LayoutDashboard,
   Mail,
+  ShieldCheck,
 } from "lucide-react";
 
 const menuItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Intelligence", href: "/intelligence", icon: Brain },
   { label: "Business", href: "/business", icon: Building2 },
-  { label: "Map Hot", href: "/map", icon: Flame },
+  { label: "Map Hot", href: "/map-hot", icon: Flame },
+  { label: "Securities", href: "/securities", icon: ShieldCheck },
   { label: "Inbox", href: "/inbox", icon: Mail },
 ];
 
