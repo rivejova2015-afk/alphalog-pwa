@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import withPWA from "next-pwa";
 import runtimeCaching from "next-pwa/cache";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -124,4 +125,16 @@ const withPWAConfig = withPWA({
   },
 });
 
-export default withPWAConfig(nextConfig);
+// Sentry build wrapper. Without SENTRY_AUTH_TOKEN it still works — the
+// webpack plugin warns and skips source-map upload but the build succeeds.
+// `silent: true` suppresses noise in local dev.
+export default withSentryConfig(withPWAConfig(nextConfig), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  sourcemaps: { disable: false, deleteSourcemapsAfterUpload: true },
+  disableLogger: true,
+  widenClientFileUpload: true,
+  tunnelRoute: "/monitoring",  // bypass ad-blockers for browser errors
+});

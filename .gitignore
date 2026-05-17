@@ -22,9 +22,14 @@ tests/e2e/.auth/
 /.next/
 /out/
 public/workbox-*.js
+public/workbox-*.js.map
 public/sw.js
+public/sw.js.map
 public/fallback-*.js
 public/worker-*.js
+
+# Sentry
+.sentryclirc
 
 # production
 /build

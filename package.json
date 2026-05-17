@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.5",
+    "@sentry/nextjs": "^10.53.1",
     "@simplewebauthn/browser": "^11.0.0",
     "@simplewebauthn/server": "^11.0.0",
     "@supabase/ssr": "^0.8.0",

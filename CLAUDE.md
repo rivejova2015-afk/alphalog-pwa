@@ -681,6 +681,20 @@ QSTASH_BASE_URL=
 OPENAI_API_KEY=             # Para terminal/evidence/generate y reports
 ```
 
+### Observability (Sentry)
+```bash
+# Runtime DSNs. Vacíos = SDK no-op (sin errores, sin events).
+SENTRY_DSN=                            # Server-side init (Node + edge)
+NEXT_PUBLIC_SENTRY_DSN=                # Browser init
+
+# Build-time (Vercel CI). Opcionales — sin estos el build pasa pero no
+# se suben source maps a Sentry (los stack traces salen minificados).
+SENTRY_ORG=
+SENTRY_PROJECT=
+SENTRY_AUTH_TOKEN=
+```
+Init en `sentry.client.config.ts` / `sentry.server.config.ts` / `sentry.edge.config.ts` con `tracesSampleRate=0.05–0.10`. Tunnel route `/monitoring` configurado en `next.config.ts` para bypass de ad-blockers en errores del browser. `src/lib/sentry.ts` exporta `captureException`+`captureMessage` con la API del stub histórico (compat con `src/lib/copygroups/mirroring.ts`).
+
 ### Config y Feature Flags
 ```bash
 NEXT_PUBLIC_APP_URL=https://alphalog.io

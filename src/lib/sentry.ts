@@ -1,24 +1,20 @@
+// Sentry wrapper — preserves the legacy stub's API surface so existing callers
+// (src/lib/copygroups/mirroring.ts and any future ones) keep compiling, but
+// now delegates to the real @sentry/nextjs SDK initialized in
+// sentry.{client,server,edge}.config.ts.
+//
+// When NEXT_PUBLIC_SENTRY_DSN / SENTRY_DSN env vars are unset, the underlying
+// Sentry init() short-circuits — these calls become no-ops (no errors thrown,
+// no events sent). That keeps local dev clean of false signals.
+
+import * as Sentry from '@sentry/nextjs';
+
 export type SentryContext = Record<string, unknown>;
 
-type SentryLike = {
-  captureMessage?: (message: string, context?: { extra?: SentryContext }) => void;
-  captureException?: (error: unknown, context?: { extra?: SentryContext }) => void;
+export const captureMessage = (message: string, context?: SentryContext): void => {
+  Sentry.captureMessage(message, context ? { extra: context } : undefined);
 };
 
-const getSentry = (): SentryLike | null => {
-  const globalRef = typeof window !== "undefined" ? window : globalThis;
-  const sentry = (globalRef as typeof globalThis & { Sentry?: SentryLike }).Sentry;
-  return sentry ?? null;
-};
-
-export const captureMessage = (message: string, context?: SentryContext) => {
-  const sentry = getSentry();
-  if (!sentry?.captureMessage) return;
-  sentry.captureMessage(message, context ? { extra: context } : undefined);
-};
-
-export const captureException = (error: unknown, context?: SentryContext) => {
-  const sentry = getSentry();
-  if (!sentry?.captureException) return;
-  sentry.captureException(error, context ? { extra: context } : undefined);
+export const captureException = (error: unknown, context?: SentryContext): void => {
+  Sentry.captureException(error, context ? { extra: context } : undefined);
 };
