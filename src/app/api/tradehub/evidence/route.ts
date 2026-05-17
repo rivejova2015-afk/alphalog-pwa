@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
@@ -232,7 +233,7 @@ export async function GET(request: NextRequest) {
       { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' } }
     );
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradehub/evidence:", err);
+    logError("Evidence", { component: "GET", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -442,7 +443,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(mapLegacyEvidence(data as EvidenceRow));
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradehub/evidence:", err);
+    logError("Evidence", { component: "POST", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

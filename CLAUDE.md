@@ -788,10 +788,12 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 
 ### 🔴 Pendiente / No implementado
 - Suscripción multi-usuario real (actualmente 1 usuario).
-- Tests E2E para módulos de negocio: solo `/business/journal` cubierto. Falta cobertura para decisions/health/kpis/llc/pl/roadmap/runway/sops.
 - Tests unitarios coinarb segunda capa: `analysis/` (smc-detector, mtf-analyzer, liquidity-map, candle-builder), `validators/` (volume-delta, volume-profile, fear-greed, liquidation-heatmap), `risk/phase-manager.ts` siguen sin cobertura. Tier-1 (config, command-poller, feeds-watchdog, circuit-breaker, daily-tracker, backtest-scoring) cubierto desde sprints 3-4.
-- UI ack verification: `/api/algorithms/[id]/control` dispara comando pero `ControlButton` no polea `bot_command_status` — si el poller falla el usuario no se entera.
 - Variables Sentry pendientes en Vercel: el SDK está instalado y configurado, falta setear `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` para activar reporting. Sin DSN el wrapper hace no-op silencioso.
+- AAB drag/drop nodos: 20% madurez en `AabTreeView.client.tsx`. Bloqueado por spec UX.
+- TerminalReportsBot QStash scheduling: mencionado pero no implementado. Decidir entre construir o eliminar la mención.
+- alphacore-offline E2E: falta spec que pruebe mutation offline → reconciliación online (requiere setup complejo de IndexedDB mock).
+- console.log → logError: ~185 archivos restantes (cleanup gradual). Endpoints principales ya migrados (journal, accounts, tradehub/trades).
 
 ### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
 - `src/lib/alphacore/conflict-resolution.ts:434–489` `rollbackToSnapshot()` implementado y testeable.
@@ -803,6 +805,12 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - **UI Foundation reusable** (2026-05): `ConfirmDialog`, `Skeleton`, `EmptyState` y `Modal` exportados desde `@/components/ui`. Migrados los 8 paneles Business y EventModal de Treasury para eliminar `alert()`/`confirm()`/`prompt()` del browser → Sonner toasts + ConfirmDialog.
 - **Treasury threshold editor** (2026-05): Umbral + Anti-DD ahora editables inline con `PUT /api/treasury/configs` (antes solo lectura).
 - **Sentry instalado** (2026-05): `@sentry/nextjs` configurado vía `sentry.{client,server,edge}.config.ts` + `instrumentation.ts` + `withSentryConfig` en `next.config.ts`. `src/lib/sentry.ts` ahora es wrapper real (no stub). `logError` server-side delega automáticamente. Activación pendiente solo de env vars en Vercel.
+- **ControlButton ack verification** (2026-05): `/api/algorithms/[id]/commands/recent` retorna lifecycle status. ControlButton polea cada 5s hasta DONE/FAILED o 60s timeout, muestra estado real ACK→DONE/FAILED en lugar de toast optimista.
+- **UI Foundation + Testing** (2026-05): 13 unit tests UI con `@testing-library/react` + jsdom + polyfill `<dialog>`. Cubre `ConfirmDialog`, `Skeleton`, `EmptyState`, `ErrorBoundaryPage`. `npm run analyze` con `@next/bundle-analyzer` para inspeccionar chunks.
+- **EvidenceVault filtros** (2026-05): búsqueda full-text + filtro por tipo (image/pdf/other) + filtro por status. Contador X/N.
+- **SEO base mínimo** (2026-05): metadata en layouts de `/auth`, `/business`, `/intelligence`, `/securities`, `/health`, `/dashboard`. `src/app/robots.ts` y `src/app/sitemap.ts` con allow solo en rutas públicas.
+- **E2E coverage** (2026-05): 20 specs totales. Nuevos: `inbox.spec.ts` (4), `polyarb.spec.ts` (3), `securities.spec.ts` (7), `intelligence.spec.ts` (ampliado con mindops + knowledge-factory).
+- **CRLF normalizado** (2026-05): `git config core.autocrlf input` aplicado. Repo trabaja con LF nativo.
 - **Sprint 3 + 4: cobertura de tests críticos** (2026-05-03/04): saltó de 376 → 623 tests (+247).
   - `src/lib/bot/__tests__/` — signal-engine (quantum-math, position-sizer, session-guard), regime/hmm-engine, arbitrage (latency-detector, pulse-validator, pair-monitor, risk-guard), skills/skill-manager. ~80% del Tier-1 cubierto.
   - `src/lib/cme/__tests__/` — market-hours, tradovate (fetch mocks), vault (RPC mocks), risk-manager (chain mocks), order-executor (vault+tradovate+DB orchestration). ~95% del módulo cubierto.
@@ -943,6 +951,26 @@ Solo 3 flags públicos (via `NEXT_PUBLIC_*`):
 | `typescript` | 5 | Tipado |
 | `eslint` / `eslint-config-next` | 9 / 16.1.1 | Linting |
 | `babel-plugin-react-compiler` | 1.0.0 | React Compiler (experimental) |
+| `@testing-library/react` | 16.3.2 | UI unit tests |
+| `@testing-library/jest-dom` | 6.9.1 | Matchers para vitest (`toBeInTheDocument`, etc.) |
+| `@testing-library/user-event` | 14.6.1 | Simular interacciones de usuario |
+| `jsdom` | 29.1.1 | Environment de DOM para tests UI |
+| `@next/bundle-analyzer` | latest | `npm run analyze` para inspeccionar chunks del build |
+| `cross-env` | 10.1.0 | Setear env vars portable (Windows/Unix) en scripts |
+
+### Performance tooling
+
+```bash
+npm run analyze    # build con visualizador de chunks (.next/analyze/{client,server}.html)
+```
+
+Para inspeccionar bundle: abre `.next/analyze/client.html` en el browser tras el build. Targets sugeridos:
+- First Load JS per page < 300 KB
+- Cualquier chunk individual > 500 KB requiere code-splitting con `dynamic()`
+
+### Convenciones de idioma
+
+Código nuevo en **español** (UI strings, toasts, mensajes de error visibles). Código legacy en inglés se mantiene. **No instalar framework i18n** — overkill para 1 usuario.
 
 ---
 

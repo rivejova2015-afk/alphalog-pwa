@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Login | AlphaLog",
+  title: "Iniciar sesión — AlphaLog",
+  description: "Plataforma de gestión de trading con bot MT5, terminal de análisis y suite de inteligencia.",
 };
 
 export default function AuthLayout({

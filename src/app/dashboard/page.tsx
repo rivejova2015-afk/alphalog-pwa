@@ -1,9 +1,15 @@
 ﻿// src/app/dashboard/page.tsx
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 import DashboardPerformancePanel from "@/components/dashboard/DashboardPerformancePanel";
 import { getAccountGroups, getPerformanceMetrics } from "@/lib/dashboard/queries";
+
+export const metadata: Metadata = {
+  title: "Dashboard — AlphaLog",
+  description: "Performance overview, métricas por cuenta y enlaces a todos los hubs.",
+};
 
 export const dynamic = "force-dynamic";
 

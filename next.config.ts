@@ -145,5 +145,7 @@ export default withSentryConfig(withBundleAnalyzer(withPWAConfig(nextConfig)), {
   sourcemaps: { disable: false, deleteSourcemapsAfterUpload: true },
   disableLogger: true,
   widenClientFileUpload: true,
-  tunnelRoute: "/monitoring",  // bypass ad-blockers for browser errors
+  // tunnelRoute disabled until Sentry DSN is set in Vercel. When activating:
+  //   1. Re-enable `tunnelRoute: "/monitoring"`.
+  //   2. Sentry will auto-generate the proxy at build time.
 });

@@ -10,6 +10,7 @@ import { autoFixTradeUpdate } from "@/lib/validation/autoFix";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { asString } from "@/lib/validation/nullGuards";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
+import { logError } from "@/lib/log";
 import { resolveRouteId } from "@/lib/api/routeParams";
 
 /**
@@ -164,7 +165,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating trade:", error);
+      logError("TradeHub", { component: "PATCH trades", message: "Update error", error: error.message });
       return NextResponse.json(
         { error: "Failed to update trade" },
         { status: 500 }
@@ -250,7 +251,7 @@ export async function PATCH(
 
     return NextResponse.json(responseCheck.data);
   } catch (err: any) {
-    console.error("Error in PATCH /api/tradehub/trades/[id]:", err);
+    logError("TradeHub", { component: "PATCH trades", message: "Unexpected error", error: String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -387,7 +388,7 @@ export async function DELETE(
       .eq("user_id", userId);
 
     if (error) {
-      console.error("Error deleting trade:", error);
+      logError("TradeHub", { component: "DELETE trades", message: "Delete error", error: error.message });
       return NextResponse.json(
         { error: "Failed to delete trade" },
         { status: 500 }
@@ -406,7 +407,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error("Error in DELETE /api/tradehub/trades/[id]:", err);
+    logError("TradeHub", { component: "DELETE trades", message: "Unexpected error", error: String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

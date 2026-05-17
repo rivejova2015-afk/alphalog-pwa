@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { setupResponseSchema } from "@/lib/validation/schemas";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * GET /api/tradehub/setups
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
       .order("sort_index", { ascending: true });
 
     if (error) {
-      console.error("Error fetching setups:", error);
+      logError("Setups", { component: "GET", message: "Fetch error", error: error.message });
       return NextResponse.json(
         { error: "Failed to fetch setups" },
         { status: 500 }
@@ -37,14 +38,14 @@ export async function GET(request: NextRequest) {
 
     const contractResult = enforceResponseContract(setupResponseSchema.array(), result);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] GET /api/tradehub/setups contract violation:", contractResult.errors);
+      logWarn("Setups", "ContractGuard GET violation", { errors: contractResult.errors });
     }
 
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradehub/setups:", err);
+    logError("Setups", { component: "GET", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Error creating setup:", error);
+      logError("Setups", { component: "POST", message: "Create error", error: error.message });
       return NextResponse.json(
         { error: "Failed to create setup" },
         { status: 500 }
@@ -116,12 +117,12 @@ export async function POST(request: NextRequest) {
 
     const contractResult = enforceResponseContract(setupResponseSchema, data);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] POST /api/tradehub/setups contract violation:", contractResult.errors);
+      logWarn("Setups", "ContractGuard POST violation", { errors: contractResult.errors });
     }
 
     return NextResponse.json(data);
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradehub/setups:", err);
+    logError("Setups", { component: "POST", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
