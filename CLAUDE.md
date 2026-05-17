@@ -767,7 +767,9 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - Loading skeletons en AccountComparisonTable, TradeHubOverviewWidget
 
 **Testing**
-- Vitest: 19 unit tests (encryption, timingSafeEqual, xpConfig)
+- Vitest: 562 unit tests across 47 files (encryption, timingSafeEqual, xpConfig, bot/* signal-engine + arbitrage + regime + skills, cme/* market-hours + tradovate + vault + risk-manager + order-executor, quality-gates, alphashield, treasury, backtest, map-hot)
+- Coinarb subproject: 61 tests across 7 files (config, command-poller, feeds-watchdog, backtest-scoring, config-pause, circuit-breaker, daily-tracker)
+- Total combinado: 623 tests verde
 - Playwright E2E: auth, smoke, navigation, mobile-layout-fit, api-health
 
 **Features**
@@ -780,14 +782,14 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 
 ### ⚠️ Parcialmente implementado / TODOs conocidos
 
-- Copy Groups: API completa (6 endpoints en `/api/copy-groups/*`) pero la **UI dedicada está ausente** — el grafo solo se consume desde AAB (`/dashboard/tradehub/accounts/aab`). El endpoint `/graph` no tiene panel propio.
+- Copy Groups: ya tiene UI dedicada (sprint 3 — `/dashboard/copy-groups` lista + `/dashboard/copy-groups/[id]` detalle con grafo SVG + AabRightPanel). Pendiente: link directo desde MainNav (actualmente se accede solo por URL o desde el flujo AAB).
 - Componentes UI duplicados entre `src/components/ui/` (canónico, lowercase) y `src/components/shared/` (legacy, PascalCase). Conviven; APIs distintas en `Badge`. Cleanup futuro de imports + eliminar duplicados de `shared/`.
 - Operations panel (`/business/operations`) es solo nav-hub (40% madurez). Pendiente convertir en mini-dashboard agregando # decisions pendientes, # SOPs por hacer, último P&L, runway actual.
 
 ### 🔴 Pendiente / No implementado
 - Suscripción multi-usuario real (actualmente 1 usuario).
 - Tests E2E para módulos de negocio: solo `/business/journal` cubierto. Falta cobertura para decisions/health/kpis/llc/pl/roadmap/runway/sops.
-- Tests unitarios coinarb: subproyecto `coinarb/` sin test suite. `command-poller.ts`, `applyParameters`, `setTradingPaused`, WS watchdog, replay backtest sin coverage.
+- Tests unitarios coinarb segunda capa: `analysis/` (smc-detector, mtf-analyzer, liquidity-map, candle-builder), `validators/` (volume-delta, volume-profile, fear-greed, liquidation-heatmap), `risk/phase-manager.ts` siguen sin cobertura. Tier-1 (config, command-poller, feeds-watchdog, circuit-breaker, daily-tracker, backtest-scoring) cubierto desde sprints 3-4.
 - UI ack verification: `/api/algorithms/[id]/control` dispara comando pero `ControlButton` no polea `bot_command_status` — si el poller falla el usuario no se entera.
 - Variables Sentry pendientes en Vercel: el SDK está instalado y configurado, falta setear `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` para activar reporting. Sin DSN el wrapper hace no-op silencioso.
 
@@ -801,6 +803,20 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - **UI Foundation reusable** (2026-05): `ConfirmDialog`, `Skeleton`, `EmptyState` y `Modal` exportados desde `@/components/ui`. Migrados los 8 paneles Business y EventModal de Treasury para eliminar `alert()`/`confirm()`/`prompt()` del browser → Sonner toasts + ConfirmDialog.
 - **Treasury threshold editor** (2026-05): Umbral + Anti-DD ahora editables inline con `PUT /api/treasury/configs` (antes solo lectura).
 - **Sentry instalado** (2026-05): `@sentry/nextjs` configurado vía `sentry.{client,server,edge}.config.ts` + `instrumentation.ts` + `withSentryConfig` en `next.config.ts`. `src/lib/sentry.ts` ahora es wrapper real (no stub). `logError` server-side delega automáticamente. Activación pendiente solo de env vars en Vercel.
+- **Sprint 3 + 4: cobertura de tests críticos** (2026-05-03/04): saltó de 376 → 623 tests (+247).
+  - `src/lib/bot/__tests__/` — signal-engine (quantum-math, position-sizer, session-guard), regime/hmm-engine, arbitrage (latency-detector, pulse-validator, pair-monitor, risk-guard), skills/skill-manager. ~80% del Tier-1 cubierto.
+  - `src/lib/cme/__tests__/` — market-hours, tradovate (fetch mocks), vault (RPC mocks), risk-manager (chain mocks), order-executor (vault+tradovate+DB orchestration). ~95% del módulo cubierto.
+  - `coinarb/tests/` — circuit-breaker (12) y daily-tracker (14) sumados a los 35 ya existentes.
+  - UI: `/dashboard/copy-groups` lista + detalle creados (sprint 3) — los 6 endpoints `/api/copy-groups/*` ahora son consumidos por la UI.
+  - Quality-gates table fix crítico: runner.ts + promote-to-live + quality-gates route ahora leen de `trading_algorithms` (sprint 2).
+- **Map Hot module completo end-to-end** (2026-05): pasó de UI con mock data (~35% madurez) a 95% funcional.
+  - Schema: migration `109_map_hot_schema.sql` con 3 tablas (`map_hot_goals`, `map_hot_goal_links`, `map_hot_milestones`), RLS owner-only, soft-delete, indexes parciales.
+  - API: `/api/map-hot/goals` (GET/POST) + `/api/map-hot/goals/[id]` (GET/PUT/DELETE) + `/api/map-hot/milestones` (GET/POST) + `/api/map-hot/milestones/[id]` (PUT/DELETE) + `/api/algorithms/lite` (GET liviano para selector). Todos con Zod + autoFix + contractGuard + audit + recordBugFromRequest.
+  - UI: `GoalGrid.client.tsx` (wired al API con Sonner toasts + ConfirmDialog + Skeleton + EmptyState), `FutureProgressTracker.client.tsx` (refactor del estático), `MilestoneFormModal.client.tsx`, `AlgorithmMultiSelect.client.tsx` (FK real a `algorithms`, espejo de `InstrumentMultiSelect`), `GoalCard.tsx` (chips linkeables a `/intelligence/algorithms?id=...`).
+  - `/map-hot/progress` reescrito como server component con 3 widgets: `ProgressDistributionDonut`, `ProgressTimeframeTable`, `AtRiskGoalsList`. Agregado al sidebar.
+  - Tests: 11 unit tests nuevos (`goalStatus.test.ts`, `milestoneStatus.test.ts`) + 6 E2E smoke (`tests/e2e/map-hot.spec.ts`). 573 tests totales del proyecto pasan, 0 regresiones.
+  - Helpers nuevos: `src/lib/map-hot/goalStatus.ts`, `src/lib/map-hot/milestoneStatus.ts`. Schemas Zod extendidos en `src/lib/validation/schemas.ts` (`mapHotGoalCreateSchema`, `mapHotMilestoneCreateSchema`, etc.). autoFix extendido en `src/lib/validation/autoFix.ts`.
+  - Tradermap legacy: tablas `tradermap_*` + `progress_events` + `user_level_state` + `progress_map_*` quedan en parking lot (header comment en `008_tradermap_schema.sql` y `src/lib/tradermap/progressEngine.ts`). XP/levels no replicado en Map Hot; decisión pendiente para V2.
 
 ---
 

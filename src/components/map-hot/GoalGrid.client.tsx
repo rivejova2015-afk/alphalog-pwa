@@ -1,14 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { GoalCard } from './GoalCard';
 import { GoalFormModal } from './GoalFormModal.client';
+import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 
 type GoalStatus = 'ON_TRACK' | 'BELOW_PACE' | 'EXCEEDED' | 'WARNING';
 type GoalTimeframe = 'annual' | 'quarterly' | 'monthly' | 'weekly';
 
-interface Goal {
+interface LinkedAlgorithm {
+  id: string;
+  name: string;
+  status: string | null;
+}
+
+interface ApiGoal {
+  id: string;
+  name: string;
+  timeframe: GoalTimeframe;
+  target_value: number;
+  current_value: number;
+  unit: string;
+  status: GoalStatus;
+  due_date: string | null;
+  linked_algorithms?: LinkedAlgorithm[];
+}
+
+interface UiGoal {
   id: string;
   name: string;
   timeframe: GoalTimeframe;
@@ -16,16 +36,10 @@ interface Goal {
   currentValue: number;
   status: GoalStatus;
   unit: string;
-  linkedAlgos: string[];
+  linkedAlgorithms: LinkedAlgorithm[];
+  linkedAlgoIds: string[];
   daysLeft?: number;
 }
-
-const INITIAL_GOALS: Goal[] = [
-  { id: '1', name: 'Annual Revenue Target', timeframe: 'annual', targetValue: 120000, currentValue: 67500, status: 'ON_TRACK', unit: '$', linkedAlgos: ['GoldRange Basket v3', 'ES Futures Mean Rev'], daysLeft: 267 },
-  { id: '2', name: 'Q2 Trading P&L', timeframe: 'quarterly', targetValue: 30000, currentValue: 12400, status: 'BELOW_PACE', unit: '$', linkedAlgos: ['GoldRange Basket v3'], daysLeft: 53 },
-  { id: '3', name: 'Win Rate Improvement', timeframe: 'monthly', targetValue: 70, currentValue: 68.4, status: 'ON_TRACK', unit: '', linkedAlgos: [], daysLeft: 21 },
-  { id: '4', name: 'Max Drawdown Control', timeframe: 'monthly', targetValue: 8, currentValue: 6.8, status: 'EXCEEDED', unit: '-', linkedAlgos: ['GoldRange Basket v3'], daysLeft: 21 },
-];
 
 const TIMEFRAME_ORDER: GoalTimeframe[] = ['annual', 'quarterly', 'monthly', 'weekly'];
 const TIMEFRAME_LABELS: Record<GoalTimeframe, string> = {
@@ -35,13 +49,65 @@ const TIMEFRAME_LABELS: Record<GoalTimeframe, string> = {
   weekly: 'Weekly',
 };
 
-export function GoalGrid() {
-  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
-  const [showForm, setShowForm] = useState(false);
-  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [activeFilter, setActiveFilter] = useState<GoalTimeframe | 'all'>('all');
+const daysUntil = (dueDate: string | null): number | undefined => {
+  if (!dueDate) return undefined;
+  const due = new Date(dueDate + 'T00:00:00Z').getTime();
+  if (!Number.isFinite(due)) return undefined;
+  const today = Date.now();
+  const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : 0;
+};
 
-  const handleSave = (data: {
+const apiToUi = (g: ApiGoal): UiGoal => ({
+  id: g.id,
+  name: g.name,
+  timeframe: g.timeframe,
+  targetValue: Number(g.target_value),
+  currentValue: Number(g.current_value),
+  status: g.status,
+  unit: g.unit,
+  linkedAlgorithms: g.linked_algorithms ?? [],
+  linkedAlgoIds: (g.linked_algorithms ?? []).map((a) => a.id),
+  daysLeft: daysUntil(g.due_date),
+});
+
+const readCsrf = (): string => {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(/(?:^|;\s*)al_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
+export function GoalGrid() {
+  const [goals, setGoals] = useState<UiGoal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<UiGoal | null>(null);
+  const [activeFilter, setActiveFilter] = useState<GoalTimeframe | 'all'>('all');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const loadGoals = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/map-hot/goals', { credentials: 'same-origin' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as ApiGoal[];
+      setGoals(data.map(apiToUi));
+    } catch (err) {
+      console.error('Error loading map-hot goals:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to load goals');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGoals();
+  }, [loadGoals]);
+
+  const handleSave = async (data: {
     name: string;
     timeframe: GoalTimeframe;
     target_value: number;
@@ -50,35 +116,69 @@ export function GoalGrid() {
     linked_algo_ids: string[];
     status: GoalStatus;
   }) => {
-    if (editingGoal) {
-      setGoals((prev) =>
-        prev.map((g) =>
-          g.id === editingGoal.id
-            ? { ...g, name: data.name, timeframe: data.timeframe, targetValue: data.target_value, currentValue: data.current_value, unit: data.unit, linkedAlgos: data.linked_algo_ids, status: data.status }
-            : g
-        )
-      );
-    } else {
-      const newGoal: Goal = {
-        id: Date.now().toString(),
-        name: data.name,
-        timeframe: data.timeframe,
-        targetValue: data.target_value,
-        currentValue: data.current_value,
-        status: data.status,
-        unit: data.unit,
-        linkedAlgos: data.linked_algo_ids,
-      };
-      setGoals((prev) => [newGoal, ...prev]);
+    const isEditing = Boolean(editingGoal);
+    const url = isEditing
+      ? `/api/map-hot/goals/${editingGoal!.id}`
+      : '/api/map-hot/goals';
+    const method = isEditing ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': readCsrf(),
+        },
+        body: JSON.stringify({
+          name: data.name,
+          timeframe: data.timeframe,
+          target_value: data.target_value,
+          current_value: data.current_value,
+          unit: data.unit,
+          linked_algorithm_ids: data.linked_algo_ids,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+
+      toast.success(isEditing ? 'Goal updated' : 'Goal created');
+      setEditingGoal(null);
+      await loadGoals();
+    } catch (err) {
+      console.error('Error saving goal:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to save goal');
     }
-    setEditingGoal(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/map-hot/goals/${id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'x-csrf-token': readCsrf() },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      toast.success('Goal deleted');
+      setConfirmDeleteId(null);
+      setGoals((prev) => prev.filter((g) => g.id !== id));
+    } catch (err) {
+      console.error('Error deleting goal:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete goal');
+    }
   };
 
   const filteredGoals = activeFilter === 'all'
     ? goals
     : goals.filter((g) => g.timeframe === activeFilter);
 
-  const grouped = TIMEFRAME_ORDER.reduce<Record<GoalTimeframe, Goal[]>>(
+  const grouped = TIMEFRAME_ORDER.reduce<Record<GoalTimeframe, UiGoal[]>>(
     (acc, tf) => {
       acc[tf] = filteredGoals.filter((g) => g.timeframe === tf);
       return acc;
@@ -129,8 +229,17 @@ export function GoalGrid() {
         ))}
       </div>
 
+      {/* Loading skeletons */}
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-lg" />
+          ))}
+        </div>
+      )}
+
       {/* Goals by timeframe */}
-      {TIMEFRAME_ORDER.map((tf) => {
+      {!loading && TIMEFRAME_ORDER.map((tf) => {
         const tfGoals = grouped[tf];
         if (tfGoals.length === 0) return null;
         return (
@@ -147,6 +256,7 @@ export function GoalGrid() {
                     setEditingGoal(goal);
                     setShowForm(true);
                   }}
+                  onDelete={() => setConfirmDeleteId(goal.id)}
                 />
               ))}
             </div>
@@ -154,10 +264,24 @@ export function GoalGrid() {
         );
       })}
 
-      {filteredGoals.length === 0 && (
-        <div className="text-center py-16">
-          <p className="text-[#475569] text-sm">No goals for this timeframe yet.</p>
-        </div>
+      {!loading && filteredGoals.length === 0 && (
+        <EmptyState
+          title="No goals yet"
+          message={
+            activeFilter === 'all'
+              ? 'Create your first goal to start tracking progress.'
+              : `No ${TIMEFRAME_LABELS[activeFilter as GoalTimeframe].toLowerCase()} goals yet.`
+          }
+          action={
+            <button
+              onClick={() => { setEditingGoal(null); setShowForm(true); }}
+              className="flex items-center gap-2 px-3 py-2 bg-[#eab308] hover:bg-[#d99e08] text-[#0a0e1a] text-sm font-bold rounded transition-colors"
+            >
+              <Plus size={15} />
+              New Goal
+            </button>
+          }
+        />
       )}
 
       {/* Form modal */}
@@ -171,10 +295,21 @@ export function GoalGrid() {
             targetValue: editingGoal.targetValue.toString(),
             currentValue: editingGoal.currentValue.toString(),
             unit: editingGoal.unit,
-            linkedAlgos: editingGoal.linkedAlgos.join(', '),
+            linkedAlgoIds: editingGoal.linkedAlgoIds,
           } : undefined}
         />
       )}
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteId)}
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={async () => { if (confirmDeleteId) await handleDelete(confirmDeleteId); }}
+        title="Delete goal?"
+        message="This goal will be moved to the trash. You can restore it later from the API."
+        variant="danger"
+        confirmLabel="Delete"
+      />
     </>
   );
 }

@@ -351,3 +351,95 @@ export function validationErrorResponse(errors: Record<string, string>) {
     details: errors,
   };
 }
+
+// ============================================================================
+// Map Hot module schemas (goals + milestones + algorithm links)
+// ============================================================================
+
+export const mapHotTimeframeSchema = z.enum(["annual", "quarterly", "monthly", "weekly"]);
+export const mapHotGoalStatusSchema = z.enum(["ON_TRACK", "BELOW_PACE", "EXCEEDED", "WARNING"]);
+export const mapHotMilestoneQuarterSchema = z.enum(["Q1", "Q2", "Q3", "Q4"]);
+export const mapHotMilestoneStatusSchema = z.enum(["completed", "active", "upcoming"]);
+
+export const mapHotGoalCreateSchema = z.object({
+  name: z.string().min(1, { message: "name is required" }).max(120),
+  timeframe: mapHotTimeframeSchema,
+  target_value: z.number().positive({ message: "target_value must be positive" }),
+  current_value: z.number().nonnegative().optional().default(0),
+  unit: z.string().max(8).optional().default("$"),
+  due_date: z.string().date().nullable().optional(),
+  linked_algorithm_ids: z.array(z.string().uuid()).max(20).optional().default([]),
+});
+
+export const mapHotGoalUpdateSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  timeframe: mapHotTimeframeSchema.optional(),
+  target_value: z.number().positive().optional(),
+  current_value: z.number().nonnegative().optional(),
+  unit: z.string().max(8).optional(),
+  due_date: z.string().date().nullable().optional(),
+  linked_algorithm_ids: z.array(z.string().uuid()).max(20).optional(),
+  restore: z.boolean().optional(),
+});
+
+export const mapHotLinkedAlgorithmSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  status: z.string().nullable(),
+});
+
+export const mapHotGoalResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    name: z.string(),
+    timeframe: mapHotTimeframeSchema,
+    target_value: z.number(),
+    current_value: z.number(),
+    unit: z.string(),
+    status: mapHotGoalStatusSchema,
+    due_date: z.string().nullable(),
+    sort_index: z.number(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    deleted_at: z.string().nullable(),
+    linked_algorithms: z.array(mapHotLinkedAlgorithmSchema).optional(),
+  })
+  .passthrough();
+
+export const mapHotMilestoneCreateSchema = z.object({
+  year: z.number().int().min(2020).max(2100),
+  quarter: mapHotMilestoneQuarterSchema,
+  label: z.string().min(1).max(80),
+  target_amount: z.number().positive(),
+  description: z.string().max(500).nullable().optional(),
+  status: mapHotMilestoneStatusSchema.optional().default("upcoming"),
+});
+
+export const mapHotMilestoneUpdateSchema = z.object({
+  year: z.number().int().min(2020).max(2100).optional(),
+  quarter: mapHotMilestoneQuarterSchema.optional(),
+  label: z.string().min(1).max(80).optional(),
+  target_amount: z.number().positive().optional(),
+  description: z.string().max(500).nullable().optional(),
+  status: mapHotMilestoneStatusSchema.optional(),
+  restore: z.boolean().optional(),
+});
+
+export const mapHotMilestoneResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    year: z.number(),
+    quarter: mapHotMilestoneQuarterSchema,
+    label: z.string(),
+    target_amount: z.number(),
+    description: z.string().nullable(),
+    status: mapHotMilestoneStatusSchema,
+    sort_index: z.number(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    deleted_at: z.string().nullable(),
+  })
+  .passthrough();
+

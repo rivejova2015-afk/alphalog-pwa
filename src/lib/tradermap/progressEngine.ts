@@ -1,3 +1,9 @@
+// LEGACY (parking lot — 2026-05): superseded by /map-hot (see migration 109).
+// Tables tradermap_goals + tradermap_goal_quarters + progress_events +
+// user_level_state + progress_map_* are still alive in DB and feed
+// /api/tradermap/*, but the consumer UI was redirected to /map-hot/goals via
+// next.config.ts. XP/levels gamification has no replacement in Map Hot yet —
+// keep this module + tables until that decision is made (V2 adopt vs V3 drop).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { XP_VALUES } from "./xpConfig";
 

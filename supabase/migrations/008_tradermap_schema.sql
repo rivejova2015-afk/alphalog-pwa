@@ -1,5 +1,11 @@
 -- 008_tradermap_schema.sql
 -- Sprint 5: TraderMap Goals, Progress & Level System
+-- LEGACY (parking lot — 2026-05): superseded by 109_map_hot_schema.sql for
+-- goals/milestones. These tables (tradermap_goals + tradermap_goal_quarters
+-- + progress_events + user_level_state) stay alive because XP/level
+-- gamification has no replacement in Map Hot yet. Decision pending:
+-- (a) Map Hot adopts XP/levels in V2 → keep these tables.
+-- (b) Drop gamification → DROP migration in V3.
 -- Decisiones:
 -- - Goals trimestrales con cálculos automáticos de progreso
 -- - Progress events para tracking de actividad (trades, evidencia, reportes, etc)

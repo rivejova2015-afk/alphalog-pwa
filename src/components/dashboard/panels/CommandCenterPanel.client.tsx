@@ -39,7 +39,7 @@ const AGENTS = [
   { id: 'ui-designer',       name: 'UI Designer',       model: 'Sonnet', letter: 'UD', module: 'trading',     desc: 'Responsive mobile-first, ARIA, Tailwind 4',        pct: 91 },
   { id: 'deploy-ops',        name: 'Deploy Ops',        model: 'Sonnet', letter: 'DO', module: '_vercel',     desc: 'Vercel deploys, GitHub Actions, CI/CD',            pct: 99 },
   { id: 'perf-optimizer',    name: 'Perf Optimizer',    model: 'Sonnet', letter: 'PO', module: '_db',         desc: 'Queries, bundle size, caching, CWV',               pct: 95 },
-  { id: 'test-engineer',     name: 'Test Engineer',     model: 'Sonnet', letter: 'TE', module: '_test',       desc: '19 unit tests Vitest, E2E Playwright',             pct: 85 },
+  { id: 'test-engineer',     name: 'Test Engineer',     model: 'Sonnet', letter: 'TE', module: '_test',       desc: '623 unit tests Vitest (562 root + 61 coinarb)',    pct: 92 },
   { id: 'bot-specialist',    name: 'Bot Specialist',    model: 'Sonnet', letter: 'BT', module: 'bot',         desc: 'MT5 heartbeat, telemetría, Copy Groups',           pct: 75 },
   { id: 'feature-completer', name: 'Feature Completer', model: 'Opus',   letter: 'FC', module: 'intelligence',desc: 'P&L, Copy Groups UI, ConstraintMonitor',           pct: 75 },
 ] as const;

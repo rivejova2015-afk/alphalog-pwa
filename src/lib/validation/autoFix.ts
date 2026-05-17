@@ -353,3 +353,120 @@ export const autoFixSendEmail = (input: Record<string, unknown>): AutoFixResult<
 
   return { data: output, changed: changes.length > 0, changes };
 };
+
+// ============================================================================
+// Map Hot module autoFix
+// ============================================================================
+
+const MAP_HOT_TIMEFRAMES = new Set(["annual", "quarterly", "monthly", "weekly"]);
+const MAP_HOT_QUARTERS = new Set(["Q1", "Q2", "Q3", "Q4"]);
+const MAP_HOT_MILESTONE_STATUSES = new Set(["completed", "active", "upcoming"]);
+
+export const autoFixMapHotGoal = (input: Record<string, unknown>): AutoFixResult<Record<string, unknown>> => {
+  const output: Record<string, unknown> = { ...input };
+  const changes: string[] = [];
+
+  const name = normalizeString(input.name, { trim: true });
+  if (name !== undefined) {
+    trackChange(changes, "name", input.name, name);
+    output.name = name;
+  }
+
+  const timeframe = normalizeString(input.timeframe, { trim: true, lowercase: true });
+  if (timeframe && MAP_HOT_TIMEFRAMES.has(timeframe)) {
+    trackChange(changes, "timeframe", input.timeframe, timeframe);
+    output.timeframe = timeframe;
+  }
+
+  const target = normalizeNumber(input.target_value);
+  if (target !== undefined) {
+    trackChange(changes, "target_value", input.target_value, target);
+    output.target_value = target;
+  }
+
+  const current = normalizeNumber(input.current_value);
+  if (current !== undefined) {
+    const clamped = current < 0 ? 0 : current;
+    trackChange(changes, "current_value", input.current_value, clamped);
+    output.current_value = clamped;
+  }
+
+  const unitRaw = normalizeString(input.unit, { trim: true });
+  if (unitRaw !== undefined) {
+    const unit = unitRaw || "$";
+    trackChange(changes, "unit", input.unit, unit);
+    output.unit = unit;
+  }
+
+  if (input.due_date === null) {
+    output.due_date = null;
+  } else {
+    const dueDate = normalizeDate(input.due_date);
+    if (dueDate !== undefined) {
+      trackChange(changes, "due_date", input.due_date, dueDate);
+      output.due_date = dueDate;
+    }
+  }
+
+  if (Array.isArray(input.linked_algorithm_ids)) {
+    const ids = input.linked_algorithm_ids
+      .map((id) => normalizeString(id, { trim: true }))
+      .filter((id): id is string => Boolean(id));
+    const unique = Array.from(new Set(ids));
+    if (unique.length !== input.linked_algorithm_ids.length) {
+      trackChange(changes, "linked_algorithm_ids", input.linked_algorithm_ids, unique);
+    }
+    output.linked_algorithm_ids = unique;
+  }
+
+  return { data: output, changed: changes.length > 0, changes };
+};
+
+export const autoFixMapHotMilestone = (input: Record<string, unknown>): AutoFixResult<Record<string, unknown>> => {
+  const output: Record<string, unknown> = { ...input };
+  const changes: string[] = [];
+
+  const year = normalizeNumber(input.year);
+  if (year !== undefined) {
+    const intYear = Math.floor(year);
+    trackChange(changes, "year", input.year, intYear);
+    output.year = intYear;
+  }
+
+  const quarterRaw = normalizeString(input.quarter, { trim: true, uppercase: true });
+  if (quarterRaw && MAP_HOT_QUARTERS.has(quarterRaw)) {
+    trackChange(changes, "quarter", input.quarter, quarterRaw);
+    output.quarter = quarterRaw;
+  }
+
+  const label = normalizeString(input.label, { trim: true });
+  if (label !== undefined) {
+    trackChange(changes, "label", input.label, label);
+    output.label = label;
+  }
+
+  const target = normalizeNumber(input.target_amount);
+  if (target !== undefined) {
+    trackChange(changes, "target_amount", input.target_amount, target);
+    output.target_amount = target;
+  }
+
+  if (input.description === null) {
+    output.description = null;
+  } else {
+    const description = normalizeString(input.description, { trim: true });
+    if (description !== undefined) {
+      const value = description.length > 0 ? description : null;
+      trackChange(changes, "description", input.description, value);
+      output.description = value;
+    }
+  }
+
+  const status = normalizeString(input.status, { trim: true, lowercase: true });
+  if (status && MAP_HOT_MILESTONE_STATUSES.has(status)) {
+    trackChange(changes, "status", input.status, status);
+    output.status = status;
+  }
+
+  return { data: output, changed: changes.length > 0, changes };
+};

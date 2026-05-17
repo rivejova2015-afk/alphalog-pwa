@@ -1,8 +1,15 @@
+import Link from 'next/link';
 import { Badge } from '@/components/shared/Badge';
-import { Target, TrendingUp, Calendar, Edit2 } from 'lucide-react';
+import { Target, TrendingUp, Calendar, Edit2, Trash2 } from 'lucide-react';
 
 type GoalStatus = 'ON_TRACK' | 'BELOW_PACE' | 'EXCEEDED' | 'WARNING';
 type GoalTimeframe = 'annual' | 'quarterly' | 'monthly' | 'weekly';
+
+export interface LinkedAlgorithm {
+  id: string;
+  name: string;
+  status: string | null;
+}
 
 interface GoalCardProps {
   id: string;
@@ -12,10 +19,18 @@ interface GoalCardProps {
   currentValue: number;
   status: GoalStatus;
   unit?: string;
-  linkedAlgos?: string[];
+  linkedAlgorithms?: LinkedAlgorithm[];
   daysLeft?: number;
   onEdit?: () => void;
+  onDelete?: () => void;
 }
+
+const algoStatusColor = (status: string | null): string => {
+  if (status === 'live') return '#22d3ee';
+  if (status === 'paper') return '#eab308';
+  if (status === 'paused') return '#94a3b8';
+  return '#475569';
+};
 
 const STATUS_CONFIG: Record<GoalStatus, { variant: 'success' | 'warning' | 'error' | 'info'; color: string }> = {
   ON_TRACK:   { variant: 'success', color: '#34d399' },
@@ -38,9 +53,10 @@ export function GoalCard({
   currentValue,
   status,
   unit = '',
-  linkedAlgos = [],
+  linkedAlgorithms = [],
   daysLeft,
   onEdit,
+  onDelete,
 }: GoalCardProps) {
   const cfg = STATUS_CONFIG[status];
   const progress = Math.min((currentValue / targetValue) * 100, 100);
@@ -80,6 +96,15 @@ export function GoalCard({
               aria-label="Edit goal"
             >
               <Edit2 size={13} className="text-[#475569]" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="p-1 hover:bg-[#0a0e1a] rounded transition-colors"
+              aria-label="Delete goal"
+            >
+              <Trash2 size={13} className="text-[#475569] hover:text-red-400" />
             </button>
           )}
         </div>
@@ -127,17 +152,26 @@ export function GoalCard({
         )}
       </div>
 
-      {/* Linked algos */}
-      {linkedAlgos.length > 0 && (
+      {/* Linked algorithms */}
+      {linkedAlgorithms.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-[#1f2937]">
-          {linkedAlgos.map((algo) => (
-            <span
-              key={algo}
-              className="text-[10px] px-2 py-0.5 bg-[#22d3ee]/10 border border-[#22d3ee]/20 text-[#22d3ee] rounded"
-            >
-              {algo}
-            </span>
-          ))}
+          {linkedAlgorithms.map((algo) => {
+            const color = algoStatusColor(algo.status);
+            return (
+              <Link
+                key={algo.id}
+                href={`/intelligence/algorithms?id=${algo.id}`}
+                className="text-[10px] px-2 py-0.5 rounded border transition-opacity hover:opacity-80"
+                style={{
+                  borderColor: `${color}33`,
+                  backgroundColor: `${color}15`,
+                  color,
+                }}
+              >
+                {algo.name}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

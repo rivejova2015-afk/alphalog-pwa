@@ -1,5 +1,5 @@
 import { Rocket } from "lucide-react";
-import { FutureProgressTracker } from "@/components/map-hot/FutureProgressTracker";
+import { FutureProgressTracker } from "@/components/map-hot/FutureProgressTracker.client";
 
 export default function PlanningPage() {
   return (

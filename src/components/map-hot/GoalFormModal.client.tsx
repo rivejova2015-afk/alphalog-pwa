@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { AlgorithmMultiSelect } from './AlgorithmMultiSelect.client';
+import { computeGoalStatus, type GoalStatus } from '@/lib/map-hot/goalStatus';
 
 type GoalTimeframe = 'annual' | 'quarterly' | 'monthly' | 'weekly';
-type GoalStatus = 'ON_TRACK' | 'BELOW_PACE' | 'EXCEEDED' | 'WARNING';
 
 interface GoalFormData {
   name: string;
@@ -12,7 +13,7 @@ interface GoalFormData {
   targetValue: string;
   currentValue: string;
   unit: string;
-  linkedAlgos: string;
+  linkedAlgoIds: string[];
 }
 
 interface GoalFormModalProps {
@@ -38,7 +39,7 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
     targetValue: initialData?.targetValue ?? '',
     currentValue: initialData?.currentValue ?? '0',
     unit: initialData?.unit ?? '$',
-    linkedAlgos: initialData?.linkedAlgos ?? '',
+    linkedAlgoIds: initialData?.linkedAlgoIds ?? [],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -60,12 +61,7 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
 
     setSaving(true);
     const current = parseFloat(form.currentValue) || 0;
-    const progress = current / target;
-    const status: GoalStatus =
-      progress >= 1 ? 'EXCEEDED'
-      : progress >= 0.7 ? 'ON_TRACK'
-      : progress >= 0.4 ? 'BELOW_PACE'
-      : 'WARNING';
+    const status: GoalStatus = computeGoalStatus(current, target);
 
     onSave({
       name: form.name.trim(),
@@ -73,14 +69,14 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
       target_value: target,
       current_value: current,
       unit: form.unit,
-      linked_algo_ids: form.linkedAlgos.split(',').map((s) => s.trim()).filter(Boolean),
+      linked_algo_ids: form.linkedAlgoIds,
       status,
     });
     setSaving(false);
     onClose();
   };
 
-  const set = (key: keyof GoalFormData, val: string) => {
+  const setField = <K extends keyof GoalFormData>(key: K, val: GoalFormData[K]) => {
     setForm((f) => ({ ...f, [key]: val }));
     setError('');
   };
@@ -107,7 +103,7 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
             <label className="text-xs text-[#475569] block mb-1.5">Goal Name *</label>
             <input
               value={form.name}
-              onChange={(e) => set('name', e.target.value)}
+              onChange={(e) => setField('name', e.target.value)}
               placeholder="e.g. Annual Revenue Target"
               className="w-full bg-[#151b28] border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#475569] focus:outline-none focus:border-[#eab308]/50"
             />
@@ -120,7 +116,7 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
               {TIMEFRAMES.map((tf) => (
                 <button
                   key={tf}
-                  onClick={() => set('timeframe', tf)}
+                  onClick={() => setField('timeframe', tf)}
                   className={`py-2 text-xs font-bold rounded capitalize transition-colors ${
                     form.timeframe === tf
                       ? 'bg-[#eab308] text-[#0a0e1a]'
@@ -139,7 +135,7 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
               <label className="text-xs text-[#475569] block mb-1.5">Unit</label>
               <input
                 value={form.unit}
-                onChange={(e) => set('unit', e.target.value)}
+                onChange={(e) => setField('unit', e.target.value)}
                 placeholder="$"
                 className="w-full bg-[#151b28] border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#475569] focus:outline-none focus:border-[#eab308]/50"
               />
@@ -149,7 +145,7 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
               <input
                 type="number"
                 value={form.targetValue}
-                onChange={(e) => set('targetValue', e.target.value)}
+                onChange={(e) => setField('targetValue', e.target.value)}
                 placeholder="120000"
                 className="w-full bg-[#151b28] border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#475569] focus:outline-none focus:border-[#eab308]/50"
               />
@@ -159,21 +155,19 @@ export function GoalFormModal({ onClose, onSave, initialData }: GoalFormModalPro
               <input
                 type="number"
                 value={form.currentValue}
-                onChange={(e) => set('currentValue', e.target.value)}
+                onChange={(e) => setField('currentValue', e.target.value)}
                 placeholder="0"
                 className="w-full bg-[#151b28] border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#475569] focus:outline-none focus:border-[#eab308]/50"
               />
             </div>
           </div>
 
-          {/* Linked algos */}
+          {/* Linked algorithms (FK to public.algorithms) */}
           <div>
-            <label className="text-xs text-[#475569] block mb-1.5">Linked strategies (comma separated)</label>
-            <input
-              value={form.linkedAlgos}
-              onChange={(e) => set('linkedAlgos', e.target.value)}
-              placeholder="GoldRange Basket v3, EUR Trend Follower"
-              className="w-full bg-[#151b28] border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#475569] focus:outline-none focus:border-[#eab308]/50"
+            <label className="text-xs text-[#475569] block mb-1.5">Linked algorithms</label>
+            <AlgorithmMultiSelect
+              value={form.linkedAlgoIds}
+              onChange={(next) => setField('linkedAlgoIds', next)}
             />
           </div>
 

@@ -40,6 +40,7 @@ const SECTIONS: SidebarSection[] = [
     name: 'Map Hot',
     items: [
       { label: 'Goals', href: '/map-hot/goals' },
+      { label: 'Progress', href: '/map-hot/progress' },
       { label: 'Future', href: '/map-hot/planning' },
     ],
   },
