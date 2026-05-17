@@ -1,9 +1,26 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { decryptText } from "@/lib/security/encryption";
-
-type MaybeNumber = number | string | null | undefined;
+import {
+  MOOD_SCORE_MAP,
+  DAY_MS,
+  asNumber,
+  normalizeStatus,
+  normalizeText,
+  classifyAccountType,
+  isWithinLastDays,
+  shortText,
+  isMissingTableError,
+  safeDecrypt,
+  parseJournalContent,
+  toDateKey,
+  scoreFromJournalEntry,
+  computeMoodOutcomeCorrelation,
+  buildConstraintItems,
+  withFallback,
+  type MaybeNumber,
+  type JournalLike,
+} from "./helpers";
 
 type AccountRow = {
   id: string;
@@ -152,130 +169,7 @@ export type KnowledgeFactoryData = {
   insights: InsightItem[];
 };
 
-const MOOD_SCORE_MAP: Record<string, number> = {
-  terrible: 1,
-  bad: 3,
-  neutral: 5,
-  good: 7,
-  excellent: 9,
-};
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-const asNumber = (value: MaybeNumber): number => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-};
-
-const normalizeStatus = (value: string | null | undefined): "open" | "closed" => {
-  const text = (value || "").trim().toLowerCase();
-  return text === "open" ? "open" : "closed";
-};
-
-const normalizeText = (value: string | null | undefined) =>
-  (value || "").trim().toLowerCase();
-
-const classifyAccountType = (account: AccountRow, categoryName?: string | null): "real" | "propfirm" => {
-  const role = normalizeText(account.role);
-  const category = normalizeText(categoryName);
-  const source = `${role} ${category}`;
-
-  if (
-    source.includes("propfirm") ||
-    source.includes("prop firm") ||
-    source.includes("funded") ||
-    source.includes("challenge")
-  ) {
-    return "propfirm";
-  }
-
-  return "real";
-};
-
-const isWithinLastDays = (value: string | null | undefined, days: number) => {
-  if (!value) return false;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  return date.getTime() >= Date.now() - days * DAY_MS;
-};
-
-const shortText = (value: string, max = 180) => {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= max) return normalized;
-  return `${normalized.slice(0, max - 1)}...`;
-};
-
-const isMissingTableError = (error: unknown) => {
-  const maybe = error as { code?: string; message?: string } | null;
-  return (
-    maybe?.code === "42P01" ||
-    (typeof maybe?.message === "string" &&
-      maybe.message.toLowerCase().includes("does not exist"))
-  );
-};
-
-const safeDecrypt = (value: string | null | undefined) => {
-  if (!value) return "";
-  try {
-    return decryptText(value) || "";
-  } catch {
-    return value;
-  }
-};
-
-const parseJournalContent = (value: string | null | undefined) => {
-  const decrypted = safeDecrypt(value);
-  if (!decrypted) {
-    return {
-      text: "",
-      mood_score: null as number | null,
-      action_items: [] as string[],
-      lessons_learned: "",
-    };
-  }
-  try {
-    const parsed = JSON.parse(decrypted) as Record<string, unknown>;
-    const text = typeof parsed.text === "string" ? parsed.text : decrypted;
-    const moodScore =
-      typeof parsed.mood_score === "number" && Number.isFinite(parsed.mood_score)
-        ? parsed.mood_score
-        : null;
-    const actionItems = Array.isArray(parsed.action_items)
-      ? parsed.action_items.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-      : [];
-    const lessons =
-      typeof parsed.lessons_learned === "string" ? parsed.lessons_learned : "";
-    return {
-      text,
-      mood_score: moodScore,
-      action_items: actionItems,
-      lessons_learned: lessons,
-    };
-  } catch {
-    return {
-      text: decrypted,
-      mood_score: null as number | null,
-      action_items: [] as string[],
-      lessons_learned: "",
-    };
-  }
-};
-
-const withFallback = async <T>(
-  query: PromiseLike<{ data: T | null; error: unknown }>,
-  fallback: T
-): Promise<T> => {
-  const { data, error } = await query;
-  if (error) {
-    if (isMissingTableError(error)) return fallback;
-    throw error;
-  }
-  return (data ?? fallback) as T;
-};
+// Pure helpers + types live in ./helpers (imported at the top).
 
 async function getAuthenticatedClient() {
   const supabase = await createClient();
@@ -332,130 +226,7 @@ async function getBaseRows(
   return { supabase, accounts, categories, trades, journalEntries };
 }
 
-/**
- * Extracts the date portion (YYYY-MM-DD) from an ISO datetime string.
- */
-const toDateKey = (value: string | null | undefined): string | null => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
-};
-
-/**
- * Computes the mood-outcome correlation for the last 30 days.
- *
- * For each day that has BOTH a journal entry with a mood score AND at least
- * one closed trade (by exit_date), it computes the average PnL for high-mood
- * days (score >= 7) vs low-mood days (score <= 4).
- *
- * The biasSignal indicates whether high mood correlates with better or worse
- * trading performance:
- * - 'positive': high mood days have higher avg PnL (good mood = better trading)
- * - 'negative': high mood days have lower avg PnL (possible overconfidence)
- * - 'neutral': insufficient data (< 5 days with both) or difference < 10%
- */
-function computeMoodOutcomeCorrelation(
-  journalEntries30d: JournalRow[],
-  trades30d: TradeRow[],
-  scoreFromEntry: (entry: JournalRow) => number
-): MoodOutcomeCorrelation {
-  const neutralResult: MoodOutcomeCorrelation = {
-    highMoodAvgPnl: null,
-    lowMoodAvgPnl: null,
-    biasSignal: "neutral",
-    correlationSampleSize: 0,
-  };
-
-  // Group journal entries by date, using the best mood score per day
-  const moodByDate = new Map<string, number>();
-  for (const entry of journalEntries30d) {
-    const dateKey = toDateKey(entry.created_at);
-    if (!dateKey) continue;
-    const score = scoreFromEntry(entry);
-    const existing = moodByDate.get(dateKey);
-    // If multiple entries in a day, keep the latest (first in desc order from query)
-    if (existing === undefined) {
-      moodByDate.set(dateKey, score);
-    }
-  }
-
-  // Group closed trades by exit_date, computing avg PnL per day
-  const pnlByDate = new Map<string, { total: number; count: number }>();
-  for (const trade of trades30d) {
-    if (normalizeStatus(trade.status) !== "closed") continue;
-    const dateKey = toDateKey(trade.exit_date || trade.created_at);
-    if (!dateKey) continue;
-    const pnl = asNumber(trade.pnl);
-    const existing = pnlByDate.get(dateKey);
-    if (existing) {
-      existing.total += pnl;
-      existing.count += 1;
-    } else {
-      pnlByDate.set(dateKey, { total: pnl, count: 1 });
-    }
-  }
-
-  // Find days with BOTH mood and trades
-  const highMoodPnls: number[] = [];
-  const lowMoodPnls: number[] = [];
-  let sampleSize = 0;
-
-  for (const [dateKey, moodScore] of moodByDate) {
-    const dayPnl = pnlByDate.get(dateKey);
-    if (!dayPnl) continue;
-
-    sampleSize += 1;
-    const avgDayPnl = dayPnl.total / dayPnl.count;
-
-    if (moodScore >= 7) {
-      highMoodPnls.push(avgDayPnl);
-    } else if (moodScore <= 4) {
-      lowMoodPnls.push(avgDayPnl);
-    }
-    // Scores 5-6 are "mid-range" and excluded from high/low buckets
-  }
-
-  if (sampleSize < 5) return neutralResult;
-
-  const highMoodAvgPnl =
-    highMoodPnls.length > 0
-      ? highMoodPnls.reduce((sum, v) => sum + v, 0) / highMoodPnls.length
-      : null;
-
-  const lowMoodAvgPnl =
-    lowMoodPnls.length > 0
-      ? lowMoodPnls.reduce((sum, v) => sum + v, 0) / lowMoodPnls.length
-      : null;
-
-  // Determine bias signal
-  let biasSignal: "positive" | "negative" | "neutral" = "neutral";
-
-  if (highMoodAvgPnl !== null && lowMoodAvgPnl !== null) {
-    // Need at least 2 days in each bucket for a meaningful signal
-    if (highMoodPnls.length >= 2 && lowMoodPnls.length >= 2) {
-      const diff = highMoodAvgPnl - lowMoodAvgPnl;
-      const avgMagnitude = (Math.abs(highMoodAvgPnl) + Math.abs(lowMoodAvgPnl)) / 2;
-      // Only signal if the difference is > 10% of the average magnitude
-      if (avgMagnitude > 0 && Math.abs(diff) / avgMagnitude > 0.1) {
-        biasSignal = diff > 0 ? "positive" : "negative";
-      }
-    }
-  } else if (highMoodAvgPnl !== null && highMoodPnls.length >= 2) {
-    // Only high mood data available
-    biasSignal = highMoodAvgPnl > 0 ? "positive" : "neutral";
-  } else if (lowMoodAvgPnl !== null && lowMoodPnls.length >= 2) {
-    // Only low mood data available
-    biasSignal = lowMoodAvgPnl < 0 ? "positive" : "neutral";
-  }
-
-  return {
-    highMoodAvgPnl: highMoodAvgPnl !== null ? Math.round(highMoodAvgPnl * 100) / 100 : null,
-    lowMoodAvgPnl: lowMoodAvgPnl !== null ? Math.round(lowMoodAvgPnl * 100) / 100 : null,
-    biasSignal,
-    correlationSampleSize: sampleSize,
-  };
-}
+// toDateKey + computeMoodOutcomeCorrelation are re-exported from ./helpers.
 
 export async function getCapitalLevelsData(): Promise<CapitalLevelsData> {
   const { supabase, userId } = await getAuthenticatedClient();
@@ -695,8 +466,11 @@ export async function getMindOpsData(): Promise<MindOpsData> {
   const entries7dRows = journalEntries.filter((entry) => isWithinLastDays(entry.created_at, 7));
   const entries30dRows = journalEntries.filter((entry) => isWithinLastDays(entry.created_at, 30));
 
-  const scoreFromEntry = (entry: JournalRow) => {
-    const parsed = parseJournalContent(entry.content);
+  // Accept JournalLike (helpers.ts) so this can pass to computeMoodOutcomeCorrelation
+  // which uses the looser shape. JournalRow.id is required while JournalLike.id is
+  // optional — we don't read id here so the wider type is safe.
+  const scoreFromEntry = (entry: JournalLike) => {
+    const parsed = parseJournalContent(entry.content ?? null);
     if (typeof parsed.mood_score === "number" && Number.isFinite(parsed.mood_score)) {
       return parsed.mood_score;
     }

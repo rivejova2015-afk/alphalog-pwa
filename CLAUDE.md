@@ -884,8 +884,13 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 **Backtest (Fase #8):**
 - `coinarb/scripts/backtest.ts --days=N`: replay de N días con forward TP/SL scoring. Usa `loadHistoricalCandlesForDays()` (nuevo) que pagina vía Coinbase REST. 1m capped a 7d.
 
-**UI legacy paralela:**
-- `/intelligence/agents` sigue activa y lee `coinarb_agents` (tabla previa a la unificación). Decision pendiente: deprecar esa página y dropear la tabla, o mantenerla.
+**UI dual `/intelligence/agents` + `/intelligence/algorithms` — recomendación KEEP both (2026-05-17 análisis):**
+- **No son duplicados** — sirven propósitos complementarios:
+  - `/intelligence/agents` (lee `coinarb_agents` + `polyarb_agents`): **fleet overview**. Muestra PolyArb + Coinarb con detalle granular de estado (PAPER+Day N/14, PAPER+OFFLINE, LIVE+REAL$, OFFLINE), heartbeat 30s, badges. La pantalla "¿están vivos mis bots y a qué fase del trial llegaron?".
+  - `/intelligence/algorithms` (lee `algorithms`): **per-algorithm deep control**. Registry unificado de TODOS los algos (MT5/CME/options/crypto), modal con tunables editables, pause/resume, telemetry live. La pantalla "¿cómo está configurado y operando un algo específico?".
+- Dropear `/intelligence/agents` perdería: visibilidad PolyArb (no hay fila para polyarb en `algorithms`), contador de días PAPER trial (1-14), taxonomía detallada del proceso del bot.
+- Acción ideal a futuro: integrar el panel de tunables + telemetry de algorithms dentro del sub-page `/intelligence/agents/coinarb` para que el usuario tenga ambas superficies sin cambiar de URL.
+- `coinarb_agents` table queda viva — es la fuente de verdad para `/intelligence/agents`.
 
 ### Validación en capas
 1. **Zod schema** — valida shape y tipos del request body

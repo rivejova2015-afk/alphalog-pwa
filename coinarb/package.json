@@ -12,6 +12,7 @@
     "boot:products": "tsx scripts/boot-products.ts",
     "test:cdp-auth": "tsx scripts/test-cdp-auth.ts",
     "backtest": "tsx scripts/backtest.ts",
+    "preflight:live": "tsx scripts/preflight-live.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
