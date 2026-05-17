@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { logAuditFromRequest } from '@/lib/security/auditLog';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -54,6 +55,18 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logAuditFromRequest(
+    {
+      userId: user.id,
+      action: "update",
+      resourceType: "cme_risk_config",
+      resourceId: cmeAccountId,
+      status: "success",
+      changes: updates as Record<string, unknown>,
+    },
+    req
+  );
 
   return NextResponse.json({ data });
 }

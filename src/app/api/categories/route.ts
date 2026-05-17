@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 export async function GET(request: NextRequest) {
   try {
@@ -119,6 +120,11 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await logAuditFromRequest(
+      { userId, action: "create", resourceType: "category", resourceId: category.id, status: "success" },
+      request
+    );
 
     return NextResponse.json(
       { data: category, message: "Category created successfully" },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +71,18 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       logError("Algorithms", { component: "POST /api/algorithms/[id]/control", message: insErr?.message ?? "insert failed" });
       return NextResponse.json({ error: "Failed to dispatch command" }, { status: 500 });
     }
+
+    await logAuditFromRequest(
+      {
+        userId: user.id,
+        action: "update",
+        resourceType: "algorithm",
+        resourceId: id,
+        status: "success",
+        changes: { control: parsed.data.action, command_id: cmd.id },
+      },
+      request
+    );
 
     return NextResponse.json({
       ok: true,

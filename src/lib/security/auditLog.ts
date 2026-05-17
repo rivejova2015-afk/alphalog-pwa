@@ -23,6 +23,7 @@ export type AuditAction =
 export type AuditResourceType =
   | "trade"
   | "account"
+  | "account_category"
   | "journal"
   | "secure_mail"
   | "evidence"
@@ -35,7 +36,13 @@ export type AuditResourceType =
   | "webhook"
   | "bot_signal_engine_state"
   | "algorithm"
-  | "algorithm_deployment";
+  | "algorithm_deployment"
+  | "agent"
+  | "category"
+  | "treasury_config"
+  | "cme_signal"
+  | "cme_risk_config"
+  | "pairing_token";
 
 export type AuditStatus = "success" | "failure" | "partial" | "skipped";
 

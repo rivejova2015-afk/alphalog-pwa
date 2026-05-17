@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { logAuditFromRequest } from '@/lib/security/auditLog';
 
 export async function GET(
   _request: NextRequest,
@@ -63,5 +64,11 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logAuditFromRequest(
+    { userId: user.id, action: "update", resourceType: "agent", resourceId: id, status: "success" },
+    request
+  );
+
   return NextResponse.json(data);
 }

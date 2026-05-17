@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -160,6 +161,11 @@ export async function PATCH(
         );
       }
     }
+
+    await logAuditFromRequest(
+      { userId: userData.user.id, action: "update", resourceType: "account", resourceId: id, status: "success" },
+      request
+    );
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
@@ -351,6 +357,11 @@ export async function DELETE(
         { status: 500 }
       );
     }
+
+    await logAuditFromRequest(
+      { userId, action: "delete", resourceType: "account", resourceId: id, status: "success" },
+      request
+    );
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -133,6 +134,18 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if (linkErr) {
       throw new Error(`algorithm link failed: ${linkErr.message}`);
     }
+
+    await logAuditFromRequest(
+      {
+        userId: user.id,
+        action: "create",
+        resourceType: "pairing_token",
+        resourceId: instance.id,
+        status: "success",
+        changes: { algorithm_id: algo.id, platform: parsedBody.platform, expires_at: expiresAt },
+      },
+      request
+    );
 
     return NextResponse.json({
       token,

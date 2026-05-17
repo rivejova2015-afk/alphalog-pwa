@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 type Category = { id: string; name: string; description: string | null; created_at: string };
 
@@ -92,6 +93,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await logAuditFromRequest(
+      { userId, action: "create", resourceType: "account_category", resourceId: category.id, status: "success" },
+      request
+    );
+
     return NextResponse.json(category, { status: 201 });
   } catch (err: unknown) {
     console.error("Error in POST /api/account-categories:", err);
@@ -162,6 +168,11 @@ export async function PATCH(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await logAuditFromRequest(
+      { userId, action: "update", resourceType: "account_category", resourceId: id, status: "success" },
+      request
+    );
 
     return NextResponse.json(updated);
   } catch (err: unknown) {
@@ -320,6 +331,18 @@ export async function DELETE(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await logAuditFromRequest(
+      {
+        userId,
+        action: "delete",
+        resourceType: "account_category",
+        resourceId: id,
+        status: "success",
+        changes: { reassigned_to: targetCategoryId, accounts_reassigned: accountsCount },
+      },
+      request
+    );
 
     return NextResponse.json({ success: true, targetCategoryId });
   } catch (err: unknown) {

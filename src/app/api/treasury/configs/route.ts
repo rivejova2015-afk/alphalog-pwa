@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +59,22 @@ export async function PUT(request: NextRequest) {
       logError("Treasury", { component: "PUT /api/treasury/configs", message: error?.message ?? "no data" });
       return NextResponse.json({ error: "Update failed" }, { status: 500 });
     }
+
+    await logAuditFromRequest(
+      {
+        userId: user.id,
+        action: "update",
+        resourceType: "treasury_config",
+        resourceId: parsed.data.account_id,
+        status: "success",
+        changes: {
+          balance_threshold: parsed.data.balance_threshold,
+          anti_drawdown_active: parsed.data.anti_drawdown_active,
+          anti_drawdown_threshold: parsed.data.anti_drawdown_threshold,
+        },
+      },
+      request
+    );
 
     return NextResponse.json({ config: data });
   } catch (err) {

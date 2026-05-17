@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { checkOrderRisk } from '@/lib/cme/risk-manager';
 import { executeSignal } from '@/lib/cme/order-executor';
+import { logAuditFromRequest } from '@/lib/security/auditLog';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -79,6 +80,18 @@ export async function POST(req: NextRequest) {
       .eq('id', signal.id);
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
+
+  await logAuditFromRequest(
+    {
+      userId: user.id,
+      action: "create",
+      resourceType: "cme_signal",
+      resourceId: signal.id,
+      status: "success",
+      changes: { orderId: result.orderId, contract: parsed.data.contract, direction: parsed.data.direction },
+    },
+    req
+  );
 
   return NextResponse.json({
     success: true,

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCoinarbAgent } from '@/lib/coinarb/agent';
+import { logAuditFromRequest } from '@/lib/security/auditLog';
 
 export async function GET() {
   const supabase = await createClient();
@@ -41,5 +42,11 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logAuditFromRequest(
+    { userId: user.id, action: "create", resourceType: "agent", resourceId: data.id, status: "success" },
+    request
+  );
+
   return NextResponse.json(data, { status: 201 });
 }
