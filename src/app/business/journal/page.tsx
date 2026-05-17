@@ -1,5 +1,5 @@
 import { BookOpen } from "lucide-react";
-import { JournalEditor } from "@/components/business/journal/JournalEditor.client";
+import JournalPanel from "@/components/business/panels/JournalPanel.client";
 
 export default function JournalPage() {
   return (
@@ -13,7 +13,7 @@ export default function JournalPage() {
           <p className="text-sm text-[#94a3b8] mt-1">Trading reflections and analysis notes</p>
         </div>
       </div>
-      <JournalEditor />
+      <JournalPanel />
     </div>
   );
 }
