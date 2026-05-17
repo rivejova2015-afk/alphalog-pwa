@@ -62,6 +62,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       versions: versions || [],
       events: events || [],
       experiments: experiments?.flags_json || {},
+    }, {
+      headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=30" },
     });
   } catch (error) {
     reportCopyGroupError(error, { area: "copy-groups", action: "graph" });

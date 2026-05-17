@@ -78,7 +78,20 @@ async function downloadQTableFromStorage(
   }
 }
 
-export async function runSkillLearningCycle(instrument: "XAUUSD"): Promise<SkillLearningOutput> {
+/**
+ * Runs the RL skill learning cycle for an instrument.
+ *
+ * @param instrument  Trading instrument (currently only XAUUSD).
+ * @param userId      Owner of the skill row. Caller (cron handler) is
+ *                    responsible for resolving this — usually from
+ *                    BOT_OPS_USER_ID env. Required since the bot historically
+ *                    hardcoded a single owner UUID; making it a parameter
+ *                    cleans up that debt and enables multi-user scenarios.
+ */
+export async function runSkillLearningCycle(
+  instrument: "XAUUSD",
+  userId: string,
+): Promise<SkillLearningOutput> {
   try {
     const supabase = await createClient();
 
@@ -127,7 +140,7 @@ export async function runSkillLearningCycle(instrument: "XAUUSD"): Promise<Skill
       const { data: newSkill, error: createErr } = await supabase
         .from("bot_skills")
         .insert({
-          user_id: "381e268e-a042-4612-8b39-7a120ace17d6", // hardcoded default user
+          user_id: userId,
           instrument,
           skill_type: "HYBRID",
           environment: "paper",
@@ -214,7 +227,7 @@ export async function runSkillLearningCycle(instrument: "XAUUSD"): Promise<Skill
 
     // 11. Insert audit log
     const { error: auditErr } = await supabase.from("bot_skill_audit_log").insert({
-      user_id: "381e268e-a042-4612-8b39-7a120ace17d6",
+      user_id: userId,
       skill_id: skillId,
       event_type: "LEARNING_CYCLE",
       parameters: {

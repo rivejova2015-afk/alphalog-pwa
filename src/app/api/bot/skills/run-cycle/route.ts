@@ -25,9 +25,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // ── Resolve bot ops user (env first, hard fallback for legacy single-owner) ──
+  const userId =
+    process.env.BOT_OPS_USER_ID ?? "381e268e-a042-4612-8b39-7a120ace17d6";
+
   try {
     // ── Run skill learning cycle for XAUUSD ────────────────────────────────
-    const result = await runSkillLearningCycle("XAUUSD");
+    const result = await runSkillLearningCycle("XAUUSD", userId);
 
     if (!result.success) {
       // Not necessarily a failure, could be insufficient data

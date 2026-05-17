@@ -154,7 +154,7 @@ describe("skill-manager", () => {
 
   describe("runSkillLearningCycle", () => {
     it("happy path: 60 trades + crear skill nueva + subir Q-table + audit", async () => {
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
 
       expect(r.success).toBe(true);
       expect(r.tradesProcessed).toBe(60);
@@ -167,7 +167,7 @@ describe("skill-manager", () => {
 
     it("retorna success=false cuando hay <50 paper trades", async () => {
       state.paperTrades = makeManyTrades(20);
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
 
       expect(r.success).toBe(false);
       expect(r.tradesProcessed).toBe(20);
@@ -178,7 +178,7 @@ describe("skill-manager", () => {
     it("retorna error cuando falla la query a paper_trades", async () => {
       state.paperTradesError = { message: "RLS denied" };
       state.paperTrades = null;
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
 
       expect(r.success).toBe(false);
       expect(r.error).toContain("RLS denied");
@@ -196,7 +196,7 @@ describe("skill-manager", () => {
         text: JSON.stringify({ table: [], epsilon: 0.25, version: 3, instrument: "XAUUSD" }),
       };
 
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
       expect(r.success).toBe(true);
       expect(r.skillId).toBe("skill-existing-7");
       // No debe haber intentado crear una nueva
@@ -211,41 +211,47 @@ describe("skill-manager", () => {
         performance_before: null,
       };
       state.storageDownload = { ok: false }; // download falla
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
       expect(r.success).toBe(true);
       expect(mockCreateEmptyQTable).toHaveBeenCalledWith("XAUUSD");
     });
 
     it("retorna error cuando falla creación de nueva skill", async () => {
       state.newSkillError = { message: "INSERT failed" };
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
       expect(r.success).toBe(false);
       expect(r.error).toContain("INSERT failed");
     });
 
     it("retorna error cuando falla update bot_skills", async () => {
       state.updateSkillError = { message: "Update conflict" };
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
       expect(r.success).toBe(false);
       expect(r.error).toContain("Update conflict");
     });
 
     it("continúa exitosamente aunque falle el audit log (solo warning)", async () => {
       state.auditError = { message: "audit table missing" };
-      const r = await runSkillLearningCycle("XAUUSD");
+      const r = await runSkillLearningCycle("XAUUSD", "test-user-1");
       expect(r.success).toBe(true);
       expect(mockLogError).toHaveBeenCalled();
     });
 
     it("audit log incluye episode count + epsilon + LLM rules count", async () => {
       mockExtractTradingRules.mockResolvedValue([{ id: "r1" }, { id: "r2" }]);
-      await runSkillLearningCycle("XAUUSD");
+      await runSkillLearningCycle("XAUUSD", "test-user-1");
 
       const audit = state.insertedAuditEntries[0] as { event_type: string; parameters: Record<string, unknown> };
       expect(audit.event_type).toBe("LEARNING_CYCLE");
       expect(audit.parameters.rl_episode_count).toBe(60);
       expect(audit.parameters.llm_rules_generated).toBe(2);
       expect(audit.parameters.epsilon_after).toBe(0.28);
+    });
+
+    it("audit log usa el userId pasado por parámetro (no hardcoded)", async () => {
+      await runSkillLearningCycle("XAUUSD", "custom-user-42");
+      const audit = state.insertedAuditEntries[0] as { user_id: string };
+      expect(audit.user_id).toBe("custom-user-42");
     });
   });
 });

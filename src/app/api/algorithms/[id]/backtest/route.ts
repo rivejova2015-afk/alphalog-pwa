@@ -81,7 +81,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ results: data ?? [] });
+    return NextResponse.json({ results: data ?? [] }, {
+      headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=120" },
+    });
   } catch (err) {
     logError("Algorithms", { component: "GET /api/algorithms/[id]/backtest", message: String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

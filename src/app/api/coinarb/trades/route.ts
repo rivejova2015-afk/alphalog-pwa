@@ -8,7 +8,9 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const agent = await getCoinarbAgent(supabase, user.id);
-  if (!agent) return NextResponse.json({ data: [], total: 0 });
+  if (!agent) return NextResponse.json({ data: [], total: 0 }, {
+    headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=30" },
+  });
 
   const limit = Math.min(100, parseInt(request.nextUrl.searchParams.get('limit') ?? '50'));
   const offset = parseInt(request.nextUrl.searchParams.get('offset') ?? '0');
@@ -54,5 +56,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ data: trades, total: count ?? 0 });
+  return NextResponse.json({ data: trades, total: count ?? 0 }, {
+    headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=30" },
+  });
 }

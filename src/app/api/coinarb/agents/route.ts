@@ -8,7 +8,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const agent = await getCoinarbAgent(supabase, user.id);
-  return NextResponse.json(agent ? [agent] : []);
+  return NextResponse.json(agent ? [agent] : [], {
+    headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+  });
 }
 
 export async function POST(request: NextRequest) {

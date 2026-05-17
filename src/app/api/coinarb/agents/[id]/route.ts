@@ -27,6 +27,8 @@ export async function GET(
     has_cdp_key: !!api_key_encrypted,
     has_cdp_secret: !!api_secret_encrypted,
     has_intx_passphrase: !!api_passphrase_encrypted,
+  }, {
+    headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
   });
 }
 
