@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { eventItemResponseSchema } from "@/lib/validation/schemas";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/terminal/events?instrumentId={id}
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
       .order("timestamp_utc", { ascending: true });
 
     if (error) {
-      console.error("Error fetching events:", error);
+      logError("TerminalEvents", { component: "GET", message: "Fetch error", error: error.message });
       return NextResponse.json(
         { error: "Failed to fetch events" },
         { status: 500 }
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/terminal/events:", err);
+    logError("TerminalEvents", { component: "GET", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Error creating event:", error);
+      logError("TerminalEvents", { component: "POST", message: "Create error", error: error.message });
       return NextResponse.json(
         { error: "Failed to create event" },
         { status: 500 }
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responsePayload);
   } catch (err: unknown) {
-    console.error("Error in POST /api/terminal/events:", err);
+    logError("TerminalEvents", { component: "POST", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

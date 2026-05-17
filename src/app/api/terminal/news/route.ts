@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { newsItemResponseSchema } from "@/lib/validation/schemas";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/terminal/news?instrumentId={id}
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
       .order("timestamp_utc", { ascending: false });
 
     if (error) {
-      console.error("Error fetching news:", error);
+      logError("TerminalNews", { component: "GET", message: "Fetch error", error: error.message });
       return NextResponse.json(
         { error: "Failed to fetch news" },
         { status: 500 }
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/terminal/news:", err);
+    logError("TerminalNews", { component: "GET", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Error creating news:", error);
+      logError("TerminalNews", { component: "POST", message: "Create error", error: error.message });
       return NextResponse.json(
         { error: "Failed to create news" },
         { status: 500 }
@@ -154,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responsePayload);
   } catch (err: unknown) {
-    console.error("Error in POST /api/terminal/news:", err);
+    logError("TerminalNews", { component: "POST", message: "Unexpected error", error: String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

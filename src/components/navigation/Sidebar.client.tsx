@@ -17,10 +17,10 @@ import {
 const menuItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Intelligence", href: "/intelligence", icon: Brain },
-  { label: "Business", href: "/business", icon: Building2 },
+  { label: "Negocio", href: "/business", icon: Building2 },
   { label: "Map Hot", href: "/map-hot", icon: Flame },
   { label: "Securities", href: "/securities", icon: ShieldCheck },
-  { label: "Inbox", href: "/inbox", icon: Mail },
+  { label: "Buzón", href: "/inbox", icon: Mail },
 ];
 
 const COLLAPSE_KEY = "al-sidebar-collapsed";

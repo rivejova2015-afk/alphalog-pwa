@@ -6,7 +6,7 @@ export function SelectorDashboard() {
     <div className="max-w-4xl mx-auto py-8">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-[#e2e8f0] mb-4 font-mono">AlphaLog 2.1</h1>
-        <p className="text-[#94a3b8] text-lg">Choose your dashboard</p>
+        <p className="text-[#94a3b8] text-lg">Elige tu dashboard</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
@@ -21,7 +21,7 @@ export function SelectorDashboard() {
           </p>
           <Link href="/intelligence">
             <button className="w-full px-4 py-2 bg-[#22d3ee] hover:bg-[#06b6d4] text-[#0a0e1a] font-bold rounded transition-colors text-sm">
-              ENTER
+              ENTRAR
             </button>
           </Link>
         </Card>
@@ -37,7 +37,7 @@ export function SelectorDashboard() {
           </p>
           <Link href="/business">
             <button className="w-full px-4 py-2 bg-[#34d399] hover:bg-[#2ba88b] text-[#0a0e1a] font-bold rounded transition-colors text-sm">
-              ENTER
+              ENTRAR
             </button>
           </Link>
         </Card>
@@ -53,7 +53,7 @@ export function SelectorDashboard() {
           </p>
           <Link href="/map-hot">
             <button className="w-full px-4 py-2 bg-[#eab308] hover:bg-[#d99e08] text-[#0a0e1a] font-bold rounded transition-colors text-sm">
-              ENTER
+              ENTRAR
             </button>
           </Link>
         </Card>
@@ -69,7 +69,7 @@ export function SelectorDashboard() {
           </p>
           <Link href="/securities">
             <button className="w-full px-4 py-2 bg-[#a78bfa] hover:bg-[#9061f9] text-[#0a0e1a] font-bold rounded transition-colors text-sm">
-              ENTER
+              ENTRAR
             </button>
           </Link>
         </Card>
@@ -77,8 +77,8 @@ export function SelectorDashboard() {
 
       {/* Quick Status Footer */}
       <Card className="text-center p-4 bg-[#151b28] border-[#1f2937]">
-        <p className="text-sm text-[#94a3b8] mb-2">AlphaLog Status</p>
-        <p className="text-lg font-bold font-mono text-[#22d3ee]">System Online</p>
+        <p className="text-sm text-[#94a3b8] mb-2">Estado del sistema</p>
+        <p className="text-lg font-bold font-mono text-[#22d3ee]">En línea</p>
       </Card>
     </div>
   );

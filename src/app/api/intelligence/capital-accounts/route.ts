@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 type CapitalType = "real" | "propfirm";
 
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       if (isMissingTableError(error)) {
         return NextResponse.json([]);
       }
-      console.error("Error fetching intelligence capital accounts:", error);
+      logError("CapitalAccounts", { component: "GET", message: "Fetch error", error: error.message });
       return NextResponse.json({ error: "Failed to fetch capital accounts" }, { status: 500 });
     }
 
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (error) {
-    console.error("Error in GET /api/intelligence/capital-accounts:", error);
+    logError("CapitalAccounts", { component: "GET", message: "Unexpected error", error: String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      console.error("Error creating intelligence capital account:", error);
+      logError("CapitalAccounts", { component: "POST", message: "Create error", error: error.message });
       return NextResponse.json({ error: "Failed to create capital account" }, { status: 500 });
     }
 

@@ -11,6 +11,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/log';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     const { data: events, error } = await query;
 
     if (error) {
-      console.error('Error fetching calendar events:', error);
+      logError('TreasuryCalendar', { component: 'GET', message: 'Fetch error', error: error.message });
       return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
     }
 
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
     });
   } catch (error) {
-    console.error('GET /api/treasury/calendar-events error:', error);
+    logError('TreasuryCalendar', { component: 'GET', message: 'Unexpected error', error: String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating calendar event:', error);
+      logError('TreasuryCalendar', { component: 'POST', message: 'Create error', error: error.message });
       if (error.code === '23505') {
         return NextResponse.json(
           { error: 'Event already exists for this date and type' },
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
-    console.error('POST /api/treasury/calendar-events error:', error);
+    logError('TreasuryCalendar', { component: 'POST', message: 'Unexpected error', error: String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

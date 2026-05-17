@@ -12,12 +12,12 @@ import {
 } from "lucide-react";
 
 const items = [
-  { label: "Home", href: "/", icon: LayoutDashboard },
+  { label: "Inicio", href: "/", icon: LayoutDashboard },
   { label: "Intel", href: "/intelligence", icon: Brain },
-  { label: "Business", href: "/business", icon: Building2 },
+  { label: "Negocio", href: "/business", icon: Building2 },
   { label: "Map Hot", href: "/map-hot", icon: Flame },
-  { label: "Sec", href: "/securities", icon: ShieldCheck },
-  { label: "Inbox", href: "/inbox", icon: Mail },
+  { label: "Seg", href: "/securities", icon: ShieldCheck },
+  { label: "Buzón", href: "/inbox", icon: Mail },
 ];
 
 export default function MobileBottomNav() {
