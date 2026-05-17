@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { accountResponseSchema, accountCreateSchema } from "@/lib/validation/schemas";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * GET /api/accounts?trash=false
@@ -69,7 +70,8 @@ export async function GET(request: NextRequest) {
     const { data: accounts, error } = await query as unknown as { data: AccountRow[] | null; error: unknown };
 
     if (error) {
-      console.error("Error fetching accounts (with category join):", error);
+      const errMsg = (error as { message?: string }).message ?? String(error);
+      logError("Accounts", { component: "GET", message: "fetch with category join failed", error: errMsg });
       const fallbackQuery = supabase
         .from("accounts")
         .select(
@@ -87,7 +89,8 @@ export async function GET(request: NextRequest) {
         (await filteredFallback) as unknown as { data: AccountRow[] | null; error: unknown };
 
       if (fallbackError) {
-        console.error("Error fetching accounts (fallback):", fallbackError);
+        const fbErrMsg = (fallbackError as { message?: string }).message ?? String(fallbackError);
+        logError("Accounts", { component: "GET", message: "fetch fallback failed", error: fbErrMsg });
         return NextResponse.json(
           { error: "Failed to fetch accounts" },
           { status: 500 }
@@ -112,7 +115,7 @@ export async function GET(request: NextRequest) {
 
       const contractResult = enforceResponseContract(accountResponseSchema.array(), fallbackMapped);
       if (!contractResult.ok) {
-        console.warn("[ContractGuard] GET /api/accounts (fallback) contract violation:", contractResult.errors);
+        logWarn("Accounts", "ContractGuard fallback violation", { errors: contractResult.errors });
       }
 
       return NextResponse.json(fallbackMapped, {
@@ -139,14 +142,14 @@ export async function GET(request: NextRequest) {
 
     const contractResult = enforceResponseContract(accountResponseSchema.array(), mapped);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] GET /api/accounts contract violation:", contractResult.errors);
+      logWarn("Accounts", "ContractGuard GET violation", { errors: contractResult.errors });
     }
 
     return NextResponse.json(mapped, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/accounts:", err);
+    logError("Accounts", { component: "GET", message: "Unexpected error", error: String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -229,7 +232,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (createError) {
-      console.error("Error creating account:", createError);
+      logError("Accounts", { component: "POST", message: "Create error", error: createError.message });
       return NextResponse.json(
         { error: "Failed to create account" },
         { status: 500 }
@@ -238,12 +241,12 @@ export async function POST(request: NextRequest) {
 
     const contractResult = enforceResponseContract(accountResponseSchema, account);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] POST /api/accounts contract violation:", contractResult.errors);
+      logWarn("Accounts", "ContractGuard POST violation", { errors: contractResult.errors });
     }
 
     return NextResponse.json(account, { status: 201 });
   } catch (err: unknown) {
-    console.error("Error in POST /api/accounts:", err);
+    logError("Accounts", { component: "POST", message: "Unexpected error", error: String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

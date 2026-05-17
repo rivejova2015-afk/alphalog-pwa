@@ -1,4 +1,4 @@
-import { Card } from '../shared/Card';
+import { Card } from '@/components/ui/card';
 import Link from 'next/link';
 
 export function SelectorDashboard() {
@@ -11,7 +11,7 @@ export function SelectorDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
         {/* Intelligence Suite */}
-        <Card hover className="flex flex-col">
+        <Card className="flex flex-col p-4 hover:border-cyan-500/30 transition-colors cursor-pointer bg-[#151b28] border-[#1f2937]">
           <div className="w-12 h-12 bg-[#22d3ee]/20 border border-[#22d3ee]/30 rounded-lg flex items-center justify-center mb-4">
             <span className="text-[#22d3ee] text-2xl">⚙️</span>
           </div>
@@ -27,7 +27,7 @@ export function SelectorDashboard() {
         </Card>
 
         {/* Business */}
-        <Card hover className="flex flex-col">
+        <Card className="flex flex-col p-4 hover:border-cyan-500/30 transition-colors cursor-pointer bg-[#151b28] border-[#1f2937]">
           <div className="w-12 h-12 bg-[#34d399]/20 border border-[#34d399]/30 rounded-lg flex items-center justify-center mb-4">
             <span className="text-[#34d399] text-2xl">📊</span>
           </div>
@@ -43,7 +43,7 @@ export function SelectorDashboard() {
         </Card>
 
         {/* Map Hot */}
-        <Card hover className="flex flex-col">
+        <Card className="flex flex-col p-4 hover:border-cyan-500/30 transition-colors cursor-pointer bg-[#151b28] border-[#1f2937]">
           <div className="w-12 h-12 bg-[#eab308]/20 border border-[#eab308]/30 rounded-lg flex items-center justify-center mb-4">
             <span className="text-[#eab308] text-2xl">🎯</span>
           </div>
@@ -59,7 +59,7 @@ export function SelectorDashboard() {
         </Card>
 
         {/* AlphaLog Securities */}
-        <Card hover className="flex flex-col">
+        <Card className="flex flex-col p-4 hover:border-cyan-500/30 transition-colors cursor-pointer bg-[#151b28] border-[#1f2937]">
           <div className="w-12 h-12 bg-[#a78bfa]/20 border border-[#a78bfa]/30 rounded-lg flex items-center justify-center mb-4">
             <span className="text-[#a78bfa] text-2xl">🛡️</span>
           </div>
@@ -76,7 +76,7 @@ export function SelectorDashboard() {
       </div>
 
       {/* Quick Status Footer */}
-      <Card className="text-center">
+      <Card className="text-center p-4 bg-[#151b28] border-[#1f2937]">
         <p className="text-sm text-[#94a3b8] mb-2">AlphaLog Status</p>
         <p className="text-lg font-bold font-mono text-[#22d3ee]">System Online</p>
       </Card>
