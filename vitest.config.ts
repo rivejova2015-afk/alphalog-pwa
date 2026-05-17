@@ -15,6 +15,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Stub Next.js server-only sentinel for vitest (Node env, no Next resolver).
+      'server-only': path.resolve(__dirname, './src/test/server-only-stub.ts'),
     },
   },
 });
