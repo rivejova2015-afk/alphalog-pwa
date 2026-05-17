@@ -2,6 +2,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui";
 import { AlertCircle, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
 import { loadBusinessCosts } from "@/lib/business/offline-loader";
@@ -90,7 +91,7 @@ export default function RunwayPanel({ offlineData }: RunwayPanelProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-slate-400">Loading...</div>
+            <Skeleton height={56} count={3} />
           ) : (
             <>
               {/* Cash Reserve Input */}

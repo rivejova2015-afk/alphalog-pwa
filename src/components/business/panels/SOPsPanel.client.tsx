@@ -2,8 +2,10 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog, Skeleton } from "@/components/ui";
 import { BookOpen, Plus, Play, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { loadBusinessSOPs } from "@/lib/business/offline-loader";
 import { createBusinessSOPRun, deleteBusinessSOP, getBusinessSOPWithItems, getBusinessSOPRuns, getBusinessSOPRunItems, updateBusinessSOPRunItem } from "@/lib/business/queries";
 import SOPForm from "../forms/SOPForm.client";
@@ -28,6 +30,8 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [runItems, setRunItems] = useState<import('@/lib/business/types').BusinessSOPRunItem[]>([]);
   const [runItemsLoading, setRunItemsLoading] = useState(false);
+  const [confirmDeleteSopId, setConfirmDeleteSopId] = useState<string | null>(null);
+  const [confirmDeleteItemId, setConfirmDeleteItemId] = useState<string | null>(null);
 
   useEffect(() => {
     loadSOPs();
@@ -52,7 +56,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        alert("Not authenticated");
+        toast.error("Sesión expirada");
         return;
       }
       const created = await createBusinessSOPRun({
@@ -62,7 +66,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       });
 
       if (!created) {
-        alert('Failed to create run');
+        toast.error("No se pudo crear el run");
         return;
       }
 
@@ -70,21 +74,24 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       await loadSopRuns(sopId);
       setSelectedRunId(created.id);
       await loadRunItems(created.id);
-      alert("SOP run created!");
+      toast.success("SOP run creado");
     } catch (err) {
       console.error("Error creating run:", err);
-      alert("Failed to create run");
+      toast.error("No se pudo crear el run");
     }
   }
 
   async function handleDelete(sopId: string) {
-    if (!confirm("Delete this SOP?")) return;
     try {
       await deleteBusinessSOP(sopId);
       await loadSOPs();
       setSelectedSop(null);
+      toast.success("SOP eliminado");
     } catch (err) {
       console.error("Error deleting SOP:", err);
+      toast.error("No se pudo eliminar el SOP");
+    } finally {
+      setConfirmDeleteSopId(null);
     }
   }
 
@@ -108,25 +115,30 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        alert("Not authenticated");
+        toast.error("Sesión expirada");
         return;
       }
       // Insert as template item (label)
       await supabase.from('business_sop_items').insert([{ sop_id: sopId, user_id: user.id, label: title, sort_index: 0 }]);
       await loadSopItems(sopId);
+      toast.success("Ítem añadido");
     } catch (err) {
       console.error('Error adding SOP item:', err);
+      toast.error("No se pudo añadir el ítem");
     }
   }
 
   async function handleDeleteItem(itemId: string) {
-    if (!confirm('Delete this item?')) return;
     try {
       const supabase = createClient();
       await supabase.from('business_sop_items').delete().eq('id', itemId);
       if (selectedSop) await loadSopItems(selectedSop);
+      toast.success("Ítem eliminado");
     } catch (err) {
       console.error('Error deleting SOP item:', err);
+      toast.error("No se pudo eliminar el ítem");
+    } finally {
+      setConfirmDeleteItemId(null);
     }
   }
 
@@ -158,12 +170,13 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
     try {
       const ok = await updateBusinessSOPRunItem(itemId, !currentChecked);
       if (!ok) {
-        alert('Failed to update item');
+        toast.error("No se pudo actualizar el ítem");
         return;
       }
       if (selectedRunId) await loadRunItems(selectedRunId);
     } catch (err) {
       console.error('Error toggling run item:', err);
+      toast.error("No se pudo actualizar el ítem");
     }
   }
 
@@ -189,7 +202,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-slate-400">Loading SOPs...</div>
+            <Skeleton height={60} count={4} />
           ) : sops.length === 0 ? (
             <div className="text-center py-8 text-slate-400">No SOPs created yet</div>
           ) : (
@@ -215,7 +228,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
                     }
                   }}
                   onStartRun={handleStartRun}
-                  onDelete={handleDelete}
+                  onDelete={(id) => setConfirmDeleteSopId(id)}
                 />
               ))}
             </div>
@@ -251,7 +264,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
                     <div key={it.id} className="flex items-center justify-between bg-slate-800 p-2 rounded border border-slate-700">
                       <div className="text-sm text-slate-300">{it.label}</div>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => handleDeleteItem(it.id)} className="p-1 text-red-400 hover:text-red-300">
+                        <button onClick={() => setConfirmDeleteItemId(it.id)} className="p-1 text-red-400 hover:text-red-300">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -346,6 +359,25 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteSopId !== null}
+        title="Eliminar SOP"
+        message="Esta acción no se puede deshacer."
+        variant="danger"
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmDeleteSopId(null)}
+        onConfirm={() => confirmDeleteSopId ? handleDelete(confirmDeleteSopId) : Promise.resolve()}
+      />
+      <ConfirmDialog
+        open={confirmDeleteItemId !== null}
+        title="Eliminar ítem"
+        message="Se quitará del checklist."
+        variant="danger"
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmDeleteItemId(null)}
+        onConfirm={() => confirmDeleteItemId ? handleDeleteItem(confirmDeleteItemId) : Promise.resolve()}
+      />
     </div>
   );
 }

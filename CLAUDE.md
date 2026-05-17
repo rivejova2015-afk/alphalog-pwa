@@ -161,21 +161,26 @@ alphalog-pwa/
 | `/dashboard/logs/system` | System logs (feature flag: `NEXT_PUBLIC_ENABLE_SYSTEM_LOGS`) |
 | `/dashboard/conflicts` | Resolución de conflictos offline |
 
-### Trading Hub (mobile-first, tabs)
+### Trading Hub
+El hub de trading **vive bajo `/dashboard/tradehub`**, no como ruta separada `/trading/*`. Las rutas listadas previamente eran propuestas que nunca se implementaron.
+
 | Ruta | Descripción |
 |------|-------------|
-| `/trading` | Hub de trading con MainNav |
-| `/trading/tabs/tradehub` | TradeHub embebido |
-| `/trading/tabs/terminal` | Terminal embebido |
-| `/trading/tabs/tradermap` | TraderMap embebido |
-| `/trading/tabs/bot-control` | Bot control embebido |
-| `/trading/tabs/journal-pt` | Diario de trading (PT = prop trader) |
-| `/trading/accounts` | Cuentas de trading |
-| `/trading/trades` | Listado de trades |
-| `/trading/evidence` | Bóveda de evidencias |
-| `/trading/playbook` | Playbook de setups |
-| `/trading/reports` | Reportes semanales |
-| `/trading/overview` | Vista general de trading |
+| `/dashboard/tradehub` | TradeHub principal (Accounts + Trades + Evidence + Playbook + Reports) |
+| `/dashboard/tradehub/categories` | Gestión de categorías de cuentas |
+| `/dashboard/tradehub/accounts/aab` | Accounts Architect Bot (feature flag `NEXT_PUBLIC_ENABLE_AAB`) |
+
+### AlphaLog Securities
+| Ruta | Descripción |
+|------|-------------|
+| `/securities` | Redirige a `/securities/cybersec` |
+| `/securities/cybersec` | CyberSec Academy: syllabus de 58 módulos |
+| `/securities/cybersec/modules/[id]` | Detalle de módulo con niveles + research + lecciones |
+| `/securities/cybersec/lessons/[id]` | Lección extendida |
+| `/securities/cybersec/quizzes/[id]` | Quiz por lección |
+| `/securities/cybersec/practice/[id]` | Práctica de matching |
+| `/securities/cybersec/homework` y `homework/[id]` | Lista + detalle con submit |
+| `/securities/cybersec/exam` | Examen final (32 preguntas, pasa con ≥70%) |
 
 ### Business Hub
 | Ruta | Descripción |
@@ -197,10 +202,10 @@ alphalog-pwa/
 | Ruta | Descripción |
 |------|-------------|
 | `/intelligence` | Suite de inteligencia |
-| `/intelligence/tabs/capital-levels` | Niveles de capital objetivo |
-| `/intelligence/tabs/constraint-solver` | Solver de restricciones financieras |
-| `/intelligence/tabs/mindops` | Ops mentales / planificación |
-| `/intelligence/tabs/knowledge-factory` | Fábrica de conocimiento |
+| `/intelligence/tabs/capital-levels` | Distribución de capital real vs propfirm + top cuentas |
+| `/intelligence/tabs/constraint-monitor` | Semáforo de 4 disciplinas (cadencia, win rate, P&L, journaling) |
+| `/intelligence/tabs/mindops` | Correlación mood ↔ outcome de journal |
+| `/intelligence/tabs/knowledge-factory` | Síntesis IA de insights de los últimos 30 días |
 | `/intelligence/calendar` | Calendario económico |
 | `/intelligence/evidence` | Evidencias de análisis |
 | `/intelligence/news` | Noticias de mercado |
@@ -768,21 +773,27 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 
 ### ⚠️ Parcialmente implementado / TODOs conocidos
 
-- Copy Groups: API completa (6 endpoints en `/api/copy-groups/*`) pero **UI ausente** — ningún componente consume el endpoint `/graph`. Validar si sigue en roadmap antes de invertir; el API se construyó hace meses y nunca se usó.
-- Intelligence ConstraintSolver: **no existe** (solo tipos en `src/lib/intelligence/metrics.ts` para `ConstraintStatus`/`ConstraintItem`). Requiere spec antes de implementar.
-- Intelligence KnowledgeFactory: backend (`/api/intelligence/knowledge-factory/synthesize`) + componente (`KnowledgeFactorySynthesis.client.tsx`) existen, pero **falta page route** en `src/app/intelligence/tabs/knowledge-factory/page.tsx` para que sea accesible.
+- Copy Groups: API completa (6 endpoints en `/api/copy-groups/*`) pero la **UI dedicada está ausente** — el grafo solo se consume desde AAB (`/dashboard/tradehub/accounts/aab`). El endpoint `/graph` no tiene panel propio.
+- Componentes UI duplicados entre `src/components/ui/` (canónico, lowercase) y `src/components/shared/` (legacy, PascalCase). Conviven; APIs distintas en `Badge`. Cleanup futuro de imports + eliminar duplicados de `shared/`.
+- Operations panel (`/business/operations`) es solo nav-hub (40% madurez). Pendiente convertir en mini-dashboard agregando # decisions pendientes, # SOPs por hacer, último P&L, runway actual.
 
 ### 🔴 Pendiente / No implementado
-- Sentry/error monitoring externo: SDK `@sentry/nextjs` no instalado. `src/lib/sentry.ts` es un stub que falla silente; `captureException` import en `src/lib/copygroups/mirroring.ts` es código muerto.
 - Suscripción multi-usuario real (actualmente 1 usuario).
-- Tests E2E para módulos de negocio: solo `/business/journal` cubierto (`tests/e2e/business.spec.ts` + `tests/e2e/journal.spec.ts`). Falta cobertura para decisions/health/kpis/llc/pl/roadmap/runway/sops.
+- Tests E2E para módulos de negocio: solo `/business/journal` cubierto. Falta cobertura para decisions/health/kpis/llc/pl/roadmap/runway/sops.
 - Tests unitarios coinarb: subproyecto `coinarb/` sin test suite. `command-poller.ts`, `applyParameters`, `setTradingPaused`, WS watchdog, replay backtest sin coverage.
 - UI ack verification: `/api/algorithms/[id]/control` dispara comando pero `ControlButton` no polea `bot_command_status` — si el poller falla el usuario no se entera.
+- Variables Sentry pendientes en Vercel: el SDK está instalado y configurado, falta setear `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` para activar reporting. Sin DSN el wrapper hace no-op silencioso.
 
 ### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
 - `src/lib/alphacore/conflict-resolution.ts:434–489` `rollbackToSnapshot()` implementado y testeable.
 - `src/lib/alphacore/offline/outbox.ts:189–228` outbox sync implementado (POST/PATCH/DELETE vía `buildEndpoint`+`buildMethod`).
 - P&L periódico (daily/weekly/monthly) en `getPerformanceMetrics` calcula vía `pnlForPeriod()` + `startOfUtcDay/Week/Month` helpers.
+- **Intelligence tabs completos** (2026-05): capital-levels, constraint-monitor (rename de ConstraintSolver), mindops, knowledge-factory. Backend en `src/lib/intelligence/metrics.ts` + UI en `src/components/intelligence/*Panel.client.tsx`.
+- **AlphaLog Securities + CyberSec Academy** (2026-05): app top-level con 58 módulos, 12 lecciones, quizzes, prácticas, homework y exam, 4 tablas Supabase (`securities_progress`, `securities_quiz_results`, `securities_homework_submissions`, `securities_exam_results`).
+- **Error boundaries cubiertos** (2026-05): `error.tsx` en `/intelligence`, `/map-hot`, `/securities`, `/inbox`, `/auth`, `/dashboard` + 6 sub-segmentos. Helper compartido `src/components/ui/error-boundary-page.tsx`.
+- **UI Foundation reusable** (2026-05): `ConfirmDialog`, `Skeleton`, `EmptyState` y `Modal` exportados desde `@/components/ui`. Migrados los 8 paneles Business y EventModal de Treasury para eliminar `alert()`/`confirm()`/`prompt()` del browser → Sonner toasts + ConfirmDialog.
+- **Treasury threshold editor** (2026-05): Umbral + Anti-DD ahora editables inline con `PUT /api/treasury/configs` (antes solo lectura).
+- **Sentry instalado** (2026-05): `@sentry/nextjs` configurado vía `sentry.{client,server,edge}.config.ts` + `instrumentation.ts` + `withSentryConfig` en `next.config.ts`. `src/lib/sentry.ts` ahora es wrapper real (no stub). `logError` server-side delega automáticamente. Activación pendiente solo de env vars en Vercel.
 
 ---
 
@@ -891,6 +902,7 @@ Solo 3 flags públicos (via `NEXT_PUBLIC_*`):
 | `postmark` | 4.0.5 | Email transaccional (inbound + outbound) |
 | `@react-pdf/renderer` | 3.4.5 | Generación de PDFs |
 | `idb` | 8.0.3 | IndexedDB wrapper (offline queue) |
+| `@sentry/nextjs` | 10.53.1 | Error monitoring / performance tracing (activación pendiente DSN) |
 
 ### Dev
 | Paquete | Versión | Uso |

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui';
 import type { Account, TreasuryConfig } from '@/lib/treasury/calculations';
 
 interface CalendarEvent {
@@ -80,15 +81,17 @@ export default function EventModal({
     }
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const handleDelete = async () => {
     if (!event) return;
-    if (confirm('Are you sure you want to delete this event?')) {
-      try {
-        setError(null);
-        await onDelete(event.id);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      }
+    try {
+      setError(null);
+      await onDelete(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setConfirmDelete(false);
     }
   };
 
@@ -208,7 +211,7 @@ export default function EventModal({
           {event && (
             <Button
               variant="destructive"
-              onClick={handleDelete}
+              onClick={() => setConfirmDelete(true)}
               disabled={isLoading}
               className="bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-500/30"
             >
@@ -234,6 +237,16 @@ export default function EventModal({
           </div>
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Eliminar evento"
+        message="Esta acción no se puede deshacer."
+        variant="danger"
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

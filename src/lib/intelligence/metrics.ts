@@ -121,6 +121,10 @@ export type ConstraintSolverData = {
   blockedCount: number;
 };
 
+// Renamed alias — this is a constraint *monitor*, not a solver (no optimization).
+// Keep both names for backward-compat with existing callers.
+export type ConstraintMonitorData = ConstraintSolverData;
+
 export type MoodOutcomeCorrelation = {
   highMoodAvgPnl: number | null;
   lowMoodAvgPnl: number | null;
@@ -661,6 +665,9 @@ export async function getConstraintSolverData(): Promise<ConstraintSolverData> {
     blockedCount: constraints.filter((item) => item.status === "critical").length,
   };
 }
+
+// Alias matching the renamed UI ("Constraint Monitor"). Same implementation.
+export const getConstraintMonitorData = getConstraintSolverData;
 
 export async function getMindOpsData(): Promise<MindOpsData> {
   const { supabase, userId } = await getAuthenticatedClient();

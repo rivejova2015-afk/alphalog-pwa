@@ -36,6 +36,11 @@ export function logError(name: string, meta: LogMeta): void {
         logger.error(name, meta.message || "Error", undefined, context)
       )
       .catch(() => undefined);
+  } else {
+    // Server-side: also forward to Sentry. Wrapper no-ops when DSN unset.
+    import("@/lib/sentry")
+      .then(({ captureMessage }) => captureMessage(`[${name}] ${meta.message || "Error"}`, context))
+      .catch(() => undefined);
   }
 
   // En desarrollo, muestra en consola con color

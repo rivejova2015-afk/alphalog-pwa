@@ -21,8 +21,10 @@ const SECTIONS: SidebarSection[] = [
     items: [
       { label: 'Agents Dashboard', href: '/intelligence/agents' },
       { label: 'Algorithmic Trading', href: '/intelligence/algorithms' },
-      { label: 'Market Intelligence', href: '/intelligence' },
-      { label: 'Signal Hub', href: '/intelligence' },
+      { label: 'Capital Levels', href: '/intelligence/tabs/capital-levels' },
+      { label: 'Constraint Monitor', href: '/intelligence/tabs/constraint-monitor' },
+      { label: 'MindOps', href: '/intelligence/tabs/mindops' },
+      { label: 'Knowledge Factory', href: '/intelligence/tabs/knowledge-factory' },
     ],
   },
   {

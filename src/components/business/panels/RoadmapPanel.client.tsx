@@ -2,8 +2,10 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog, Skeleton } from "@/components/ui";
 import { Map, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { loadBusinessMilestones } from "@/lib/business/offline-loader";
 import { updateBusinessMilestoneStatus, deleteBusinessMilestone } from "@/lib/business/queries";
 import MilestoneForm from "../forms/MilestoneForm.client";
@@ -19,6 +21,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
   const [milestones, setMilestones] = useState<BusinessMilestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMilestones();
@@ -40,18 +43,23 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
     try {
       await updateBusinessMilestoneStatus(id, newStatus);
       await loadMilestones();
+      toast.success("Estado actualizado");
     } catch (err) {
       console.error("Error updating milestone:", err);
+      toast.error("No se pudo actualizar el estado");
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this milestone?")) return;
     try {
       await deleteBusinessMilestone(id);
       await loadMilestones();
+      toast.success("Milestone eliminado");
     } catch (err) {
       console.error("Error deleting milestone:", err);
+      toast.error("No se pudo eliminar el milestone");
+    } finally {
+      setConfirmDeleteId(null);
     }
   }
 
@@ -81,7 +89,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-slate-400">Loading milestones...</div>
+            <Skeleton height={64} count={4} />
           ) : (
             <>
               {/* Pending */}
@@ -99,7 +107,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
                         key={m.id}
                         milestone={m}
                         onStatusChange={handleStatusChange}
-                        onDelete={handleDelete}
+                        onDelete={(id) => setConfirmDeleteId(id)}
                       />
                     ))}
                   </div>
@@ -121,7 +129,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
                         key={m.id}
                         milestone={m}
                         onStatusChange={handleStatusChange}
-                        onDelete={handleDelete}
+                        onDelete={(id) => setConfirmDeleteId(id)}
                       />
                     ))}
                   </div>
@@ -144,7 +152,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
                         milestone={m}
                         onStatusChange={handleStatusChange}
                         isCompleted
-                        onDelete={handleDelete}
+                        onDelete={(id) => setConfirmDeleteId(id)}
                       />
                     ))}
                   </div>
@@ -171,6 +179,16 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Eliminar milestone"
+        message="Esta acción no se puede deshacer."
+        variant="danger"
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId ? handleDelete(confirmDeleteId) : Promise.resolve()}
+      />
     </div>
   );
 }

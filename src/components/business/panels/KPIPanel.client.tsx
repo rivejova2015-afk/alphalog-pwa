@@ -2,6 +2,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui";
 import { BarChart3 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { loadBusinessCosts } from "@/lib/business/offline-loader";
@@ -79,7 +80,7 @@ export default function KPIPanel({ offlineData }: KPIPanelProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-slate-400">Loading...</div>
+            <Skeleton height={60} count={4} />
           ) : (
             <>
               {/* Month Selector */}

@@ -69,8 +69,8 @@ test.describe('Intelligence Module', () => {
   // Constraint Solver tab
   // -------------------------------------------------------------------------
 
-  test('should load /intelligence/tabs/constraint-solver without error 500', async ({ page }) => {
-    const response = await page.goto('/intelligence/tabs/constraint-solver', {
+  test('should load /intelligence/tabs/constraint-monitor without error 500', async ({ page }) => {
+    const response = await page.goto('/intelligence/tabs/constraint-monitor', {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
@@ -83,8 +83,8 @@ test.describe('Intelligence Module', () => {
     expect(content?.trim().length).toBeGreaterThan(0);
   });
 
-  test('should render meaningful content on the constraint-solver tab', async ({ page }) => {
-    await page.goto('/intelligence/tabs/constraint-solver', {
+  test('should render meaningful content on the constraint-monitor tab', async ({ page }) => {
+    await page.goto('/intelligence/tabs/constraint-monitor', {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
@@ -134,5 +134,37 @@ test.describe('Intelligence Module', () => {
 
     const content = await page.locator('body').textContent();
     expect(content?.trim().length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // MindOps + Knowledge Factory tabs (Sprint 1 of frontend advance plan)
+  // -------------------------------------------------------------------------
+
+  test('should load /intelligence/tabs/mindops without a server error', async ({ page }) => {
+    const response = await page.goto('/intelligence/tabs/mindops', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+
+    const status = response?.status() ?? 0;
+    expect(status).not.toBe(500);
+    expect(status).not.toBe(503);
+
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole('heading', { name: /mindops/i })).toBeVisible();
+  });
+
+  test('should load /intelligence/tabs/knowledge-factory without a server error', async ({ page }) => {
+    const response = await page.goto('/intelligence/tabs/knowledge-factory', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+
+    const status = response?.status() ?? 0;
+    expect(status).not.toBe(500);
+    expect(status).not.toBe(503);
+
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole('heading', { name: /knowledge factory/i })).toBeVisible();
   });
 });

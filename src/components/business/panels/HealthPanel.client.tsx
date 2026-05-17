@@ -2,6 +2,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui";
 import { Activity, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { loadBusinessCosts } from "@/lib/business/offline-loader";
@@ -77,7 +78,7 @@ export default function HealthPanel({ offlineData }: HealthPanelProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-slate-400">Loading...</div>
+            <Skeleton height={48} count={4} />
           ) : alerts.length === 0 ? (
             <div className="bg-green-900/20 border border-green-800 rounded-lg p-4">
               <div className="flex items-center gap-2">

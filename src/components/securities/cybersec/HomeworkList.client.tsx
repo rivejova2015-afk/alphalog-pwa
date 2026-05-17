@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight, FileText, ListChecks } from "lucide-react";
 import { toast } from "sonner";
+import { Skeleton, EmptyState } from "@/components/ui";
 import { HW, HW_TOTAL_POINTS, type HomeworkStatus, type HomeworkSubmission } from "@/lib/securities/cybersec";
 
 const STATUS_STYLES: Record<HomeworkStatus, string> = {
@@ -50,12 +51,35 @@ export function HomeworkList() {
     return acc + (sub.points ?? hw?.pts ?? 0);
   }, 0);
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-3 gap-2">
+          <Skeleton height={70} />
+          <Skeleton height={70} />
+          <Skeleton height={70} />
+        </div>
+        <Skeleton height={70} count={4} />
+      </div>
+    );
+  }
+
+  if (HW.length === 0) {
+    return (
+      <EmptyState
+        icon={ListChecks}
+        title="Sin tareas asignadas"
+        message="Cuando se publiquen nuevas tareas aparecerán aquí."
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-3 gap-2">
         <Tile label="Entregadas" value={`${totalSubmitted}/${HW.length}`} accent="#22d3ee" />
         <Tile label="Puntos" value={`${totalEarned}/${HW_TOTAL_POINTS}`} accent="#34d399" />
-        <Tile label={loading ? "Cargando…" : "Pendientes"} value={`${HW.length - totalSubmitted}`} accent="#eab308" />
+        <Tile label="Pendientes" value={`${HW.length - totalSubmitted}`} accent="#eab308" />
       </div>
 
       <ul className="space-y-2">

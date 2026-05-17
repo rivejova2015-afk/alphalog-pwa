@@ -15,6 +15,7 @@ import {
   type ModuleStatus,
   type ProgressMap,
 } from "@/lib/securities/cybersec";
+import { Skeleton } from "@/components/ui";
 import { ProgressBadge } from "./ProgressBadge.client";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -128,12 +129,22 @@ export function SyllabusPanel() {
 }
 
 function SummaryStrip({ stats, loading }: { stats: { total: number; completed: number; active: number; locked: number }; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Skeleton height={70} />
+        <Skeleton height={70} />
+        <Skeleton height={70} />
+        <Skeleton height={70} />
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
       <Tile label="Total" value={stats.total} accent="#94a3b8" />
       <Tile label="Activos" value={stats.active} accent="#22d3ee" />
       <Tile label="Completados" value={stats.completed} accent="#34d399" />
-      <Tile label={loading ? "Cargando…" : "Bloqueados"} value={stats.locked} accent="#475569" />
+      <Tile label="Bloqueados" value={stats.locked} accent="#475569" />
     </div>
   );
 }

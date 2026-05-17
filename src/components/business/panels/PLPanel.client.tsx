@@ -2,8 +2,10 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog, Skeleton } from "@/components/ui";
 import { TrendingUp, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { loadBusinessCosts } from "@/lib/business/offline-loader";
 import { deleteBusinessCost } from "@/lib/business/queries";
 import { calculatePLMetrics, calculateTrendMetrics, getMonthStr, getLastNMonths, type TrendData, type PLMetrics } from "@/lib/business/metrics";
@@ -23,6 +25,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
   const [costsLoading, setCostsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(getMonthStr());
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { trades, loading: tradesLoading } = usePnlMetrics({
     closedOnly: true,
     requireExitDate: true,
@@ -62,12 +65,15 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
   }
 
   async function handleDeleteCost(id: string) {
-    if (!confirm("Delete this cost?")) return;
     try {
       await deleteBusinessCost(id);
       await loadCosts();
+      toast.success("Costo eliminado");
     } catch (err) {
       console.error("Error deleting cost:", err);
+      toast.error("No se pudo eliminar el costo");
+    } finally {
+      setConfirmDeleteId(null);
     }
   }
 
@@ -106,7 +112,13 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
-            <div className="text-center py-8 text-slate-400">Loading...</div>
+            <div className="space-y-3">
+              <Skeleton height={80} count={1} />
+              <div className="grid grid-cols-4 gap-3">
+                <Skeleton height={70} /><Skeleton height={70} /><Skeleton height={70} /><Skeleton height={70} />
+              </div>
+              <Skeleton height={50} count={3} />
+            </div>
           ) : plMetrics ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -175,7 +187,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
                         <div className="text-right mr-3">
                           <div className="text-white">${cost.amount.toFixed(2)}</div>
                         </div>
-                        <button onClick={() => handleDeleteCost(cost.id)} className="p-1 text-red-400">
+                        <button onClick={() => setConfirmDeleteId(cost.id)} className="p-1 text-red-400">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -211,6 +223,16 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
       {showForm && (
         <CostForm onClose={() => setShowForm(false)} onSave={() => { setShowForm(false); loadCosts(); }} />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Eliminar costo"
+        message="Esta acción no se puede deshacer."
+        variant="danger"
+        confirmLabel="Eliminar"
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={() => confirmDeleteId ? handleDeleteCost(confirmDeleteId) : Promise.resolve()}
+      />
     </div>
   );
 }
