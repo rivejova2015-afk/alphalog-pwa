@@ -12,9 +12,9 @@ describe("resolveSymbol", () => {
   it("returns explicit entry for known symbols", () => {
     const xau = resolveSymbol("XAUUSD");
     expect(xau.assetClass).toBe("metals-spot");
-    // XAUUSD uses Yahoo via GC=F proxy (spot ticker was discontinued), with
-    // fxratesapi as D1 spot-real fallback. CSV alternatives remain available.
-    expect(xau.apiSources).toEqual(["yahoo", "fxratesapi"]);
+    // Metals chain: OANDA real-spot first (when token), Yahoo GC=F proxy,
+    // fxratesapi as D1 fallback. CSV alternatives remain for broker fidelity.
+    expect(xau.apiSources).toEqual(["oanda", "yahoo", "fxratesapi"]);
     expect(xau.notes).toContain("GC=F");
   });
 
@@ -44,17 +44,17 @@ describe("resolveSymbol", () => {
 });
 
 describe("getApiSourcesForTf", () => {
-  it("XAUUSD M1 returns only [yahoo] (fxratesapi is D1-only, filtered out)", () => {
-    expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual(["yahoo"]);
+  it("XAUUSD M1 returns [oanda, yahoo] (fxratesapi D1-only is filtered out)", () => {
+    expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual(["oanda", "yahoo"]);
   });
 
-  it("XAUUSD D1 returns [yahoo, fxratesapi] — Yahoo first, fxratesapi backup", () => {
-    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["yahoo", "fxratesapi"]);
+  it("XAUUSD D1 returns full chain [oanda, yahoo, fxratesapi]", () => {
+    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["oanda", "yahoo", "fxratesapi"]);
   });
 
-  it("EURUSD returns yahoo for any TF it supports", () => {
-    expect(getApiSourcesForTf("EURUSD", "M1")).toEqual(["yahoo"]);
-    expect(getApiSourcesForTf("EURUSD", "D1")).toEqual(["yahoo"]);
+  it("EURUSD returns [oanda, yahoo] — Oanda preferred when token is set, Yahoo as fallback", () => {
+    expect(getApiSourcesForTf("EURUSD", "M1")).toEqual(["oanda", "yahoo"]);
+    expect(getApiSourcesForTf("EURUSD", "D1")).toEqual(["oanda", "yahoo"]);
   });
 
   it("ES (futures) returns yahoo", () => {

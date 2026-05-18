@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dispatchTradovate } from "./tradovate";
+import { dispatchIbkr } from "./ibkr";
 import type { DispatchInput, DispatchResult } from "./types";
 
 export type { DispatchInput, DispatchResult, DispatchMode } from "./types";
@@ -46,11 +47,7 @@ export async function dispatchSignal(
   }
 
   if (platform === "IBKR") {
-    return {
-      ok: false, action: "failed",
-      reason: "unsupported_platform",
-      error: "IBKR dispatcher not implemented in Sprint A — coming in Sprint C.",
-    };
+    return await dispatchIbkr(input, svc);
   }
 
   return {

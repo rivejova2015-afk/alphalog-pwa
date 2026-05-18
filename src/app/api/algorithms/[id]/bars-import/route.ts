@@ -18,11 +18,12 @@ import { parseTradovateCsv, detectSymbolTfFromTradovateFilename } from "@/lib/ba
 import { parseDukascopyCsv, detectSymbolTfFromDukascopyFilename } from "@/lib/backtest/dukascopy-csv-parser";
 import { parseHistDataCsv, detectSymbolTfFromHistDataFilename } from "@/lib/backtest/histdata-csv-parser";
 import { parseCmeCsv, detectTfFromCmeFilename } from "@/lib/backtest/cme-csv-parser";
+import { parseBinanceCsv, detectSymbolTfFromBinanceFilename } from "@/lib/backtest/binance-csv-parser";
 import { logError, logInfo } from "@/lib/log";
 import type { Bar, Timeframe } from "@/types/backtest";
 
-type Source = "mt4" | "mt5" | "tradovate" | "dukascopy" | "histdata" | "cme";
-const VALID_SOURCES: Source[] = ["mt4", "mt5", "tradovate", "dukascopy", "histdata", "cme"];
+type Source = "mt4" | "mt5" | "tradovate" | "dukascopy" | "histdata" | "cme" | "binance";
+const VALID_SOURCES: Source[] = ["mt4", "mt5", "tradovate", "dukascopy", "histdata", "cme", "binance"];
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,6 +88,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       // The user must pick the symbol via the form field (or we filter by it).
       const det = detectTfFromCmeFilename(file.name);
       fromFilename = det ? { symbol: null, tf: det.tf } : null;
+    } else if (source === "binance") {
+      const det = detectSymbolTfFromBinanceFilename(file.name);
+      fromFilename = det ? { symbol: det.symbol, tf: det.tf } : null;
     } else {
       // mt4/mt5 share the MT5 detector
       const det = detectSymbolTfFromFilename(file.name);
@@ -128,6 +132,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       parsed = parseHistDataCsv(text, { tzOffsetMinutes });
     } else if (source === "cme") {
       parsed = parseCmeCsv(text, { filterSymbol: symbol });
+    } else if (source === "binance") {
+      parsed = parseBinanceCsv(text);
     } else {
       parsed = parseMt5Csv(text, { tzOffsetMinutes });
     }

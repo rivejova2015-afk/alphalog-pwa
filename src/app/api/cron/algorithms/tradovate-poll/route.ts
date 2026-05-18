@@ -174,10 +174,13 @@ async function handler(request: NextRequest) {
   const svc = createServiceClient();
   const mode = getDispatchMode();
 
+  // Walks every algo whose platform is dispatched server-side (Tradovate
+  // futures, IBKR options — both go through src/lib/engine/dispatchers).
+  // MT4/MT5 stay EA-driven and are filtered out here.
   const { data: algos, error: algoErr } = await svc
     .from("algorithms")
     .select("id, user_id, name, status, platform, instrument, parameters, engine_config, lot_size, risk_percent, last_signal_bar_ts")
-    .eq("platform", "Tradovate")
+    .in("platform", ["Tradovate", "IBKR"])
     .in("status", ["live", "paper"])
     .is("deleted_at", null);
 

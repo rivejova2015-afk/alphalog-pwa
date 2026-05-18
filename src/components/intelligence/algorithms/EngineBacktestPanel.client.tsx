@@ -165,6 +165,8 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [manageOpen, setManageOpen]   = useState(false);
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<HistoryRow | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [symbolStatus, setSymbolStatus] = useState<Record<string, SymbolStatus> | null>(null);
 
   // Load history on mount + refresh after each successful run.
@@ -213,6 +215,29 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       if (prev.length >= 2) return [prev[1], runId];  // keep last 2, FIFO
       return [...prev, runId];
     });
+  }
+
+  async function deleteAllRuns() {
+    setDeletingAll(true);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/engine-backtest/runs`, {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      toast.success(`${json.deleted ?? 0} backtests borrados`);
+      setCompareIds([]);
+      setData(null);
+      await refreshHistory();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setDeletingAll(false);
+      setConfirmDeleteAll(false);
+    }
   }
 
   async function deleteRun(runId: string) {
@@ -450,9 +475,20 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       {/* Manage history panel — list with delete buttons */}
       {manageOpen && history.length > 0 && (
         <div className="rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-2 max-h-60 overflow-y-auto">
-          <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1.5 px-1">
-            Borrar runs individualmente (hard-delete, sin papelera)
-          </p>
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <p className="text-[10px] text-[#475569] uppercase tracking-wider">
+              Borrar runs individualmente (hard-delete, sin papelera)
+            </p>
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteAll(true)}
+              disabled={deletingAll || history.length === 0}
+              className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border border-[#ef4444]/40 bg-[#ef4444]/10 text-[#ef4444] hover:bg-[#ef4444]/20 transition-colors disabled:opacity-40"
+              title="Borrar todo el historial de backtests para este algoritmo"
+            >
+              {deletingAll ? "Borrando…" : `Borrar todo (${history.length})`}
+            </button>
+          </div>
           <div className="space-y-1">
             {history.map((r) => (
               <div key={r.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#151b28]">
@@ -520,6 +556,52 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
                 {deletingId === confirmDelete.id
                   ? <><Loader2 size={11} className="animate-spin" /> Borrando…</>
                   : <><Trash2 size={11} /> Borrar definitivamente</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk-delete confirmation modal */}
+      {confirmDeleteAll && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-delete-all-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => !deletingAll && setConfirmDeleteAll(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#0a0e1a] border border-[#ef4444]/40 rounded-lg p-5 max-w-md w-full mx-4 shadow-2xl"
+          >
+            <h3 id="confirm-delete-all-title" className="text-sm font-bold text-[#ef4444] mb-2 flex items-center gap-2">
+              <Trash2 size={14} /> Borrar todo el historial
+            </h3>
+            <p className="text-[11px] text-[#94a3b8] mb-3">
+              Se van a borrar <span className="font-mono font-bold text-[#ef4444]">{history.length}</span> backtest runs de este algoritmo de forma definitiva.
+            </p>
+            <p className="text-[10px] text-[#475569] mb-4">
+              No hay papelera. Las estadísticas reales del algoritmo no se ven afectadas.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAll(false)}
+                disabled={deletingAll}
+                className="px-3 py-1.5 rounded-lg border border-[#1f2937] text-[#475569] text-xs hover:border-[#475569] transition-colors disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={deleteAllRuns}
+                disabled={deletingAll}
+                className="px-3 py-1.5 rounded-lg bg-[#ef4444] text-white text-xs font-semibold hover:bg-[#dc2626] transition-colors disabled:opacity-40 flex items-center gap-1.5"
+              >
+                {deletingAll
+                  ? <><Loader2 size={11} className="animate-spin" /> Borrando…</>
+                  : <><Trash2 size={11} /> Borrar todos los {history.length}</>}
               </button>
             </div>
           </div>

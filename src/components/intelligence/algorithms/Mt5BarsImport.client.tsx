@@ -22,11 +22,18 @@ const DUKASCOPY_FILENAME_RE  = /^([A-Z]{6,7})[._\-].*?(Candlestick[_-]?(\d+)[_-]
 const HISTDATA_FILENAME_RE   = /^DAT_ASCII_([A-Z0-9]+)_M1_(\d{4})(?:\d{2})?\.csv$/i;
 // CME daily settlement: `settle.YYYYMMDD.s.csv` — no symbol in filename (multi-contract file).
 const CME_FILENAME_RE        = /^settle\.\d{8}\.s\.csv$/i;
+// Binance bulk archive: `<SYMBOL>-<INTERVAL>-<YYYY-MM-DD>.csv` or monthly `<SYMBOL>-<INTERVAL>-<YYYY-MM>.csv`.
+const BINANCE_FILENAME_RE    = /^([A-Z0-9]+)-([0-9]+(?:m|mo|h|d|w))-(\d{4}-\d{2}(?:-\d{2})?)\.csv$/i;
+const BINANCE_TF_MAP: Record<string, Tf> = {
+  "1m": "M1", "3m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
+  "1h": "H1", "2h": "H1", "4h": "H4", "6h": "H4", "8h": "H4", "12h": "H4",
+  "1d": "D1", "3d": "D1", "1w": "W1", "1mo": "MN1",
+};
 
 const TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
 type Tf = typeof TIMEFRAMES[number];
 
-const SOURCES = ["mt5", "mt4", "tradovate", "dukascopy", "histdata", "cme"] as const;
+const SOURCES = ["mt5", "mt4", "tradovate", "dukascopy", "histdata", "cme", "binance"] as const;
 type Source = typeof SOURCES[number];
 
 const SOURCE_LABELS: Record<Source, string> = {
@@ -36,6 +43,7 @@ const SOURCE_LABELS: Record<Source, string> = {
   dukascopy: "Dukascopy (forex)",
   histdata:  "HistData (forex M1)",
   cme:       "CME settlement (futures D1)",
+  binance:   "Binance bulk archive (crypto)",
 };
 
 const SOURCE_HINTS: Record<Source, string> = {
@@ -45,6 +53,7 @@ const SOURCE_HINTS: Record<Source, string> = {
   dukascopy: "Formato: SYMBOL_Candlestick_N_U_BID_*.csv (ej. EURUSD_Candlestick_15_M_BID_*.csv) o renombrado SYMBOL_TF.csv",
   histdata:  "Formato: DAT_ASCII_SYMBOL_M1_YYYYMM.csv (ej. DAT_ASCII_EURUSD_M1_202401.csv)",
   cme:       "Formato: settle.YYYYMMDD.s.csv — el filename trae solo la fecha, completá Symbol (ej. ES) manualmente",
+  binance:   "Formato: SYMBOL-TF-YYYY-MM-DD.csv (ej. BTCUSDT-1m-2024-01-15.csv). Descargá de data.binance.vision/data/spot/daily/klines/.",
 };
 
 interface FileEntry {
@@ -99,6 +108,14 @@ function detectFromName(name: string, source: Source): { symbol: string; tf: Tf 
     // CME files don't embed a symbol — user must specify. We only return tf.
     if (!CME_FILENAME_RE.test(base)) return null;
     return { symbol: "", tf: "D1" };
+  }
+
+  if (source === "binance") {
+    const m = base.match(BINANCE_FILENAME_RE);
+    if (!m) return null;
+    const tf = BINANCE_TF_MAP[m[2].toLowerCase()];
+    if (!tf) return null;
+    return { symbol: m[1].toUpperCase(), tf };
   }
 
   // MT4 + MT5 share the same export filename convention.
@@ -202,7 +219,7 @@ export function Mt5BarsImport({ algorithmId, onSuccess }: Props) {
         className="w-full flex items-center justify-between px-3 py-2 text-xs font-mono uppercase tracking-wider text-[#22d3ee] hover:bg-[#22d3ee]/5 transition-colors"
       >
         <span className="flex items-center gap-1.5">
-          <Upload size={12} /> Importar barras (MT4/MT5/Tradovate/Dukascopy/HistData/CME)
+          <Upload size={12} /> Importar barras (MT4/MT5/Tradovate/Dukascopy/HistData/CME/Binance)
           {entries.length > 0 && <span className="text-[10px] text-[#475569]">— {entries.length} archivo{entries.length === 1 ? "" : "s"}</span>}
         </span>
         {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}

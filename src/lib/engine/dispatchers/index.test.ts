@@ -131,12 +131,26 @@ describe("dispatchSignal — routing", () => {
     expect(res.reason).toBe("ea_driven_platform");
   });
 
-  it("IBKR returns unsupported_platform (Sprint C scope)", async () => {
+  it("IBKR with valid params returns shadow_logged (stub — no real executor)", async () => {
     const svc = makeSupabaseMock();
-    const res = await dispatchSignal(tradovateInput({ algo: { ...tradovateInput().algo, platform: "IBKR" } }), svc);
+    const res = await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_ibkr", user_id: "user_1", platform: "IBKR",
+        parameters: { ibkr_account: "U1234567", underlying: "SPY", options_strategy: "covered_call" },
+      },
+    }), svc);
+    expect(res.ok).toBe(true);
+    expect(res.action).toBe("shadow_logged");
+    expect(res.reason).toBe("ibkr_stub_no_executor");
+  });
+
+  it("IBKR without ibkr_account returns failed/no_ibkr_account", async () => {
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput({
+      algo: { id: "a", user_id: "u", platform: "IBKR", parameters: { underlying: "SPY" } },
+    }), svc);
     expect(res.ok).toBe(false);
-    expect(res.action).toBe("failed");
-    expect(res.reason).toBe("unsupported_platform");
+    expect(res.reason).toBe("no_ibkr_account");
   });
 
   it("unknown platform returns unsupported_platform with the bad value in the error", async () => {
