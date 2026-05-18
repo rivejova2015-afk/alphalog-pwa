@@ -718,6 +718,18 @@ NODE_ENV=production
 # validar shadow logs. Cualquier valor que no sea 'live' (incluyendo typos
 # y string vacío) se interpreta como shadow — defensa contra accidentes.
 DISPATCH_MODE=shadow
+
+# OANDA v20 fetcher (forex + metales spot). Opcional — sin token el bars-loader
+# cae al siguiente source de la cadena (Yahoo). Sacá un token gratuito en
+# https://www.oanda.com (cuenta practice = gratis, sin depósito).
+OANDA_API_TOKEN=                # bearer token de v20 account
+OANDA_ENV=practice              # 'practice' (default) | 'live'
+
+# CME daily settlement cron — opt-in. Cuando true, baja el settle del día
+# anterior para ES/NQ/YM/RTY/GC/SI/CL/NG todos los días hábiles a las 23:00 UTC.
+# El endpoint público de CME no tiene SLA — habilitar solo después de probar
+# manualmente que el parser sigue matcheando.
+CME_AUTO_FETCH_ENABLED=false
 ```
 
 ### Testing
@@ -782,12 +794,11 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 
 ### ⚠️ Parcialmente implementado / TODOs conocidos
 
-- Copy Groups: ya tiene UI dedicada (sprint 3 — `/dashboard/copy-groups` lista + `/dashboard/copy-groups/[id]` detalle con grafo SVG + AabRightPanel). Pendiente: link directo desde MainNav (actualmente se accede solo por URL o desde el flujo AAB).
-- Operations panel (`/business/operations`) es solo nav-hub (40% madurez). Pendiente convertir en mini-dashboard agregando # decisions pendientes, # SOPs por hacer, último P&L, runway actual.
+<!-- (resolved sprint 11) Copy Groups: UI dedicada (sprint 3) + dashboard quick-link tile (sprint 5) + entrada en Sidebar lateral bajo "Intelligence Suite" (sprint 11). Operations bajo "Business" también añadido. -->
 
 ### 🔴 Pendiente / No implementado
 - Suscripción multi-usuario real (actualmente 1 usuario).
-- Tests unitarios coinarb segunda capa: `analysis/` (smc-detector, mtf-analyzer, liquidity-map, candle-builder), `validators/` (volume-delta, volume-profile, fear-greed, liquidation-heatmap), `risk/phase-manager.ts` siguen sin cobertura. Tier-1 (config, command-poller, feeds-watchdog, circuit-breaker, daily-tracker, backtest-scoring) cubierto desde sprints 3-4.
+<!-- (resolved sprint 6) Coinarb segunda capa cubierta: analysis/ (smc-detector, mtf-analyzer, liquidity-map, candle-builder), validators/ (volume-delta, volume-profile, fear-greed, liquidation-heatmap) y risk/phase-manager.ts ahora tienen 79 tests en coinarb/tests/. -->
 - Variables Sentry pendientes en Vercel: el SDK está instalado y configurado, falta setear `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` para activar reporting. Sin DSN el wrapper hace no-op silencioso.
 - AAB drag/drop nodos: 20% madurez en `AabTreeView.client.tsx`. Bloqueado por spec UX.
 - TerminalReportsBot QStash scheduling: mencionado pero no implementado. Decidir entre construir o eliminar la mención.
@@ -822,6 +833,7 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
   - Sprint 7: `runSkillLearningCycle(instrument, userId)` ya no hardcodea owner UUID; llm-rules tests (10); Cache-Control batch en 6 GET routes (copy-groups graph, coinarb agents/trades, algorithms backtest, polyarb agents).
   - Sprint 8: 11 audit log sites nuevos en 12 rutas mutadoras críticas (accounts CRUD, categories, agents create/update, algo control/pairing-token, CME signal/risk-config, treasury configs). `AuditResourceType` extendido con 7 tipos nuevos.
 - **Sprint 9 — `shared/` consolidado** (2026-05-03): `src/components/shared/` eliminado por completo. Los 2 archivos finales (`Button.tsx`, `Card.tsx`) eran código muerto sin importadores en `src/`. Única ubicación canónica ahora: `src/components/ui/`.
+- **Sprint 10 — Operations dashboard** (2026-05-03): `/business/operations` pasó de nav-hub (40% madurez) a mini-dashboard con 6 tiles: decisions pendientes, SOPs por correr, milestones, costos del mes, P&L del mes, runway. Backend en `src/lib/business/operationsDashboard.ts` (helper puro `buildOperationsDashboard` + async loader). 18 unit tests para el helper. Reusa `calculatePLMetrics` + `calculateRunwayMetrics` de `lib/business/metrics.ts`.
 - **Map Hot module completo end-to-end** (2026-05): pasó de UI con mock data (~35% madurez) a 95% funcional.
   - Schema: migration `109_map_hot_schema.sql` con 3 tablas (`map_hot_goals`, `map_hot_goal_links`, `map_hot_milestones`), RLS owner-only, soft-delete, indexes parciales.
   - API: `/api/map-hot/goals` (GET/POST) + `/api/map-hot/goals/[id]` (GET/PUT/DELETE) + `/api/map-hot/milestones` (GET/POST) + `/api/map-hot/milestones/[id]` (PUT/DELETE) + `/api/algorithms/lite` (GET liviano para selector). Todos con Zod + autoFix + contractGuard + audit + recordBugFromRequest.

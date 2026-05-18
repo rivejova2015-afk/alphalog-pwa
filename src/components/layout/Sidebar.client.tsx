@@ -21,6 +21,7 @@ const SECTIONS: SidebarSection[] = [
     items: [
       { label: 'Agents Dashboard', href: '/intelligence/agents' },
       { label: 'Algorithmic Trading', href: '/intelligence/algorithms' },
+      { label: 'Copy Groups', href: '/dashboard/copy-groups' },
       { label: 'Capital Levels', href: '/intelligence/tabs/capital-levels' },
       { label: 'Constraint Monitor', href: '/intelligence/tabs/constraint-monitor' },
       { label: 'MindOps', href: '/intelligence/tabs/mindops' },
@@ -30,6 +31,7 @@ const SECTIONS: SidebarSection[] = [
   {
     name: 'Business',
     items: [
+      { label: 'Operations', href: '/business/operations' },
       { label: 'Decisions', href: '/business/decisions' },
       { label: 'Journal', href: '/business/journal' },
       { label: 'KPIs', href: '/business/kpis' },
