@@ -1,10 +1,11 @@
 import Link from "next/link";
 import {
   Scale, BookOpen, LineChart, ClipboardList, Activity, TrendingUp,
-  Building2, MapPin, AlertCircle, CheckCircle2, Clock,
+  Building2, MapPin, AlertCircle, CheckCircle2, Clock, DollarSign, Timer,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { loadOperationsDashboardData } from "@/lib/business/operationsDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -19,32 +20,11 @@ const SECTIONS = [
   { label: "Roadmap", href: "/business/roadmap", icon: MapPin, color: "#c084fc", desc: "Product and business roadmap" },
 ];
 
-// Lightweight aggregator that sums a few counters without pulling whole tables.
-// Each query uses `head: true, count: 'exact'` so we transfer 0 bytes of rows.
-async function loadOperationsOverview(userId: string) {
-  const supabase = await createClient();
-  const startOfMonth = new Date();
-  startOfMonth.setUTCDate(1);
-  startOfMonth.setUTCHours(0, 0, 0, 0);
-
-  const [decisionsCount, sopsCount, milestonesPending, costsThisMonth] = await Promise.all([
-    supabase.from("business_decisions").select("id", { head: true, count: "exact" }).eq("user_id", userId).is("deleted_at", null),
-    supabase.from("business_sops").select("id", { head: true, count: "exact" }).eq("user_id", userId).is("deleted_at", null),
-    supabase.from("business_milestones").select("id", { head: true, count: "exact" }).eq("user_id", userId).is("deleted_at", null).neq("status", "completed"),
-    supabase.from("business_costs").select("amount").eq("user_id", userId).is("deleted_at", null).gte("cost_date", startOfMonth.toISOString().split("T")[0]),
-  ]);
-
-  const costsTotalMonth = (costsThisMonth.data ?? []).reduce(
-    (acc, row) => acc + Number((row as { amount: number | null }).amount ?? 0),
-    0,
-  );
-
-  return {
-    decisionsCount: decisionsCount.count ?? 0,
-    sopsCount: sopsCount.count ?? 0,
-    milestonesPending: milestonesPending.count ?? 0,
-    costsTotalMonth,
-  };
+function formatRunway(months: number): string {
+  if (!Number.isFinite(months) || months <= 0) return "—";
+  if (months >= 99) return "99+ m";
+  if (months >= 12) return `${(months / 12).toFixed(1)}y`;
+  return `${months.toFixed(1)} m`;
 }
 
 export default async function OperationsPage() {
@@ -52,7 +32,10 @@ export default async function OperationsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth");
 
-  const overview = await loadOperationsOverview(user.id);
+  const overview = await loadOperationsDashboardData(user.id);
+
+  const pnlPositive = overview.netPnlMonth >= 0;
+  const runwayHealthy = overview.runwayMonths >= 6;
 
   return (
     <div className="space-y-6">
@@ -61,20 +44,20 @@ export default async function OperationsPage() {
         <p className="text-sm text-[#94a3b8] mt-1">Manage your trading business operations</p>
       </div>
 
-      {/* Overview tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Overview tiles — 6 KPIs per spec (decisions pending, SOPs to run, milestones, costs, PnL, runway) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Tile
           icon={Scale}
-          label="Active decisions"
-          value={overview.decisionsCount.toString()}
-          accent="#34d399"
+          label="Decisions pendientes"
+          value={overview.decisionsPending.toString()}
+          accent={overview.decisionsPending > 0 ? "#22d3ee" : "#34d399"}
           href="/business/decisions"
         />
         <Tile
           icon={ClipboardList}
-          label="SOPs disponibles"
-          value={overview.sopsCount.toString()}
-          accent="#eab308"
+          label="SOPs por correr"
+          value={overview.sopsToRun.toString()}
+          accent={overview.sopsToRun > 0 ? "#eab308" : "#34d399"}
           href="/business/sops"
         />
         <Tile
@@ -90,6 +73,20 @@ export default async function OperationsPage() {
           value={`$${overview.costsTotalMonth.toFixed(0)}`}
           accent={overview.costsTotalMonth > 0 ? "#ef4444" : "#34d399"}
           href="/business/pl"
+        />
+        <Tile
+          icon={DollarSign}
+          label="P&L del mes"
+          value={`${pnlPositive ? "+" : ""}$${overview.netPnlMonth.toFixed(0)}`}
+          accent={pnlPositive ? "#34d399" : "#ef4444"}
+          href="/business/pl"
+        />
+        <Tile
+          icon={Timer}
+          label="Runway"
+          value={formatRunway(overview.runwayMonths)}
+          accent={runwayHealthy ? "#34d399" : overview.runwayMonths >= 3 ? "#eab308" : "#ef4444"}
+          href="/business/runway"
         />
       </div>
 
