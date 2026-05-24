@@ -1,0 +1,64 @@
+# Build artefacts
+.next
+out
+dist
+build
+coverage
+.turbo
+.swc
+
+# Dependencies (rebuilt inside container)
+node_modules
+
+# Tests / dev artefacts not needed at runtime
+playwright-report
+test-results
+tests/.auth
+*.tsbuildinfo
+
+# Local secrets — never bake into image
+.env
+.env.*
+!.env.example
+
+# Sibling projects in this repo that are NOT deployed with the web app.
+# They have their own Fly.io apps (coinarb-50x, polyarb-*) or local runtimes.
+coinarb
+polyarb
+bots
+lattice-desktop
+GoldRangeBasketR
+
+# Git / editor / OS
+.git
+.gitignore
+.gitattributes
+.gitmodules
+.github
+.vscode
+.idea
+.cursor
+.claude
+.DS_Store
+Thumbs.db
+
+# Docs / config not needed by runtime
+*.md
+!README.md
+docs
+scripts
+supabase
+.env.example
+.dockerignore
+Dockerfile
+Dockerfile.cron
+fly.toml
+fly.cron.toml
+crontab
+MIGRATION-RUNBOOK.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,23 @@
+# AlphaLog cron sidecar — separate Fly app so cron failures never affect web
+# uptime and vice versa. Same region as web (iad) to keep 6PN traffic local.
+
+app            = "alphalog-cron"
+primary_region = "iad"
+kill_signal    = "SIGTERM"
+kill_timeout   = "10s"
+
+[build]
+  dockerfile = "Dockerfile.cron"
+
+[env]
+  TZ = "UTC"
+
+# No [http_service] — this app exposes no public port. Only outbound calls
+# over Fly's private 6PN to alphalog-pwa.internal.
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "256mb"
+
+[deploy]
+  strategy = "immediate"

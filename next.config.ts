@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   turbopack: {},
+
+  // Standalone output enables minimal Docker images (self-contained server.js + only
+  // the production deps actually used). Required for the Fly.io migration; harmless
+  // on Vercel since Vercel uses its own build adapter.
+  output: 'standalone',
   
   // Image optimization configuration with remote patterns (Next.js 16+)
   images: {

@@ -58,6 +58,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# fly.io — local helpers that may contain plaintext secrets after editing
+.fly-secrets.sh
+.fly-secrets.local.sh
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+#
+# AlphaLog cron sidecar
+# Runs supercronic (a cron daemon designed for containers — it logs to stdout,
+# respects signals, and exits non-zero on misfires so Fly restarts it).
+#
+# All jobs are HTTP POSTs against the main app's internal address inside Fly's
+# private 6PN network: http://alphalog-pwa.internal:3000. Authentication uses
+# the CRON_SECRET / OPS_CRON_SECRET headers the routes already expect.
+
+FROM debian:bookworm-slim
+
+# Pin a version explicitly so reproducible. Update SUPERCRONIC_VERSION + the
+# checksum together. The checksum below is OMITTED (verify yourself with
+# `curl -L .../supercronic-linux-amd64 | sha256sum` and pin if desired).
+ENV SUPERCRONIC_VERSION=v0.2.33
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL -o /usr/local/bin/supercronic \
+        "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+    && chmod +x /usr/local/bin/supercronic
+
+WORKDIR /app
+COPY crontab /app/crontab
+
+# UTC matches Vercel's cron behaviour, so we don't have to re-translate the
+# existing schedule expressions copied from vercel.json.
+ENV TZ=UTC
+
+CMD ["/usr/local/bin/supercronic", "-passthrough-logs", "/app/crontab"]

@@ -1,0 +1,33 @@
+# AlphaLog cron schedule — ported from vercel.json (UTC).
+# Each line calls an internal endpoint on alphalog-pwa.internal:3000 via Fly's
+# private 6PN network. The CRON_SECRET / OPS_CRON_SECRET env vars are injected
+# by `fly secrets set --app alphalog-cron`.
+#
+# The shell snippet uses curl --fail so a non-2xx response makes supercronic
+# log the failure (and Fly's metrics surface it). Endpoints needing a body
+# already tolerate empty POSTs.
+
+# Terminal / market data
+0    *    *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/terminal/reports/refresh
+0    */2  *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/terminal/news-fetch
+*/5  *    *  *  *   curl --fail --max-time 30 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/terminal/price-fetch
+0    6    *  *  1   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/terminal/calendar-fetch
+
+# Bot / algo runtime monitoring (every minute for heartbeat = OK for supercronic)
+*/2  *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/bot-heartbeat-monitor
+*    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-heartbeat
+*    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/coinarb-heartbeat
+0    22   *  *  *   curl --fail --max-time 60 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-daily-report
+
+# Backtest pipeline
+15   *    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/backtest/paper-bridge
+30   4    *  *  *   curl --fail --max-time 300 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/backtest/daemon
+
+# Bars ingest + algorithms
+10   *    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/bars/ingest
+45   5    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/algorithms/paper-review
+*    *    *  *  *   curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/algorithms/tradovate-poll
+0    23   *  *  1-5 curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/bars/cme-settle-fetch
+
+# Map / progress snapshots
+5    0    *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/map-hot/snapshot
