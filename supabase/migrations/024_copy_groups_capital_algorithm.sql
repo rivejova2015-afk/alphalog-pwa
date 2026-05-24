@@ -286,7 +286,7 @@ as $$
   with recursive tree as (
     select
       l.child_account_id as account_id,
-      l.copy_multiplier as multiplier_path,
+      l.copy_multiplier::numeric as multiplier_path,
       1 as depth,
       l.parent_account_id as parent_account_id
     from public.copy_group_links l

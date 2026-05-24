@@ -29,9 +29,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         supabase
           .from("copy_group_nodes")
           .select(
-            "id, copy_group_id, account_id, role, status, risk_pct, risk_node, created_at, updated_at, account:accounts(id, name, currency, status, operation_state, phase_status, role)"
+            "id, copy_group_id, account_id, role, status, risk_pct, risk_node, sort_index, created_at, updated_at, account:accounts(id, name, currency, status, operation_state, phase_status, role)"
           )
-          .eq("copy_group_id", id),
+          .eq("copy_group_id", id)
+          .order("role", { ascending: false })       // master first, slave after
+          .order("sort_index", { ascending: true }),
+
         supabase
           .from("copy_group_links")
           .select("id, copy_group_id, parent_account_id, child_account_id, copy_multiplier, link_type, created_at")

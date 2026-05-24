@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, MoveVertical } from "lucide-react";
 import AabRightPanel from "@/components/tradehub/aab/AabRightPanel.client";
 import CopyGroupGraph from "./CopyGroupGraph.client";
+import { SortableSlavesList } from "./SortableSlavesList.client";
 
 interface Account {
   id: string;
@@ -118,12 +119,26 @@ export default function CopyGroupDetailWorkspace({ copyGroupId }: { copyGroupId:
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-        <CopyGroupGraph
-          nodes={graph.nodes}
-          links={graph.links}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
-        />
+        <div className="space-y-4">
+          <CopyGroupGraph
+            nodes={graph.nodes}
+            links={graph.links}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={setSelectedNodeId}
+          />
+
+          <section className="rounded-lg border border-[#1f2937] bg-[#151b28] p-4">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#94a3b8] mb-3 flex items-center gap-2">
+              <MoveVertical size={14} className="text-[#22d3ee]" />
+              Orden de slaves (drag para reordenar)
+            </h2>
+            <SortableSlavesList
+              copyGroupId={graph.group.id}
+              initialSlaves={graph.nodes.filter((n) => n.role === "slave")}
+              onReorderCommitted={() => void loadAll()}
+            />
+          </section>
+        </div>
 
         <AabRightPanel
           group={graph.group}
