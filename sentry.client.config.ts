@@ -29,5 +29,15 @@ if (DSN) {
       'ResizeObserver loop limit exceeded',
       'ResizeObserver loop completed with undelivered notifications',
     ],
+
+    beforeSend(event, hint) {
+      const err = hint.originalException as Error | undefined;
+      if (err?.name === 'AbortError') return null;
+      // Workbox / next-pwa fetch races during SW updates — already covered by
+      // ignoreErrors but extension code can rewrite the message.
+      const msg = event.message ?? '';
+      if (msg.includes('Failed to fetch') && msg.includes('workbox')) return null;
+      return event;
+    },
   });
 }

@@ -37,9 +37,12 @@ export function logError(name: string, meta: LogMeta): void {
       )
       .catch(() => undefined);
   } else {
-    // Server-side: also forward to Sentry. Wrapper no-ops when DSN unset.
+    // Server-side: forward to Sentry tagged by module so the Mission Control
+    // dashboard can group by `tag:module:*`. Wrapper no-ops when DSN unset.
     import("@/lib/sentry")
-      .then(({ captureMessage }) => captureMessage(`[${name}] ${meta.message || "Error"}`, context))
+      .then(({ captureMessageWithModule }) =>
+        captureMessageWithModule(name.toLowerCase(), `[${name}] ${meta.message || "Error"}`, context)
+      )
       .catch(() => undefined);
   }
 

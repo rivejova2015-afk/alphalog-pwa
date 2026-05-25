@@ -18,3 +18,18 @@ export const captureMessage = (message: string, context?: SentryContext): void =
 export const captureException = (error: unknown, context?: SentryContext): void => {
   Sentry.captureException(error, context ? { extra: context } : undefined);
 };
+
+// Tagged variant — drives the "Trading Operations Mission Control" dashboard
+// which groups by `tag:module:*` (bot, cme, coinarb, polyarb, treasury, ...).
+// withScope isolates the tag so it does not leak into unrelated events.
+export const captureMessageWithModule = (
+  module: string,
+  message: string,
+  context?: SentryContext
+): void => {
+  Sentry.withScope((scope) => {
+    scope.setTag('module', module);
+    if (context) scope.setExtras(context);
+    Sentry.captureMessage(message);
+  });
+};
