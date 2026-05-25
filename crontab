@@ -14,7 +14,10 @@
 0    6    *  *  1   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/terminal/calendar-fetch
 
 # Bot / algo runtime monitoring (every minute for heartbeat = OK for supercronic)
-*/2  *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/bot-heartbeat-monitor
+# NOTE: despite living under /api/ops/cron/*, bot-heartbeat-monitor validates against
+# CRON_SECRET (not OPS_CRON_SECRET). Audit showed only coinarb-heartbeat, polyarb-heartbeat
+# and polyarb-daily-report actually use OPS_CRON_SECRET. CLAUDE.md was misleading on this.
+*/2  *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $CRON_SECRET"     http://alphalog-pwa.internal:3000/api/ops/cron/bot-heartbeat-monitor
 *    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-heartbeat
 *    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/coinarb-heartbeat
 0    22   *  *  *   curl --fail --max-time 60 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-daily-report
