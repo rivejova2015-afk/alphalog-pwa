@@ -3,6 +3,88 @@
 > Estado actual: Vercel suspendió la cuenta `rivejova2015-afk`. `alphalog.io` muestra "deployment paused".
 > Objetivo: cutover a Fly.io en 3 días sin perder datos ni crons.
 
+---
+
+## Adendum 2026-05-25 — Estado real del cutover
+
+> Esta sección registra lo que efectivamente ocurrió al ejecutar el runbook,
+> incluyendo divergencias importantes con el plan original. Útil si alguien
+> retoma o audita la migración.
+
+### Causa raíz revisada
+Vercel no bloqueó por contenido/abuso. El badge "Overdue" en el dashboard
+confirma que es **factura impaga** (`resource_creation_blocked` al intentar
+POST en la API). Esto significa:
+- El bloqueo es reversible pagando.
+- Los paneles "Domains" y "DNS Records" siguen siendo navegables (lectura +
+  delete), aunque crear nuevos resources retorna 402/blocked.
+
+### DÍA 1 — Fly apps en producción
+- `alphalog-pwa` (machine `48e0633a300e98`, iad) — imagen 93 MB, `/api/health` retorna 200.
+- `alphalog-cron` (machine `0805097aded4e8`, iad) — imagen 35 MB, supercronic activo.
+- IPs dedicadas: `137.66.59.103` (v4) + `2a09:8280:1::11a:f67f:0` (v6).
+
+### Cambios al plan técnico
+1. **Build pre-built en lugar de remoto**. Depot OOM con `next build` 3 veces
+   (codebase peakea ~5GB). Solución: `npm run build` local → Dockerfile single-
+   stage que solo copia `.next/standalone` + `.next/static` + `public/`. Build
+   time pasó de >5 min remoto a 30 seg deploy. Ver commit `d66ee88`.
+2. **`--legacy-peer-deps` agregado al npm ci**. React 19 vs peer dep de
+   `@react-pdf/renderer@3` (espera react ^18). Mismo flag que usaba Vercel via
+   `NPM_CONFIG_LEGACY_PEER_DEPS`.
+3. **`experimental.cpus: 2`** en `next.config.ts` como cap defensivo de workers.
+
+### Secretos recuperados (no perdidos)
+Resultó que no hacía falta recuperar de Vercel: la app `polyarb-50x` (Fly,
+mismo owner) ya tenía `DATA_ENCRYPTION_KEY` y otros secretos cargados. Se
+extrajeron lanzando una máquina alpine efímera con `printenv` y leyendo los
+logs. Total recuperado vía polyarb: 5 secretos.
+
+Generados frescos (sin pérdida funcional): CRON_SECRET, OPS_CRON_SECRET,
+OPS_ALERT_TOKEN, MT5_WEBHOOK_SECRET (el EA no lo usa — usa `instance_secret`
+per-bot en Supabase), POSTMARK_INBOUND_WEBHOOK_SECRET, VAPID keypair (existing
+push subs se invalidan, requieren re-suscripción).
+
+Pendientes de cargar (dashboards externos del user): POSTMARK_SERVER_TOKEN,
+OPENAI_API_KEY, QSTASH_TOKEN, QSTASH_CURRENT_SIGNING_KEY,
+QSTASH_NEXT_SIGNING_KEY. Sin estos, `/api/health` retorna `degraded` pero
+el core funciona.
+
+### DNS — la sorpresa grande
+**El dominio `alphalog.io` no usa IONOS DNS, usa Vercel DNS.** Los
+nameservers son `ns1.vercel-dns.com` y `ns2.vercel-dns.com`. IONOS solo
+gestiona el registro del dominio (registrar), no los records. Cualquier
+cambio en el panel DNS de IONOS NO tiene efecto mientras los NS apunten a
+Vercel.
+
+Plan ejecutado:
+1. Vía Vercel API (token temporal): DELETE de los 2 ALIAS records → ✅ OK.
+2. Vía Vercel API: POST de 4 records nuevos (A + AAAA para `@` y `www`
+   apuntando a Fly) → ❌ bloqueado por `resource_creation_blocked` (billing).
+3. Plan B: User cambia nameservers en IONOS de `ns*.vercel-dns.com` a
+   `ns*.ui-dns.com` (IONOS nativo). Records IONOS ya estaban configurados.
+4. Esperando propagación de NS (típico 4-48h).
+
+Vercel sigue sirviendo IPs anycast por default (sin records explícitos),
+así que `alphalog.io` responde HTTP 402 "Payment Required" mientras los
+NS propagan. No es NXDOMAIN, simplemente Vercel paused page con error
+code distinto.
+
+### Certificados TLS
+`fly certs add alphalog.io` + `fly certs add www.alphalog.io` ya ejecutados.
+Estado: "Not verified" hasta que propague DNS. Cuando los NS flipeen a IONOS
+y los registros A/AAAA apunten a `137.66.59.103` / `2a09:8280:1::11a:f67f:0`,
+Fly auto-emite vía ACME HTTP-01.
+
+### Verificación post-propagación
+```bash
+nslookup alphalog.io 1.1.1.1                          # debe devolver 137.66.59.103
+fly certs check alphalog.io --app alphalog-pwa        # debe decir "Verified"
+curl -sS -o /dev/null -w "%{http_code}\n" https://alphalog.io/api/health  # debe ser 200
+```
+
+---
+
 Toda la infraestructura como código ya está commiteada en este repo:
 
 | Archivo | Propósito |
