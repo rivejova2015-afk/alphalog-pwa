@@ -17,7 +17,11 @@ kill_timeout   = "15s"
 [env]
   NODE_ENV               = "production"
   PORT                   = "3000"
-  HOSTNAME               = "0.0.0.0"
+  # Bind dual-stack IPv6+IPv4. Fly's private 6PN network (alphalog-pwa.internal)
+  # routes over IPv6 only, so the cron sidecar can't reach us if Next.js standalone
+  # binds 0.0.0.0 (IPv4 only). "::" tells Node to listen on the IPv6 unspecified
+  # address, which on Linux also accepts mapped IPv4 connections.
+  HOSTNAME               = "::"
   NEXT_TELEMETRY_DISABLED = "1"
   # Non-secret runtime config. Secrets (DATA_ENCRYPTION_KEY, VAPID_PRIVATE_KEY,
   # SUPABASE_SERVICE_ROLE_KEY, etc.) are set with `fly secrets set`.
