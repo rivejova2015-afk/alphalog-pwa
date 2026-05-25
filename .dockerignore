@@ -1,5 +1,12 @@
-# Build artefacts
-.next
+# Build artefacts — most are excluded EXCEPT what the pre-built strategy needs.
+# We build locally (`npm run build`) and ship the standalone output as-is, so
+# .next/standalone and .next/static must be available to the Docker context.
+.next/cache
+.next/diagnostics
+.next/dev
+.next/trace
+.next/types
+.next/server
 out
 dist
 build
@@ -54,7 +61,7 @@ Dockerfile
 Dockerfile.cron
 fly.toml
 fly.cron.toml
-crontab
+# NOTE: do NOT exclude `crontab` — Dockerfile.cron needs it in the build context.
 MIGRATION-RUNBOOK.md
 
 # Logs

@@ -18,6 +18,14 @@ const nextConfig: NextConfig = {
   // the production deps actually used). Required for the Fly.io migration; harmless
   // on Vercel since Vercel uses its own build adapter.
   output: 'standalone',
+
+  // Limit parallel workers during `next build` to keep memory under ~4GB. Without
+  // this Next.js spawns one worker per CPU (Fly's Depot builder reports 16+ CPUs),
+  // each loading the full bundle, and OOMs the builder container. 2 workers is
+  // slower (~2x) but reliable.
+  experimental: {
+    cpus: 2,
+  },
   
   // Image optimization configuration with remote patterns (Next.js 16+)
   images: {
