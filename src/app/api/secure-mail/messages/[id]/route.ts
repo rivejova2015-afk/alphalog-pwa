@@ -39,11 +39,13 @@ export async function GET(
       return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
 
-    // Audit log: record message access (fire-and-forget)
+    // Audit log: record message access (fire-and-forget).
+    // 'open' is the canonical event from the CHECK constraint enum
+    // (open|decrypt|download_attachment|send).
     void supabase.from("secure_message_access_audit").insert({
       user_id: userData.user.id,
       message_id: id,
-      event: "read",
+      event: "open",
     });
 
     const { data: attachments, error: attachmentsError } = await supabase
