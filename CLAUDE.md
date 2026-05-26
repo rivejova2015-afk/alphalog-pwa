@@ -689,16 +689,17 @@ OPENAI_API_KEY=             # Para terminal/evidence/generate y reports
 ### Observability (Sentry)
 ```bash
 # Runtime DSNs. Vacíos = SDK no-op (sin errores, sin events).
+# Setteadas como Fly secrets en app alphalog-pwa.
 SENTRY_DSN=                            # Server-side init (Node + edge)
 NEXT_PUBLIC_SENTRY_DSN=                # Browser init
 
-# Build-time (Vercel CI). Opcionales — sin estos el build pasa pero no
-# se suben source maps a Sentry (los stack traces salen minificados).
-SENTRY_ORG=
-SENTRY_PROJECT=
-SENTRY_AUTH_TOKEN=
+# Build-time (local + Fly). Sin estas el build pasa pero no se suben
+# source maps a Sentry (los stack traces salen minificados).
+SENTRY_ORG=alphalog
+SENTRY_PROJECT=javascript-nextjs
+SENTRY_AUTH_TOKEN=                     # Organization Auth Token (project:releases + org:read)
 ```
-Init en `sentry.client.config.ts` / `sentry.server.config.ts` / `sentry.edge.config.ts` con `tracesSampleRate=0.05–0.10`. Tunnel route `/monitoring` configurado en `next.config.ts` para bypass de ad-blockers en errores del browser. `src/lib/sentry.ts` exporta `captureException`+`captureMessage` con la API del stub histórico (compat con `src/lib/copygroups/mirroring.ts`).
+Init en `sentry.client.config.ts` / `sentry.server.config.ts` / `sentry.edge.config.ts`. Server `tracesSampleRate=0.05` default con `tracesSampler` selectivo @ 1.0 para rutas hot (`/api/cme/signal`, `/api/webhooks/mt5`, `/api/webhooks/algo-trade`, `/api/algorithms/*`, `/api/treasury/payouts/*`) y @ 0.5 para crons. Client `tracesSampleRate=0.1`, `replaysOnErrorSampleRate=1.0`. `beforeSend` filtra `AbortError` + workbox races + RLS denials. `src/lib/sentry.ts` expone `captureException`, `captureMessage` y `captureMessageWithModule(module, message, context)` — el último taggea con `module:*` para el dashboard "Trading Operations Mission Control" (8 widgets agrupados por módulo + p95 hot routes + failure rate). Endpoint `/api/sentry-smoke-test` (auth `OPS_ALERT_TOKEN`) dispara message + exception sintéticos para verificar el pipeline post-deploy.
 
 ### Config y Feature Flags
 ```bash
@@ -799,7 +800,6 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 ### 🔴 Pendiente / No implementado
 - Suscripción multi-usuario real (actualmente 1 usuario).
 <!-- (resolved sprint 6) Coinarb segunda capa cubierta: analysis/ (smc-detector, mtf-analyzer, liquidity-map, candle-builder), validators/ (volume-delta, volume-profile, fear-greed, liquidation-heatmap) y risk/phase-manager.ts ahora tienen 79 tests en coinarb/tests/. -->
-- Variables Sentry pendientes en Vercel: el SDK está instalado y configurado, falta setear `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` para activar reporting. Sin DSN el wrapper hace no-op silencioso.
 - AAB drag/drop nodos: 20% madurez en `AabTreeView.client.tsx`. Bloqueado por spec UX.
 - TerminalReportsBot QStash scheduling: mencionado pero no implementado. Decidir entre construir o eliminar la mención.
 - alphacore-offline E2E: falta spec que pruebe mutation offline → reconciliación online (requiere setup complejo de IndexedDB mock).
@@ -814,7 +814,7 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - **Error boundaries cubiertos** (2026-05): `error.tsx` en `/intelligence`, `/map-hot`, `/securities`, `/inbox`, `/auth`, `/dashboard` + 6 sub-segmentos. Helper compartido `src/components/ui/error-boundary-page.tsx`.
 - **UI Foundation reusable** (2026-05): `ConfirmDialog`, `Skeleton`, `EmptyState` y `Modal` exportados desde `@/components/ui`. Migrados los 8 paneles Business y EventModal de Treasury para eliminar `alert()`/`confirm()`/`prompt()` del browser → Sonner toasts + ConfirmDialog.
 - **Treasury threshold editor** (2026-05): Umbral + Anti-DD ahora editables inline con `PUT /api/treasury/configs` (antes solo lectura).
-- **Sentry instalado** (2026-05): `@sentry/nextjs` configurado vía `sentry.{client,server,edge}.config.ts` + `instrumentation.ts` + `withSentryConfig` en `next.config.ts`. `src/lib/sentry.ts` ahora es wrapper real (no stub). `logError` server-side delega automáticamente. Activación pendiente solo de env vars en Vercel.
+- **Sentry activado en producción** (2026-05-25): `@sentry/nextjs` 10.53.1 corriendo en Fly (app `alphalog-pwa`, org `alphalog`, project `javascript-nextjs`). 4 envs como Fly secrets (`NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`) + `SENTRY_AUTH_TOKEN` para upload de source maps en build local. Server `logError` taggea con `module:*` vía `captureMessageWithModule()` (módulos enumerados: bot, cme, coinarb, polyarb, algorithms, treasury, secure_mail, journal, tradehub, intelligence, webhooks, cron). `tracesSampler` selectivo: 1.0 hot routes / 0.5 crons / 0.05 default. `beforeSend` drop de noise (AbortError, RLS denials, workbox races). Dashboard "Trading Operations Mission Control" con 8 widgets (Errors Last Hour, Errors by Module, p95 Latency Hot Routes, Top 10 Issues, Webhook Throughput, Error Severity, Algorithm Failure Rate, Failed Crons 7d). Endpoint `POST /api/sentry-smoke-test` auth con `OPS_ALERT_TOKEN` para verificar delivery post-deploy.
 - **ControlButton ack verification** (2026-05): `/api/algorithms/[id]/commands/recent` retorna lifecycle status. ControlButton polea cada 5s hasta DONE/FAILED o 60s timeout, muestra estado real ACK→DONE/FAILED en lugar de toast optimista.
 - **UI Foundation + Testing** (2026-05): 13 unit tests UI con `@testing-library/react` + jsdom + polyfill `<dialog>`. Cubre `ConfirmDialog`, `Skeleton`, `EmptyState`, `ErrorBoundaryPage`. `npm run analyze` con `@next/bundle-analyzer` para inspeccionar chunks.
 - **EvidenceVault filtros** (2026-05): búsqueda full-text + filtro por tipo (image/pdf/other) + filtro por status. Contador X/N.
@@ -955,7 +955,7 @@ Solo 3 flags públicos (via `NEXT_PUBLIC_*`):
 | `postmark` | 4.0.5 | Email transaccional (inbound + outbound) |
 | `@react-pdf/renderer` | 3.4.5 | Generación de PDFs |
 | `idb` | 8.0.3 | IndexedDB wrapper (offline queue) |
-| `@sentry/nextjs` | 10.53.1 | Error monitoring / performance tracing (activación pendiente DSN) |
+| `@sentry/nextjs` | 10.53.1 | Error monitoring + performance tracing (activo en producción Fly) |
 
 ### Dev
 | Paquete | Versión | Uso |
