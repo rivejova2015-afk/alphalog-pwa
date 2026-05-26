@@ -1,17 +1,13 @@
 /**
  * Inbound Email Webhook (Postmark)
  * Sprint 13: Receive encrypted emails via Postmark Inbound
- *
+ * 
  * Runtime: Node.js (required for crypto validation)
- *
+ * 
  * SECURITY CRITICAL:
- * - Authenticate via HTTP Basic Auth (Postmark's documented mechanism for inbound webhooks).
- *   Configure the webhook URL in Postmark as:
- *     https://USER:PASSWORD@alphalog.io/api/inbound/email
- *   where USER comes from POSTMARK_INBOUND_WEBHOOK_USER and PASSWORD from
- *   POSTMARK_INBOUND_WEBHOOK_PASSWORD.
- * - Reject unauthorized senders against secure_allowed_senders (silent 200 to avoid retries).
- * - Store only ciphertext (AES-256-GCM in DB; PGP layer added by sender).
+ * - Validate webhook signature
+ * - Reject unauthorized senders
+ * - Store only ciphertext
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -44,50 +40,30 @@ interface PostmarkInboundMessage {
   }>;
 }
 
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ab, bb);
-}
-
-function validateBasicAuth(authHeader: string | null): boolean {
-  const expectedUser = process.env.POSTMARK_INBOUND_WEBHOOK_USER;
-  const expectedPassword = process.env.POSTMARK_INBOUND_WEBHOOK_PASSWORD;
-
-  if (!expectedUser || !expectedPassword) {
-    // Fail closed: never run in production without credentials configured.
+function validateWebhookSignature(body: string, signature: string | null): boolean {
+  if (!signature || !process.env.POSTMARK_INBOUND_WEBHOOK_SECRET) {
     return false;
   }
 
-  if (!authHeader || !authHeader.toLowerCase().startsWith('basic ')) {
-    return false;
-  }
+  const expectedSignature = crypto
+    .createHmac('sha256', process.env.POSTMARK_INBOUND_WEBHOOK_SECRET)
+    .update(body)
+    .digest('hex');
 
-  let decoded: string;
-  try {
-    decoded = Buffer.from(authHeader.slice(6).trim(), 'base64').toString('utf-8');
-  } catch {
-    return false;
-  }
-
-  const separator = decoded.indexOf(':');
-  if (separator === -1) return false;
-
-  const user = decoded.slice(0, separator);
-  const password = decoded.slice(separator + 1);
-
-  return safeEqual(user, expectedUser) && safeEqual(password, expectedPassword);
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
-    const authHeader = request.headers.get('authorization');
+    const signature = request.headers.get('x-postmark-signature');
 
-    // Validate webhook authentication (Postmark sends HTTP Basic Auth on inbound).
-    if (!validateBasicAuth(authHeader)) {
-      console.error('[InboundEmail] Invalid Basic Auth credentials');
+    // Validate webhook signature
+    if (!validateWebhookSignature(body, signature)) {
+      console.error('Invalid webhook signature');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
