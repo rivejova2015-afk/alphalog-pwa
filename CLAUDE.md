@@ -1020,16 +1020,18 @@ npm run audit:sprints            # Auditoría de sprints completados
 
 ## 14. Deployment
 
-- **Plataforma**: Vercel (Node 24.x, región iad1 — Washington D.C.)
-- **Dominio**: alphalog.io + www.alphalog.io (IONOS DNS → Vercel)
-- **Proyecto Vercel**: `prj_qBbAPYFtvx4FIu7wmeLoV6fMqAir`
-- **Último deploy**: `dpl_E88kojzWi3hPZ4CSKQuMjbCmkLmo` (READY)
+- **Plataforma**: **Fly.io** (region `iad` — Washington D.C., Node 24-slim). Vercel fue eliminado el 2026-05-25.
+- **Dominio**: alphalog.io + www.alphalog.io (IONOS DNS → Fly). Headers `server: Fly/...`, `via: 1.1 fly.io`.
+- **Apps Fly**:
+  - `alphalog-pwa` — web Next.js standalone. Config: `fly.toml` + `Dockerfile`. **Pre-built strategy**: `npm run build` corre LOCAL (o en CI runner) porque el Depot de Fly hace OOM (~4 GB) con `next build` por 187 routes + Sentry + PWA + React 19. El Dockerfile solo `COPY .next/standalone` + `.next/static`.
+  - `alphalog-cron` — sidecar con `supercronic`. Config: `fly.cron.toml` + `Dockerfile.cron` + `crontab`. Sin HTTP público — llama endpoints internos del web vía Fly 6PN (`alphalog-pwa.internal:3000`) con `CRON_SECRET` / `OPS_CRON_SECRET`.
 - **Supabase**: `jgkvnnlodwdtjsmmzwry` (us-east-2, PostgreSQL 17.6, ACTIVE_HEALTHY)
-- **CI**: GitHub Actions en `.github/workflows/`
-  - `quality-gate.yml` — build + tests en cada PR
-  - `bot-maintenance.yml` — mantenimiento automático del bot
-  - `bot-command-timeout.yml` — timeout de comandos pendientes
-- **Deploy manual**: `vercel --prod` desde CLI
+- **CI/CD GitHub Actions** (`.github/workflows/`):
+  - `quality-gate.yml` — lint + build en cada PR/push a main (sin deploy)
+  - `fly-deploy.yml` — **auto-deploy a Fly** en push a main (web + cron en paralelo). Skip si solo cambian `coinarb/`, `polyarb/`, `lattice-desktop/`, `bots/`, `docs/`, o `**.md`. Manual trigger via `workflow_dispatch` con choice de strategy (rolling/immediate/bluegreen). Concurrency lock `fly-deploy-alphalog` para evitar deploys solapados. Requiere secret `FLY_API_TOKEN` (obtenible con `fly tokens create deploy -x 8760h`).
+  - `coinarb-deploy.yml` — deploy de `coinarb-50x` (app Fly aparte) cuando cambia `coinarb/**`
+  - `bot-maintenance.yml`, `bot-command-timeout.yml`, `cme-crons.yml`, `heartbeat.yml` — utilidades de bot, no relacionadas con deploy del web
+- **Deploy manual** (fallback si CI falla): `npm run build && flyctl deploy --app alphalog-pwa --remote-only` desde la máquina del dev.
 
 ---
 

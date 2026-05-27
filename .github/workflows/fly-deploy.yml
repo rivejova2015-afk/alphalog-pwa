@@ -1,0 +1,150 @@
+name: Fly Deploy (alphalog-pwa + alphalog-cron)
+
+# Trigger:
+#   - push a main: deploy automático del root app (web + cron)
+#   - workflow_dispatch: manual con elección de strategy
+#
+# Skip: si el push solo toca subproyectos con su propio deploy
+# (coinarb/, polyarb/, lattice-desktop/, bots/) o assets sin impacto.
+#
+# Pre-built strategy (ver Dockerfile): el `npm run build` corre en el runner
+# de GitHub (16GB+ RAM) porque el Depot de Fly hace OOM con next build.
+# El Dockerfile solo COPY de .next/standalone + .next/static.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'coinarb/**'
+      - 'polyarb/**'
+      - 'lattice-desktop/**'
+      - 'bots/**'
+      - '**.md'
+      - '.github/workflows/coinarb-deploy.yml'
+      - '.github/workflows/quality-gate.yml'
+      - '.github/workflows/heartbeat.yml'
+      - '.github/workflows/cme-crons.yml'
+      - '.github/workflows/bot-*.yml'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: 'Fly deploy strategy'
+        required: false
+        default: 'rolling'
+        type: choice
+        options: [rolling, immediate, bluegreen]
+      skip_web:
+        description: 'Skip web deploy (only cron)'
+        required: false
+        default: false
+        type: boolean
+      skip_cron:
+        description: 'Skip cron deploy (only web)'
+        required: false
+        default: false
+        type: boolean
+
+# Lock: never let two deploys overlap. cancel-in-progress=false porque si ya
+# hay un deploy corriendo, mejor que termine antes de empezar el siguiente
+# (Fly's rolling strategy ya maneja el zero-downtime, pero overlapping flyctl
+# invocations pueden confundir el release tracker).
+concurrency:
+  group: fly-deploy-alphalog
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================================
+  # WEB: alphalog-pwa (Next.js standalone)
+  # ============================================================================
+  deploy-web:
+    name: Build + Deploy web (alphalog-pwa)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_web != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (pre-built strategy for Fly)
+        # Genera .next/standalone + .next/static. Sin esto, el COPY en
+        # Dockerfile falla con "no such file".
+        run: npm run build
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly (alphalog-pwa)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy \
+            --app alphalog-pwa \
+            --config fly.toml \
+            --strategy ${{ inputs.strategy || 'rolling' }} \
+            --remote-only \
+            --wait-timeout 300
+
+  # ============================================================================
+  # CRON: alphalog-cron (supercronic sidecar) — paralelo con web
+  # ============================================================================
+  deploy-cron:
+    name: Deploy cron sidecar (alphalog-cron)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_cron != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy cron to Fly (alphalog-cron)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy \
+            --app alphalog-cron \
+            --config fly.cron.toml \
+            --dockerfile Dockerfile.cron \
+            --strategy ${{ inputs.strategy || 'immediate' }} \
+            --remote-only \
+            --wait-timeout 180
+
+  # ============================================================================
+  # SUMMARY: agrega un check final que reporta el estado combinado de ambos
+  # deploys. Útil para branch protection rules que requieran 1 sola check.
+  # ============================================================================
+  deploy-summary:
+    name: Deploy Summary
+    needs: [deploy-web, deploy-cron]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report status
+        run: |
+          web="${{ needs.deploy-web.result }}"
+          cron="${{ needs.deploy-cron.result }}"
+          echo "Web deploy:  $web"
+          echo "Cron deploy: $cron"
+          # Fail summary si cualquiera fall (excluye 'skipped' del fail).
+          if [[ "$web" == "failure" || "$cron" == "failure" ]]; then
+            echo "::error::At least one deploy failed."
+            exit 1
+          fi
+          echo "All requested deploys succeeded."
