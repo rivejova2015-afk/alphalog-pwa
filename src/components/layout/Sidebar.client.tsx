@@ -59,7 +59,7 @@ export function AppSidebar() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     'Intelligence Suite': true,
     Business: false,
-    'Map Hot': false,
+    'Map Hot': true,
     'AlphaLog Securities': false,
   });
 
