@@ -8,6 +8,7 @@
 
 import { createClient } from '@/lib/supabase/browser';
 import type { BaseFields, EntityOperation, MutationMetadata, MutationStatus } from './types';
+import { logError } from '@/lib/log';
 
 /**
  * Mutation request payload
@@ -557,7 +558,10 @@ async function logMutationSuccess(context: {
       fingerprint: `${context.table}:${context.entityId}:${context.operation}`,
     });
   } catch (err) {
-    console.error('Failed to log mutation success:', err);
+    logError('Alphacore', {
+      component: 'mutations.logMutationSuccess',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -584,6 +588,9 @@ async function logMutationError(context: {
       fingerprint: context.fingerprint,
     });
   } catch (err) {
-    console.error('Failed to log mutation error:', err);
+    logError('Alphacore', {
+      component: 'mutations.logMutationError',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }

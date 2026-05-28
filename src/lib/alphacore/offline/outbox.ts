@@ -25,6 +25,7 @@ import {
 } from './idb';
 
 import type { MutationRequest } from '../mutations';
+import { logError } from '@/lib/log';
 
 /**
  * Outbox sync configuration
@@ -313,7 +314,11 @@ export class OutboxManager {
     const result = await this.syncAll();
 
     if (!result.success) {
-      console.error('[OutboxManager] Sync after reconnection had errors:', result.errors);
+      logError('Alphacore', {
+        component: 'outbox.onLineRestored',
+        message: `Sync after reconnection had ${result.errors?.length ?? 0} errors`,
+        errors: result.errors,
+      });
     }
   }
 

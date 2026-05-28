@@ -13,6 +13,7 @@ import type { BaseFields } from '@/lib/alphacore/types';
 import { mutateOfflineFirst, getOfflineBridge } from '@/lib/alphacore/offline/offlineBridge';
 import { preSubmitDedupeCheck } from '@/lib/alphacore/dedupe-checker';
 import type { MutationResponse } from '@/lib/alphacore/mutations';
+import { logError } from '@/lib/log';
 
 // ============================================================================
 // TYPES
@@ -472,7 +473,10 @@ export function getJournalOutboxStatus() {
     const bridge = getOfflineBridge();
     return bridge.getOutboxStatus();
   } catch (error) {
-    console.error('Failed to get journal outbox status:', error);
+    logError('Alphacore', {
+      component: 'journal.getJournalOutboxStatus',
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       total: 0,
       pending: 0,
@@ -493,7 +497,10 @@ export async function syncJournalEntries() {
     console.log('[JournalEntry] Sync complete:', result);
     return result;
   } catch (error) {
-    console.error('Journal sync failed:', error);
+    logError('Alphacore', {
+      component: 'journal.syncJournalEntries',
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       success: false,
       error

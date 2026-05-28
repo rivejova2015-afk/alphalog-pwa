@@ -13,6 +13,7 @@
 import { DEDUPE_SCHEMAS } from '@/lib/alphacore/dedupe';
 import { getMetadata, storeMetadata } from '@/lib/alphacore/offline/idb';
 import { createClient } from '@/lib/supabase/browser';
+import { logError } from '@/lib/log';
 
 /**
  * Runtime dedup check result
@@ -160,7 +161,10 @@ async function checkUniqueConstraint(
       );
     }
   } catch (error) {
-    console.error('UNIQUE_CONSTRAINT check failed:', error);
+    logError('Alphacore', {
+      component: 'dedupe-checker.uniqueConstraint',
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       isDuplicate: false,
       confidence: 'unknown',
@@ -204,7 +208,11 @@ async function checkUniqueConstraintOnline(
   const { data: existing, error } = await query.limit(1);
 
   if (error) {
-    console.error(`Unique constraint check failed for ${table}:`, error);
+    logError('Alphacore', {
+      component: 'dedupe-checker.uniqueConstraint.query',
+      message: `Unique constraint check failed for ${table}: ${error.message}`,
+      table,
+    });
     return {
       isDuplicate: false,
       confidence: 'unknown',
@@ -273,7 +281,10 @@ async function checkUniqueConstraintOffline(
       message: `Offline: No known duplicate`
     };
   } catch (error) {
-    console.error('Offline unique constraint check failed:', error);
+    logError('Alphacore', {
+      component: 'dedupe-checker.uniqueConstraint.offline',
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       isDuplicate: false,
       confidence: 'unknown',
@@ -310,7 +321,10 @@ async function checkDerivedFields(
       );
     }
   } catch (error) {
-    console.error('DERIVED_FROM_UI_DB check failed:', error);
+    logError('Alphacore', {
+      component: 'dedupe-checker.derivedFromUiDb',
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       isDuplicate: false,
       confidence: 'unknown',
@@ -425,7 +439,10 @@ async function checkDerivedFieldsOffline(
       message: `Offline: No derived duplicates found`
     };
   } catch (error) {
-    console.error('Offline derived check failed:', error);
+    logError('Alphacore', {
+      component: 'dedupe-checker.derived.offline',
+      message: error instanceof Error ? error.message : String(error),
+    });
     return {
       isDuplicate: false,
       confidence: 'unknown',

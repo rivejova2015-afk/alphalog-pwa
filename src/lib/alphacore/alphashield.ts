@@ -5,6 +5,7 @@
 
 import { createClient } from '@/lib/supabase/browser';
 import type { ErrorDetail, MutationMetadata } from './types';
+import { logError as forwardToSentry } from '@/lib/log';
 
 export interface SafeModeState {
   enabled: boolean;
@@ -72,7 +73,10 @@ class SafeModeManager {
 
   private enableSafeMode() {
     this.state.enabled = true;
-    console.error('[AlphaShield] Safe Mode ENABLED - 3+ errors in 60s');
+    forwardToSentry('Alphacore', {
+      component: 'alphashield.enableSafeMode',
+      message: 'Safe Mode ENABLED — 3+ errors in 60s',
+    });
   }
 
   private resetIfNeeded() {
@@ -150,12 +154,20 @@ export async function logMutationError(options: MutationErrorOptions) {
     });
     
     if (logError) {
-      console.error('[AlphaShield] Failed to log error:', logError);
+      forwardToSentry('Alphacore', {
+        component: 'alphashield.logToAppLogs',
+        message: `Failed to persist error log to app_logs: ${logError.message}`,
+        originalMessage: options.message,
+      });
     } else {
-      console.error('[AlphaShield] Error logged:', options.message);
+      // Successful persistence — informational only, not an error.
+      console.log('[AlphaShield] Error logged:', options.message);
     }
   } catch (err) {
-    console.error('[AlphaShield] Failed to log mutation error:', err);
+    forwardToSentry('Alphacore', {
+      component: 'alphashield.logMutationError',
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -226,7 +238,10 @@ export async function generateDebugBundle(): Promise<DebugBundle | null> {
     
     return bundle;
   } catch (err) {
-    console.error('[AlphaShield] Failed to generate debug bundle:', err);
+    forwardToSentry('Alphacore', {
+      component: 'alphashield.generateDebugBundle',
+      message: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -248,7 +263,10 @@ export async function copyDebugBundleToClipboard(): Promise<boolean> {
     
     return false;
   } catch (err) {
-    console.error('[AlphaShield] Failed to copy debug bundle:', err);
+    forwardToSentry('Alphacore', {
+      component: 'alphashield.copyDebugBundle',
+      message: err instanceof Error ? err.message : String(err),
+    });
     return false;
   }
 }
@@ -282,7 +300,10 @@ Please help diagnose this issue.
     
     return prompt;
   } catch (err) {
-    console.error('[AlphaShield] Failed to generate error prompt:', err);
+    forwardToSentry('Alphacore', {
+      component: 'alphashield.generateErrorPrompt',
+      message: err instanceof Error ? err.message : String(err),
+    });
     return '';
   }
 }
@@ -336,7 +357,10 @@ export async function checkForDuplicate(
     
     return { isDuplicate: false, reason: 'no_match_found' };
   } catch (err) {
-    console.error('[AlphaShield] Duplicate check failed:', err);
+    forwardToSentry('Alphacore', {
+      component: 'alphashield.duplicateCheck',
+      message: err instanceof Error ? err.message : String(err),
+    });
     return { isDuplicate: false, reason: 'check_error' };
   }
 }

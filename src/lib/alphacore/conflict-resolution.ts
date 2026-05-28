@@ -9,6 +9,7 @@
  */
 
 import type { EntityOperation } from '@/lib/alphacore/types';
+import { logError } from '@/lib/log';
 
 /**
  * Conflict detection result
@@ -468,12 +469,14 @@ export async function rollbackToSnapshot(
     const errorMessage =
       (errorData as Record<string, unknown>).message ||
       `HTTP ${response.status}`;
-    console.error('[Rollback] Failed to rollback:', {
+    logError('Alphacore', {
+      component: 'conflict-resolution.rollbackToSnapshot',
+      message: `Failed to rollback ${snapshot.table}/${snapshot.entityId}: ${String(errorMessage)}`,
       entityId: snapshot.entityId,
       table: snapshot.table,
       conflictId: snapshot.conflictId,
       status: response.status,
-      error: errorMessage,
+      error: String(errorMessage),
     });
     throw new Error(
       `Rollback failed for ${snapshot.table}/${snapshot.entityId}: ${errorMessage}`

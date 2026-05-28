@@ -21,6 +21,7 @@ import type { EntityOperation } from '../types';
 import type { MutationRequest, MutationResponse } from '../mutations';
 import { createEntity, updateEntity, softDeleteEntity } from '../mutations';
 import { getOutboxManager } from './outbox';
+import { logError } from '@/lib/log';
 
 /**
  * Online/offline detection
@@ -126,7 +127,12 @@ export class OfflineBridge {
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      console.error(`[OfflineBridge] Online ${operation} failed:`, error.message);
+      logError('Alphacore', {
+        component: 'offlineBridge.online',
+        message: `Online ${operation} failed: ${error.message}`,
+        operation,
+        table,
+      });
 
       return {
         error: {
@@ -200,7 +206,12 @@ export class OfflineBridge {
       } as MutationResponse<T>;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      console.error(`[OfflineBridge] Offline ${operation} failed:`, error.message);
+      logError('Alphacore', {
+        component: 'offlineBridge.offline',
+        message: `Offline ${operation} failed: ${error.message}`,
+        operation,
+        table,
+      });
 
       return {
         error: {
@@ -261,7 +272,10 @@ export class OfflineBridge {
   private onOnlineDetected(): void {
     console.log('[OfflineBridge] Online detected - triggering sync');
     this.syncNow().catch((err) => {
-      console.error('[OfflineBridge] Auto-sync after reconnection failed:', err);
+      logError('Alphacore', {
+        component: 'offlineBridge.onOnlineDetected',
+        message: `Auto-sync after reconnection failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
     });
   }
 
