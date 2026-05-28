@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { capitalTargetResponseSchema } from "@/lib/validation/schemas";
+import { logError } from "@/lib/log";
 
 type CapitalTargetType = "real" | "propfirm";
 type ManualFieldKey =
@@ -197,7 +198,7 @@ export async function GET(request: NextRequest) {
       if (isMissingSchemaError(error)) {
         return NextResponse.json([]);
       }
-      console.error("Error fetching intelligence capital targets:", error);
+      logError("IntelligenceCapitalTargets", { component: "intelligence.capital-targets", message: "Error fetching intelligence capital targets:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch targets" }, { status: 500 });
     }
 
@@ -212,7 +213,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (error) {
-    console.error("Error in GET /api/intelligence/capital-targets:", error);
+    logError("IntelligenceCapitalTargets", { component: "intelligence.capital-targets", message: "Error in GET /api/intelligence/capital-targets:", error: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -315,7 +316,7 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      console.error("Error creating intelligence capital target:", error);
+      logError("IntelligenceCapitalTargets", { component: "intelligence.capital-targets", message: "Error creating intelligence capital target:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to save target" }, { status: 500 });
     }
 
@@ -326,7 +327,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    console.error("Error in POST /api/intelligence/capital-targets:", error);
+    logError("IntelligenceCapitalTargets", { component: "intelligence.capital-targets", message: "Error in POST /api/intelligence/capital-targets:", error: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logError } from "@/lib/log";
 
 /**
  * POST /api/tradehub/trades/{id}/screenshot
@@ -87,7 +88,7 @@ export async function POST(
       });
 
     if (uploadError) {
-      console.error("Error uploading file:", uploadError);
+      logError("TradehubTradesScreenshot", { component: "tradehub.trades.[id].screenshot", message: "Error uploading file:", error: uploadError instanceof Error ? uploadError.message : String(uploadError) });
       return NextResponse.json(
         { error: "Failed to upload screenshot" },
         { status: 500 }
@@ -101,7 +102,7 @@ export async function POST(
       .eq("id", id);
 
     if (updateError) {
-      console.error("Error updating trade:", updateError);
+      logError("TradehubTradesScreenshot", { component: "tradehub.trades.[id].screenshot", message: "Error updating trade:", error: updateError instanceof Error ? updateError.message : String(updateError) });
       // Attempt cleanup
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(
@@ -121,7 +122,7 @@ export async function POST(
       signedUrl: signedData?.signedUrl || null,
     });
   } catch (err: any) {
-    console.error("Error in POST /api/tradehub/trades/[id]/screenshot:", err);
+    logError("TradehubTradesScreenshot", { component: "tradehub.trades.[id].screenshot", message: "Error in POST /api/tradehub/trades/[id]/screenshot:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -174,7 +175,7 @@ export async function GET(
       .createSignedUrl(trade.screenshot_path, 60);
 
     if (signError) {
-      console.error("Error generating signed URL:", signError);
+      logError("TradehubTradesScreenshot", { component: "tradehub.trades.[id].screenshot", message: "Error generating signed URL:", error: signError instanceof Error ? signError.message : String(signError) });
       return NextResponse.json(
         { error: "Failed to generate signed URL" },
         { status: 500 }
@@ -183,7 +184,7 @@ export async function GET(
 
     return NextResponse.json({ signedUrl: signedData.signedUrl });
   } catch (err: any) {
-    console.error("Error in GET /api/tradehub/trades/[id]/screenshot:", err);
+    logError("TradehubTradesScreenshot", { component: "tradehub.trades.[id].screenshot", message: "Error in GET /api/tradehub/trades/[id]/screenshot:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

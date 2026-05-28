@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      console.error("[SecureMail] Fetch messages error:", error);
+      logError("SecureMail", { component: "secure-mail.messages", message: "Fetch messages error:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
     }
 
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    console.error("[SecureMail] GET messages error:", error);
+    logError("SecureMail", { component: "secure-mail.messages", message: "GET messages error:", error: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

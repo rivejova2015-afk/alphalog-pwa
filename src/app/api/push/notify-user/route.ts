@@ -5,6 +5,7 @@
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
+import { logError } from "@/lib/log";
 
 // Ensure Node.js runtime for compatibility with web-push and Supabase client
 export const runtime = 'nodejs';
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       const { getSupabaseClient } = await import('@/lib/supabase/lazy-client.js');
       supabase = getSupabaseClient();
     } catch (error) {
-      console.error('Failed to initialize Supabase:', error);
+      logError("PushNotifyUser", { component: "push.notify-user", message: "Failed to initialize Supabase:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: 'Service unavailable: missing configuration' },
         { status: 500 }
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', userId);
 
     if (fetchError) {
-      console.error('Failed to fetch subscriptions:', fetchError);
+      logError("PushNotifyUser", { component: "push.notify-user", message: "Failed to fetch subscriptions:", error: fetchError instanceof Error ? fetchError.message : String(fetchError) });
       return NextResponse.json(
         { error: 'Failed to fetch subscriptions' },
         { status: 500 }
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
       total: subscriptions.length,
     });
   } catch (error) {
-    console.error('Notify user endpoint error:', error);
+    logError("PushNotifyUser", { component: "push.notify-user", message: "Notify user endpoint error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

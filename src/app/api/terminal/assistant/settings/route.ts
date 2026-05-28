@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 const DEFAULT_SETTINGS = {
   assistant_name: "AlphaAnalyst",
@@ -37,7 +38,7 @@ export async function GET() {
 
     return NextResponse.json({ settings: data });
   } catch (err) {
-    console.error("[Assistant Settings] GET error:", err);
+    logError("Assistant Settings", { component: "terminal.assistant.settings", message: "GET error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -77,7 +78,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Assistant Settings] PATCH error:", err);
+    logError("Assistant Settings", { component: "terminal.assistant.settings", message: "PATCH error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

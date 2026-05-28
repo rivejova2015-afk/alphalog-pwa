@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
+import { logError } from "@/lib/log";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error || !node) {
-      console.error("Error creating node:", error);
+      logError("CopyGroupsNodes", { component: "copy-groups.[id].nodes", message: "Error creating node:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to create node" }, { status: 500 });
     }
 
@@ -88,7 +89,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (error || !node) {
-      console.error("Error updating node:", error);
+      logError("CopyGroupsNodes", { component: "copy-groups.[id].nodes", message: "Error updating node:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to update node" }, { status: 500 });
     }
 
@@ -136,7 +137,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       .eq("copy_group_id", id);
 
     if (error) {
-      console.error("Error deleting node:", error);
+      logError("CopyGroupsNodes", { component: "copy-groups.[id].nodes", message: "Error deleting node:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to delete node" }, { status: 500 });
     }
 

@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { logError } from "@/lib/log";
 
 /**
  * POST /api/accounts/trash/empty
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       .not("deleted_at", "is", null);
 
     if (deleteError) {
-      console.error("Error emptying trash:", deleteError);
+      logError("AccountsTrashEmpty", { component: "accounts.trash.empty", message: "Error emptying trash:", error: deleteError instanceof Error ? deleteError.message : String(deleteError) });
       return NextResponse.json(
         { error: "Failed to empty trash" },
         { status: 500 }
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in POST /api/accounts/trash/empty:", err);
+    logError("AccountsTrashEmpty", { component: "accounts.trash.empty", message: "Error in POST /api/accounts/trash/empty:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

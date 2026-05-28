@@ -14,6 +14,7 @@ import { encryptText } from '@/lib/security/encryption';
 import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { logError } from "@/lib/log";
 
 const USER_ID        = '381e268e-a042-4612-8b39-7a120ace17d6';
 const FETCH_TIMEOUT  = 12_000;
@@ -93,7 +94,7 @@ async function handleCalendarFetch(request: NextRequest) {
 
     rawEvents = parsed.data.economicCalendar ?? [];
   } catch (e) {
-    console.error('[calendar-fetch] Finnhub error:', e);
+    logError("calendar-fetch", { component: "cron.terminal.calendar-fetch", message: "Finnhub error:", error: e instanceof Error ? e.message : String(e) });
     return NextResponse.json({ error: 'Failed to fetch calendar', details: String(e) }, { status: 502 });
   }
 
@@ -161,7 +162,7 @@ async function handleCalendarFetch(request: NextRequest) {
     });
 
     if (error) {
-      console.error('[calendar-fetch] Insert error:', error.message);
+      logError("TerminalCalendar", { component: "cron.terminal.calendar-fetch", message: `Insert error: ${error.message}` });
       skipped++;
     } else {
       inserted++;

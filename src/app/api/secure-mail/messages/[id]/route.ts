@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptText } from "@/lib/security/encryption";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -54,7 +55,7 @@ export async function GET(
       .is("deleted_at", null);
 
     if (attachmentsError) {
-      console.error("[SecureMail] Fetch attachments error:", attachmentsError);
+      logError("SecureMail", { component: "secure-mail.messages.[id]", message: "Fetch attachments error:", error: attachmentsError instanceof Error ? attachmentsError.message : String(attachmentsError) });
       return NextResponse.json({ error: "Failed to fetch attachments" }, { status: 500 });
     }
 
@@ -71,7 +72,7 @@ export async function GET(
 
     return NextResponse.json({ message: decryptedMessage, attachments: decryptedAttachments });
   } catch (error) {
-    console.error("[SecureMail] GET message error:", error);
+    logError("SecureMail", { component: "secure-mail.messages.[id]", message: "GET message error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

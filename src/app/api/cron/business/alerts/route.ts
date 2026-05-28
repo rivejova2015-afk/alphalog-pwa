@@ -29,6 +29,7 @@ import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
+import { logError } from "@/lib/log";
 
 interface PushSubscriptionJSON {
   endpoint: string;
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
       .is('deleted_at', null);
 
     if (usersError) {
-      console.error('Error fetching users:', usersError);
+      logError("CronBusinessAlerts", { component: "cron.business.alerts", message: "Error fetching users:", error: usersError instanceof Error ? usersError.message : String(usersError) });
       return NextResponse.json(
         { error: 'Failed to fetch users', details: usersError },
         { status: 500 }
@@ -285,7 +286,7 @@ export async function GET(request: NextRequest) {
           }
         }
       } catch (error) {
-        console.error(`Error processing user ${user.user_id}:`, error);
+        logError("CronBusinessAlerts", { component: "cron.business.alerts", message: "Error processing user ${user.user_id}:", error: error instanceof Error ? error.message : String(error) });
         continue;
       }
     }
@@ -303,7 +304,7 @@ export async function GET(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('[Business Alerts] Unexpected error:', error);
+    logError("Business Alerts", { component: "cron.business.alerts", message: "Unexpected error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Internal server error',

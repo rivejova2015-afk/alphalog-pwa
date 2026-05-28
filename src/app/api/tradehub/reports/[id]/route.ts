@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logError } from "@/lib/log";
 
 /**
  * DELETE /api/tradehub/reports/{id}
@@ -49,7 +50,7 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (error) {
-      console.error("Error deleting report:", error);
+      logError("TradehubReports", { component: "tradehub.reports.[id]", message: "Error deleting report:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to delete report" },
         { status: 500 }
@@ -58,7 +59,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error("Error in DELETE /api/tradehub/reports/[id]:", err);
+    logError("TradehubReports", { component: "tradehub.reports.[id]", message: "Error in DELETE /api/tradehub/reports/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

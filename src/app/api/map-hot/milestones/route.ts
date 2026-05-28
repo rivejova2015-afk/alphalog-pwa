@@ -10,6 +10,7 @@ import { autoFixMapHotMilestone } from "@/lib/validation/autoFix";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 type MilestoneRow = {
   id: string;
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
       .order("quarter", { ascending: true });
 
     if (error) {
-      console.error("Error fetching map_hot_milestones:", error);
+      logError("MapHotMilestones", { component: "map-hot.milestones", message: "Error fetching map_hot_milestones:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch milestones" }, { status: 500 });
     }
 
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/map-hot/milestones:", err);
+    logError("MapHotMilestones", { component: "map-hot.milestones", message: "Error in GET /api/map-hot/milestones:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
-      console.error("Error creating map_hot_milestone:", insertErr);
+      logError("MapHotMilestones", { component: "map-hot.milestones", message: "Error creating map_hot_milestone:", error: insertErr instanceof Error ? insertErr.message : String(insertErr) });
       return NextResponse.json({ error: "Failed to create milestone" }, { status: 500 });
     }
 
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (err: unknown) {
-    console.error("Error in POST /api/map-hot/milestones:", err);
+    logError("MapHotMilestones", { component: "map-hot.milestones", message: "Error in POST /api/map-hot/milestones:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

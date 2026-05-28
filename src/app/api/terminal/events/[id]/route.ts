@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 /**
  * PATCH /api/terminal/events/{id}
@@ -49,7 +50,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating event:", error);
+      logError("TerminalEvents", { component: "terminal.events.[id]", message: "Error updating event:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to update event" },
         { status: 500 }
@@ -61,7 +62,7 @@ export async function PATCH(
       name: decryptText(data.name),
     });
   } catch (err: unknown) {
-    console.error("Error in PATCH /api/terminal/events/[id]:", err);
+    logError("TerminalEvents", { component: "terminal.events.[id]", message: "Error in PATCH /api/terminal/events/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -108,7 +109,7 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (error) {
-      console.error("Error deleting event:", error);
+      logError("TerminalEvents", { component: "terminal.events.[id]", message: "Error deleting event:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to delete event" },
         { status: 500 }
@@ -117,7 +118,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/terminal/events/[id]:", err);
+    logError("TerminalEvents", { component: "terminal.events.[id]", message: "Error in DELETE /api/terminal/events/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

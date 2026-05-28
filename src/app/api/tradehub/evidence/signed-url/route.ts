@@ -1,6 +1,7 @@
 // src/app/api/tradehub/evidence/signed-url/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (tradeError && !isMissingTable(tradeError)) {
-      console.error("Error fetching trade_evidence:", tradeError);
+      logError("TradehubEvidenceSignedUrl", { component: "tradehub.evidence.signed-url", message: "Error fetching trade_evidence:", error: tradeError instanceof Error ? tradeError.message : String(tradeError) });
       return NextResponse.json(
         { error: "Failed to generate signed URL" },
         { status: 500 }
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
         .createSignedUrl(tradeEvidence.file_path, 60);
 
       if (urlError) {
-        console.error("Error generating signed URL:", urlError);
+        logError("TradehubEvidenceSignedUrl", { component: "tradehub.evidence.signed-url", message: "Error generating signed URL:", error: urlError instanceof Error ? urlError.message : String(urlError) });
         return NextResponse.json(
           { error: "Failed to generate signed URL", details: urlError.message },
           { status: 500 }
@@ -96,7 +97,7 @@ export async function GET(request: NextRequest) {
       .createSignedUrl(evidence.image_path, 60);
 
     if (urlError) {
-      console.error("Error generating signed URL:", urlError);
+      logError("TradehubEvidenceSignedUrl", { component: "tradehub.evidence.signed-url", message: "Error generating signed URL:", error: urlError instanceof Error ? urlError.message : String(urlError) });
       return NextResponse.json(
         { error: "Failed to generate signed URL", details: urlError.message },
         { status: 500 }
@@ -105,7 +106,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ signedUrl: signedUrl.signedUrl });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradehub/evidence/signed-url:", err);
+    logError("TradehubEvidenceSignedUrl", { component: "tradehub.evidence.signed-url", message: "Error in GET /api/tradehub/evidence/signed-url:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

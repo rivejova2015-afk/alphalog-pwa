@@ -36,6 +36,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from "@/lib/log";
 
 interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error';
@@ -189,7 +190,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Logs ingest error:', error);
+    logError("LogsIngest", { component: "logs.ingest", message: "Logs ingest error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

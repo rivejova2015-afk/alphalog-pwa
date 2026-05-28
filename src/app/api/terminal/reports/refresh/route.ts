@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
       stale: staleJobs?.length ?? 0,
     });
   } catch (error) {
-    console.error("Error in GET /api/terminal/reports/refresh:", error);
+    logError("TerminalReportsRefresh", { component: "terminal.reports.refresh", message: "Error in GET /api/terminal/reports/refresh:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

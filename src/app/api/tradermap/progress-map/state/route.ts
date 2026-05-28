@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recomputeProgress } from "@/lib/tradermap/progressEngine";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/tradermap/progress-map/state
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradermap/progress-map/state:", err);
+    logError("TradermapProgressMapState", { component: "tradermap.progress-map.state", message: "Error in GET /api/tradermap/progress-map/state:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

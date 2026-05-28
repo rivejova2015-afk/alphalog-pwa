@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 /**
  * PATCH /api/terminal/news/{id}
@@ -51,7 +52,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating news:", error);
+      logError("TerminalNews", { component: "terminal.news.[id]", message: "Error updating news:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to update news" },
         { status: 500 }
@@ -65,7 +66,7 @@ export async function PATCH(
       source: decryptText(data.source),
     });
   } catch (err: any) {
-    console.error("Error in PATCH /api/terminal/news/[id]:", err);
+    logError("TerminalNews", { component: "terminal.news.[id]", message: "Error in PATCH /api/terminal/news/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -112,7 +113,7 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (error) {
-      console.error("Error deleting news:", error);
+      logError("TerminalNews", { component: "terminal.news.[id]", message: "Error deleting news:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to delete news" },
         { status: 500 }
@@ -121,7 +122,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error("Error in DELETE /api/terminal/news/[id]:", err);
+    logError("TerminalNews", { component: "terminal.news.[id]", message: "Error in DELETE /api/terminal/news/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

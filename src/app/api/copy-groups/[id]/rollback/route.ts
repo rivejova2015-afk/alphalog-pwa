@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
+import { logError } from "@/lib/log";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (applyError) {
-      console.error("Error applying snapshot:", applyError);
+      logError("CopyGroupsRollback", { component: "copy-groups.[id].rollback", message: "Error applying snapshot:", error: applyError instanceof Error ? applyError.message : String(applyError) });
       return NextResponse.json({ error: "Failed to apply snapshot" }, { status: 500 });
     }
 

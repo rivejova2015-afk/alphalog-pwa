@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/tradermap/progress-map/thresholds
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
       .order("key", { ascending: true });
 
     if (error) {
-      console.error("Error fetching thresholds:", error);
+      logError("TradermapProgressMapThresholds", { component: "tradermap.progress-map.thresholds", message: "Error fetching thresholds:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch thresholds" }, { status: 500 });
     }
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradermap/progress-map/thresholds:", err);
+    logError("TradermapProgressMapThresholds", { component: "tradermap.progress-map.thresholds", message: "Error in GET /api/tradermap/progress-map/thresholds:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -80,13 +81,13 @@ export async function POST(request: NextRequest) {
       .upsert(payload, { onConflict: "user_id,key" });
 
     if (error) {
-      console.error("Error upserting thresholds:", error);
+      logError("TradermapProgressMapThresholds", { component: "tradermap.progress-map.thresholds", message: "Error upserting thresholds:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to save thresholds" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradermap/progress-map/thresholds:", err);
+    logError("TradermapProgressMapThresholds", { component: "tradermap.progress-map.thresholds", message: "Error in POST /api/tradermap/progress-map/thresholds:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/terminal/evidence/{id}/attachments
@@ -42,7 +43,7 @@ export async function GET(
       .order("created_at", { ascending: true });
 
     if (error) {
-      console.error("Error fetching attachments:", error);
+      logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments", message: "Error fetching attachments:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to fetch attachments" },
         { status: 500 }
@@ -51,7 +52,7 @@ export async function GET(
 
     return NextResponse.json(data || []);
   } catch (err: any) {
-    console.error("Error in GET /api/terminal/evidence/[id]/attachments:", err);
+    logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments", message: "Error in GET /api/terminal/evidence/[id]/attachments:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -138,7 +139,7 @@ export async function POST(
       });
 
     if (uploadError) {
-      console.error("Error uploading file:", uploadError);
+      logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments", message: "Error uploading file:", error: uploadError instanceof Error ? uploadError.message : String(uploadError) });
       return NextResponse.json(
         { error: "Failed to upload file" },
         { status: 500 }
@@ -162,7 +163,7 @@ export async function POST(
       .single();
 
     if (dbError) {
-      console.error("Error creating attachment record:", dbError);
+      logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments", message: "Error creating attachment record:", error: dbError instanceof Error ? dbError.message : String(dbError) });
       // Clean up uploaded file on DB error
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(
@@ -173,7 +174,7 @@ export async function POST(
 
     return NextResponse.json(data);
   } catch (err: any) {
-    console.error("Error in POST /api/terminal/evidence/[id]/attachments:", err);
+    logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments", message: "Error in POST /api/terminal/evidence/[id]/attachments:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

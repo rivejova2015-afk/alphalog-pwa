@@ -1,6 +1,7 @@
 // src/app/api/terminal/evidence/[id]/attachments/[attachmentId]/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 /**
  * DELETE /api/terminal/evidence/{id}/attachments/{attachmentId}
@@ -42,7 +43,7 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (dbError) {
-      console.error("Error deleting attachment metadata:", dbError);
+      logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments.[attachmentId]", message: "Error deleting attachment metadata:", error: dbError instanceof Error ? dbError.message : String(dbError) });
       return NextResponse.json(
         { error: "Failed to delete attachment" },
         { status: 500 }
@@ -58,10 +59,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error(
-      "Error in DELETE /api/terminal/evidence/[id]/attachments/[attachmentId]:",
-      err
-    );
+    logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments.[attachmentId]", message: "Error in DELETE /api/terminal/evidence/[id]/attachments/[attachmentId]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -109,7 +107,7 @@ export async function GET(
       .createSignedUrl(attachment.path, 60);
 
     if (error) {
-      console.error("Error creating signed URL:", error);
+      logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments.[attachmentId]", message: "Error creating signed URL:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to generate download URL" },
         { status: 500 }
@@ -118,10 +116,7 @@ export async function GET(
 
     return NextResponse.json({ signedUrl: data.signedUrl });
   } catch (err: any) {
-    console.error(
-      "Error in GET /api/terminal/evidence/[id]/attachments/[attachmentId]/signed-url:",
-      err
-    );
+    logError("TerminalEvidenceAttachments", { component: "terminal.evidence.[id].attachments.[attachmentId]", message: "Error in GET /api/terminal/evidence/[id]/attachments/[attachmentId]/signed-url:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

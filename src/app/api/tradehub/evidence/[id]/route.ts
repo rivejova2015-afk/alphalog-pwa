@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logError } from "@/lib/log";
 
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
@@ -51,7 +52,7 @@ export async function PATCH(
       .single();
 
     if (tradeError && !isMissingTable(tradeError)) {
-      console.error("Error fetching trade_evidence:", tradeError);
+      logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error fetching trade_evidence:", error: tradeError instanceof Error ? tradeError.message : String(tradeError) });
       return NextResponse.json(
         { error: "Failed to update evidence" },
         { status: 500 }
@@ -68,7 +69,7 @@ export async function PATCH(
         .single();
 
       if (error) {
-        console.error("Error updating trade_evidence:", error);
+        logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error updating trade_evidence:", error: error instanceof Error ? error.message : String(error) });
         return NextResponse.json(
           { error: "Failed to update evidence" },
           { status: 500 }
@@ -102,7 +103,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating evidence:", error);
+      logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error updating evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to update evidence" },
         { status: 500 }
@@ -111,7 +112,7 @@ export async function PATCH(
 
     return NextResponse.json(data);
   } catch (err: any) {
-    console.error("Error in PATCH /api/tradehub/evidence/[id]:", err);
+    logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error in PATCH /api/tradehub/evidence/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -152,7 +153,7 @@ export async function DELETE(
       .single();
 
     if (tradeError && !isMissingTable(tradeError)) {
-      console.error("Error fetching trade_evidence:", tradeError);
+      logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error fetching trade_evidence:", error: tradeError instanceof Error ? tradeError.message : String(tradeError) });
       return NextResponse.json(
         { error: "Failed to delete evidence" },
         { status: 500 }
@@ -175,7 +176,7 @@ export async function DELETE(
         .eq("user_id", userId);
 
       if (error) {
-        console.error("Error deleting trade_evidence:", error);
+        logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error deleting trade_evidence:", error: error instanceof Error ? error.message : String(error) });
         return NextResponse.json(
           { error: "Failed to delete evidence" },
           { status: 500 }
@@ -215,7 +216,7 @@ export async function DELETE(
       .eq("user_id", userId);
 
     if (error) {
-      console.error("Error deleting evidence:", error);
+      logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error deleting evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to delete evidence" },
         { status: 500 }
@@ -224,7 +225,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error("Error in DELETE /api/tradehub/evidence/[id]:", err);
+    logError("TradehubEvidence", { component: "tradehub.evidence.[id]", message: "Error in DELETE /api/tradehub/evidence/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

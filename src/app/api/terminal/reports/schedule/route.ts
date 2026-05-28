@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { Asset } from "@/lib/news/sources";
+import { logError } from "@/lib/log";
 
 const allowedAssets: Asset[] = ["US500", "XAUUSD"];
 const QSTASH_BASE_URL = "https://qstash.upstash.io/v2/schedules";
@@ -70,7 +71,7 @@ export async function GET() {
 
     return NextResponse.json(data || []);
   } catch (error) {
-    console.error("Error in GET /api/terminal/reports/schedule:", error);
+    logError("TerminalReportsSchedule", { component: "terminal.reports.schedule", message: "Error in GET /api/terminal/reports/schedule:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -211,7 +212,7 @@ export async function POST(request: NextRequest) {
       const lastAttempt = scheduleAttempts[scheduleAttempts.length - 1];
       const status = lastAttempt?.response?.status ?? 500;
       const body = lastAttempt?.errorBody || "Unknown error";
-      console.error("QStash schedule failed:", status, body);
+      logError("TerminalReportsSchedule", { component: "terminal.reports.schedule", message: `QStash schedule failed: status=${status}`, status, body });
       const { data: updatedJob } = await supabase
         .from("terminal_report_jobs")
         .update({
@@ -256,7 +257,7 @@ export async function POST(request: NextRequest) {
       job: updatedJob || job,
     });
   } catch (error) {
-    console.error("Error in POST /api/terminal/reports/schedule:", error);
+    logError("TerminalReportsSchedule", { component: "terminal.reports.schedule", message: "Error in POST /api/terminal/reports/schedule:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -323,7 +324,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Error in DELETE /api/terminal/reports/schedule:", error);
+    logError("TerminalReportsSchedule", { component: "terminal.reports.schedule", message: "Error in DELETE /api/terminal/reports/schedule:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -1,6 +1,7 @@
 // src/app/api/attachments/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError as captureError } from "@/lib/log";
 
 const MAX_FILE_MB = 100;
 const BLOCKED_EXTENSIONS = [".exe", ".bat"];
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("Error inserting attachment metadata:", insertError);
+      captureError("Attachments", { component: "attachments", message: "Error inserting attachment metadata:", error: insertError instanceof Error ? insertError.message : String(insertError) });
       return NextResponse.json(
         { error: "Failed to save attachment metadata" },
         { status: 500 }
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
       .createSignedUrl(path, 60);
 
     if (signError) {
-      console.error("Error creating signed URL:", signError);
+      captureError("Attachments", { component: "attachments", message: "Error creating signed URL:", error: signError instanceof Error ? signError.message : String(signError) });
       return NextResponse.json(
         { error: "Failed to generate signed URL" },
         { status: 500 }
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
       signedUrl: signedData.signedUrl,
     });
   } catch (err: unknown) {
-    console.error("Error in POST /api/attachments:", err);
+    captureError("Attachments", { component: "attachments", message: "Error in POST /api/attachments:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -166,7 +167,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", attachmentId);
 
     if (updateError) {
-      console.error("Error soft-deleting attachment:", updateError);
+      captureError("Attachments", { component: "attachments", message: "Error soft-deleting attachment:", error: updateError instanceof Error ? updateError.message : String(updateError) });
       return NextResponse.json(
         { error: "Failed to delete attachment" },
         { status: 500 }
@@ -185,7 +186,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/attachments:", err);
+    captureError("Attachments", { component: "attachments", message: "Error in DELETE /api/attachments:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -235,7 +236,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: true });
 
     if (listError) {
-      console.error("Error fetching attachments:", listError);
+      captureError("Attachments", { component: "attachments", message: "Error fetching attachments:", error: listError instanceof Error ? listError.message : String(listError) });
       return NextResponse.json(
         { error: "Failed to fetch attachments" },
         { status: 500 }
@@ -262,7 +263,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(attachmentsWithUrls);
   } catch (err: unknown) {
-    console.error("Error in GET /api/attachments:", err);
+    captureError("Attachments", { component: "attachments", message: "Error in GET /api/attachments:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

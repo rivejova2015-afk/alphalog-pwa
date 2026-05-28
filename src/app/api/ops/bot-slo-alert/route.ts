@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { captureException, captureMessage } from "@/lib/sentry";
 import { safeCompareTokens } from "@/lib/security/timing";
+import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
       captureMessage(`[BotSLO] ${status} / ${severity}`, context);
     }
   } catch (error) {
-    console.error("[bot-slo-alert] failed to send to sentry:", error);
+    logError("BotSLOAlert", { component: "ops.bot-slo-alert", message: error instanceof Error ? error.message : String(error) });
   }
 
   if (process.env.NODE_ENV !== "production") {

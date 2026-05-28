@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getPerformanceMetrics } from "@/lib/dashboard/queries";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/dashboard/metrics
@@ -22,7 +23,7 @@ export async function GET() {
       headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=120" },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/dashboard/metrics:", err);
+    logError("DashboardMetrics", { component: "dashboard.metrics", message: "Error in GET /api/dashboard/metrics:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

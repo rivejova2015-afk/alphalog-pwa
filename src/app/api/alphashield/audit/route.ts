@@ -7,6 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { auditSprints, type AuditReport } from '@/lib/alphashield/sprintAudit';
 import { logger } from '@/lib/alphashield/logger';
+import { logError as captureError } from "@/lib/log";
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (logError) {
-      console.error('[AlphaShield Audit] Error saving to app_logs:', logError);
+      captureError("AlphaShield Audit", { component: "alphashield.audit", message: "Error saving to app_logs:", error: logError instanceof Error ? logError.message : String(logError) });
       // Don't fail the request, just log the error
       await logger.warn('alphashield', 'Failed to save audit to app_logs', {
         error: logError.message,
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
       generatedAt: report.generatedAt,
     });
   } catch (error) {
-    console.error('[AlphaShield Audit] Unexpected error:', error);
+    captureError("AlphaShield Audit", { component: "alphashield.audit", message: "Unexpected error:", error: error instanceof Error ? error.message : String(error) });
 
     await logger.error('alphashield', 'Audit execution failed', error as Error, {
       stack: (error as Error).stack,
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     if (logsError && logsError.code !== 'PGRST116') {
       // PGRST116 = no rows found (expected if no audit yet)
-      console.error('[AlphaShield Audit] Error fetching last audit:', logsError);
+      captureError("AlphaShield Audit", { component: "alphashield.audit", message: "Error fetching last audit:", error: logsError instanceof Error ? logsError.message : String(logsError) });
       return NextResponse.json(
         { error: 'Failed to fetch audit' },
         { status: 500 },
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
       lastGeneratedAt: logs?.created_at || null,
     });
   } catch (error) {
-    console.error('[AlphaShield Audit GET] Unexpected error:', error);
+    captureError("AlphaShield Audit GET", { component: "alphashield.audit", message: "Unexpected error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         ok: false,

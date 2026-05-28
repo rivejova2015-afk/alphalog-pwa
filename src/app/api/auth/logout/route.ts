@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { logError } from "@/lib/log";
 
 export async function POST() {
   try {
@@ -32,13 +33,13 @@ export async function POST() {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      console.error("[Auth Logout] Error:", error.message);
+      logError("Auth", { component: "auth.logout", message: error.message });
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error("[Auth Logout] Unexpected error:", error?.message || error);
+    logError("Auth Logout", { component: "auth.logout", message: "Unexpected error:", error: error?.message || error instanceof Error ? error?.message || error.message : String(error?.message || error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

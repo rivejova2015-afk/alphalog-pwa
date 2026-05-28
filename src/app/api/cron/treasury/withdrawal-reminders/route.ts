@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { computeCycleStart } from '@/lib/treasury/payoutEngine';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
 import { safeCompareTokens } from '@/lib/security/timing';
+import { logError } from "@/lib/log";
 
 // Type for push subscription
 type PushSubscription = {
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
       .returns<{ user_id: string; auth: { users: { id: string; email?: string } } }[]>();
 
     if (userError) {
-      console.error('Error fetching users with push subscriptions:', userError);
+      logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error fetching users with push subscriptions:", error: userError instanceof Error ? userError.message : String(userError) });
       return NextResponse.json(
         { error: 'Database query failed', details: userError.message },
         { status: 500 }
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
           .returns<AccountConfig[]>();
 
         if (configError) {
-          console.error(`Error fetching configs for user ${userId}:`, configError);
+          logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error fetching configs for user ${userId}:", error: configError instanceof Error ? configError.message : String(configError) });
           errors.push(`Config query failed for user ${userId}`);
           continue;
         }
@@ -180,7 +181,7 @@ export async function GET(request: NextRequest) {
           .returns<CalendarEvent[]>();
 
         if (eventError) {
-          console.error(`Error fetching calendar events for user ${userId}:`, eventError);
+          logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error fetching calendar events for user ${userId}:", error: eventError instanceof Error ? eventError.message : String(eventError) });
           errors.push(`Event query failed for user ${userId}`);
           continue;
         }
@@ -254,7 +255,7 @@ export async function GET(request: NextRequest) {
               .returns<{ subscription_json: Record<string, unknown> }[]>();
 
             if (subError) {
-              console.error(`Error fetching subscriptions for user ${userId}:`, subError);
+              logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error fetching subscriptions for user ${userId}:", error: subError instanceof Error ? subError.message : String(subError) });
               errors.push(`Subscription query failed for user ${userId}`);
               continue;
             }
@@ -281,7 +282,7 @@ export async function GET(request: NextRequest) {
                 });
                 pushSent = true;
               } catch (pushError) {
-                console.error(`Error sending push to subscription:`, pushError);
+                logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error sending push to subscription:", error: pushError instanceof Error ? pushError.message : String(pushError) });
                 // Continue with next subscription
               }
             }
@@ -297,10 +298,7 @@ export async function GET(request: NextRequest) {
                 .is('deleted_at', null);
 
               if (updateError) {
-                console.error(
-                  `Error updating cycle start for user ${userId}:`,
-                  updateError
-                );
+                logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error updating cycle start for user ${userId}:", error: updateError instanceof Error ? updateError.message : String(updateError) });
               } else {
                 sentNotifications++;
                 console.log(
@@ -309,12 +307,12 @@ export async function GET(request: NextRequest) {
               }
             }
           } catch (notifError) {
-            console.error('Error processing notification:', notifError);
+            logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error processing notification:", error: notifError instanceof Error ? notifError.message : String(notifError) });
             errors.push(`Notification failed: ${String(notifError)}`);
           }
         }
       } catch (userProcessError) {
-        console.error(`Error processing user ${userId}:`, userProcessError);
+        logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error processing user ${userId}:", error: userProcessError instanceof Error ? userProcessError.message : String(userProcessError) });
         errors.push(`User processing failed: ${String(userProcessError)}`);
       }
     }
@@ -332,7 +330,7 @@ export async function GET(request: NextRequest) {
       timestamp: todayUTC,
     });
   } catch (error) {
-    console.error('[Treasury Withdrawal Reminders] Fatal error:', error);
+    logError("Treasury Withdrawal Reminders", { component: "cron.treasury.withdrawal-reminders", message: "Fatal error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Internal server error',

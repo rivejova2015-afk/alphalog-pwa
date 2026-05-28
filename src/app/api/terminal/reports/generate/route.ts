@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Asset } from "@/lib/news/sources";
 import { runReportPipeline } from "@/lib/reports/runReport";
 import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
+import { logError } from "@/lib/log";
 
 const allowedAssets: Asset[] = ["US500", "XAUUSD"];
 
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
       assets: results,
     });
   } catch (error) {
-    console.error("Error in POST /api/terminal/reports/generate:", error);
+    logError("TerminalReportsGenerate", { component: "terminal.reports.generate", message: "Error in POST /api/terminal/reports/generate:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

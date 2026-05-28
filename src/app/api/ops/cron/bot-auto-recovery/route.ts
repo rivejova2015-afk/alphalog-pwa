@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, report });
   } catch (error) {
-    console.error("[cron/bot-auto-recovery] error:", error);
+    logError("BotAutoRecovery", { component: "ops.cron.bot-auto-recovery", message: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

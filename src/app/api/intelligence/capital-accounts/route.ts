@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
-    console.error("Error in POST /api/intelligence/capital-accounts:", error);
+    logError("IntelligenceCapitalAccounts", { component: "intelligence.capital-accounts", message: "Error in POST /api/intelligence/capital-accounts:", error: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

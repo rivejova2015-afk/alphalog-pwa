@@ -13,6 +13,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from "@/lib/log";
 
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -178,7 +179,7 @@ async function handlePriceFetch(request: NextRequest) {
   // Upsert into live_market_data
   for (const { asset, price } of priceResults) {
     if (!price) {
-      console.error(`[price-fetch] No price for ${asset}`);
+      logError("CronTerminalPriceFetch", { component: "cron.terminal.price-fetch", message: "[price-fetch] No price for ${asset}" });
       results.push({ asset, ok: false });
       continue;
     }
@@ -200,7 +201,7 @@ async function handlePriceFetch(request: NextRequest) {
       );
 
     if (error) {
-      console.error(`[price-fetch] Upsert error for ${asset}:`, error.message);
+      logError("TerminalPrice", { component: "cron.terminal.price-fetch", message: `Upsert error for ${asset}: ${error.message}`, asset });
       results.push({ asset, ok: false });
     } else {
       results.push({ asset, ok: true, source: price.source });

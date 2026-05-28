@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -16,7 +17,7 @@ const safeEncrypt = (value: string) => {
   try {
     return encryptText(value);
   } catch (err) {
-    console.error("[Terminal] Failed to encrypt evidence:", err);
+    logError("Terminal", { component: "terminal.evidence.[id]", message: "Failed to encrypt evidence:", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 };
@@ -77,7 +78,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating evidence:", error);
+      logError("TerminalEvidence", { component: "terminal.evidence.[id]", message: "Error updating evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to update evidence" },
         { status: 500 }
@@ -90,7 +91,7 @@ export async function PATCH(
       content: safeDecrypt(data.content),
     });
   } catch (err: any) {
-    console.error("Error in PATCH /api/terminal/evidence/[id]:", err);
+    logError("TerminalEvidence", { component: "terminal.evidence.[id]", message: "Error in PATCH /api/terminal/evidence/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -137,7 +138,7 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (attachmentsError) {
-      console.error("Error fetching attachments:", attachmentsError);
+      logError("TerminalEvidence", { component: "terminal.evidence.[id]", message: "Error fetching attachments:", error: attachmentsError instanceof Error ? attachmentsError.message : String(attachmentsError) });
       return NextResponse.json(
         { error: "Failed to delete evidence" },
         { status: 500 }
@@ -172,7 +173,7 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (error) {
-      console.error("Error deleting evidence:", error);
+      logError("TerminalEvidence", { component: "terminal.evidence.[id]", message: "Error deleting evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to delete evidence" },
         { status: 500 }
@@ -181,7 +182,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error("Error in DELETE /api/terminal/evidence/[id]:", err);
+    logError("TerminalEvidence", { component: "terminal.evidence.[id]", message: "Error in DELETE /api/terminal/evidence/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

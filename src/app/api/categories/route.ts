@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { logError } from "@/lib/log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       .order("sort_index", { ascending: true });
 
     if (error) {
-      console.error("[Categories API] Query error:", error);
+      logError("Categories API", { component: "categories", message: "Query error:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Error fetching categories" },
         { status: 500 }
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err) {
-    console.error("[Categories API] Error:", err);
+    logError("Categories API", { component: "categories", message: "Error:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[Categories API POST] Insert error:", error);
+      logError("Categories API POST", { component: "categories", message: "Insert error:", error: error instanceof Error ? error.message : String(error) });
       if (error.code === "23505") {
         return NextResponse.json(
           { error: "Category already exists" },
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    console.error("[Categories API POST] Unexpected error:", err);
+    logError("Categories API POST", { component: "categories", message: "Unexpected error:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

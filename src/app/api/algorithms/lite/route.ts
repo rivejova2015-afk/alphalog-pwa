@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
       .order("name", { ascending: true });
 
     if (error) {
-      console.error("Error fetching algorithms lite:", error);
+      logError("AlgorithmsLite", { component: "algorithms.lite", message: "Error fetching algorithms lite:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch algorithms" }, { status: 500 });
     }
 
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=120" },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/algorithms/lite:", err);
+    logError("AlgorithmsLite", { component: "algorithms.lite", message: "Error in GET /api/algorithms/lite:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: null, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

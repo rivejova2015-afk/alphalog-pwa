@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { logError } from "@/lib/log";
 
 type Category = { id: string; name: string; description: string | null; created_at: string };
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       .order("name_lower", { ascending: true });
 
     if (error) {
-      console.error("Error fetching categories:", error);
+      logError("AccountCategories", { component: "account-categories", message: "Error fetching categories:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to fetch categories" },
         { status: 500 }
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/account-categories:", err);
+    logError("AccountCategories", { component: "account-categories", message: "Error in GET /api/account-categories:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (createError) {
-      console.error("Error creating category:", createError);
+      logError("AccountCategories", { component: "account-categories", message: "Error creating category:", error: createError instanceof Error ? createError.message : String(createError) });
       return NextResponse.json(
         { error: "Failed to create category" },
         { status: 500 }
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(category, { status: 201 });
   } catch (err: unknown) {
-    console.error("Error in POST /api/account-categories:", err);
+    logError("AccountCategories", { component: "account-categories", message: "Error in POST /api/account-categories:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -162,7 +163,7 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error("Error updating category:", updateError);
+      logError("AccountCategories", { component: "account-categories", message: "Error updating category:", error: updateError instanceof Error ? updateError.message : String(updateError) });
       return NextResponse.json(
         { error: "Failed to update category" },
         { status: 500 }
@@ -176,7 +177,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json(updated);
   } catch (err: unknown) {
-    console.error("Error in PATCH /api/account-categories:", err);
+    logError("AccountCategories", { component: "account-categories", message: "Error in PATCH /api/account-categories:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -236,7 +237,7 @@ export async function DELETE(request: NextRequest) {
       .is("deleted_at", null);
 
     if (countError) {
-      console.error("Error counting accounts for category:", countError);
+      logError("AccountCategories", { component: "account-categories", message: "Error counting accounts for category:", error: countError instanceof Error ? countError.message : String(countError) });
       return NextResponse.json(
         { error: "Failed to validate category usage" },
         { status: 500 }
@@ -286,7 +287,7 @@ export async function DELETE(request: NextRequest) {
           .single();
 
         if (createCatError || !newCategory) {
-          console.error("Error creating category during reassignment:", createCatError);
+          logError("AccountCategories", { component: "account-categories", message: "Error creating category during reassignment:", error: createCatError instanceof Error ? createCatError.message : String(createCatError) });
           return NextResponse.json(
             { error: "Failed to create target category" },
             { status: 500 }
@@ -309,7 +310,7 @@ export async function DELETE(request: NextRequest) {
         .is("deleted_at", null);
 
       if (reassignError) {
-        console.error("Error reassigning accounts:", reassignError);
+        logError("AccountCategories", { component: "account-categories", message: "Error reassigning accounts:", error: reassignError instanceof Error ? reassignError.message : String(reassignError) });
         return NextResponse.json(
           { error: "Failed to reassign accounts" },
           { status: 500 }
@@ -325,7 +326,7 @@ export async function DELETE(request: NextRequest) {
       .eq("user_id", userId);
 
     if (deleteError) {
-      console.error("Error deleting category:", deleteError);
+      logError("AccountCategories", { component: "account-categories", message: "Error deleting category:", error: deleteError instanceof Error ? deleteError.message : String(deleteError) });
       return NextResponse.json(
         { error: "Failed to delete category" },
         { status: 500 }
@@ -346,7 +347,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true, targetCategoryId });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/account-categories:", err);
+    logError("AccountCategories", { component: "account-categories", message: "Error in DELETE /api/account-categories:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

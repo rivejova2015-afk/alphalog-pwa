@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 async function getUserFromRequest(request: NextRequest) {
   const supabase = await createClient();
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch subscriptions:", error);
+      logError("PushSubscriptions", { component: "push.subscriptions", message: "Failed to fetch subscriptions:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch subscriptions" }, { status: 500 });
     }
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (error) {
-    console.error("Get subscriptions endpoint error:", error);
+    logError("PushSubscriptions", { component: "push.subscriptions", message: "Get subscriptions endpoint error:", error: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/log";
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error in POST /api/pwa/clear-force-refresh:", error);
+    logError("PwaClearForceRefresh", { component: "pwa.clear-force-refresh", message: "Error in POST /api/pwa/clear-force-refresh:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

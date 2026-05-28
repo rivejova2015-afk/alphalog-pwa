@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { logError } from "@/lib/log";
 
 /**
  * Whitelist of tables allowed for AlphaCore offline sync mutations.
@@ -68,7 +69,7 @@ export async function DELETE(
       .single();
 
     if (error) {
-      console.error(`[AlphaCore] Error deleting ${table}/${id}:`, error);
+      logError("AlphaCore", { component: "alphacore.[table].[id].delete", message: `Error deleting ${table}/${id}:: ${error instanceof Error ? error.message : String(error)}` });
       await recordBugFromRequest(request, {
         userId,
         status: 500,
@@ -108,7 +109,7 @@ export async function DELETE(
       data: { id },
     });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/alphacore/[table]/[id]/delete:", err);
+    logError("AlphacoreDelete", { component: "alphacore.[table].[id].delete", message: "Error in DELETE /api/alphacore/[table]/[id]/delete:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

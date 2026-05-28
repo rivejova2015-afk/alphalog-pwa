@@ -5,6 +5,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { logError } from "@/lib/log";
 
 interface UpdateStatusRequest {
   payoutId: string; // UUID
@@ -82,7 +83,7 @@ export async function PATCH(request: Request): Promise<Response> {
       .eq('user_id', userId);
 
     if (updateError) {
-      console.error('[/api/treasury/payouts/status] Update error:', updateError);
+      logError("TreasuryPayouts", { component: "treasury.payouts.status", message: "Update error:", error: updateError instanceof Error ? updateError.message : String(updateError) });
       return Response.json(
         { success: false, error: 'Failed to update status' },
         { status: 500 }
@@ -95,7 +96,7 @@ export async function PATCH(request: Request): Promise<Response> {
       newStatus: status,
     } as UpdateStatusResponse);
   } catch (error) {
-    console.error('[/api/treasury/payouts/status] Error:', error);
+    logError("TreasuryPayouts", { component: "treasury.payouts.status", message: "Error:", error: error instanceof Error ? error.message : String(error) });
     return Response.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit * 2 - 1); // fetch 2x limit to allow dedup with legacy
 
     if (tradeEvidenceError && !isMissingTable(tradeEvidenceError)) {
-      console.error("Error fetching trade_evidence:", tradeEvidenceError);
+      logError("TradehubEvidence", { component: "tradehub.evidence", message: "Error fetching trade_evidence:", error: tradeEvidenceError instanceof Error ? tradeEvidenceError.message : String(tradeEvidenceError) });
       return NextResponse.json(
         { error: "Failed to fetch evidence" },
         { status: 500 }
@@ -204,7 +204,7 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit * 2 - 1);
 
     if (legacyError && !isMissingTable(legacyError)) {
-      console.error("Error fetching legacy evidence:", legacyError);
+      logError("TradehubEvidence", { component: "tradehub.evidence", message: "Error fetching legacy evidence:", error: legacyError instanceof Error ? legacyError.message : String(legacyError) });
       return NextResponse.json(
         { error: "Failed to fetch evidence" },
         { status: 500 }
@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      console.error("Error uploading file:", uploadError);
+      logError("TradehubEvidence", { component: "tradehub.evidence", message: "Error uploading file:", error: uploadError instanceof Error ? uploadError.message : String(uploadError) });
       return NextResponse.json(
         {
           error: getStorageUploadMessage(uploadError),
@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (tradeEvidenceInsert.error && !isMissingTable(tradeEvidenceInsert.error)) {
-      console.error("Error inserting trade_evidence:", tradeEvidenceInsert.error);
+      logError("TradehubEvidence", { component: "tradehub.evidence", message: "Error inserting trade_evidence:", error: tradeEvidenceInsert.error instanceof Error ? tradeEvidenceInsert.error.message : String(tradeEvidenceInsert.error) });
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(
         {
@@ -406,7 +406,7 @@ export async function POST(request: NextRequest) {
     try {
       encryptedNotes = encryptText(notes) || null;
     } catch (err) {
-      console.error("Error encrypting notes:", err);
+      logError("TradehubEvidence", { component: "tradehub.evidence", message: "Error encrypting notes:", error: err instanceof Error ? err.message : String(err) });
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(
         { error: "Configuración de seguridad pendiente" },
@@ -430,7 +430,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("Error inserting evidence:", insertError);
+      logError("TradehubEvidence", { component: "tradehub.evidence", message: "Error inserting evidence:", error: insertError instanceof Error ? insertError.message : String(insertError) });
       // Attempt cleanup
       await supabase.storage.from("log_attachments").remove([safePath]);
       return NextResponse.json(

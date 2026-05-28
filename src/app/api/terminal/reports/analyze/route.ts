@@ -6,6 +6,7 @@ import { dedupeNews } from "@/lib/news/dedupe";
 import { scoreImpact } from "@/lib/news/impactScore";
 import { analyzeNewsWithAI } from "@/lib/terminal-ia/analyzeWithAI";
 import type { ScoredNewsItem } from "@/lib/reports/buildBase";
+import { logError } from "@/lib/log";
 
 const ALLOWED_ASSETS: Asset[] = ["XAUUSD"];
 
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
         : undefined,
     });
   } catch (err) {
-    console.error("[Terminal] Analyze error:", err);
+    logError("Terminal", { component: "terminal.reports.analyze", message: "Analyze error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

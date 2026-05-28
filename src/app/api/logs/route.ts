@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { decryptText, encryptText } from "@/lib/security/encryption";
+import { logError as captureError } from "@/lib/log";
 
 const pageSize = 50;
 
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
     if (query) {
       const { data: searchItems, error } = await baseQuery.range(0, searchLimit - 1);
       if (error) {
-        console.error("[Logs API] Query error:", error);
+        captureError("Logs API", { component: "logs", message: "Query error:", error: error instanceof Error ? error.message : String(error) });
         return NextResponse.json(
           { error: "Error fetching logs" },
           { status: 500 }
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
 
       const { data: pageItems, error } = await baseQuery.range(offset, offset + pageSize - 1);
       if (error) {
-        console.error("[Logs API] Query error:", error);
+        captureError("Logs API", { component: "logs", message: "Query error:", error: error instanceof Error ? error.message : String(error) });
         return NextResponse.json(
           { error: "Error fetching logs" },
           { status: 500 }
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (err) {
-    console.error("[Logs API] Unexpected error:", err);
+    captureError("Logs API", { component: "logs", message: "Unexpected error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -204,7 +205,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (logError) {
-      console.error("[Logs API POST] Insert error:", logError);
+      captureError("Logs API POST", { component: "logs", message: "Insert error:", error: logError instanceof Error ? logError.message : String(logError) });
       // Check if it's the unique constraint error (duplicate by day UTC)
       if (logError.code === "23505") {
         return NextResponse.json(
@@ -269,7 +270,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    console.error("[Logs API POST] Unexpected error:", err);
+    captureError("Logs API POST", { component: "logs", message: "Unexpected error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -322,7 +323,7 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (logError) {
-      console.error("[Logs API PATCH] Update error:", logError);
+      captureError("Logs API PATCH", { component: "logs", message: "Update error:", error: logError instanceof Error ? logError.message : String(logError) });
       if (logError.code === "23505") {
         return NextResponse.json(
           {
@@ -385,7 +386,7 @@ export async function PATCH(request: NextRequest) {
       { status: 200 }
     );
   } catch (err) {
-    console.error("[Logs API PATCH] Unexpected error:", err);
+    captureError("Logs API PATCH", { component: "logs", message: "Unexpected error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -448,7 +449,7 @@ export async function DELETE(request: NextRequest) {
       { status: 200 }
     );
   } catch (err) {
-    console.error("[Logs API DELETE] Unexpected error:", err);
+    captureError("Logs API DELETE", { component: "logs", message: "Unexpected error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

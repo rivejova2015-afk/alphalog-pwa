@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createInitialVersion, reportCopyGroupError } from "@/lib/copygroups/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching copy groups:", error);
+      logError("CopyGroups", { component: "copy-groups", message: "Error fetching copy groups:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch copy groups" }, { status: 500 });
     }
 
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !group) {
-      console.error("Error creating copy group:", error);
+      logError("CopyGroups", { component: "copy-groups", message: "Error creating copy group:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to create copy group" }, { status: 500 });
     }
 

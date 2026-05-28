@@ -11,6 +11,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { logError } from "@/lib/log";
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase.auth.refreshSession();
 
     if (error) {
-      console.error('[Auth Refresh] Error:', error.message);
+      logError("Auth", { component: "auth.refresh", message: error.message });
       return NextResponse.json(
         { error: error.message },
         { status: 401 }
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
       user: data.user,
     });
   } catch (error: any) {
-    console.error('[Auth Refresh] Unexpected error:', error?.message || error);
+    logError("Auth Refresh", { component: "auth.refresh", message: "Unexpected error:", error: error?.message || error instanceof Error ? error?.message || error.message : String(error?.message || error) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

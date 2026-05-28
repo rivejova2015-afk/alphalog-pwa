@@ -4,6 +4,7 @@
 import { sendPushToSubscription } from "@/lib/push/webpush.server";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 async function getUserFromRequest(request: NextRequest) {
   const supabase = await createClient();
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: "Test notification sent" });
   } catch (error) {
-    console.error("Test push endpoint error:", error);
+    logError("PushTest", { component: "push.test", message: "Test push endpoint error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Failed to send test notification" }, { status: 500 });
   }
 }

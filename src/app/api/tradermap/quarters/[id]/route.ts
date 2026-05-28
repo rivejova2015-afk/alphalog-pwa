@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
 import { XP_VALUES } from "@/lib/tradermap/xpConfig";
+import { logError } from "@/lib/log";
 
 /**
  * PATCH /api/tradermap/quarters/[id]
@@ -117,7 +118,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating quarter:", error);
+      logError("TradermapQuarters", { component: "tradermap.quarters.[id]", message: "Error updating quarter:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to update quarter" },
         { status: 500 }
@@ -170,7 +171,7 @@ export async function PATCH(
 
     return NextResponse.json(data);
   } catch (err: any) {
-    console.error("Error in PATCH /api/tradermap/quarters/[id]:", err);
+    logError("TradermapQuarters", { component: "tradermap.quarters.[id]", message: "Error in PATCH /api/tradermap/quarters/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

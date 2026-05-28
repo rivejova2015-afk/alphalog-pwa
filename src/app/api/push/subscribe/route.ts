@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 async function getUserFromRequest(request: NextRequest) {
   const supabase = await createClient();
@@ -50,13 +51,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Failed to save subscription:", error);
+      logError("PushSubscribe", { component: "push.subscribe", message: "Failed to save subscription:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to save subscription" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, subscription: data });
   } catch (error) {
-    console.error("Subscribe endpoint error:", error);
+    logError("PushSubscribe", { component: "push.subscribe", message: "Subscribe endpoint error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -81,13 +82,13 @@ export async function DELETE(request: NextRequest) {
       .eq("endpoint", endpoint);
 
     if (error) {
-      console.error("Failed to delete subscription:", error);
+      logError("PushSubscribe", { component: "push.subscribe", message: "Failed to delete subscription:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to delete subscription" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Unsubscribe endpoint error:", error);
+    logError("PushSubscribe", { component: "push.subscribe", message: "Unsubscribe endpoint error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

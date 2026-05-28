@@ -310,7 +310,7 @@ export async function DELETE(
       .eq("trade_id", id);
 
     if (evidenceError && !isMissingTable(evidenceError)) {
-      console.error("Error fetching evidence for trade delete:", evidenceError);
+      logError("TradehubTrades", { component: "tradehub.trades.[id]", message: "Error fetching evidence for trade delete:", error: evidenceError instanceof Error ? evidenceError.message : String(evidenceError) });
       return NextResponse.json(
         { error: "Failed to delete trade evidence" },
         { status: 500 }
@@ -345,7 +345,7 @@ export async function DELETE(
       .eq("trade_id", id);
 
     if (reportEvidenceError && !isMissingTable(reportEvidenceError)) {
-      console.error("Error fetching trade_evidence for trade delete:", reportEvidenceError);
+      logError("TradehubTrades", { component: "tradehub.trades.[id]", message: "Error fetching trade_evidence for trade delete:", error: reportEvidenceError instanceof Error ? reportEvidenceError.message : String(reportEvidenceError) });
       return NextResponse.json(
         { error: "Failed to delete trade evidence" },
         { status: 500 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       .order("exit_date", { ascending: false });
 
     if (tradesError) {
-      console.error("Error fetching trades:", tradesError);
+      logError("TradehubReportsGenerate", { component: "tradehub.reports.generate", message: "Error fetching trades:", error: tradesError instanceof Error ? tradesError.message : String(tradesError) });
       return NextResponse.json(
         { error: "Failed to fetch trades" },
         { status: 500 }
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
     try {
       encryptedContent = encryptText(markdownContent);
     } catch (err) {
-      console.error("Error encrypting AlphaBrief report:", err);
+      logError("TradehubReportsGenerate", { component: "tradehub.reports.generate", message: "Error encrypting AlphaBrief report:", error: err instanceof Error ? err.message : String(err) });
       return NextResponse.json(
         { error: "Configuración de seguridad pendiente" },
         { status: 500 }
@@ -195,7 +196,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("Error creating report:", insertError);
+      logError("TradehubReportsGenerate", { component: "tradehub.reports.generate", message: "Error creating report:", error: insertError instanceof Error ? insertError.message : String(insertError) });
       return NextResponse.json(
         { error: "Failed to create report" },
         { status: 500 }
@@ -235,7 +236,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradehub/reports/generate:", err);
+    logError("TradehubReportsGenerate", { component: "tradehub.reports.generate", message: "Error in POST /api/tradehub/reports/generate:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

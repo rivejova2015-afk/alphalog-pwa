@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/terminal/assistant/memory
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ memory: data ?? [] });
   } catch (err) {
-    console.error("[Assistant Memory] GET error:", err);
+    logError("Assistant Memory", { component: "terminal.assistant.memory", message: "GET error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -86,7 +87,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Assistant Memory] DELETE error:", err);
+    logError("Assistant Memory", { component: "terminal.assistant.memory", message: "DELETE error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

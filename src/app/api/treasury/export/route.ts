@@ -14,6 +14,7 @@ import {
 import { logAuditEvent } from '@/lib/security/auditLog';
 import { recordBugFromRequest } from '@/lib/security/bugRecorder';
 import { asArray } from '@/lib/validation/nullGuards';
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/treasury/export
@@ -111,7 +112,7 @@ export async function GET(request: Request) {
       .lte('updated_at', to.toISOString());
 
     if (tradesError) {
-      console.error('[Export] Error fetching trades:', tradesError);
+      logError("Export", { component: "treasury.export", message: "Error fetching trades:", error: tradesError instanceof Error ? tradesError.message : String(tradesError) });
       await recordBugFromRequest(request, {
         userId,
         status: 500,
@@ -147,7 +148,7 @@ export async function GET(request: Request) {
       .is('deleted_at', null);
 
     if (payoutsError) {
-      console.error('[Export] Error fetching payouts:', payoutsError);
+      logError("Export", { component: "treasury.export", message: "Error fetching payouts:", error: payoutsError instanceof Error ? payoutsError.message : String(payoutsError) });
       await recordBugFromRequest(request, {
         userId,
         status: 500,
@@ -187,7 +188,7 @@ export async function GET(request: Request) {
       .order('tx_date', { ascending: false });
 
     if (txError) {
-      console.error('[Export] Error fetching transactions:', txError);
+      logError("Export", { component: "treasury.export", message: "Error fetching transactions:", error: txError instanceof Error ? txError.message : String(txError) });
       await recordBugFromRequest(request, {
         userId,
         status: 500,
@@ -283,7 +284,7 @@ export async function GET(request: Request) {
 
     return exportSuccessResponse(csvContent, "csv", filename);
   } catch (error) {
-    console.error('[Export] Unexpected error:', error);
+    logError("Export", { component: "treasury.export", message: "Unexpected error:", error: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: "unknown",
       status: 500,

@@ -7,6 +7,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { safeCompareTokens } from '@/lib/security/timing';
+import { logError } from "@/lib/log";
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error('Cleanup error:', error);
+      logError("LogsCleanup", { component: "logs.cleanup", message: "Cleanup error:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       cutoffDate: thirtyDaysAgo.toISOString(),
     });
   } catch (error) {
-    console.error('Cleanup handler error:', error);
+    logError("LogsCleanup", { component: "logs.cleanup", message: "Cleanup handler error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

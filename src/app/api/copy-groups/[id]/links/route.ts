@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
+import { logError } from "@/lib/log";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error || !link) {
-      console.error("Error creating link:", error);
+      logError("CopyGroupsLinks", { component: "copy-groups.[id].links", message: "Error creating link:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to create link" }, { status: 500 });
     }
 
@@ -86,7 +87,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (error || !link) {
-      console.error("Error updating link:", error);
+      logError("CopyGroupsLinks", { component: "copy-groups.[id].links", message: "Error updating link:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to update link" }, { status: 500 });
     }
 
@@ -134,7 +135,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       .eq("copy_group_id", id);
 
     if (error) {
-      console.error("Error deleting link:", error);
+      logError("CopyGroupsLinks", { component: "copy-groups.[id].links", message: "Error deleting link:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to delete link" }, { status: 500 });
     }
 

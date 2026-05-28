@@ -9,6 +9,7 @@ import { cookies } from 'next/headers';
 import { checkAiRateLimit } from '@/lib/security/aiRateLimit';
 import { computeIntegrityHash } from '@/lib/security/integrity';
 import { encryptNumeric, encryptForDomain } from '@/lib/security/encryption';
+import { logError } from "@/lib/log";
 
 interface CreatePayoutRequest {
   accountId: string; // UUID
@@ -279,7 +280,7 @@ export async function POST(request: Request): Promise<Response> {
       .single();
 
     if (insertError || !newPayout) {
-      console.error('[/api/treasury/payouts/create] Insert error:', insertError);
+      logError("TreasuryPayouts", { component: "treasury.payouts.create", message: "Insert error:", error: insertError instanceof Error ? insertError.message : String(insertError) });
       return Response.json(
         { success: false, error: 'Failed to create payout' },
         { status: 500 }
@@ -299,7 +300,7 @@ export async function POST(request: Request): Promise<Response> {
       },
     } as CreatePayoutResponse);
   } catch (error) {
-    console.error('[/api/treasury/payouts/create] Error:', error);
+    logError("TreasuryPayouts", { component: "treasury.payouts.create", message: "Error:", error: error instanceof Error ? error.message : String(error) });
     return Response.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

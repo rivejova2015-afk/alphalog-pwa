@@ -24,6 +24,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { safeCompareTokens } from '@/lib/security/timing';
+import { logError } from "@/lib/log";
 
 function getMonthStr(): string {
   const now = new Date();
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
       .order('user_id', { ascending: true });
 
     if (templatesError) {
-      console.error('Error fetching templates:', templatesError);
+      logError("CronBusinessRecurringCosts", { component: "cron.business.recurring-costs", message: "Error fetching templates:", error: templatesError instanceof Error ? templatesError.message : String(templatesError) });
       return NextResponse.json(
         { error: 'Failed to fetch templates', details: templatesError },
         { status: 500 }
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
           .limit(1);
 
         if (existingError) {
-          console.error(`Error checking existing costs for template ${template.id}:`, existingError);
+          logError("CronBusinessRecurringCosts", { component: "cron.business.recurring-costs", message: "Error checking existing costs for template ${template.id}:", error: existingError instanceof Error ? existingError.message : String(existingError) });
           results.push({
             template_id: template.id,
             user_id: template.user_id,
@@ -189,7 +190,7 @@ export async function GET(request: NextRequest) {
           .single();
 
         if (insertError) {
-          console.error(`Error creating cost from template ${template.id}:`, insertError);
+          logError("CronBusinessRecurringCosts", { component: "cron.business.recurring-costs", message: "Error creating cost from template ${template.id}:", error: insertError instanceof Error ? insertError.message : String(insertError) });
           results.push({
             template_id: template.id,
             user_id: template.user_id,
@@ -206,7 +207,7 @@ export async function GET(request: NextRequest) {
           .eq('id', template.id);
 
         if (updateError) {
-          console.error(`Error updating template ${template.id}:`, updateError);
+          logError("CronBusinessRecurringCosts", { component: "cron.business.recurring-costs", message: "Error updating template ${template.id}:", error: updateError instanceof Error ? updateError.message : String(updateError) });
           results.push({
             template_id: template.id,
             user_id: template.user_id,
@@ -226,7 +227,7 @@ export async function GET(request: NextRequest) {
 
         console.log(`Created recurring cost ${newCost.id} from template ${template.id}`);
       } catch (error) {
-        console.error(`Unexpected error processing template ${template.id}:`, error);
+        logError("CronBusinessRecurringCosts", { component: "cron.business.recurring-costs", message: "Unexpected error processing template ${template.id}:", error: error instanceof Error ? error.message : String(error) });
         results.push({
           template_id: template.id,
           user_id: template.user_id,
@@ -257,7 +258,7 @@ export async function GET(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('[Business Recurring Costs] Unexpected error:', error);
+    logError("Business Recurring Costs", { component: "cron.business.recurring-costs", message: "Unexpected error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Internal server error',

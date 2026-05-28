@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText } from "@/lib/security/encryption";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value: string): string => {
   try {
@@ -54,7 +55,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ session: sessionResult.data, messages });
   } catch (err) {
-    console.error("[Chat Session] GET error:", err);
+    logError("Chat Session", { component: "terminal.chat.sessions.[id]", message: "GET error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -93,7 +94,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Chat Session] PATCH error:", err);
+    logError("Chat Session", { component: "terminal.chat.sessions.[id]", message: "PATCH error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -125,7 +126,7 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Chat Session] DELETE error:", err);
+    logError("Chat Session", { component: "terminal.chat.sessions.[id]", message: "DELETE error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -19,6 +19,7 @@ import { sendEmailResponseSchema, sendEmailSchema, validatePayloadSafe, validati
 import { recordBugFromRequest } from '@/lib/security/bugRecorder';
 import { retryAsync, isRetryableError } from '@/lib/security/retry';
 import { autoFixSendEmail } from '@/lib/validation/autoFix';
+import { logError } from '@/lib/log';
 import { enforceResponseContract } from '@/lib/validation/contractGuard';
 
 export const runtime = 'nodejs';
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (messageError || !message) {
-      console.error('Failed to create message record:', messageError);
+      logError('OutboundEmail', { component: 'send.createMessageRecord', message: messageError?.message ?? 'message insert returned no row' });
       await recordBugFromRequest(request, {
         userId: user.id,
         status: 500,
@@ -227,7 +228,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(responseCheck.data, { status: 200 });
     } catch (sendError) {
-      console.error('Postmark send error:', sendError);
+      logError('OutboundEmail', { component: 'send.postmarkSend', message: sendError instanceof Error ? sendError.message : String(sendError) });
       await recordBugFromRequest(request, {
         userId: user.id,
         status: 500,
@@ -244,7 +245,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
     }
   } catch (error) {
-    console.error('Outbound send error:', error);
+    logError('OutboundEmail', { component: 'send.handler', message: error instanceof Error ? error.message : String(error) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { logError } from "@/lib/log";
 
 type Params = { params: Promise<{ id: string; msgId: string }> };
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Chat Rating] POST error:", err);
+    logError("Chat Rating", { component: "terminal.chat.sessions.[id].messages.[msgId].rating", message: "POST error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

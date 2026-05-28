@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { encryptText } from '@/lib/security/encryption';
+import { logError } from '@/lib/log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     // Validate webhook signature
     if (!validateWebhookSignature(body, signature)) {
-      console.error('Invalid webhook signature');
+      logError('InboundEmail', { component: 'postmark.signatureValidation', message: 'Invalid webhook signature' });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (mailboxError || !mailbox) {
-      console.error('Mailbox not found:', toEmail);
+      logError('InboundEmail', { component: 'postmark.resolveMailbox', message: `Mailbox not found for ${toEmail}`, toEmail });
       return NextResponse.json({ error: 'Mailbox not found' }, { status: 404 });
     }
 
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (messageError || !message) {
-      console.error('Failed to store message:', messageError);
+      logError('InboundEmail', { component: 'postmark.storeMessage', message: messageError?.message ?? 'message insert returned no row' });
       return NextResponse.json({ error: 'Failed to store message' }, { status: 500 });
     }
 
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest) {
           });
 
         if (uploadError) {
-          console.error('Failed to upload attachment:', uploadError);
+          logError('InboundEmail', { component: 'postmark.uploadAttachment', message: uploadError instanceof Error ? uploadError.message : String(uploadError) });
           continue;
         }
 
@@ -190,7 +191,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: 'Message received' }, { status: 200 });
   } catch (error) {
-    console.error('Inbound webhook error:', error);
+    logError('InboundEmail', { component: 'postmark.handler', message: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

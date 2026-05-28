@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logError } from "@/lib/log";
 
 type CapitalTargetType = "real" | "propfirm";
 type ManualFieldKey =
@@ -319,13 +320,13 @@ export async function PATCH(
           { status: 500 }
         );
       }
-      console.error("Error updating intelligence capital target:", error);
+      logError("IntelligenceCapitalTargets", { component: "intelligence.capital-targets.[id]", message: "Error updating intelligence capital target:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to update target" }, { status: 500 });
     }
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error in PATCH /api/intelligence/capital-targets/[id]:", error);
+    logError("IntelligenceCapitalTargets", { component: "intelligence.capital-targets.[id]", message: "Error in PATCH /api/intelligence/capital-targets/[id]:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

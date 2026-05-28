@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, decryptNumeric } from "@/lib/security/encryption";
 import { asString } from "@/lib/validation/nullGuards";
+import { logError } from "@/lib/log";
 
 const CSV_HEADERS = [
   "id",
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      console.error("[export] trades query failed:", error);
+      logError("export", { component: "tradehub.trades.export", message: "trades query failed:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch trades" }, { status: 500 });
     }
 
@@ -123,7 +124,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradehub/trades/export:", err);
+    logError("TradehubTradesExport", { component: "tradehub.trades.export", message: "Error in GET /api/tradehub/trades/export:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logError } from "@/lib/log";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -67,7 +68,7 @@ export async function DELETE(
       .single();
 
     if (error) {
-      console.error("Error deleting manual simulation:", error);
+      logError("IntelligenceCapitalTargetsManualSimulation", { component: "intelligence.capital-targets.[id].manual-simulation", message: "Error deleting manual simulation:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to clear manual simulation" },
         { status: 500 }
@@ -76,7 +77,7 @@ export async function DELETE(
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error in DELETE /api/intelligence/capital-targets/[id]/manual-simulation:", error);
+    logError("IntelligenceCapitalTargetsManualSimulation", { component: "intelligence.capital-targets.[id].manual-simulation", message: "Error in DELETE /api/intelligence/capital-targets/[id]/manual-simulation:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

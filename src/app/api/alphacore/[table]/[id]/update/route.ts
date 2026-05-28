@@ -5,6 +5,7 @@ import { encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { z } from "zod";
+import { logError } from "@/lib/log";
 
 /**
  * Whitelist of tables allowed for AlphaCore offline sync mutations.
@@ -129,7 +130,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error(`[AlphaCore] Error updating ${table}/${id}:`, error);
+      logError("AlphaCore", { component: "alphacore.[table].[id].update", message: `Error updating ${table}/${id}:: ${error instanceof Error ? error.message : String(error)}` });
       await recordBugFromRequest(request, {
         userId,
         status: 500,
@@ -167,7 +168,7 @@ export async function PATCH(
       data,
     });
   } catch (err: unknown) {
-    console.error("Error in PATCH /api/alphacore/[table]/[id]/update:", err);
+    logError("AlphacoreUpdate", { component: "alphacore.[table].[id].update", message: "Error in PATCH /api/alphacore/[table]/[id]/update:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

@@ -11,6 +11,7 @@ import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { computeGoalStatus } from "@/lib/map-hot/goalStatus";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 type GoalRow = {
   id: string;
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching map_hot_goals:", error);
+      logError("MapHotGoals", { component: "map-hot.goals", message: "Error fetching map_hot_goals:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch goals" }, { status: 500 });
     }
 
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/map-hot/goals:", err);
+    logError("MapHotGoals", { component: "map-hot.goals", message: "Error in GET /api/map-hot/goals:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: null, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
         .in("id", body.linked_algorithm_ids);
 
       if (algoErr) {
-        console.error("Error verifying algorithm ownership:", algoErr);
+        logError("MapHotGoals", { component: "map-hot.goals", message: "Error verifying algorithm ownership:", error: algoErr instanceof Error ? algoErr.message : String(algoErr) });
         return NextResponse.json({ error: "Failed to verify algorithms" }, { status: 500 });
       }
 
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertErr || !inserted) {
-      console.error("Error creating map_hot_goal:", insertErr);
+      logError("MapHotGoals", { component: "map-hot.goals", message: "Error creating map_hot_goal:", error: insertErr instanceof Error ? insertErr.message : String(insertErr) });
       return NextResponse.json({ error: "Failed to create goal" }, { status: 500 });
     }
 
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest) {
       }));
       const { error: linkErr } = await supabase.from("map_hot_goal_links").insert(linkRows);
       if (linkErr) {
-        console.error("Error inserting goal links:", linkErr);
+        logError("MapHotGoals", { component: "map-hot.goals", message: "Error inserting goal links:", error: linkErr instanceof Error ? linkErr.message : String(linkErr) });
         // Rollback: hard-delete the goal to keep state consistent
         await supabase.from("map_hot_goals").delete().eq("id", inserted.id).eq("user_id", userId);
         return NextResponse.json({ error: "Failed to link algorithms" }, { status: 500 });
@@ -197,7 +198,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (fetchErr || !full) {
-      console.error("Error refetching created goal:", fetchErr);
+      logError("MapHotGoals", { component: "map-hot.goals", message: "Error refetching created goal:", error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr) });
       return NextResponse.json(mapRowToResponse(inserted as unknown as GoalRow), { status: 201 });
     }
 
@@ -220,7 +221,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (err: unknown) {
-    console.error("Error in POST /api/map-hot/goals:", err);
+    logError("MapHotGoals", { component: "map-hot.goals", message: "Error in POST /api/map-hot/goals:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

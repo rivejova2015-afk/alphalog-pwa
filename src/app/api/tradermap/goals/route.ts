@@ -4,6 +4,7 @@ import { decryptText, encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { goalResponseSchema } from "@/lib/validation/schemas";
+import { logError } from "@/lib/log";
 
 type QuarterKey = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -203,7 +204,7 @@ export async function GET(request: NextRequest) {
       .order("sort_index", { ascending: true });
 
     if (error) {
-      console.error("Error fetching goals:", error);
+      logError("TradermapGoals", { component: "tradermap.goals", message: "Error fetching goals:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch goals" }, { status: 500 });
     }
 
@@ -221,7 +222,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err) {
-    console.error("Error in GET /api/tradermap/goals:", err);
+    logError("TradermapGoals", { component: "tradermap.goals", message: "Error in GET /api/tradermap/goals:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -296,7 +297,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (goalError) {
-      console.error("Error creating goal:", goalError);
+      logError("TradermapGoals", { component: "tradermap.goals", message: "Error creating goal:", error: goalError instanceof Error ? goalError.message : String(goalError) });
       return NextResponse.json({ error: "Failed to create goal" }, { status: 500 });
     }
 
@@ -317,7 +318,7 @@ export async function POST(request: NextRequest) {
       .insert(rows);
 
     if (quartersError) {
-      console.error("Error creating quarters:", quartersError);
+      logError("TradermapGoals", { component: "tradermap.goals", message: "Error creating quarters:", error: quartersError instanceof Error ? quartersError.message : String(quartersError) });
       await supabase.from("tradermap_goals").delete().eq("id", goalData.id);
       return NextResponse.json({ error: "Failed to create quarters" }, { status: 500 });
     }
@@ -365,7 +366,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responsePayload);
   } catch (err) {
-    console.error("Error in POST /api/tradermap/goals:", err);
+    logError("TradermapGoals", { component: "tradermap.goals", message: "Error in POST /api/tradermap/goals:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

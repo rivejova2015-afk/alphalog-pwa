@@ -10,6 +10,7 @@ import { autoFixMapHotMilestone } from "@/lib/validation/autoFix";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 type MilestoneRow = {
   id: string;
@@ -106,7 +107,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
             { status: 409 }
           );
         }
-        console.error("Error updating map_hot_milestone:", updateErr);
+        logError("MapHotMilestones", { component: "map-hot.milestones.[id]", message: "Error updating map_hot_milestone:", error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         return NextResponse.json({ error: "Failed to update milestone" }, { status: 500 });
       }
     }
@@ -139,7 +140,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json(response);
   } catch (err: unknown) {
-    console.error("Error in PUT /api/map-hot/milestones/[id]:", err);
+    logError("MapHotMilestones", { component: "map-hot.milestones.[id]", message: "Error in PUT /api/map-hot/milestones/[id]:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -172,7 +173,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       .eq("user_id", userId);
 
     if (deleteErr) {
-      console.error("Error soft-deleting map_hot_milestone:", deleteErr);
+      logError("MapHotMilestones", { component: "map-hot.milestones.[id]", message: "Error soft-deleting map_hot_milestone:", error: deleteErr instanceof Error ? deleteErr.message : String(deleteErr) });
       return NextResponse.json({ error: "Failed to delete milestone" }, { status: 500 });
     }
 
@@ -189,7 +190,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/map-hot/milestones/[id]:", err);
+    logError("MapHotMilestones", { component: "map-hot.milestones.[id]", message: "Error in DELETE /api/map-hot/milestones/[id]:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

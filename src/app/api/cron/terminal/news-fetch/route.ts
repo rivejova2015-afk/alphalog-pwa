@@ -25,6 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { logError } from "@/lib/log";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const USER_ID   = '381e268e-a042-4612-8b39-7a120ace17d6';
@@ -204,10 +205,10 @@ async function handleNewsFetch(request: NextRequest) {
           });
         }
       } catch (e) {
-        console.error('[news-fetch] Finnhub general parse error:', e);
+        logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Finnhub general parse error:", error: e instanceof Error ? e.message : String(e) });
       }
     } else {
-      console.error('[news-fetch] Finnhub general fetch failed:', fhGeneralResult.reason);
+      logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Finnhub general fetch failed:", error: fhGeneralResult.reason instanceof Error ? fhGeneralResult.reason.message : String(fhGeneralResult.reason) });
     }
 
     // Process Finnhub Forex (skip URLs already in general)
@@ -230,10 +231,10 @@ async function handleNewsFetch(request: NextRequest) {
           });
         }
       } catch (e) {
-        console.error('[news-fetch] Finnhub forex parse error:', e);
+        logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Finnhub forex parse error:", error: e instanceof Error ? e.message : String(e) });
       }
     } else {
-      console.error('[news-fetch] Finnhub forex fetch failed:', fhForexResult.reason);
+      logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Finnhub forex fetch failed:", error: fhForexResult.reason instanceof Error ? fhForexResult.reason.message : String(fhForexResult.reason) });
     }
 
     // Process Alpha Vantage
@@ -255,10 +256,10 @@ async function handleNewsFetch(request: NextRequest) {
           });
         }
       } catch (e) {
-        console.error('[news-fetch] Alpha Vantage parse error:', e);
+        logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Alpha Vantage parse error:", error: e instanceof Error ? e.message : String(e) });
       }
     } else {
-      console.error('[news-fetch] Alpha Vantage fetch failed:', avResult.reason);
+      logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Alpha Vantage fetch failed:", error: avResult.reason instanceof Error ? avResult.reason.message : String(avResult.reason) });
     }
 
     // 5. Dedup against DB (last 48h) and within batch
@@ -348,7 +349,7 @@ async function handleNewsFetch(request: NextRequest) {
           };
         });
       } catch (e) {
-        console.error('[news-fetch] Anthropic error, using defaults:', e);
+        logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Anthropic error, using defaults:", error: e instanceof Error ? e.message : String(e) });
         analyzed = batchToAnalyze.map((item) => ({
           ...item, relevancy_score: 50, impact_label: 'Medium',
         }));
@@ -378,7 +379,7 @@ async function handleNewsFetch(request: NextRequest) {
       });
 
       if (error) {
-        console.error('[news-fetch] Insert error:', error.message);
+        logError("TerminalNews", { component: "cron.terminal.news-fetch", message: `Insert error: ${error.message}` });
       } else {
         inserted++;
         if (!firstHighImpact && item.impact_label === 'High' && item.relevancy_score >= 70) {
@@ -423,7 +424,7 @@ async function handleNewsFetch(request: NextRequest) {
         });
         highImpactPush = pushRes.ok;
       } catch (e) {
-        console.error('[news-fetch] Push notification error:', e);
+        logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Push notification error:", error: e instanceof Error ? e.message : String(e) });
       }
     }
 
@@ -442,7 +443,7 @@ async function handleNewsFetch(request: NextRequest) {
       high_impact_push:       highImpactPush,
     });
   } catch (error) {
-    console.error('[news-fetch] Unexpected error:', error);
+    logError("news-fetch", { component: "cron.terminal.news-fetch", message: "Unexpected error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: 'Internal server error', details: String(error) },
       { status: 500 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
       .order("week_start", { ascending: false });
 
     if (reportsError) {
-      console.error("[Reports GET] Query error:", reportsError);
+      logError("Reports GET", { component: "tradehub.reports", message: "Query error:", error: reportsError instanceof Error ? reportsError.message : String(reportsError) });
       return NextResponse.json([]);
     }
 
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("[Reports GET] Error:", err);
+    logError("Reports GET", { component: "tradehub.reports", message: "Error:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

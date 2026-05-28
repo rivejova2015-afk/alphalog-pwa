@@ -11,6 +11,7 @@ import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { computeGoalStatus } from "@/lib/map-hot/goalStatus";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 type GoalRow = {
   id: string;
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/map-hot/goals/[id]:", err);
+    logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error in GET /api/map-hot/goals/[id]:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: null, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -155,7 +156,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         .eq("user_id", userId);
 
       if (updateErr) {
-        console.error("Error updating map_hot_goal:", updateErr);
+        logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error updating map_hot_goal:", error: updateErr instanceof Error ? updateErr.message : String(updateErr) });
         return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
       }
     }
@@ -172,7 +173,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
           .in("id", Array.from(nextIds));
 
         if (algoErr) {
-          console.error("Error verifying algorithm ownership:", algoErr);
+          logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error verifying algorithm ownership:", error: algoErr instanceof Error ? algoErr.message : String(algoErr) });
           return NextResponse.json({ error: "Failed to verify algorithms" }, { status: 500 });
         }
         if ((ownedAlgos?.length ?? 0) !== nextIds.size) {
@@ -201,7 +202,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
           .eq("user_id", userId)
           .in("algorithm_id", toRemove);
         if (deleteErr) {
-          console.error("Error removing goal links:", deleteErr);
+          logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error removing goal links:", error: deleteErr instanceof Error ? deleteErr.message : String(deleteErr) });
           return NextResponse.json({ error: "Failed to update links" }, { status: 500 });
         }
       }
@@ -215,7 +216,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
           }))
         );
         if (insertErr) {
-          console.error("Error adding goal links:", insertErr);
+          logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error adding goal links:", error: insertErr instanceof Error ? insertErr.message : String(insertErr) });
           return NextResponse.json({ error: "Failed to update links" }, { status: 500 });
         }
       }
@@ -249,7 +250,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json(response);
   } catch (err: unknown) {
-    console.error("Error in PUT /api/map-hot/goals/[id]:", err);
+    logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error in PUT /api/map-hot/goals/[id]:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -283,7 +284,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       .eq("user_id", userId);
 
     if (deleteErr) {
-      console.error("Error soft-deleting map_hot_goal:", deleteErr);
+      logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error soft-deleting map_hot_goal:", error: deleteErr instanceof Error ? deleteErr.message : String(deleteErr) });
       return NextResponse.json({ error: "Failed to delete goal" }, { status: 500 });
     }
 
@@ -300,7 +301,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/map-hot/goals/[id]:", err);
+    logError("MapHotGoals", { component: "map-hot.goals.[id]", message: "Error in DELETE /api/map-hot/goals/[id]:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

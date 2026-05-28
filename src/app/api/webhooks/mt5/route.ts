@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { retryAsync, isRetryableError } from '@/lib/security/retry';
 import { createServiceClient } from '@/lib/supabase/server';
+import { logError } from '@/lib/log';
 
 export const runtime = 'nodejs';
 
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        console.error('[MT5 Webhook] Edge function error:', data);
+        logError('WebhookMT', { component: 'mt5.edgeFunction', message: typeof data === 'object' && data && 'error' in data ? String((data as { error: unknown }).error) : 'edge function returned error', payload: data });
         return NextResponse.json(data, { status: response.status });
       }
 
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
         { status: 200 },
       );
     } catch (edgeError) {
-      console.error('[MT5 Webhook] Failed to call edge function:', edgeError);
+      logError('WebhookMT', { component: 'mt5.edgeFunctionCall', message: edgeError instanceof Error ? edgeError.message : String(edgeError) });
       return NextResponse.json(
         {
           error: 'Failed to forward to edge function',
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
-    console.error('[MT5 Webhook] Request parsing error:', error);
+    logError('WebhookMT', { component: 'mt5.requestParsing', message: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       {
         error: 'Invalid request',

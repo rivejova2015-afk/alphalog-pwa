@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,12 +119,12 @@ export async function POST(request: NextRequest) {
           "x-ops-token": process.env.OPS_ALERT_TOKEN ?? "",
         },
         body: JSON.stringify(report),
-      }).catch((err) => console.error("[cron/bot-slo-monitor] alert dispatch failed:", err));
+      }).catch((err) => logError("BotSLOMonitor", { component: "ops.cron.bot-slo-monitor.alertDispatch", message: err instanceof Error ? err.message : String(err) }));
     }
 
     return NextResponse.json({ ok: true, report });
   } catch (error) {
-    console.error("[cron/bot-slo-monitor] error:", error);
+    logError("BotSLOMonitor", { component: "ops.cron.bot-slo-monitor", message: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

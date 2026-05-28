@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 /**
  * GET /api/tradermap/level
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (createError) {
-        console.error("Error creating level state:", createError);
+        logError("TradermapLevel", { component: "tradermap.level", message: "Error creating level state:", error: createError instanceof Error ? createError.message : String(createError) });
         return NextResponse.json(
           { error: "Failed to initialize level" },
           { status: 500 }
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (fetchError) {
-        console.error("Error fetching level state:", fetchError);
+        logError("TradermapLevel", { component: "tradermap.level", message: "Error fetching level state:", error: fetchError instanceof Error ? fetchError.message : String(fetchError) });
         return NextResponse.json(
           { error: "Failed to fetch level" },
           { status: 500 }
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (error) {
-      console.error("Error fetching level state:", error);
+      logError("TradermapLevel", { component: "tradermap.level", message: "Error fetching level state:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to fetch level" },
         { status: 500 }
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradermap/level:", err);
+    logError("TradermapLevel", { component: "tradermap.level", message: "Error in GET /api/tradermap/level:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText } from "@/lib/security/encryption";
+import { logError } from "@/lib/log";
 
 const PR_OFFSET_MS = 4 * 60 * 60 * 1000; // UTC-4
 
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ sessions: result, page, limit });
   } catch (err) {
-    console.error("[Chat Sessions] GET error:", err);
+    logError("Chat Sessions", { component: "terminal.chat.sessions", message: "GET error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ session: data, isFirst }, { status: 201 });
   } catch (err) {
-    console.error("[Chat Sessions] POST error:", err);
+    logError("Chat Sessions", { component: "terminal.chat.sessions", message: "POST error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

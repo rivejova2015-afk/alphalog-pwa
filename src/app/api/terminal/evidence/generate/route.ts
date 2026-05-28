@@ -8,6 +8,7 @@ import { scoreImpact } from "@/lib/news/impactScore";
 import { buildReportBase } from "@/lib/reports/buildBase";
 import { reportLog } from "@/lib/logging/reportLogs";
 import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
+import { logError } from "@/lib/log";
 
 const allowedAssets: Asset[] = ["XAUUSD"];
 
@@ -15,7 +16,7 @@ const safeEncrypt = (value: string) => {
   try {
     return encryptText(value);
   } catch (err) {
-    console.error("[Terminal] Failed to encrypt evidence:", err);
+    logError("Terminal", { component: "terminal.evidence.generate", message: "Failed to encrypt evidence:", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 };
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !data) {
-      console.error("Error creating evidence:", error);
+      logError("TerminalEvidenceGenerate", { component: "terminal.evidence.generate", message: "Error creating evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to create evidence" },
         { status: 500 }
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
       incompleteReasons,
     });
   } catch (err: unknown) {
-    console.error("Error in POST /api/terminal/evidence/generate:", err);
+    logError("TerminalEvidenceGenerate", { component: "terminal.evidence.generate", message: "Error in POST /api/terminal/evidence/generate:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

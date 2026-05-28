@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 interface SnapshotRow {
   recorded_at: string;
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .order("recorded_at", { ascending: true });
 
     if (error) {
-      console.error("Error fetching map_hot_goal_snapshots:", error);
+      logError("MapHotGoalsSnapshots", { component: "map-hot.goals.[id].snapshots", message: "Error fetching map_hot_goal_snapshots:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to fetch snapshots" }, { status: 500 });
     }
 
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       { headers: { "Cache-Control": "private, max-age=300, stale-while-revalidate=600" } }
     );
   } catch (err: unknown) {
-    console.error("Error in GET /api/map-hot/goals/[id]/snapshots:", err);
+    logError("MapHotGoalsSnapshots", { component: "map-hot.goals.[id].snapshots", message: "Error in GET /api/map-hot/goals/[id]/snapshots:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, { userId: userIdForBug, status: 500, error: err });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

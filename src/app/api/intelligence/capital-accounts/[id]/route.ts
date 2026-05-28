@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
+import { logError } from "@/lib/log";
 
 type CapitalType = "real" | "propfirm";
 
@@ -108,13 +109,13 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error("Error updating intelligence capital account:", error);
+      logError("IntelligenceCapitalAccounts", { component: "intelligence.capital-accounts.[id]", message: "Error updating intelligence capital account:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to update capital account" }, { status: 500 });
     }
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error in PATCH /api/intelligence/capital-accounts/[id]:", error);
+    logError("IntelligenceCapitalAccounts", { component: "intelligence.capital-accounts.[id]", message: "Error in PATCH /api/intelligence/capital-accounts/[id]:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -157,7 +158,7 @@ export async function DELETE(
       .is("deleted_at", null);
 
     if (clearTargetLinksError) {
-      console.error("Error clearing target links for deleted capital account:", clearTargetLinksError);
+      logError("IntelligenceCapitalAccounts", { component: "intelligence.capital-accounts.[id]", message: "Error clearing target links for deleted capital account:", error: clearTargetLinksError instanceof Error ? clearTargetLinksError.message : String(clearTargetLinksError) });
       return NextResponse.json({ error: "Failed to unlink related targets" }, { status: 500 });
     }
 
@@ -168,13 +169,13 @@ export async function DELETE(
       .eq("user_id", userData.user.id);
 
     if (error) {
-      console.error("Error deleting intelligence capital account:", error);
+      logError("IntelligenceCapitalAccounts", { component: "intelligence.capital-accounts.[id]", message: "Error deleting intelligence capital account:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to delete capital account" }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Error in DELETE /api/intelligence/capital-accounts/[id]:", error);
+    logError("IntelligenceCapitalAccounts", { component: "intelligence.capital-accounts.[id]", message: "Error in DELETE /api/intelligence/capital-accounts/[id]:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

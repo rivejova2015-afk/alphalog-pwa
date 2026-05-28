@@ -5,6 +5,7 @@ import { encryptText, decryptText } from "@/lib/security/encryption";
 import { buildChatContext } from "@/lib/terminal-ia/buildChatContext";
 import { buildAssistantSystemPrompt } from "@/lib/terminal-ia/chatPrompt";
 import type { Asset } from "@/lib/news/sources";
+import { logError } from "@/lib/log";
 
 const MODEL = "claude-sonnet-4-20250514";
 const MAX_HISTORY = 20;
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ messages });
   } catch (err) {
-    console.error("[Chat Messages] GET error:", err);
+    logError("Chat Messages", { component: "terminal.chat.sessions.[id].messages", message: "GET error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -330,7 +331,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           controller.close();
           return;
         }
-        console.error("[Chat Messages] Stream error:", err);
+        logError("Chat Messages", { component: "terminal.chat.sessions.[id].messages", message: "Stream error:", error: err instanceof Error ? err.message : String(err) });
         try {
           sendEvent(controller, { type: "error", message: "Internal server error" });
           controller.close();
@@ -402,7 +403,7 @@ async function triggerMemoryExtraction(
       );
     }
   } catch (err) {
-    console.error("[Memory Extraction] Error:", err);
+    logError("Memory Extraction", { component: "terminal.chat.sessions.[id].messages", message: "Error:", error: err instanceof Error ? err.message : String(err) });
     // Non-critical — don't throw
   }
 }

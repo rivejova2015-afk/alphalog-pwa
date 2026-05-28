@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
+import { logError } from "@/lib/log";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -23,7 +24,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }, { onConflict: "copy_group_id" });
 
     if (error) {
-      console.error("Error updating experiments:", error);
+      logError("CopyGroupsExperiments", { component: "copy-groups.[id].experiments", message: "Error updating experiments:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to update experiments" }, { status: 500 });
     }
 

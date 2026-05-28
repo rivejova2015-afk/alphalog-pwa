@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
         },
       });
       if (insertErr) {
-        console.error(`[cron/bot-daily-verify] Failed to persist for bot ${res.botId}:`, insertErr.message);
+        logError("BotDailyVerify", { component: "ops.cron.bot-daily-verify.persist", message: `Failed to persist for bot ${res.botId}: ${insertErr.message}`, botId: res.botId });
         savedCount.failed++;
       } else {
         savedCount.success++;
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, generatedAt, results: results.length, saved: savedCount });
   } catch (error) {
-    console.error("[cron/bot-daily-verify] error:", error);
+    logError("BotDailyVerify", { component: "ops.cron.bot-daily-verify", message: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

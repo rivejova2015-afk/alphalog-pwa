@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
@@ -17,7 +18,7 @@ const safeEncrypt = (value: string) => {
   try {
     return encryptText(value);
   } catch (err) {
-    console.error("[Terminal] Failed to encrypt evidence:", err);
+    logError("Terminal", { component: "terminal.evidence", message: "Failed to encrypt evidence:", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 };
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching evidence:", error);
+      logError("TerminalEvidence", { component: "terminal.evidence", message: "Error fetching evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to fetch evidence" },
         { status: 500 }
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/terminal/evidence:", err);
+    logError("TerminalEvidence", { component: "terminal.evidence", message: "Error in GET /api/terminal/evidence:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("Error creating evidence:", error);
+      logError("TerminalEvidence", { component: "terminal.evidence", message: "Error creating evidence:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Failed to create evidence" },
         { status: 500 }
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest) {
       content: safeDecrypt(data.content),
     });
   } catch (err: unknown) {
-    console.error("Error in POST /api/terminal/evidence:", err);
+    logError("TerminalEvidence", { component: "terminal.evidence", message: "Error in POST /api/terminal/evidence:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

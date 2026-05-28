@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { logError } from "@/lib/log";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -74,7 +75,7 @@ export async function PATCH(
         .eq("id", id);
 
       if (updateError) {
-        console.error("Error restoring account:", updateError);
+        logError("Accounts", { component: "accounts.[id]", message: "Error restoring account:", error: updateError instanceof Error ? updateError.message : String(updateError) });
         return NextResponse.json(
           { error: "Failed to restore account" },
           { status: 500 }
@@ -154,7 +155,7 @@ export async function PATCH(
         .eq("id", id);
 
       if (updateError) {
-        console.error("Error updating account:", updateError);
+        logError("Accounts", { component: "accounts.[id]", message: "Error updating account:", error: updateError instanceof Error ? updateError.message : String(updateError) });
         return NextResponse.json(
           { error: "Failed to update account" },
           { status: 500 }
@@ -169,7 +170,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in PATCH /api/accounts/[id]:", err);
+    logError("Accounts", { component: "accounts.[id]", message: "Error in PATCH /api/accounts/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -224,7 +225,7 @@ export async function DELETE(
       .eq("user_id", userId);
 
     if (tradesError) {
-      console.error("Error fetching trades for account delete:", tradesError);
+      logError("Accounts", { component: "accounts.[id]", message: "Error fetching trades for account delete:", error: tradesError instanceof Error ? tradesError.message : String(tradesError) });
       return NextResponse.json(
         { error: "Failed to delete account trades" },
         { status: 500 }
@@ -256,7 +257,7 @@ export async function DELETE(
       (typeof error?.message === "string" && error.message.toLowerCase().includes("does not exist"));
 
     if (evidenceError && !isMissingTable(evidenceError)) {
-      console.error("Error fetching evidence for account delete:", evidenceError);
+      logError("Accounts", { component: "accounts.[id]", message: "Error fetching evidence for account delete:", error: evidenceError instanceof Error ? evidenceError.message : String(evidenceError) });
       return NextResponse.json(
         { error: "Failed to delete account evidence" },
         { status: 500 }
@@ -300,7 +301,7 @@ export async function DELETE(
     const { data: tradeEvidenceRows, error: tradeEvidenceError } = await tradeEvidenceQuery;
 
     if (tradeEvidenceError && !isMissingTable(tradeEvidenceError)) {
-      console.error("Error fetching trade_evidence for account delete:", tradeEvidenceError);
+      logError("Accounts", { component: "accounts.[id]", message: "Error fetching trade_evidence for account delete:", error: tradeEvidenceError instanceof Error ? tradeEvidenceError.message : String(tradeEvidenceError) });
       return NextResponse.json(
         { error: "Failed to delete account evidence" },
         { status: 500 }
@@ -351,7 +352,7 @@ export async function DELETE(
       .eq("user_id", userId);
 
     if (deleteError) {
-      console.error("Error deleting account:", deleteError);
+      logError("Accounts", { component: "accounts.[id]", message: "Error deleting account:", error: deleteError instanceof Error ? deleteError.message : String(deleteError) });
       return NextResponse.json(
         { error: "Failed to delete account" },
         { status: 500 }
@@ -365,7 +366,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    console.error("Error in DELETE /api/accounts/[id]:", err);
+    logError("Accounts", { component: "accounts.[id]", message: "Error in DELETE /api/accounts/[id]:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

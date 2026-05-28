@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       .order("sort_index", { ascending: true });
 
     if (error) {
-      console.error("[Tags API] Query error:", error);
+      logError("Tags API", { component: "tags", message: "Query error:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json(
         { error: "Error fetching tags" },
         { status: 500 }
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err) {
-    console.error("[Tags API] Error:", err);
+    logError("Tags API", { component: "tags", message: "Error:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[Tags API POST] Insert error:", error);
+      logError("Tags API POST", { component: "tags", message: "Insert error:", error: error instanceof Error ? error.message : String(error) });
       if (error.code === "23505") {
         return NextResponse.json(
           { error: "Tag already exists" },
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    console.error("[Tags API POST] Unexpected error:", err);
+    logError("Tags API POST", { component: "tags", message: "Unexpected error:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

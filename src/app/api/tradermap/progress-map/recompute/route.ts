@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { recomputeProgress } from "@/lib/tradermap/progressEngine";
+import { logError } from "@/lib/log";
 
 /**
  * POST /api/tradermap/progress-map/recompute
@@ -17,7 +18,7 @@ export async function POST() {
     const result = await recomputeProgress(supabase, userData.user.id);
     return NextResponse.json(result);
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradermap/progress-map/recompute:", err);
+    logError("TradermapProgressMapRecompute", { component: "tradermap.progress-map.recompute", message: "Error in POST /api/tradermap/progress-map/recompute:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

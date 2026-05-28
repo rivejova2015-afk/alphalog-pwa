@@ -8,6 +8,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { sendThresholdPush } from '@/lib/treasury/pushNotifications';
+import { logError } from "@/lib/log";
 
 interface PreviewRequest {
   accountId?: string; // "ALL" or UUID
@@ -277,7 +278,7 @@ export async function POST(request: Request): Promise<Response> {
       pushNotificationsPending,
     } as PreviewResponse);
   } catch (error) {
-    console.error('[/api/treasury/payouts/preview] Error:', error);
+    logError("TreasuryPayouts", { component: "treasury.payouts.preview", message: "Error:", error: error instanceof Error ? error.message : String(error) });
     return Response.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

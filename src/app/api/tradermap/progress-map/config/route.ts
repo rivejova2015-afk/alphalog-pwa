@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recomputeProgress } from "@/lib/tradermap/progressEngine";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
+import { logError } from "@/lib/log";
 
 const normalizeIds = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(String).filter(Boolean) : [];
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
     });
   } catch (err: unknown) {
-    console.error("Error in GET /api/tradermap/progress-map/config:", err);
+    logError("TradermapProgressMapConfig", { component: "tradermap.progress-map.config", message: "Error in GET /api/tradermap/progress-map/config:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !config) {
-      console.error("Error updating progress ecosystem config:", error);
+      logError("TradermapProgressMapConfig", { component: "tradermap.progress-map.config", message: "Error updating progress ecosystem config:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to apply config" }, { status: 500 });
     }
 
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ config: result.config, state: result });
   } catch (err: unknown) {
-    console.error("Error in POST /api/tradermap/progress-map/config:", err);
+    logError("TradermapProgressMapConfig", { component: "tradermap.progress-map.config", message: "Error in POST /api/tradermap/progress-map/config:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

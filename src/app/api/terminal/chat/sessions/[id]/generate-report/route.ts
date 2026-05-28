@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { runReportPipeline } from "@/lib/reports/runReport";
 import type { Asset } from "@/lib/news/sources";
+import { logError } from "@/lib/log";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -50,7 +51,7 @@ export async function POST(_request: NextRequest, { params }: Params) {
       relevantCount: result.relevantCount,
     });
   } catch (err) {
-    console.error("[Chat Generate Report] POST error:", err);
+    logError("Chat Generate Report", { component: "terminal.chat.sessions.[id].generate-report", message: "POST error:", error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

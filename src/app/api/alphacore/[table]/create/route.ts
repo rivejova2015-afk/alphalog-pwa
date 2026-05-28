@@ -5,6 +5,7 @@ import { encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { z } from "zod";
+import { logError } from "@/lib/log";
 
 /**
  * Whitelist of tables allowed for AlphaCore offline sync mutations.
@@ -146,7 +147,7 @@ export async function POST(
       .single();
 
     if (error) {
-      console.error(`[AlphaCore] Error creating ${table}:`, error);
+      logError("AlphaCore", { component: "alphacore.[table].create", message: `Error creating ${table}:: ${error instanceof Error ? error.message : String(error)}` });
       await recordBugFromRequest(request, {
         userId,
         status: 500,
@@ -177,7 +178,7 @@ export async function POST(
       data: { id: data.id, ...data },
     });
   } catch (err: unknown) {
-    console.error("Error in POST /api/alphacore/[table]/create:", err);
+    logError("AlphacoreCreate", { component: "alphacore.[table].create", message: "Error in POST /api/alphacore/[table]/create:", error: err instanceof Error ? err.message : String(err) });
     await recordBugFromRequest(request, {
       userId: null,
       status: 500,

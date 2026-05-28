@@ -7,6 +7,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from "@/lib/log";
 
 export async function PATCH(
   request: NextRequest,
@@ -33,7 +34,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error('Error updating calendar event:', error);
+      logError("TreasuryCalendarEvents", { component: "treasury.calendar-events.[id]", message: "Error updating calendar event:", error: error instanceof Error ? error.message : String(error) });
       if (error.code === 'PGRST116') {
         return NextResponse.json(
           { error: 'Event not found or not owned by user' },
@@ -45,7 +46,7 @@ export async function PATCH(
 
     return NextResponse.json(event);
   } catch (error) {
-    console.error('PATCH /api/treasury/calendar-events/[id] error:', error);
+    logError("TreasuryCalendarEvents", { component: "treasury.calendar-events.[id]", message: "PATCH /api/treasury/calendar-events/[id] error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -73,7 +74,7 @@ export async function DELETE(
       .single();
 
     if (error) {
-      console.error('Error deleting calendar event:', error);
+      logError("TreasuryCalendarEvents", { component: "treasury.calendar-events.[id]", message: "Error deleting calendar event:", error: error instanceof Error ? error.message : String(error) });
       if (error.code === 'PGRST116') {
         return NextResponse.json(
           { error: 'Event not found or not owned by user' },
@@ -85,7 +86,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, id: event.id });
   } catch (error) {
-    console.error('DELETE /api/treasury/calendar-events/[id] error:', error);
+    logError("TreasuryCalendarEvents", { component: "treasury.calendar-events.[id]", message: "DELETE /api/treasury/calendar-events/[id] error:", error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
