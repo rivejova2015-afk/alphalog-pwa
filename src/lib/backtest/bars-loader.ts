@@ -24,6 +24,54 @@ import { logInfo, logWarn } from "@/lib/log";
 const PAGE = 1000;
 const MIN_BARS = 60;
 
+// Per-TF staleness threshold: when the most-recent local bar is older than
+// the listed number of milliseconds, the loader treats the local cache as
+// "fresh enough but missing the most recent close" and walks the API chain
+// to top up. Rule of thumb: ~2x the bar period — if the latest closed bar
+// is more than 2 periods old we've missed at least one close, which matters
+// for the live dispatcher cron that evaluates the engine on every M1 close.
+//
+// For backtest paths (where `to` is historical, not "now") staleness doesn't
+// apply — see `isStale` for the "to within X seconds of now" guard.
+const STALE_THRESHOLD_MS: Record<Timeframe, number> = {
+  M1:  2  * 60_000,
+  M5:  10 * 60_000,
+  M15: 30 * 60_000,
+  M30: 60 * 60_000,
+  H1:  2  * 60 * 60_000,
+  H4:  8  * 60 * 60_000,
+  D1:  2  * 24 * 60 * 60_000,
+  W1:  10 * 24 * 60 * 60_000,
+  MN1: 40 * 24 * 60 * 60_000,
+};
+
+/**
+ * True when the requested window includes "now" (within 60s) AND the latest
+ * local bar is older than the per-TF staleness threshold. In that case
+ * loadHistoricalBars walks the API chain even though local.length >= MIN_BARS
+ * — the cache is large enough but the *tail* is stale, and the dispatcher
+ * cron needs the freshest bar to make a decision.
+ *
+ * If `to` is historical (e.g. a backtest), we never consider local stale —
+ * past windows can never get fresher.
+ */
+function isStale(local: Bar[], timeframe: Timeframe, toIso: string): boolean {
+  if (local.length === 0) return false;
+  const toMs = new Date(toIso).getTime();
+  if (!Number.isFinite(toMs)) return false;
+  const nowMs = Date.now();
+  // Only stale-check when the request reaches into "now". Backtest paths
+  // (to = some date in the past) never trigger refetch.
+  if (nowMs - toMs > 60_000) return false;
+
+  const latest = local[local.length - 1];
+  const latestMs = new Date(latest.ts).getTime();
+  if (!Number.isFinite(latestMs)) return false;
+
+  const threshold = STALE_THRESHOLD_MS[timeframe] ?? STALE_THRESHOLD_MS.H1;
+  return nowMs - latestMs > threshold;
+}
+
 export interface SourceAttempt {
   source: DataSource;
   ok: boolean;
@@ -192,7 +240,12 @@ export async function loadHistoricalBarsDetailed(
 ): Promise<LoadResult> {
   const local = await readBarsFromTable(supabase, symbol, timeframe, from, to);
   const localBars = local.length;
-  if (local.length >= MIN_BARS) {
+  const stale = isStale(local, timeframe, to);
+
+  // Local cache is sufficient AND fresh → short-circuit, no API call.
+  // For backtest paths (to in the past) `stale` is always false so this
+  // path is the common case.
+  if (local.length >= MIN_BARS && !stale) {
     return {
       bars: local,
       symbol,
@@ -202,6 +255,13 @@ export async function loadHistoricalBarsDetailed(
       effectiveSource: "local",
       nextSteps: [],
     };
+  }
+
+  if (stale) {
+    logInfo("BarsLoader", `local cache stale for ${symbol} ${timeframe} (latest=${local[local.length - 1]?.ts}) — refetching from API chain`, {
+      component: "loadHistoricalBarsDetailed",
+      meta: { symbol, timeframe, localBars, latestTs: local[local.length - 1]?.ts },
+    });
   }
 
   // Walk API sources declared for this symbol+TF in the registry.

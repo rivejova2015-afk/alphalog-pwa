@@ -202,3 +202,102 @@ describe("loadHistoricalBarsDetailed — robustness", () => {
 function isoAt(offsetMin: number): string {
   return new Date(new Date(FROM).getTime() + offsetMin * 60_000).toISOString();
 }
+
+// ─── Sprint G: staleness-driven refetch ──────────────────────────────────────
+// When the request reaches into "now" (to ≈ now) AND the latest local bar is
+// older than the per-TF threshold, the loader walks the API chain even with
+// local.length >= MIN_BARS. This is what allows the dispatcher cron to see
+// fresh data without needing the bars/ingest cron to fire every minute.
+
+describe("loadHistoricalBarsDetailed — staleness refetch (Sprint G)", () => {
+  const nowIso = () => new Date().toISOString();
+  function isoAgo(ms: number): string {
+    return new Date(Date.now() - ms).toISOString();
+  }
+  function freshBars(count: number, latestAgeMs: number, stepMs: number): Bar[] {
+    const start = Date.now() - latestAgeMs - (count - 1) * stepMs;
+    return Array.from({ length: count }, (_, i) =>
+      bar(100 + i, new Date(start + i * stepMs).toISOString())
+    );
+  }
+
+  it("M1 with latest bar 5min old → forces API refetch (>2min threshold)", async () => {
+    // 80 stale M1 bars, latest one 5min old.
+    const stale = freshBars(80, 5 * 60_000, 60_000);
+    const fresh = freshBars(85, 0,           60_000);
+    const supabase = stubSupabase({ selectBars: stale, selectBarsAfter: fresh });
+    mockChainFor.mockReturnValue(["yahoo"]);
+    mockYahooFetch.mockResolvedValue([bar(999, isoAgo(0))]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "M1", FROM, nowIso());
+
+    // Refetched even though local had >= MIN_BARS, because tail was stale.
+    expect(mockYahooFetch).toHaveBeenCalledTimes(1);
+    expect(r.effectiveSource).toBe("yahoo");
+    expect(r.localBars).toBe(80);
+  });
+
+  it("M15 with latest bar 10min old → stays local (threshold is 30min)", async () => {
+    const local = freshBars(80, 10 * 60_000, 15 * 60_000);
+    const supabase = stubSupabase({ selectBars: local });
+    mockChainFor.mockReturnValue(["yahoo"]);
+    mockYahooFetch.mockResolvedValue([bar(999)]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "M15", FROM, nowIso());
+
+    expect(r.effectiveSource).toBe("local");
+    expect(mockYahooFetch).not.toHaveBeenCalled();
+  });
+
+  it("staleness does NOT trigger for historical backtest windows", async () => {
+    // 80 ancient bars (latest is way old), but `to` is also way in the past
+    // → not a live window, so refetch should be skipped.
+    const ancient = freshBars(80, 365 * 24 * 60 * 60_000, 60_000);
+    const supabase = stubSupabase({ selectBars: ancient });
+    mockChainFor.mockReturnValue(["yahoo"]);
+
+    const r = await loadHistoricalBarsDetailed(
+      supabase, "EURUSD", "M1",
+      "2025-01-01T00:00:00Z",  // historical from
+      "2025-01-02T00:00:00Z",  // historical to — well past `now`
+    );
+
+    expect(r.effectiveSource).toBe("local");
+    expect(mockYahooFetch).not.toHaveBeenCalled();
+  });
+
+  it("M1 fresh tail (latest < 30s old) → stays local", async () => {
+    const fresh = freshBars(80, 20_000, 60_000);  // latest 20s old
+    const supabase = stubSupabase({ selectBars: fresh });
+    mockChainFor.mockReturnValue(["yahoo"]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "M1", FROM, nowIso());
+
+    expect(r.effectiveSource).toBe("local");
+    expect(mockYahooFetch).not.toHaveBeenCalled();
+  });
+
+  it("D1 with latest bar 1d old → stays local (threshold is 2d)", async () => {
+    const local = freshBars(80, 24 * 60 * 60_000, 24 * 60 * 60_000);
+    const supabase = stubSupabase({ selectBars: local });
+    mockChainFor.mockReturnValue(["yahoo"]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "D1", FROM, nowIso());
+
+    expect(r.effectiveSource).toBe("local");
+    expect(mockYahooFetch).not.toHaveBeenCalled();
+  });
+
+  it("D1 with latest bar 5d old → forces refetch (> 2d threshold)", async () => {
+    const stale = freshBars(80, 5 * 24 * 60 * 60_000, 24 * 60 * 60_000);
+    const fresh = freshBars(85, 0,                     24 * 60 * 60_000);
+    const supabase = stubSupabase({ selectBars: stale, selectBarsAfter: fresh });
+    mockChainFor.mockReturnValue(["yahoo"]);
+    mockYahooFetch.mockResolvedValue([bar(999)]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "D1", FROM, nowIso());
+
+    expect(mockYahooFetch).toHaveBeenCalledTimes(1);
+    expect(r.effectiveSource).toBe("yahoo");
+  });
+});
