@@ -34,3 +34,12 @@
 
 # Map / progress snapshots
 5    0    *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/map-hot/snapshot
+
+# Business hub + Treasury — Sprint 5 (activación 70% dormido).
+# NOTE: these endpoints are GET (not POST) — use `-X GET` explicitly.
+# - recurring-costs: monthly on day 1 (generates business_costs from active templates)
+# - business/alerts: daily (push notifications for low runway + annual report due)
+# - treasury/withdrawal-reminders: daily (push notifications on configured withdrawal_day)
+10   0    1  *  *   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/business/recurring-costs
+25   0    *  *  *   curl --fail --max-time 60  -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/business/alerts
+35   0    *  *  *   curl --fail --max-time 60  -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/treasury/withdrawal-reminders

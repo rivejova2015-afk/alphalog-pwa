@@ -101,11 +101,14 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Treasury Withdrawal Reminders] Starting at ${todayUTC}`);
 
-    // 4) Get users with active push subscriptions
+    // 4) Get users with active push subscriptions.
+    // We only need user_id — auth.users cannot be joined cross-schema via
+    // PostgREST select syntax (returns 500). The push subscription endpoint
+    // is the contact channel, email is irrelevant for web push.
     const { data: usersWithPush, error: userError } = await supabase
       .from('push_subscriptions')
-      .select('user_id, auth.users!inner(id, email)', { count: 'exact' })
-      .returns<{ user_id: string; auth: { users: { id: string; email?: string } } }[]>();
+      .select('user_id')
+      .returns<{ user_id: string }[]>();
 
     if (userError) {
       logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error fetching users with push subscriptions:", error: userError instanceof Error ? userError.message : String(userError) });
