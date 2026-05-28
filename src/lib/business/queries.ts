@@ -1,7 +1,17 @@
 /**
- * Business Module Queries
- * Server-side data fetching functions for Business module
- * All queries enforce RLS at Supabase level (auth.uid() = user_id)
+ * Business Module Queries — LEGACY shape reference (DO NOT CALL DIRECTLY)
+ *
+ * ⚠️ WARNING (Sprint 3, 2026-05-27): this file uses an UNAUTHENTICATED anon-key
+ * client (see line ~12). When called from a browser component, RLS sees
+ * `auth.uid() = null` and rejects every query silently — that is the root cause
+ * of the "70% empty schema" observed in the 2026-05-26 audit.
+ *
+ * DO NOT import these functions from route handlers OR browser components.
+ * Use the `/api/business/*` routes which replicate the query logic with the
+ * authenticated server client (`src/lib/supabase/server.ts`).
+ *
+ * This file is kept as a SHAPE REFERENCE for the schema/columns. Delete once
+ * the API rewire (Sprint 4) is complete and no callers remain.
  */
 
 import { createClient } from '@supabase/supabase-js';

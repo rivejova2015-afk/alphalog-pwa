@@ -44,7 +44,13 @@ export type AuditResourceType =
   | "treasury_transaction"
   | "cme_signal"
   | "cme_risk_config"
-  | "pairing_token";
+  | "pairing_token"
+  | "business_cost"
+  | "business_cost_template"
+  | "business_milestone"
+  | "business_decision"
+  | "business_sop"
+  | "business_llc";
 
 export type AuditStatus = "success" | "failure" | "partial" | "skipped";
 

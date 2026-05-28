@@ -509,3 +509,163 @@ export const treasuryTransactionResponseSchema = z
   })
   .passthrough();
 
+// Business hub schemas (Sprint 3 — activación 70% dormido)
+// Match exactly the interfaces in src/lib/business/types.ts and the
+// CHECK constraints in supabase/migrations/014_business_core.sql.
+
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+const monthString = z.string().regex(/^\d{4}-\d{2}$/, "Expected YYYY-MM");
+
+export const businessCostCategorySchema = z.enum([
+  "Tools Software",
+  "Data",
+  "Commissions Fees",
+  "Infrastructure",
+  "Education",
+  "Other",
+]);
+
+export const businessCostCreateSchema = z.object({
+  amount: z.number().positive(),
+  category: businessCostCategorySchema,
+  description: z.string().min(1).max(500),
+  vendor: z.string().min(1).max(200),
+  cost_date: dateString,
+  is_recurring_instance: z.boolean().optional(),
+  template_id: z.string().uuid().nullable().optional(),
+});
+
+export const businessCostUpdateSchema = z.object({
+  amount: z.number().positive().optional(),
+  category: businessCostCategorySchema.optional(),
+  description: z.string().min(1).max(500).optional(),
+  vendor: z.string().min(1).max(200).optional(),
+  cost_date: dateString.optional(),
+});
+
+export const businessCostTemplateCreateSchema = z.object({
+  amount: z.number().positive(),
+  category: businessCostCategorySchema,
+  description: z.string().min(1).max(500),
+  vendor: z.string().min(1).max(200),
+  day_of_month: z.number().int().min(1).max(31),
+  start_month: monthString,
+  active: z.boolean().optional().default(true),
+});
+
+export const businessMilestoneStatusSchema = z.enum(["pending", "in_progress", "completed"]);
+
+export const businessMilestoneCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  description: z.string().max(2000).optional(),
+  target_date: dateString.nullable().optional(),
+  status: businessMilestoneStatusSchema.optional().default("pending"),
+  goal_id: z.string().uuid().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const businessMilestoneUpdateSchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  description: z.string().max(2000).optional(),
+  target_date: dateString.nullable().optional(),
+  status: businessMilestoneStatusSchema.optional(),
+  goal_id: z.string().uuid().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const businessSOPTypeSchema = z.enum([
+  "pre_session",
+  "post_session",
+  "drawdown_protocol",
+  "withdrawal_protocol",
+  "weekly_close",
+  "monthly_close",
+  "custom",
+]);
+
+export const businessSOPCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  type: businessSOPTypeSchema,
+  content: z.string().max(5000).optional(),
+});
+
+export const businessSOPUpdateSchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  type: businessSOPTypeSchema.optional(),
+  content: z.string().max(5000).optional(),
+});
+
+export const businessSOPItemCreateSchema = z.object({
+  label: z.string().min(1).max(300),
+});
+
+export const businessSOPRunCreateSchema = z.object({
+  run_date: dateString,
+  notes: z.string().max(2000).optional(),
+});
+
+export const businessSOPRunItemPatchSchema = z.object({
+  checked: z.boolean().optional(),
+  note: z.string().max(1000).nullable().optional(),
+});
+
+export const businessDecisionPrioritySchema = z.enum(["low", "med", "high"]);
+
+export const businessDecisionCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  context: z.string().max(5000).optional().default(""),
+  decision: z.string().min(1).max(5000),
+  rationale: z.string().max(5000).optional().default(""),
+  impact: z.string().max(2000).optional().default(""),
+  tags: z.array(z.string().max(50)).max(20).optional().default([]),
+  priority: businessDecisionPrioritySchema.optional().default("med"),
+});
+
+export const businessDecisionUpdateSchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  context: z.string().max(5000).optional(),
+  decision: z.string().min(1).max(5000).optional(),
+  rationale: z.string().max(5000).optional(),
+  impact: z.string().max(2000).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  priority: businessDecisionPrioritySchema.optional(),
+});
+
+export const businessDecisionTaskCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  done: z.boolean().optional().default(false),
+});
+
+export const businessDecisionTaskPatchSchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  done: z.boolean().optional(),
+});
+
+export const businessLLCInfoUpsertSchema = z.object({
+  llc_name: z.string().min(1).max(200),
+  formation_date: dateString.nullable().optional(),
+  annual_report_due_month: z.number().int().min(1).max(12),
+  annual_fee_baseline: z.number().nonnegative(),
+  registered_agent_name: z.string().max(200).optional().default(""),
+  ein: z.string().max(50).optional().default(""),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const businessLLCInboxStatusSchema = z.enum(["new", "in_review", "done", "archived"]);
+
+export const businessLLCInboxCreateSchema = z.object({
+  title: z.string().min(1).max(300),
+  received_on: dateString,
+  status: businessLLCInboxStatusSchema.optional().default("new"),
+  notes: z.string().max(2000).nullable().optional(),
+  attachment_path: z.string().max(500).nullable().optional(),
+});
+
+export const businessLLCInboxUpdateSchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  received_on: dateString.optional(),
+  status: businessLLCInboxStatusSchema.optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  attachment_path: z.string().max(500).nullable().optional(),
+});
+
