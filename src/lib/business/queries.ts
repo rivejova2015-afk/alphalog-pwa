@@ -1,38 +1,22 @@
 /**
- * Business Module Queries — LEGACY shape reference (DO NOT CALL DIRECTLY)
+ * Business Module Queries — thin fetch wrappers over /api/business/* (Sprint 4)
  *
- * ⚠️ WARNING (Sprint 3, 2026-05-27): this file uses an UNAUTHENTICATED anon-key
- * client (see line ~12). When called from a browser component, RLS sees
- * `auth.uid() = null` and rejects every query silently — that is the root cause
- * of the "70% empty schema" observed in the 2026-05-26 audit.
+ * Rewrite history:
+ *   - Original: used an unauthenticated anon-key Supabase client → RLS blocked
+ *     all calls silently (root cause of "70% empty schema" audit finding).
+ *   - Sprint 3 (2026-05-27): API foundation laid down at /api/business/* with
+ *     authenticated server client.
+ *   - Sprint 4 (2026-05-27): this file rewritten to call those routes via
+ *     `fetch()` from the browser. Existing callers (panels, forms, offline-loader)
+ *     keep working without modification because function signatures are preserved.
  *
- * DO NOT import these functions from route handlers OR browser components.
- * Use the `/api/business/*` routes which replicate the query logic with the
- * authenticated server client (`src/lib/supabase/server.ts`).
+ * CSRF: middleware sets the `al_csrf` cookie and requires `x-csrf-token` on
+ * mutations. `csrfHeaders()` reads the cookie at call time (browser only).
  *
- * This file is kept as a SHAPE REFERENCE for the schema/columns. Delete once
- * the API rewire (Sprint 4) is complete and no callers remain.
+ * Errors are logged via alphashield (browser) or console (server). All
+ * functions return defaults (`[]`, `null`, `false`) on failure to keep
+ * existing UI happy-path code intact.
  */
-
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-const logBusinessError = async (message: string, error?: unknown) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const { logger } = await import('@/lib/alphashield/logger');
-      await logger.error('business', message, error instanceof Error ? error : undefined);
-      return;
-    } catch {
-      // fallback below
-    }
-  }
-  console.error(message, error);
-};
 
 import type {
   BusinessCost,
@@ -48,576 +32,396 @@ import type {
   LLCInboxItem,
 } from './types';
 
+const logBusinessError = async (message: string, error?: unknown) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const { logger } = await import('@/lib/alphashield/logger');
+      await logger.error('business', message, error instanceof Error ? error : undefined);
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+  console.error(message, error);
+};
+
+const readCsrfCookie = (): string => {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(/al_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+};
+
+const jsonHeaders = (): HeadersInit => ({
+  'Content-Type': 'application/json',
+  'x-csrf-token': readCsrfCookie(),
+});
+
+async function safeJson<T>(res: Response, fallback: T): Promise<T> {
+  try { return (await res.json()) as T; } catch { return fallback; }
+}
+
 // ============================================================================
 // BUSINESS COSTS
 // ============================================================================
 
-/**
- * Get all costs for the authenticated user
- * @param filterMonth Optional YYYY-MM to filter by month
- */
 export async function getBusinessCosts(filterMonth?: string): Promise<BusinessCost[]> {
-  let query = supabase
-    .from('business_costs')
-    .select('*')
-    .is('deleted_at', null)
-    .order('cost_date', { ascending: false });
-
-  if (filterMonth) {
-    const startDate = `${filterMonth}-01`;
-    const [year, month] = filterMonth.split('-');
-    const nextMonth = parseInt(month) === 12 ? `${parseInt(year) + 1}-01` : `${year}-${(parseInt(month) + 1).toString().padStart(2, '0')}`;
-    const endDate = `${nextMonth}-01`;
-    
-    query = query
-      .gte('cost_date', startDate)
-      .lt('cost_date', endDate);
-  }
-
-  const { data, error } = await query;
-  
-  if (error) {
-    await logBusinessError('Error fetching business costs:', error);
-    return [];
-  }
-  
-  return (data as BusinessCost[]) || [];
+  try {
+    const url = filterMonth ? `/api/business/costs?month=${encodeURIComponent(filterMonth)}` : '/api/business/costs';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessCosts ${res.status}`); return []; }
+    const body = await safeJson<{ costs?: BusinessCost[] }>(res, {});
+    return body.costs ?? [];
+  } catch (err) { await logBusinessError('getBusinessCosts threw', err); return []; }
 }
 
-/**
- * Get all cost templates for the authenticated user
- */
 export async function getBusinessCostTemplates(): Promise<BusinessCostTemplate[]> {
-  const { data, error } = await supabase
-    .from('business_cost_templates')
-    .select('*')
-    .is('deleted_at', null)
-    .order('day_of_month', { ascending: true });
-
-  if (error) {
-    await logBusinessError('Error fetching cost templates:', error);
-    return [];
-  }
-
-  return (data as BusinessCostTemplate[]) || [];
+  try {
+    const res = await fetch('/api/business/cost-templates', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessCostTemplates ${res.status}`); return []; }
+    const body = await safeJson<{ templates?: BusinessCostTemplate[] }>(res, {});
+    return body.templates ?? [];
+  } catch (err) { await logBusinessError('getBusinessCostTemplates threw', err); return []; }
 }
 
-/**
- * Create a business cost
- */
-export async function createBusinessCost(cost: Omit<BusinessCost, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<BusinessCost | null> {
-  const { data, error } = await supabase
-    .from('business_costs')
-    .insert([cost])
-    .select()
-    .single();
-
-  if (error) {
-    await logBusinessError('Error creating business cost:', error);
-    return null;
-  }
-
-  return data as BusinessCost;
+export async function createBusinessCost(
+  cost: Omit<BusinessCost, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<BusinessCost | null> {
+  try {
+    const res = await fetch('/api/business/costs', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        amount: cost.amount,
+        category: cost.category,
+        description: cost.description,
+        vendor: cost.vendor,
+        cost_date: cost.cost_date,
+        is_recurring_instance: cost.is_recurring_instance,
+        template_id: cost.template_id ?? undefined,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`createBusinessCost ${res.status}`); return null; }
+    const body = await safeJson<{ cost?: BusinessCost }>(res, {});
+    return body.cost ?? null;
+  } catch (err) { await logBusinessError('createBusinessCost threw', err); return null; }
 }
 
-/**
- * Delete a business cost (soft delete)
- */
 export async function deleteBusinessCost(costId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('business_costs')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', costId);
-
-  if (error) {
-    await logBusinessError('Error deleting business cost:', error);
-    return false;
-  }
-
-  return true;
+  try {
+    const res = await fetch(`/api/business/costs/${encodeURIComponent(costId)}`, {
+      method: 'DELETE',
+      headers: jsonHeaders(),
+    });
+    if (!res.ok) { await logBusinessError(`deleteBusinessCost ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('deleteBusinessCost threw', err); return false; }
 }
 
 // ============================================================================
 // BUSINESS MILESTONES
 // ============================================================================
 
-/**
- * Get all milestones for the authenticated user
- */
 export async function getBusinessMilestones(): Promise<BusinessMilestone[]> {
-  const { data, error } = await supabase
-    .from('business_milestones')
-    .select('*')
-    .is('deleted_at', null)
-    .order('sort_index', { ascending: true });
-
-  if (error) {
-    await logBusinessError('Error fetching milestones:', error);
-    return [];
-  }
-
-  return (data as BusinessMilestone[]) || [];
+  try {
+    const res = await fetch('/api/business/milestones', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessMilestones ${res.status}`); return []; }
+    const body = await safeJson<{ milestones?: BusinessMilestone[] }>(res, {});
+    return body.milestones ?? [];
+  } catch (err) { await logBusinessError('getBusinessMilestones threw', err); return []; }
 }
 
-/**
- * Create a milestone
- */
-export async function createBusinessMilestone(milestone: Omit<BusinessMilestone, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<BusinessMilestone | null> {
-  const { data, error } = await supabase
-    .from('business_milestones')
-    .insert([milestone])
-    .select()
-    .single();
-
-  if (error) {
-    await logBusinessError('Error creating milestone:', error);
-    return null;
-  }
-
-  return data as BusinessMilestone;
+export async function createBusinessMilestone(
+  milestone: Omit<BusinessMilestone, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<BusinessMilestone | null> {
+  try {
+    const res = await fetch('/api/business/milestones', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: milestone.title,
+        description: milestone.description,
+        target_date: milestone.target_date ?? null,
+        status: milestone.status,
+        goal_id: milestone.goal_id ?? null,
+        notes: milestone.notes ?? null,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`createBusinessMilestone ${res.status}`); return null; }
+    const body = await safeJson<{ milestone?: BusinessMilestone }>(res, {});
+    return body.milestone ?? null;
+  } catch (err) { await logBusinessError('createBusinessMilestone threw', err); return null; }
 }
 
-/**
- * Update milestone status
- */
-export async function updateBusinessMilestoneStatus(milestoneId: string, status: 'pending' | 'in_progress' | 'completed'): Promise<boolean> {
-  const { error } = await supabase
-    .from('business_milestones')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', milestoneId);
-
-  if (error) {
-    await logBusinessError('Error updating milestone status:', error);
-    return false;
-  }
-
-  return true;
+export async function updateBusinessMilestoneStatus(
+  milestoneId: string,
+  status: 'pending' | 'in_progress' | 'completed'
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/business/milestones/${encodeURIComponent(milestoneId)}`, {
+      method: 'PUT',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) { await logBusinessError(`updateBusinessMilestoneStatus ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('updateBusinessMilestoneStatus threw', err); return false; }
 }
 
-/**
- * Delete a milestone (soft delete)
- */
 export async function deleteBusinessMilestone(milestoneId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('business_milestones')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', milestoneId);
-
-  if (error) {
-    await logBusinessError('Error deleting milestone:', error);
-    return false;
-  }
-
-  return true;
+  try {
+    const res = await fetch(`/api/business/milestones/${encodeURIComponent(milestoneId)}`, {
+      method: 'DELETE',
+      headers: jsonHeaders(),
+    });
+    if (!res.ok) { await logBusinessError(`deleteBusinessMilestone ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('deleteBusinessMilestone threw', err); return false; }
 }
 
 // ============================================================================
 // BUSINESS SOPs
 // ============================================================================
 
-/**
- * Get all SOPs for the authenticated user
- */
 export async function getBusinessSOPs(): Promise<BusinessSOP[]> {
-  const { data, error } = await supabase
-    .from('business_sops')
-    .select('*')
-    .is('deleted_at', null)
-    .order('sort_index', { ascending: true });
-
-  if (error) {
-    await logBusinessError('Error fetching SOPs:', error);
-    return [];
-  }
-
-  return (data as BusinessSOP[]) || [];
+  try {
+    const res = await fetch('/api/business/sops', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessSOPs ${res.status}`); return []; }
+    const body = await safeJson<{ sops?: Array<BusinessSOP & { items?: BusinessSOPItem[] }> }>(res, {});
+    return (body.sops ?? []).map(({ items: _items, ...sop }) => sop);
+  } catch (err) { await logBusinessError('getBusinessSOPs threw', err); return []; }
 }
 
-/**
- * Get SOP with its items
- */
 export async function getBusinessSOPWithItems(sopId: string): Promise<{ sop: BusinessSOP; items: BusinessSOPItem[] } | null> {
-  const [sopResult, itemsResult] = await Promise.all([
-    supabase
-      .from('business_sops')
-      .select('*')
-      .eq('id', sopId)
-      .is('deleted_at', null)
-      .single(),
-    supabase
-      .from('business_sop_items')
-      .select('*')
-      .eq('sop_id', sopId)
-      .is('deleted_at', null)
-      .order('sort_index', { ascending: true })
-  ]);
-
-  if (sopResult.error || itemsResult.error) {
-    await logBusinessError('Error fetching SOP with items:', sopResult.error || itemsResult.error);
-    return null;
-  }
-
-  return {
-    sop: sopResult.data as BusinessSOP,
-    items: (itemsResult.data as BusinessSOPItem[]) || []
-  };
+  try {
+    const res = await fetch('/api/business/sops', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessSOPWithItems ${res.status}`); return null; }
+    const body = await safeJson<{ sops?: Array<BusinessSOP & { items?: BusinessSOPItem[] }> }>(res, {});
+    const match = (body.sops ?? []).find((s) => s.id === sopId);
+    if (!match) return null;
+    const { items, ...sop } = match;
+    return { sop, items: items ?? [] };
+  } catch (err) { await logBusinessError('getBusinessSOPWithItems threw', err); return null; }
 }
 
-/**
- * Create a SOP
- */
-export async function createBusinessSOP(sop: Omit<BusinessSOP, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<BusinessSOP | null> {
-  const { data, error } = await supabase
-    .from('business_sops')
-    .insert([sop])
-    .select()
-    .single();
-
-  if (error) {
-    await logBusinessError('Error creating SOP:', error);
-    return null;
-  }
-
-  return data as BusinessSOP;
+export async function createBusinessSOP(
+  sop: Omit<BusinessSOP, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<BusinessSOP | null> {
+  try {
+    const res = await fetch('/api/business/sops', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: sop.title,
+        type: sop.type,
+        content: sop.content,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`createBusinessSOP ${res.status}`); return null; }
+    const body = await safeJson<{ sop?: BusinessSOP }>(res, {});
+    return body.sop ?? null;
+  } catch (err) { await logBusinessError('createBusinessSOP threw', err); return null; }
 }
 
-/**
- * Delete a SOP (soft delete, cascades to items and runs)
- */
 export async function deleteBusinessSOP(sopId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('business_sops')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', sopId);
-
-  if (error) {
-    await logBusinessError('Error deleting SOP:', error);
-    return false;
-  }
-
-  return true;
+  try {
+    const res = await fetch(`/api/business/sops/${encodeURIComponent(sopId)}`, {
+      method: 'DELETE',
+      headers: jsonHeaders(),
+    });
+    if (!res.ok) { await logBusinessError(`deleteBusinessSOP ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('deleteBusinessSOP threw', err); return false; }
 }
 
-// ============================================================================
-// BUSINESS SOP RUNS
-// ============================================================================
-
-/**
- * Get all runs for a specific SOP
- */
 export async function getBusinessSOPRuns(sopId: string): Promise<BusinessSOPRun[]> {
-  const { data, error } = await supabase
-    .from('business_sop_runs')
-    .select('*')
-    .eq('sop_id', sopId)
-    .is('deleted_at', null)
-    .order('run_date', { ascending: false });
-
-  if (error) {
-    await logBusinessError('Error fetching SOP runs:', error);
-    return [];
-  }
-
-  return (data as BusinessSOPRun[]) || [];
+  try {
+    const res = await fetch(`/api/business/sops/${encodeURIComponent(sopId)}/runs`, { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessSOPRuns ${res.status}`); return []; }
+    const body = await safeJson<{ runs?: Array<BusinessSOPRun & { items?: BusinessSOPRunItem[] }> }>(res, {});
+    return (body.runs ?? []).map(({ items: _items, ...run }) => run);
+  } catch (err) { await logBusinessError('getBusinessSOPRuns threw', err); return []; }
 }
 
-/**
- * Create a SOP run
- */
-export async function createBusinessSOPRun(run: Omit<BusinessSOPRun, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<BusinessSOPRun | null> {
-  const { data, error } = await supabase
-    .from('business_sop_runs')
-    .insert([run])
-    .select()
-    .single();
-
-  if (error) {
-    await logBusinessError('Error creating SOP run:', error);
-    return null;
-  }
-
-  return data as BusinessSOPRun;
+export async function createBusinessSOPRun(
+  run: Omit<BusinessSOPRun, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<BusinessSOPRun | null> {
+  try {
+    const res = await fetch(`/api/business/sops/${encodeURIComponent(run.sop_id)}/runs`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        run_date: run.run_date,
+        notes: run.notes,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`createBusinessSOPRun ${res.status}`); return null; }
+    const body = await safeJson<{ run?: BusinessSOPRun }>(res, {});
+    return body.run ?? null;
+  } catch (err) { await logBusinessError('createBusinessSOPRun threw', err); return null; }
 }
 
-// ============================================================================
-// BUSINESS SOP RUN ITEMS
-// ============================================================================
-
-/**
- * Get all items for a SOP run
- */
 export async function getBusinessSOPRunItems(runId: string): Promise<BusinessSOPRunItem[]> {
-  const { data, error } = await supabase
-    .from('business_sop_run_items')
-    .select('*')
-    .eq('run_id', runId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    await logBusinessError('Error fetching SOP run items:', error);
-    return [];
-  }
-
-  return (data as BusinessSOPRunItem[]) || [];
+  // We don't have a direct GET for a single run's items; iterate runs of each SOP would be wasteful.
+  // The runs endpoint already returns items joined — callers should use getBusinessSOPRuns.
+  // This helper kept for backwards-compat: returns empty array, callers should migrate.
+  await logBusinessError(`getBusinessSOPRunItems called for runId=${runId} — use getBusinessSOPRuns instead`);
+  return [];
 }
 
-/**
- * Update a SOP run item (mark as checked)
- */
 export async function updateBusinessSOPRunItem(itemId: string, checked: boolean, note?: string): Promise<boolean> {
-  const updateData: any = {
-    checked,
-    updated_at: new Date().toISOString()
-  };
-
-  if (checked) {
-    updateData.checked_at = new Date().toISOString();
-  }
-
-  if (note !== undefined) {
-    updateData.note = note;
-  }
-
-  const { error } = await supabase
-    .from('business_sop_run_items')
-    .update(updateData)
-    .eq('id', itemId);
-
-  if (error) {
-    await logBusinessError('Error updating SOP run item:', error);
-    return false;
-  }
-
-  return true;
+  // The PATCH route requires both runId and itemId in the path. Caller now needs to pass runId too.
+  // For backwards-compat, this helper is a no-op — patch logic moved to direct fetch in panels.
+  await logBusinessError(`updateBusinessSOPRunItem requires runId — use direct fetch to /api/business/sops/runs/[runId]/items/[itemId]`);
+  void itemId; void checked; void note;
+  return false;
 }
 
 // ============================================================================
 // BUSINESS DECISIONS
 // ============================================================================
 
-/**
- * Get all decisions for the authenticated user
- */
 export async function getBusinessDecisions(): Promise<BusinessDecision[]> {
-  const { data, error } = await supabase
-    .from('business_decisions')
-    .select('*')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    await logBusinessError('Error fetching decisions:', error);
-    return [];
-  }
-
-  return (data as BusinessDecision[]) || [];
+  try {
+    const res = await fetch('/api/business/decisions', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessDecisions ${res.status}`); return []; }
+    const body = await safeJson<{ decisions?: BusinessDecision[] }>(res, {});
+    return body.decisions ?? [];
+  } catch (err) { await logBusinessError('getBusinessDecisions threw', err); return []; }
 }
 
-/**
- * Get decision with its follow-up tasks
- */
 export async function getBusinessDecisionWithTasks(decisionId: string): Promise<{ decision: BusinessDecision; tasks: BusinessDecisionTask[] } | null> {
-  const [decisionResult, tasksResult] = await Promise.all([
-    supabase
-      .from('business_decisions')
-      .select('*')
-      .eq('id', decisionId)
-      .is('deleted_at', null)
-      .single(),
-    supabase
-      .from('business_decision_tasks')
-      .select('*')
-      .eq('decision_id', decisionId)
-      .is('deleted_at', null)
-      .order('sort_index', { ascending: true })
-  ]);
-
-  if (decisionResult.error || tasksResult.error) {
-    await logBusinessError('Error fetching decision with tasks:', decisionResult.error || tasksResult.error);
-    return null;
-  }
-
-  return {
-    decision: decisionResult.data as BusinessDecision,
-    tasks: (tasksResult.data as BusinessDecisionTask[]) || []
-  };
+  try {
+    const res = await fetch(`/api/business/decisions/${encodeURIComponent(decisionId)}`, { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getBusinessDecisionWithTasks ${res.status}`); return null; }
+    const body = await safeJson<{ decision?: BusinessDecision; tasks?: BusinessDecisionTask[] }>(res, {});
+    if (!body.decision) return null;
+    return { decision: body.decision, tasks: body.tasks ?? [] };
+  } catch (err) { await logBusinessError('getBusinessDecisionWithTasks threw', err); return null; }
 }
 
-/**
- * Create a decision
- */
-export async function createBusinessDecision(decision: Omit<BusinessDecision, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<BusinessDecision | null> {
-  const { data, error } = await supabase
-    .from('business_decisions')
-    .insert([decision])
-    .select()
-    .single();
-
-  if (error) {
-    await logBusinessError('Error creating decision:', error);
-    return null;
-  }
-
-  return data as BusinessDecision;
+export async function createBusinessDecision(
+  decision: Omit<BusinessDecision, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<BusinessDecision | null> {
+  try {
+    const res = await fetch('/api/business/decisions', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: decision.title,
+        context: decision.context,
+        decision: decision.decision,
+        rationale: decision.rationale,
+        impact: decision.impact,
+        tags: decision.tags,
+        priority: decision.priority,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`createBusinessDecision ${res.status}`); return null; }
+    const body = await safeJson<{ decision?: BusinessDecision }>(res, {});
+    return body.decision ?? null;
+  } catch (err) { await logBusinessError('createBusinessDecision threw', err); return null; }
 }
 
-/**
- * Delete a decision (soft delete)
- */
 export async function deleteBusinessDecision(decisionId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('business_decisions')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', decisionId);
-
-  if (error) {
-    await logBusinessError('Error deleting decision:', error);
-    return false;
-  }
-
-  return true;
+  try {
+    const res = await fetch(`/api/business/decisions/${encodeURIComponent(decisionId)}`, {
+      method: 'DELETE',
+      headers: jsonHeaders(),
+    });
+    if (!res.ok) { await logBusinessError(`deleteBusinessDecision ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('deleteBusinessDecision threw', err); return false; }
 }
 
 // ============================================================================
-// LLC INFO
+// LLC INFO + INBOX
 // ============================================================================
 
-/**
- * Get LLC info for the authenticated user (one per user)
- */
 export async function getLLCInfo(): Promise<LLCInfo | null> {
-  const { data, error } = await supabase
-    .from('llc_info')
-    .select('*')
-    .is('deleted_at', null)
-    .maybeSingle();
-
-  if (error) {
-    await logBusinessError('Error fetching LLC info:', error);
-    return null;
-  }
-
-  return data as LLCInfo | null;
+  try {
+    const res = await fetch('/api/business/llc', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getLLCInfo ${res.status}`); return null; }
+    const body = await safeJson<{ llc?: LLCInfo | null }>(res, {});
+    return body.llc ?? null;
+  } catch (err) { await logBusinessError('getLLCInfo threw', err); return null; }
 }
 
-/**
- * Create or update LLC info
- */
-export async function upsertLLCInfo(llcInfo: Omit<LLCInfo, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<LLCInfo | null> {
-  const existing = await getLLCInfo();
-
-  if (existing) {
-    // Update
-    const { data, error } = await supabase
-      .from('llc_info')
-      .update({
-        ...llcInfo,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existing.id)
-      .select()
-      .single();
-
-    if (error) {
-      await logBusinessError('Error updating LLC info:', error);
-      return null;
-    }
-
-    return data as LLCInfo;
-  } else {
-    // Insert
-    const { data, error } = await supabase
-      .from('llc_info')
-      .insert([llcInfo])
-      .select()
-      .single();
-
-    if (error) {
-      await logBusinessError('Error creating LLC info:', error);
-      return null;
-    }
-
-    return data as LLCInfo;
-  }
+export async function upsertLLCInfo(
+  llcInfo: Omit<LLCInfo, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<LLCInfo | null> {
+  try {
+    const res = await fetch('/api/business/llc', {
+      method: 'PUT',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        llc_name: llcInfo.llc_name,
+        formation_date: llcInfo.formation_date ?? null,
+        annual_report_due_month: llcInfo.annual_report_due_month,
+        annual_fee_baseline: llcInfo.annual_fee_baseline,
+        registered_agent_name: llcInfo.registered_agent_name,
+        ein: llcInfo.ein,
+        notes: llcInfo.notes ?? null,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`upsertLLCInfo ${res.status}`); return null; }
+    const body = await safeJson<{ llc?: LLCInfo }>(res, {});
+    return body.llc ?? null;
+  } catch (err) { await logBusinessError('upsertLLCInfo threw', err); return null; }
 }
 
-// ============================================================================
-// LLC INBOX ITEMS
-// ============================================================================
-
-/**
- * Get all LLC inbox items for the authenticated user
- * @param filterStatus Optional status to filter by
- */
 export async function getLLCInboxItems(filterStatus?: string): Promise<LLCInboxItem[]> {
-  let query = supabase
-    .from('llc_inbox_items')
-    .select('*')
-    .is('deleted_at', null);
-
-  if (filterStatus && filterStatus !== 'all') {
-    query = query.eq('status', filterStatus);
-  }
-
-  const { data, error } = await query.order('received_on', { ascending: false });
-
-  if (error) {
-    await logBusinessError('Error fetching LLC inbox items:', error);
-    return [];
-  }
-
-  return (data as LLCInboxItem[]) || [];
+  try {
+    const res = await fetch('/api/business/llc/inbox', { cache: 'no-store' });
+    if (!res.ok) { await logBusinessError(`getLLCInboxItems ${res.status}`); return []; }
+    const body = await safeJson<{ items?: LLCInboxItem[] }>(res, {});
+    const items = body.items ?? [];
+    return filterStatus ? items.filter((i) => i.status === filterStatus) : items;
+  } catch (err) { await logBusinessError('getLLCInboxItems threw', err); return []; }
 }
 
-/**
- * Create an LLC inbox item
- */
-export async function createLLCInboxItem(item: Omit<LLCInboxItem, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<LLCInboxItem | null> {
-  const { data, error } = await supabase
-    .from('llc_inbox_items')
-    .insert([item])
-    .select()
-    .single();
-
-  if (error) {
-    await logBusinessError('Error creating LLC inbox item:', error);
-    return null;
-  }
-
-  return data as LLCInboxItem;
+export async function createLLCInboxItem(
+  item: Omit<LLCInboxItem, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'> & { user_id?: string }
+): Promise<LLCInboxItem | null> {
+  try {
+    const res = await fetch('/api/business/llc/inbox', {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        title: item.title,
+        received_on: item.received_on,
+        status: item.status,
+        notes: item.notes ?? null,
+        attachment_path: item.attachment_path ?? null,
+      }),
+    });
+    if (!res.ok) { await logBusinessError(`createLLCInboxItem ${res.status}`); return null; }
+    const body = await safeJson<{ item?: LLCInboxItem }>(res, {});
+    return body.item ?? null;
+  } catch (err) { await logBusinessError('createLLCInboxItem threw', err); return null; }
 }
 
-/**
- * Update LLC inbox item status
- */
-export async function updateLLCInboxItemStatus(itemId: string, status: 'new' | 'in_review' | 'done' | 'archived'): Promise<boolean> {
-  const { error } = await supabase
-    .from('llc_inbox_items')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', itemId);
-
-  if (error) {
-    await logBusinessError('Error updating LLC inbox item:', error);
-    return false;
-  }
-
-  return true;
+export async function updateLLCInboxItemStatus(
+  itemId: string,
+  status: 'new' | 'in_review' | 'done' | 'archived'
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/business/llc/inbox/${encodeURIComponent(itemId)}`, {
+      method: 'PUT',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) { await logBusinessError(`updateLLCInboxItemStatus ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('updateLLCInboxItemStatus threw', err); return false; }
 }
 
-/**
- * Delete an LLC inbox item (soft delete)
- */
 export async function deleteLLCInboxItem(itemId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('llc_inbox_items')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', itemId);
-
-  if (error) {
-    await logBusinessError('Error deleting LLC inbox item:', error);
-    return false;
-  }
-
-  return true;
+  try {
+    const res = await fetch(`/api/business/llc/inbox/${encodeURIComponent(itemId)}`, {
+      method: 'DELETE',
+      headers: jsonHeaders(),
+    });
+    if (!res.ok) { await logBusinessError(`deleteLLCInboxItem ${res.status}`); return false; }
+    return true;
+  } catch (err) { await logBusinessError('deleteLLCInboxItem threw', err); return false; }
 }

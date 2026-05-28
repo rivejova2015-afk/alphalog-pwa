@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
 import { COST_CATEGORIES } from "@/lib/business/types";
 import { createBusinessCost } from "@/lib/business/queries";
-import { createClient } from "@/lib/supabase/browser";
 
 interface CostFormProps {
   onClose: () => void;
@@ -13,7 +12,6 @@ interface CostFormProps {
 }
 
 export default function CostForm({ onClose, onSave }: CostFormProps) {
-  const supabase = createClient();
   const [formData, setFormData] = useState<{
     amount: number;
     category: typeof COST_CATEGORIES[number];
@@ -42,17 +40,7 @@ export default function CostForm({ onClose, onSave }: CostFormProps) {
         return;
       }
 
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        setError("Not authenticated");
-        return;
-      }
-
-      await createBusinessCost({
-        user_id: user.id,
+      const created = await createBusinessCost({
         amount: formData.amount,
         category: formData.category,
         description: formData.description,
@@ -62,26 +50,31 @@ export default function CostForm({ onClose, onSave }: CostFormProps) {
         sort_index: 0, // Will be managed by database ordering
       });
 
-      // If user marked this as recurring, create a cost template record
+      if (!created) {
+        setError("Failed to save cost");
+        return;
+      }
+
+      // If user marked this as recurring, also create a cost template so the
+      // /api/cron/business/recurring-costs job auto-generates future instances.
       if (formData.is_recurring_instance) {
         try {
           const day = new Date(formData.cost_date).getDate();
           const startMonth = formData.cost_date.slice(0, 7); // YYYY-MM
-          await supabase
-            .from("business_cost_templates")
-            .insert([
-              {
-                user_id: user.id,
-                amount: formData.amount,
-                category: formData.category,
-                description: formData.description,
-                vendor: formData.vendor,
-                day_of_month: day,
-                start_month: startMonth,
-                active: true,
-                sort_index: 0,
-              },
-            ]);
+          const csrf = (typeof document !== "undefined" ? document.cookie.match(/al_csrf=([^;]+)/)?.[1] : "") ?? "";
+          await fetch("/api/business/cost-templates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-csrf-token": decodeURIComponent(csrf) },
+            body: JSON.stringify({
+              amount: formData.amount,
+              category: formData.category,
+              description: formData.description,
+              vendor: formData.vendor,
+              day_of_month: day,
+              start_month: startMonth,
+              active: true,
+            }),
+          });
         } catch (err) {
           console.error("Error creating cost template:", err);
         }

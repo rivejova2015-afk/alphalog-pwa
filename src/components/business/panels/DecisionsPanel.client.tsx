@@ -60,12 +60,13 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
     const title = newTaskTitle.trim();
     if (!title) return;
     try {
-      const supabase = (await import('@/lib/supabase/browser')).createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.error("Not authenticated"); return; }
-      await supabase.from('business_decision_tasks').insert([
-        { decision_id: decisionId, user_id: user.id, title, done: false, sort_index: 0 },
-      ]);
+      const csrf = (typeof document !== 'undefined' ? document.cookie.match(/al_csrf=([^;]+)/)?.[1] : '') ?? '';
+      const res = await fetch(`/api/business/decisions/${encodeURIComponent(decisionId)}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': decodeURIComponent(csrf) },
+        body: JSON.stringify({ title, done: false }),
+      });
+      if (!res.ok) { toast.error("Failed to add task"); return; }
       setAddTaskDecisionId(null);
       setNewTaskTitle("");
       await loadDecisions();
@@ -90,15 +91,21 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
   }
 
   async function toggleDecisionTask(taskId: string, currentDone: boolean) {
+    if (!expandedDecision) return; // task can only be toggled while a decision is expanded
     try {
-      const supabase = (await import('@/lib/supabase/browser')).createClient();
-      const { error } = await supabase.from('business_decision_tasks').update({ done: !currentDone, updated_at: new Date().toISOString() }).eq('id', taskId);
-      if (error) {
-        console.error('Error updating task:', error);
-        alert('Failed to update task');
+      const csrf = (typeof document !== 'undefined' ? document.cookie.match(/al_csrf=([^;]+)/)?.[1] : '') ?? '';
+      const url = `/api/business/decisions/${encodeURIComponent(expandedDecision)}/tasks?taskId=${encodeURIComponent(taskId)}`;
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': decodeURIComponent(csrf) },
+        body: JSON.stringify({ done: !currentDone }),
+      });
+      if (!res.ok) {
+        console.error('Error updating task:', res.status);
+        toast.error('Failed to update task');
         return;
       }
-      if (expandedDecision) await loadDecisionTasks(expandedDecision);
+      await loadDecisionTasks(expandedDecision);
       await loadDecisions();
     } catch (err) {
       console.error('Error toggling decision task:', err);

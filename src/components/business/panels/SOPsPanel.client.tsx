@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { loadBusinessSOPs } from "@/lib/business/offline-loader";
 import { createBusinessSOPRun, deleteBusinessSOP, getBusinessSOPWithItems, getBusinessSOPRuns, getBusinessSOPRunItems, updateBusinessSOPRunItem } from "@/lib/business/queries";
 import SOPForm from "../forms/SOPForm.client";
-import { createClient } from "@/lib/supabase/browser";
 import type { BusinessSOP, BusinessSOPItem, BusinessSOPRun, BusinessSOPRunItem } from "@/lib/business/types";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 
@@ -51,19 +50,11 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
 
   async function handleStartRun(sopId: string) {
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Sesión expirada");
-        return;
-      }
+      // user_id is injected server-side by the route handler
       const created = await createBusinessSOPRun({
-        user_id: user.id,
         sop_id: sopId,
         run_date: new Date().toISOString().split("T")[0],
-      });
+      } as Parameters<typeof createBusinessSOPRun>[0]);
 
       if (!created) {
         toast.error("No se pudo crear el run");
@@ -110,16 +101,13 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
   async function handleAddItem(sopId: string, title: string) {
     if (!title) return;
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Sesión expirada");
-        return;
-      }
-      // Insert as template item (label)
-      await supabase.from('business_sop_items').insert([{ sop_id: sopId, user_id: user.id, label: title, sort_index: 0 }]);
+      const csrf = (typeof document !== 'undefined' ? document.cookie.match(/al_csrf=([^;]+)/)?.[1] : '') ?? '';
+      const res = await fetch(`/api/business/sops/${encodeURIComponent(sopId)}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': decodeURIComponent(csrf) },
+        body: JSON.stringify({ label: title }),
+      });
+      if (!res.ok) { toast.error("No se pudo añadir el ítem"); return; }
       await loadSopItems(sopId);
       toast.success("Ítem añadido");
     } catch (err) {
@@ -130,8 +118,12 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
 
   async function handleDeleteItem(itemId: string) {
     try {
-      const supabase = createClient();
-      await supabase.from('business_sop_items').delete().eq('id', itemId);
+      const csrf = (typeof document !== 'undefined' ? document.cookie.match(/al_csrf=([^;]+)/)?.[1] : '') ?? '';
+      const res = await fetch(`/api/business/sops/items/${encodeURIComponent(itemId)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': decodeURIComponent(csrf) },
+      });
+      if (!res.ok) { toast.error("No se pudo eliminar el ítem"); return; }
       if (selectedSop) await loadSopItems(selectedSop);
       toast.success("Ítem eliminado");
     } catch (err) {

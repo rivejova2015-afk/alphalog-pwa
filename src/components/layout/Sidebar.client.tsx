@@ -36,6 +36,10 @@ const SECTIONS: SidebarSection[] = [
       { label: 'Journal', href: '/business/journal' },
       { label: 'KPIs', href: '/business/kpis' },
       { label: 'SOPs', href: '/business/sops' },
+      { label: 'P&L', href: '/business/pl' },
+      { label: 'Runway', href: '/business/runway' },
+      { label: 'Health', href: '/business/health' },
+      { label: 'LLC', href: '/business/llc' },
     ],
   },
   {
