@@ -40,6 +40,8 @@ export type AuditResourceType =
   | "agent"
   | "category"
   | "treasury_config"
+  | "treasury_wallet"
+  | "treasury_transaction"
   | "cme_signal"
   | "cme_risk_config"
   | "pairing_token";

@@ -1,29 +1,67 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import type { Account, TreasuryConfig } from '@/lib/treasury/calculations';
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import type { Account, TreasuryConfig } from "@/lib/treasury/calculations";
 import {
   calculateRetirable,
   getSplitPercentage,
   formatCurrency,
-} from '@/lib/treasury/calculations';
+} from "@/lib/treasury/calculations";
 
 interface SplitsPanelProps {
   accounts: Account[];
   configs: TreasuryConfig[];
+  onConfigsChange?: (configs: TreasuryConfig[]) => void;
+  isReadOnly?: boolean;
 }
 
-const splitModes = [
-  { value: 'growth', label: '📈 Growth', percentage: 50, description: 'Aggressive growth' },
-  { value: 'safe', label: '⚖️ Safe', percentage: 40, description: 'Balanced approach' },
-  { value: 'cash', label: '💰 Cash', percentage: 100, description: 'All profits retirable' },
+type SplitMode = "growth" | "safe" | "cash";
+
+const splitModes: Array<{ value: SplitMode; label: string; percentage: number; description: string }> = [
+  { value: "growth", label: "📈 Growth", percentage: 50, description: "Aggressive growth" },
+  { value: "safe", label: "⚖️ Safe", percentage: 40, description: "Balanced approach" },
+  { value: "cash", label: "💰 Cash", percentage: 100, description: "All profits retirable" },
 ];
 
 export default function SplitsPanel({
   accounts,
   configs,
+  onConfigsChange,
+  isReadOnly,
 }: SplitsPanelProps) {
-  const configMap = new Map(configs.map((c) => [c.account_id, c]));
+  const [localConfigs, setLocalConfigs] = useState<TreasuryConfig[]>(configs);
+  const [savingAccountId, setSavingAccountId] = useState<string | null>(null);
+
+  const configMap = new Map(localConfigs.map((c) => [c.account_id, c]));
+
+  const persistSplitMode = async (accountId: string, nextMode: SplitMode) => {
+    setSavingAccountId(accountId);
+    try {
+      const res = await fetch("/api/treasury/configs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account_id: accountId, split_mode: nextMode }),
+      });
+      if (!res.ok) {
+        toast.error("No se pudo guardar el split mode");
+        return;
+      }
+      const { config } = (await res.json()) as { config: TreasuryConfig };
+      const next = localConfigs.some((c) => c.account_id === accountId)
+        ? localConfigs.map((c) => (c.account_id === accountId ? config : c))
+        : [...localConfigs, config];
+      setLocalConfigs(next);
+      onConfigsChange?.(next);
+      toast.success(`Split mode actualizado a ${nextMode}`);
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setSavingAccountId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -47,14 +85,15 @@ export default function SplitsPanel({
         <h3 className="text-white font-medium">Account Split Modes</h3>
         {accounts.map((account) => {
           const config = configMap.get(account.id);
-          const splitMode = config?.split_mode || 'safe';
+          const splitMode = (config?.split_mode ?? "safe") as SplitMode;
           const splitPercentage = getSplitPercentage(splitMode);
           const retirable = calculateRetirable(account, config);
+          const isSaving = savingAccountId === account.id;
 
           return (
             <Card key={account.id} className="bg-slate-900 border-slate-800">
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex-1">
                     <p className="text-white font-medium mb-2">{account.name}</p>
                     <div className="flex items-center gap-2">
@@ -66,6 +105,28 @@ export default function SplitsPanel({
                       </span>
                     </div>
                   </div>
+
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-2">
+                      <label htmlFor={`split-${account.id}`} className="sr-only">
+                        Split mode for {account.name}
+                      </label>
+                      <select
+                        id={`split-${account.id}`}
+                        value={splitMode}
+                        disabled={isSaving}
+                        onChange={(e) => void persistSplitMode(account.id, e.target.value as SplitMode)}
+                        className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-white disabled:opacity-50"
+                      >
+                        {splitModes.map((m) => (
+                          <option key={m.value} value={m.value}>
+                            {m.label} ({m.percentage}%)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="text-right">
                     <p className="text-2xl font-bold text-green-400">
                       {formatCurrency(retirable)}

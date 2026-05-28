@@ -12,6 +12,11 @@ const updateSchema = z.object({
   balance_threshold: z.number().min(0).max(1_000_000).optional(),
   anti_drawdown_active: z.boolean().optional(),
   anti_drawdown_threshold: z.number().min(0).max(100).optional(),
+  split_mode: z.enum(["growth", "safe", "cash"]).optional(),
+  withdrawal_day: z.number().int().min(1).max(31).optional(),
+  wallet_id: z.string().uuid().nullable().optional(),
+  tax_buffer_percentage: z.number().min(0).max(100).optional(),
+  milestone_target: z.number().nonnegative().optional(),
 });
 
 // PUT /api/treasury/configs
@@ -48,6 +53,11 @@ export async function PUT(request: NextRequest) {
     if (parsed.data.balance_threshold !== undefined) payload.balance_threshold = parsed.data.balance_threshold;
     if (parsed.data.anti_drawdown_active !== undefined) payload.anti_drawdown_active = parsed.data.anti_drawdown_active;
     if (parsed.data.anti_drawdown_threshold !== undefined) payload.anti_drawdown_threshold = parsed.data.anti_drawdown_threshold;
+    if (parsed.data.split_mode !== undefined) payload.split_mode = parsed.data.split_mode;
+    if (parsed.data.withdrawal_day !== undefined) payload.withdrawal_day = parsed.data.withdrawal_day;
+    if (parsed.data.wallet_id !== undefined) payload.wallet_id = parsed.data.wallet_id;
+    if (parsed.data.tax_buffer_percentage !== undefined) payload.tax_buffer_percentage = parsed.data.tax_buffer_percentage;
+    if (parsed.data.milestone_target !== undefined) payload.milestone_target = parsed.data.milestone_target;
 
     const { data, error } = await supabase
       .from("treasury_configs")
@@ -71,6 +81,11 @@ export async function PUT(request: NextRequest) {
           balance_threshold: parsed.data.balance_threshold,
           anti_drawdown_active: parsed.data.anti_drawdown_active,
           anti_drawdown_threshold: parsed.data.anti_drawdown_threshold,
+          split_mode: parsed.data.split_mode,
+          withdrawal_day: parsed.data.withdrawal_day,
+          wallet_id: parsed.data.wallet_id,
+          tax_buffer_percentage: parsed.data.tax_buffer_percentage,
+          milestone_target: parsed.data.milestone_target,
         },
       },
       request

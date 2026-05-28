@@ -443,3 +443,69 @@ export const mapHotMilestoneResponseSchema = z
   })
   .passthrough();
 
+// Treasury wallets + transactions (Sprint 2 — activación 70% dormido)
+// Wallets receive payouts. Transactions log income/expense/transfer flows
+// against a wallet (optionally linked to an account).
+
+export const treasuryWalletCreateSchema = z.object({
+  name: z.string().min(1).max(100),
+  currency: z.string().min(3).max(10).default("USD"),
+  starting_balance: z.number().nonnegative().default(0),
+});
+
+export const treasuryWalletResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    name: z.string(),
+    currency: z.string(),
+    starting_balance: z.number(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    deleted_at: z.string().nullable(),
+  })
+  .passthrough();
+
+export const treasuryTransactionTypeSchema = z.enum([
+  "income",
+  "expense",
+  "transfer",
+  "adjustment",
+]);
+
+export const treasuryTransactionCreateSchema = z.object({
+  wallet_id: z.string().uuid(),
+  account_id: z.string().uuid().nullable().optional(),
+  type: treasuryTransactionTypeSchema,
+  amount: z.number(),
+  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD"),
+  description: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const treasuryTransactionUpdateSchema = z.object({
+  type: treasuryTransactionTypeSchema.optional(),
+  amount: z.number().optional(),
+  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  description: z.string().max(500).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  account_id: z.string().uuid().nullable().optional(),
+});
+
+export const treasuryTransactionResponseSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    wallet_id: z.string().uuid(),
+    account_id: z.string().uuid().nullable(),
+    type: treasuryTransactionTypeSchema,
+    amount: z.number(),
+    occurred_on: z.string(),
+    description: z.string().nullable(),
+    notes: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    deleted_at: z.string().nullable(),
+  })
+  .passthrough();
+

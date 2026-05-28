@@ -1,166 +1,137 @@
-﻿// src/app/dashboard/treasury/page.tsx
-"use client";
+// src/app/dashboard/treasury/page.tsx
+// Server component (Sprint 2 — Activación 70% dormido).
+// Pre-fetches accounts, configs, wallets, transactions, payouts, budgets,
+// trades for the logged-in user and hands them to TreasuryShell.client.tsx.
+//
+// Previously this file was a client component that passed empty arrays to
+// TreasuryTabs, so the Treasury UI never rendered real data. This rewrite
+// is the root-cause fix for the data-pipeline gap identified in the audit.
 
-import React, { useState, useEffect } from 'react';
-import { Wallet, TrendingUp, DollarSign, Target, Calendar, AlertCircle, Grid, Zap } from 'lucide-react';
-import TreasuryTabs from '@/components/treasury/TreasuryTabs.client';
-import BackToDashboardButton from "@/components/BackToDashboardButton.client";
-import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
-import { createClient } from '@/lib/supabase/browser';
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import TreasuryShell from "@/components/treasury/TreasuryShell.client";
+import type { Account, TreasuryConfig, Trade } from "@/lib/treasury/calculations";
+import type {
+  TreasuryTransaction,
+  TreasuryPayout,
+  TreasuryBudget,
+  TreasuryWallet,
+} from "@/lib/treasury/queries";
 
-type TreasuryTabType = 'overview' | 'milestone' | 'cashflow' | 'calendario' | 'splits' | 'umbral' | 'anti-dd' | 'heatmap';
+export const dynamic = "force-dynamic";
 
-interface TreasuryTab {
-  id: TreasuryTabType;
-  label: string;
-  icon: React.ReactNode;
-  description: string;
-}
+export default async function TreasuryPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/auth");
 
-const TABS: TreasuryTab[] = [
-  { id: 'overview', label: 'Overview', icon: <Zap className="w-4 h-4" />, description: 'Treasury overview & key metrics' },
-  { id: 'milestone', label: 'Milestone', icon: <Target className="w-4 h-4" />, description: 'Financial milestones' },
-  { id: 'cashflow', label: 'Cashflow', icon: <TrendingUp className="w-4 h-4" />, description: 'Cash flow analysis' },
-  { id: 'calendario', label: 'Calendario', icon: <Calendar className="w-4 h-4" />, description: 'Financial calendar' },
-  { id: 'splits', label: 'Splits', icon: <DollarSign className="w-4 h-4" />, description: 'Account splits' },
-  { id: 'umbral', label: 'Umbral', icon: <AlertCircle className="w-4 h-4" />, description: 'Threshold alerts' },
-  { id: 'anti-dd', label: 'Anti-DD', icon: <Grid className="w-4 h-4" />, description: 'Drawdown protection' },
-  { id: 'heatmap', label: 'Heatmap', icon: <TrendingUp className="w-4 h-4" />, description: 'Heat map analysis' },
-];
+  const [
+    accountsRes,
+    configsRes,
+    walletsRes,
+    transactionsRes,
+    payoutsRes,
+    budgetsRes,
+    tradesRes,
+  ] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, account_size, current_balance, phase_status, withdrawals_enabled")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .order("name", { ascending: true }),
+    supabase
+      .from("treasury_configs")
+      .select("*")
+      .eq("user_id", user.id)
+      .is("deleted_at", null),
+    supabase
+      .from("treasury_wallets")
+      .select("*")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("treasury_transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .order("occurred_on", { ascending: false })
+      .limit(200),
+    supabase
+      .from("treasury_payouts")
+      .select("*")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .order("payout_date", { ascending: false })
+      .limit(50),
+    supabase
+      .from("treasury_budgets")
+      .select("*")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .order("period_start", { ascending: false })
+      .limit(20),
+    supabase
+      .from("trades")
+      .select("id, account_id, entry_date, exit_date, pnl, status")
+      .eq("user_id", user.id)
+      .is("deleted_at", null)
+      .ilike("status", "closed"),
+  ]);
 
-export default function TreasuryPage() {
-  const [activeTab, setActiveTab] = useState<TreasuryTabType>('overview');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Normalize accounts: schema allows NULL for account_size/current_balance,
+  // but the calculations.ts Account interface requires numbers.
+  const accounts: Account[] = (accountsRes.data ?? []).map((a) => ({
+    id: a.id as string,
+    name: (a.name as string) ?? "",
+    account_size: Number(a.account_size ?? 0),
+    current_balance: Number(a.current_balance ?? a.account_size ?? 0),
+    phase_status: (a.phase_status as string | null) ?? undefined,
+    withdrawals_enabled: a.withdrawals_enabled !== false,
+  }));
 
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUserId(user.id);
-        }
-      } catch (err) {
-        console.error("[Treasury] Error getting user:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    getUser();
-  }, []);
+  const configs: TreasuryConfig[] = (configsRes.data ?? []).map((c) => ({
+    id: c.id as string,
+    user_id: c.user_id as string,
+    account_id: c.account_id as string,
+    withdrawal_day: Number(c.withdrawal_day ?? 1),
+    split_mode: (c.split_mode as "growth" | "safe" | "cash") ?? "safe",
+    balance_threshold: c.balance_threshold == null ? undefined : Number(c.balance_threshold),
+    anti_drawdown_active: c.anti_drawdown_active === true,
+    anti_drawdown_threshold: Number(c.anti_drawdown_threshold ?? 20),
+    tax_buffer_percentage: Number(c.tax_buffer_percentage ?? 30),
+    tax_buffer_accumulated: Number(c.tax_buffer_accumulated ?? 0),
+    tax_buffer_target: c.tax_buffer_target == null ? undefined : Number(c.tax_buffer_target),
+    milestone_target: c.milestone_target == null ? undefined : Number(c.milestone_target),
+    milestone_bonus_vault: Number(c.milestone_bonus_vault ?? 0),
+    wallet_id: (c.wallet_id as string | null) ?? undefined,
+    last_threshold_push_cycle_start: (c.last_threshold_push_cycle_start as string | null) ?? undefined,
+  }));
 
-  const currentTab = TABS.find(t => t.id === activeTab);
+  const wallets = (walletsRes.data ?? []) as TreasuryWallet[];
+  const transactions = (transactionsRes.data ?? []) as TreasuryTransaction[];
+  const payouts = (payoutsRes.data ?? []) as TreasuryPayout[];
+  const budgets = (budgetsRes.data ?? []) as TreasuryBudget[];
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900/70">
-        <div className="text-center">
-          <div className="text-4xl mb-4">💰</div>
-          <p className="text-slate-400">Loading Treasury Dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+  const trades: Trade[] = (tradesRes.data ?? []).map((t) => ({
+    id: t.id as string,
+    account_id: t.account_id as string,
+    entry_date: (t.entry_date as string) ?? "",
+    exit_date: (t.exit_date as string | null) ?? undefined,
+    pnl: Number(t.pnl ?? 0),
+    status: ((t.status as string) ?? "").toLowerCase() === "closed" ? "Closed" : "Open",
+  }));
 
   return (
-    <div className="min-h-screen text-slate-200 md:flex">
-      {/* Sidebar */}
-      <aside className={`${isSidebarOpen ? "w-64" : "w-16"} hidden bg-slate-900/80 border-r border-slate-800/80 shadow-[0_18px_40px_rgba(2,4,10,0.6)] backdrop-blur-xl transition-all duration-300 md:flex md:flex-col`}>
-        {/* Header */}
-        <div className="p-4 border-b border-slate-700/60 flex items-center justify-between">
-          {isSidebarOpen && <h2 className="display-font font-semibold text-slate-100">Treasury</h2>}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 hover:bg-slate-800/70 text-slate-400 rounded-lg transition"
-          >
-            {isSidebarOpen ? "◀" : "▶"}
-          </button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-2">
-          <div className="space-y-1">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition ${
-                  activeTab === tab.id
-                    ? "bg-slate-800 text-slate-50 shadow-[0_12px_24px_rgba(2,4,10,0.45)]"
-                    : "text-slate-300 hover:bg-slate-800/70"
-                }`}
-                title={isSidebarOpen ? undefined : tab.label}
-              >
-                <span className="text-lg">{tab.icon}</span>
-                {isSidebarOpen && <span className="flex-1 text-left text-sm">{tab.label}</span>}
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-700/60">
-          {isSidebarOpen ? (
-            <div className="text-xs text-slate-400">
-              <div className="font-medium text-slate-200 mb-1">Treasury Hub</div>
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-                <span>Financial Monitoring</span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-center">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        {/* Header */}
-        <header className="bg-slate-900/80 border-b border-slate-700/60 px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between backdrop-blur-xl shadow-[0_12px_30px_rgba(2,4,10,0.45)]">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="text-3xl">💰</span>
-              <h1 className="display-font text-2xl font-semibold text-slate-50">{currentTab?.label}</h1>
-            </div>
-            <p className="text-sm text-slate-400">{currentTab?.description}</p>
-          </div>
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <BackToDashboardButton />
-            <div className="flex w-full items-center gap-3 px-4 py-2 bg-slate-900/70 border border-slate-700/60 rounded-xl text-slate-200 shadow-sm sm:w-auto">
-              <Wallet className="w-4 h-4 text-emerald-300" />
-              <span className="text-sm">Treasury Operations</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="sticky top-0 z-20 border-b border-slate-700/60 bg-slate-900/90 px-4 py-3 md:hidden">
-          <MobileModuleTabSelect
-            tabs={TABS.map((tab) => ({ id: tab.id, label: tab.label }))}
-            activeTab={activeTab}
-            onChange={(id) => setActiveTab(id as TreasuryTabType)}
-            ariaLabel="Selector de modulo Treasury"
-          />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="max-w-7xl mx-auto">
-            <TreasuryTabs
-              accounts={[]}
-              configs={[]}
-              trades={[]}
-              transactions={[]}
-              payouts={[]}
-              budgets={[]}
-            />
-          </div>
-        </div>
-      </main>
-    </div>
+    <TreasuryShell
+      accounts={accounts}
+      configs={configs}
+      wallets={wallets}
+      trades={trades}
+      transactions={transactions}
+      payouts={payouts}
+      budgets={budgets}
+    />
   );
 }

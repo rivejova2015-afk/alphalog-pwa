@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Account, TreasuryConfig, Trade } from '@/lib/treasury/calculations';
-import type { TreasuryTransaction, TreasuryPayout, TreasuryBudget } from '@/lib/treasury/queries';
+import type { TreasuryTransaction, TreasuryPayout, TreasuryBudget, TreasuryWallet } from '@/lib/treasury/queries';
 import MobileModuleTabSelect from '@/components/navigation/MobileModuleTabSelect.client';
 import OverviewPanel from './panels/Overview.client';
 import SplitsPanel from './panels/Splits.client';
@@ -20,6 +20,7 @@ interface TreasuryTabsProps {
   transactions?: TreasuryTransaction[];
   payouts?: TreasuryPayout[];
   budgets?: TreasuryBudget[];
+  wallets?: TreasuryWallet[];
 }
 
 const tabs = [
@@ -33,13 +34,14 @@ const tabs = [
   { id: 'heatmap', label: '🔥 Heatmap' },
 ];
 
-export default function TreasuryTabs({ 
-  accounts, 
-  configs, 
+export default function TreasuryTabs({
+  accounts,
+  configs,
   trades,
   transactions = [],
   payouts = [],
-  budgets = []
+  budgets = [],
+  wallets = []
 }: TreasuryTabsProps) {
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -72,7 +74,7 @@ export default function TreasuryTabs({
       {/* Tab Content */}
       <div className="min-h-96">
         {activeTab === 'overview' && (
-          <OverviewPanel accounts={accounts} configs={configs} />
+          <OverviewPanel accounts={accounts} configs={configs} wallets={wallets} />
         )}
 
         {activeTab === 'milestone' && (
