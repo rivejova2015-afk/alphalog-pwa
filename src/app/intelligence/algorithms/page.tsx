@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AlgoAccordion } from "@/components/intelligence/algorithms/AlgoAccordion.client";
 import { NewStrategyButton } from "@/components/intelligence/algorithms/NewStrategyButton.client";
 import CmeAlgoTabs from "@/components/intelligence/algorithms/CmeAlgoTabs.client";
+import { DispatchModeChip } from "@/components/intelligence/algorithms/DispatchModeChip.client";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -14,7 +15,7 @@ export default async function AlgorithmsPage() {
   const algorithms = userData?.user
     ? (await supabase
         .from("algorithms")
-        .select("id, name, instrument, status, parameters, market_type, direction, linked_bot_account_id, pnl_today, pnl_total, win_rate, trade_count, profit_factor, max_drawdown_pct, sort_index, created_at")
+        .select("id, name, instrument, status, parameters, market_type, direction, linked_bot_account_id, pnl_today, pnl_total, win_rate, trade_count, profit_factor, max_drawdown_pct, sort_index, created_at, platform, last_dispatch_at, last_signal_bar_ts, last_dispatch_action, last_dispatch_reason")
         .eq("user_id", userData.user.id)
         .is("deleted_at", null)
         .order("sort_index", { ascending: true })
@@ -57,6 +58,11 @@ export default async function AlgorithmsPage() {
       totalTrades: Number(a.trade_count ?? 0),
       profitFactor: Number(a.profit_factor ?? 0),
       maxDrawdown: Number(a.max_drawdown_pct ?? 0),
+      platform: (a.platform as string | null) ?? null,
+      lastDispatchAt:     (a.last_dispatch_at     as string | null) ?? null,
+      lastSignalBarTs:    (a.last_signal_bar_ts   as string | null) ?? null,
+      lastDispatchAction: (a.last_dispatch_action as string | null) ?? null,
+      lastDispatchReason: (a.last_dispatch_reason as string | null) ?? null,
     };
   });
 
@@ -74,6 +80,7 @@ export default async function AlgorithmsPage() {
           <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono flex items-center gap-2">
             <TrendingUp size={22} className="text-[#34d399]" />
             Algorithmic Trading
+            <DispatchModeChip />
           </h1>
           <p className="text-sm text-[#94a3b8] mt-1">Forex and futures algorithm strategies</p>
         </div>

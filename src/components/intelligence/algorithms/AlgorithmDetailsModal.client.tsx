@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play, Activity, Wifi, WifiOff } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play, Activity, Wifi, WifiOff, Inbox, Radio } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
+import { AlgorithmShadowInbox } from "./AlgorithmShadowInbox.client";
 
 type ConnectionStatus = "live" | "stale" | "synced" | "pending";
 
@@ -16,6 +17,13 @@ interface AlgorithmRow {
   status: string;
   parameters: Record<string, unknown> | null;
   engine_config: Record<string, unknown> | null;
+  // Sprint E — dispatcher telemetry (server cron writes these every minute
+  // for Tradovate/IBKR algos; null on EA-driven MT4/MT5 since the EA polls
+  // a different endpoint).
+  last_dispatch_at?:     string | null;
+  last_signal_bar_ts?:   string | null;
+  last_dispatch_action?: string | null;
+  last_dispatch_reason?: string | null;
 }
 
 interface ConnectionsResponse {
@@ -163,6 +171,15 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                 )}
                 {data.algorithm.market_type === "options" && (
                   <OptionsSection />
+                )}
+
+                {/* Sprint E — server-side dispatcher panel. Visible only for
+                    Tradovate/IBKR algos (futures/options) since those are the
+                    ones the dispatcher cron processes. EA-driven MT5 algos use
+                    a different path (signal polling) and don't write
+                    last_dispatch_*. */}
+                {algorithm && (algorithm.platform === "Tradovate" || algorithm.platform === "IBKR") && (
+                  <DispatcherSection algorithm={algorithm} />
                 )}
 
                 <div className="mt-6 pt-5 border-t border-[#1f2937]">
@@ -820,4 +837,76 @@ function formatRelative(iso: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `hace ${hrs}h`;
   return `hace ${Math.floor(hrs / 24)}d`;
+}
+
+// Sprint E — Dispatcher telemetry + Shadow Inbox section. Renders the
+// `last_dispatch_*` columns the cron writes every minute, plus the audit
+// trail of all signals the dispatcher produced. Only mounted for platforms
+// the server-side dispatcher handles (Tradovate, IBKR stub).
+function DispatcherSection({ algorithm }: { algorithm: AlgorithmRow }) {
+  const lastAt    = algorithm.last_dispatch_at ?? null;
+  const lastBarTs = algorithm.last_signal_bar_ts ?? null;
+  const action    = algorithm.last_dispatch_action ?? null;
+  const reason    = algorithm.last_dispatch_reason ?? null;
+
+  // Stale check: a dispatcher polling every minute should have a fresh
+  // last_dispatch_at. Re-evaluate every 30s so the banner appears even with
+  // the modal open. React Compiler forbids Date.now() during render → keep
+  // the time stamp in state.
+  const [now, setNow] = useState<number>(0);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const isStale = !lastAt || (now > 0 && now - new Date(lastAt).getTime() > 5 * 60 * 1000);
+  const shouldWarn = isStale && (algorithm.status === "live" || algorithm.status === "running" || algorithm.status === "paper");
+
+  const actionColor = (() => {
+    if (!action) return "text-slate-500";
+    if (action === "placed")        return "text-emerald-400";
+    if (action === "shadow_logged") return "text-amber-400";
+    if (action === "skipped")       return "text-slate-400";
+    if (action === "failed")        return "text-red-400";
+    return "text-slate-300";
+  })();
+
+  return (
+    <div className="mt-6 pt-5 border-t border-[#1f2937]">
+      <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-3 flex items-center gap-2">
+        <Radio size={12} className="text-cyan-400" />
+        Dispatcher Telemetry
+      </h3>
+
+      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <Row label="Última ejecución" value={lastAt ? `${formatRelative(lastAt)} · ${new Date(lastAt).toLocaleString()}` : "(nunca)"} mono />
+        <Row label="Bar más reciente" value={lastBarTs ? new Date(lastBarTs).toLocaleString() : "—"} mono />
+        <dt className="text-slate-500">Última decisión</dt>
+        <dd className={`text-right font-mono ${actionColor}`}>{action ?? "—"}</dd>
+        <Row label="Motivo" value={reason ?? "—"} mono />
+      </dl>
+
+      {shouldWarn && (
+        <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-red-950/40 border border-red-900/60 text-red-300 text-xs">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Dispatcher stale</p>
+            <p className="mt-0.5">
+              El cron debería actualizar este algoritmo cada ~60s. La última actualización fue {lastAt ? formatRelative(lastAt) : "nunca"}.
+              Verificar `/api/cron/algorithms/tradovate-poll` en Fly logs.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-5">
+        <h4 className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-3 flex items-center gap-2">
+          <Inbox size={12} className="text-cyan-400" />
+          Shadow Inbox
+        </h4>
+        <AlgorithmShadowInbox algorithmId={algorithm.id} />
+      </div>
+    </div>
+  );
 }

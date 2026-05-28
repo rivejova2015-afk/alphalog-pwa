@@ -9,6 +9,26 @@ vi.mock("@/lib/cme/order-executor", () => ({
   executeSignal: (...args: unknown[]) => executeSignalMock(...args),
 }));
 
+// Mock the position fetcher + token plumbing used by the position-awareness
+// step. By default: no positions, no token issues — i.e. account is flat.
+const getPositionsMock = vi.fn().mockResolvedValue([]);
+const tradovateRenewMock = vi.fn().mockResolvedValue({ accessToken: "renewed", expirationTime: new Date(Date.now() + 60 * 60 * 1000).toISOString() });
+vi.mock("@/lib/cme/tradovate", () => ({
+  getPositions:   (...args: unknown[]) => getPositionsMock(...args),
+  tradovateRenew: (...args: unknown[]) => tradovateRenewMock(...args),
+}));
+vi.mock("@/lib/cme/vault", () => ({
+  readCmeAccessToken:  vi.fn().mockResolvedValue("fake_token"),
+  storeCmeAccessToken: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Mock bars-loader so tests don't try to hit Supabase historical_bars.
+// Default returns empty bars → ATR path falls back to static defaults.
+const loadHistoricalBarsMock = vi.fn().mockResolvedValue([]);
+vi.mock("@/lib/backtest/bars-loader", () => ({
+  loadHistoricalBars: (...args: unknown[]) => loadHistoricalBarsMock(...args),
+}));
+
 // Mock the logger so tests don't pollute output.
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(),
@@ -17,38 +37,76 @@ vi.mock("@/lib/log", () => ({
 }));
 
 // ── Supabase client mock with a chainable query builder ─────────────────────
-// Just enough to satisfy insert→select→single AND update→eq calls. Returns
-// configurable responses per call type via the `cmeSignalsBehavior` object.
+// Handles three patterns the dispatcher uses:
+//   1. insert(...).select(...).single()     → cme_signals insert
+//   2. update(...).eq(col, val)             → cme_signals status update
+//   3. select(...).eq(col, val)[.eq(...)].maybeSingle()
+//                                            → cme_connections + algo_cme_accounts lookups
 
 type Behavior = {
-  insertReturn?: { data: { id: string } | null; error: { message: string } | null };
-  updateError?: { message: string } | null;
+  insertReturn?:    { data: { id: string } | null; error: { message: string } | null };
+  updateError?:     { message: string } | null;
+  connectionRow?:   { id: string; tradovate_account_id: number; token_expires_at: string | null } | null;
+  accountRow?:      { is_paper: boolean } | null;
 };
 const behavior: Behavior = {};
 const updateCalls: Array<{ table: string; payload: Record<string, unknown>; eqId?: string }> = [];
 
 function makeSupabaseMock(): SupabaseClient {
-  const tableBuilder = (table: string) => ({
-    insert: () => ({
-      select: () => ({
-        single: async () => behavior.insertReturn ?? { data: { id: "sig_test_1" }, error: null },
+  const tableBuilder = (table: string) => {
+    function selectBuilder() {
+      const chain = {
+        eq: () => chain,
+        is: () => chain,
+        order: () => chain,
+        limit: () => chain,
+        maybeSingle: async () => {
+          if (table === "cme_connections") {
+            return {
+              data: behavior.connectionRow !== undefined
+                ? behavior.connectionRow
+                : { id: "conn_1", tradovate_account_id: 12345, token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+              error: null,
+            };
+          }
+          if (table === "algo_cme_accounts") {
+            return {
+              data: behavior.accountRow !== undefined ? behavior.accountRow : { is_paper: true },
+              error: null,
+            };
+          }
+          return { data: null, error: null };
+        },
+      };
+      return chain;
+    }
+    return {
+      select: () => selectBuilder(),
+      insert: () => ({
+        select: () => ({
+          single: async () => behavior.insertReturn ?? { data: { id: "sig_test_1" }, error: null },
+        }),
       }),
-    }),
-    update: (payload: Record<string, unknown>) => ({
-      eq: async (_col: string, value: string) => {
-        updateCalls.push({ table, payload, eqId: value });
-        return { error: behavior.updateError ?? null };
-      },
-    }),
-  });
+      update: (payload: Record<string, unknown>) => ({
+        eq: async (_col: string, value: string) => {
+          updateCalls.push({ table, payload, eqId: value });
+          return { error: behavior.updateError ?? null };
+        },
+      }),
+    };
+  };
   return { from: (table: string) => tableBuilder(table) } as unknown as SupabaseClient;
 }
 
 beforeEach(() => {
   executeSignalMock.mockReset();
+  getPositionsMock.mockReset().mockResolvedValue([]);
+  loadHistoricalBarsMock.mockReset().mockResolvedValue([]);
   updateCalls.length = 0;
   delete behavior.insertReturn;
   delete behavior.updateError;
+  delete behavior.connectionRow;
+  delete behavior.accountRow;
   delete process.env.DISPATCH_MODE;
 });
 
@@ -287,5 +345,160 @@ describe("dispatchSignal — Tradovate", () => {
       },
     }), svc);
     expect(executeSignalMock.mock.calls[0][0].quantity).toBe(1);
+  });
+});
+
+describe("dispatchTradovate — position awareness (Sprint E)", () => {
+  it("skips BUY when account is already net long", async () => {
+    process.env.DISPATCH_MODE = "live";
+    getPositionsMock.mockResolvedValue([{ netPos: 2, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput({
+      signal: { action: "BUY", lots: 1, confidence: 0.7, reason: "smc_bos_long" },
+    }), svc);
+
+    expect(res.ok).toBe(true);
+    expect(res.action).toBe("skipped");
+    expect(res.reason).toBe("already_long");
+    expect(executeSignalMock).not.toHaveBeenCalled();
+    // No cme_signals row should be inserted when we short-circuit on
+    // position-aware skip — the audit row is reserved for actual dispatch
+    // attempts that reached the persistence step.
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it("skips SELL when account is already net short", async () => {
+    process.env.DISPATCH_MODE = "live";
+    getPositionsMock.mockResolvedValue([{ netPos: -3, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput({
+      signal: { action: "SELL", lots: 1, confidence: 0.7, reason: "smc_bos_short" },
+    }), svc);
+
+    expect(res.ok).toBe(true);
+    expect(res.reason).toBe("already_short");
+    expect(executeSignalMock).not.toHaveBeenCalled();
+  });
+
+  it("PROCEEDS to dispatch when net long and signal is SELL (opposite direction)", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 42 });
+    getPositionsMock.mockResolvedValue([{ netPos: 2, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput({
+      signal: { action: "SELL", lots: 1, confidence: 0.7, reason: "smc_bos_short" },
+    }), svc);
+
+    expect(res.ok).toBe(true);
+    expect(res.action).toBe("placed");
+    expect(executeSignalMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("PROCEEDS to dispatch when account is flat (netPos sum = 0)", async () => {
+    process.env.DISPATCH_MODE = "shadow";
+    getPositionsMock.mockResolvedValue([
+      { netPos: 2,  accountId: 12345 },
+      { netPos: -2, accountId: 12345 },  // netted out
+    ]);
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput(), svc);
+    expect(res.action).toBe("shadow_logged");
+  });
+
+  it("fail-open: getPositions throws → proceeds with the dispatch", async () => {
+    process.env.DISPATCH_MODE = "shadow";
+    getPositionsMock.mockRejectedValue(new Error("network timeout"));
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput(), svc);
+    // Network failure shouldn't halt the dispatch — better to risk a duplicate
+    // than to silently stop emitting signals.
+    expect(res.ok).toBe(true);
+    expect(res.action).toBe("shadow_logged");
+  });
+
+  it("skips position check when there's no active CME connection (failure-open)", async () => {
+    process.env.DISPATCH_MODE = "shadow";
+    behavior.connectionRow = null;
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput(), svc);
+    // No connection means we can't check positions — proceed and let the
+    // executor handle it (which it will, by also failing on no_active_connection).
+    expect(res.action).toBe("shadow_logged");
+    expect(getPositionsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("dispatchTradovate — ATR-derived SL/TP (Sprint E)", () => {
+  function fakeBars(count: number, range: number = 2) {
+    return Array.from({ length: count }, (_, i) => ({
+      ts: new Date(2026, 0, 1, 0, i * 15).toISOString(),
+      open: 100, high: 100 + range / 2, low: 100 - range / 2, close: 100,
+      volume: 1000, spread: null,
+    }));
+  }
+
+  it("uses ATR-derived ticks when bars are available", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    // ATR(14) with constant range 2.0 → ~2.0 in price units.
+    // For ES (tickSize 0.25), slMult=1.5 → slTicks = round(2.0 * 1.5 / 0.25) = 12
+    //                         tpMult=3.0 → tpTicks = round(2.0 * 3.0 / 0.25) = 24
+    loadHistoricalBarsMock.mockResolvedValue(fakeBars(30, 2));
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput(), svc);
+
+    expect(executeSignalMock).toHaveBeenCalledTimes(1);
+    const signal = executeSignalMock.mock.calls[0][0];
+    // ATR-derived: NOT the default 20/40
+    expect(signal.stopLossTicks).toBe(12);
+    expect(signal.takeProfitTicks).toBe(24);
+  });
+
+  it("falls back to static defaults when ATR isn't computable", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    loadHistoricalBarsMock.mockResolvedValue([]);  // no bars → ATR null
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput(), svc);
+
+    const signal = executeSignalMock.mock.calls[0][0];
+    expect(signal.stopLossTicks).toBe(20);
+    expect(signal.takeProfitTicks).toBe(40);
+  });
+
+  it("falls back to static defaults when contract has no tick size mapping", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    loadHistoricalBarsMock.mockResolvedValue(fakeBars(30, 2));
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: { cme_account_id: "cme_1", contract: "FAKE_CONTRACT" },
+      },
+    }), svc);
+
+    const signal = executeSignalMock.mock.calls[0][0];
+    expect(signal.stopLossTicks).toBe(20);
+    expect(signal.takeProfitTicks).toBe(40);
+  });
+
+  it("respects per-algo sl_atr_mult / tp_atr_mult overrides", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    loadHistoricalBarsMock.mockResolvedValue(fakeBars(30, 2));
+    const svc = makeSupabaseMock();
+    // ATR=2.0, sl_mult=2 → slTicks = round(2 * 2 / 0.25) = 16
+    //          tp_mult=5 → tpTicks = round(2 * 5 / 0.25) = 40
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: { cme_account_id: "cme_1", contract: "ESH4", sl_atr_mult: 2, tp_atr_mult: 5 },
+      },
+    }), svc);
+
+    const signal = executeSignalMock.mock.calls[0][0];
+    expect(signal.stopLossTicks).toBe(16);
+    expect(signal.takeProfitTicks).toBe(40);
   });
 });
