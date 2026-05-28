@@ -668,6 +668,9 @@ const FOREX_OVERRIDES_INIT: Record<string, string> = {
 };
 const FUTURES_OVERRIDES_INIT: Record<string, string> = {
   contracts_per_trade: '', max_daily_loss_usd: '', tick_tolerance: '', rollover_days_before: '', daily_op_limit: '',
+  // Sprint F — dispatcher reads these to derive SL/TP from ATR × multiplier.
+  // Empty → dispatcher uses sensible defaults (1.5 / 3.0).
+  sl_atr_mult: '', tp_atr_mult: '',
 };
 const OPTIONS_OVERRIDES_INIT: Record<string, string> = {
   target_delta: '', min_iv_rank: '', min_dte: '', max_dte: '', max_contracts: '', max_premium_usd: '',

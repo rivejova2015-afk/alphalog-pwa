@@ -198,23 +198,42 @@ export async function dispatchTradovate(
     };
   }
 
-  // Position awareness — skip if already in the proposed direction. Failure-
-  // open (logs warn but proceeds) so a flaky Tradovate API doesn't halt
-  // dispatch. The risk of an occasional duplicate trade beats halting on
-  // network jitter.
-  const pos = await netAccountPosition(svc, algo.id, cmeAccountId, algo.user_id);
-  if (pos.checked) {
-    if (pos.netPos > 0 && signal.action === "BUY") {
-      logInfo("DispatchTradovate", `skip BUY ${contract} — already long netPos=${pos.netPos} (algo=${algo.id})`);
-      return { ok: true, action: "skipped", reason: "already_long" };
-    }
-    if (pos.netPos < 0 && signal.action === "SELL") {
-      logInfo("DispatchTradovate", `skip SELL ${contract} — already short netPos=${pos.netPos} (algo=${algo.id})`);
-      return { ok: true, action: "skipped", reason: "already_short" };
-    }
-  }
+  const proposedQty = Math.max(1, Math.round(num(params.contracts_per_trade, 1)));
+  let quantity = proposedQty;
+  let isReversal = false;
+  let priorNetPos = 0;
 
-  const quantity = Math.max(1, Math.round(num(params.contracts_per_trade, 1)));
+  // Position awareness — skip if already in proposed direction; if opposite,
+  // REVERSE with a single market order (close existing + open new). Failure-
+  // open: if getPositions throws (network blip), we proceed without the
+  // guard. An occasional duplicate beats a halted dispatcher.
+  //
+  // Per-algo opt-out: algo.parameters.reverse_on_opposite_signal === false
+  // disables reversal — opposite-direction signals are then skipped (the
+  // open position lingers until manually closed).
+  const pos = await netAccountPosition(svc, algo.id, cmeAccountId, algo.user_id);
+  if (pos.checked && pos.netPos !== 0) {
+    const sameDirection =
+      (pos.netPos > 0 && signal.action === "BUY") ||
+      (pos.netPos < 0 && signal.action === "SELL");
+
+    if (sameDirection) {
+      const reason = pos.netPos > 0 ? "already_long" : "already_short";
+      logInfo("DispatchTradovate", `skip ${signal.action} ${contract} — ${reason} netPos=${pos.netPos} (algo=${algo.id})`);
+      return { ok: true, action: "skipped", reason };
+    }
+
+    const reverseEnabled = params.reverse_on_opposite_signal !== false;
+    if (!reverseEnabled) {
+      logInfo("DispatchTradovate", `skip ${signal.action} ${contract} — opposite_signal_no_reverse netPos=${pos.netPos} (algo=${algo.id})`);
+      return { ok: true, action: "skipped", reason: "opposite_signal_no_reverse" };
+    }
+
+    // Reverse: one market order to flatten + open in the new direction.
+    quantity = Math.abs(pos.netPos) + proposedQty;
+    isReversal = true;
+    priorNetPos = pos.netPos;
+  }
 
   // ATR-derived SL/TP with static fallback. Always returns a valid tick pair.
   const rootSym = rootSymbolOf(contract);
@@ -254,11 +273,18 @@ export async function dispatchTradovate(
   const cmeSignalId = inserted.id as string;
 
   const mode = getDispatchMode();
+  const reversalTag = isReversal ? ` reverse_from_netPos=${priorNetPos}` : "";
 
   if (mode === "shadow") {
+    // For reversals, surface that fact in the Shadow Inbox so the user can
+    // distinguish a fresh entry from a flip. The reject_reason becomes
+    // "shadow_mode (reverse from netPos=X)" — rendered in the inbox column.
+    const rejectReason = isReversal
+      ? `shadow_mode (reverse from netPos=${priorNetPos})`
+      : "shadow_mode";
     const { error: updErr } = await svc
       .from("cme_signals")
-      .update({ status: "skipped", reject_reason: "shadow_mode" })
+      .update({ status: "skipped", reject_reason: rejectReason })
       .eq("id", cmeSignalId);
     if (updErr) {
       logError("DispatchTradovate", {
@@ -267,11 +293,11 @@ export async function dispatchTradovate(
         meta: { algoId: algo.id, cmeSignalId },
       });
     }
-    logInfo("DispatchTradovate", `shadow ${signal.action} ${contract} x${quantity} SL=${slTicks}t TP=${tpTicks}t (${method}, algo=${algo.id})`);
+    logInfo("DispatchTradovate", `shadow ${signal.action} ${contract} x${quantity} SL=${slTicks}t TP=${tpTicks}t (${method}${reversalTag}, algo=${algo.id})`);
     return {
       ok: true, action: "shadow_logged",
       cmeSignalId,
-      reason: "shadow_mode",
+      reason: rejectReason,
     };
   }
 
@@ -291,7 +317,7 @@ export async function dispatchTradovate(
   try {
     const result = await executeSignal(cmeSignal, svc);
     if (result.success) {
-      logInfo("DispatchTradovate", `live ${signal.action} ${contract} x${quantity} placed orderId=${result.orderId} SL=${slTicks}t TP=${tpTicks}t (${method}, algo=${algo.id})`);
+      logInfo("DispatchTradovate", `live ${signal.action} ${contract} x${quantity} placed orderId=${result.orderId} SL=${slTicks}t TP=${tpTicks}t (${method}${reversalTag}, algo=${algo.id})`);
       return {
         ok: true, action: "placed",
         cmeSignalId,

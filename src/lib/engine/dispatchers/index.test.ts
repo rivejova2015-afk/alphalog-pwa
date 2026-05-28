@@ -380,9 +380,11 @@ describe("dispatchTradovate — position awareness (Sprint E)", () => {
     expect(executeSignalMock).not.toHaveBeenCalled();
   });
 
-  it("PROCEEDS to dispatch when net long and signal is SELL (opposite direction)", async () => {
+  it("REVERSES when net long and signal is SELL (Sprint F close-and-reverse)", async () => {
     process.env.DISPATCH_MODE = "live";
     executeSignalMock.mockResolvedValue({ success: true, orderId: 42 });
+    // Account is long 2 ES, contracts_per_trade=2. SELL signal should
+    // produce a single order of qty=4 (close 2 long + open 2 short).
     getPositionsMock.mockResolvedValue([{ netPos: 2, accountId: 12345 }]);
     const svc = makeSupabaseMock();
     const res = await dispatchSignal(tradovateInput({
@@ -392,6 +394,11 @@ describe("dispatchTradovate — position awareness (Sprint E)", () => {
     expect(res.ok).toBe(true);
     expect(res.action).toBe("placed");
     expect(executeSignalMock).toHaveBeenCalledTimes(1);
+    const passed = executeSignalMock.mock.calls[0][0];
+    // contracts_per_trade=2 in the default tradovateInput; netPos=2.
+    // Reversal qty = abs(netPos) + contracts_per_trade = 2 + 2 = 4.
+    expect(passed.quantity).toBe(4);
+    expect(passed.direction).toBe("SELL");
   });
 
   it("PROCEEDS to dispatch when account is flat (netPos sum = 0)", async () => {
@@ -500,5 +507,95 @@ describe("dispatchTradovate — ATR-derived SL/TP (Sprint E)", () => {
     const signal = executeSignalMock.mock.calls[0][0];
     expect(signal.stopLossTicks).toBe(16);
     expect(signal.takeProfitTicks).toBe(40);
+  });
+});
+
+describe("dispatchTradovate — close-and-reverse (Sprint F)", () => {
+  it("reverses long→short with combined-quantity market order", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 7 });
+    getPositionsMock.mockResolvedValue([{ netPos: 3, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2 },
+      },
+      signal: { action: "SELL", lots: 1, confidence: 0.7, reason: "smc_bos_short" },
+    }), svc);
+
+    // Reversal: abs(3) + 2 = 5 sells (3 close + 2 new short)
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(5);
+    expect(executeSignalMock.mock.calls[0][0].direction).toBe("SELL");
+  });
+
+  it("reverses short→long with combined-quantity market order", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 8 });
+    getPositionsMock.mockResolvedValue([{ netPos: -4, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 1 },
+      },
+      signal: { action: "BUY", lots: 1, confidence: 0.7, reason: "smc_bos_long" },
+    }), svc);
+
+    // Reversal: abs(-4) + 1 = 5 buys
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(5);
+    expect(executeSignalMock.mock.calls[0][0].direction).toBe("BUY");
+  });
+
+  it("respects reverse_on_opposite_signal=false → skips instead", async () => {
+    process.env.DISPATCH_MODE = "live";
+    getPositionsMock.mockResolvedValue([{ netPos: 2, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: {
+          cme_account_id: "cme_1",
+          contract: "ESH4",
+          contracts_per_trade: 1,
+          reverse_on_opposite_signal: false,
+        },
+      },
+      signal: { action: "SELL", lots: 1, confidence: 0.7, reason: "smc_bos_short" },
+    }), svc);
+
+    expect(res.action).toBe("skipped");
+    expect(res.reason).toBe("opposite_signal_no_reverse");
+    expect(executeSignalMock).not.toHaveBeenCalled();
+  });
+
+  it("shadow mode reversal: tags reject_reason with netPos info", async () => {
+    process.env.DISPATCH_MODE = "shadow";
+    getPositionsMock.mockResolvedValue([{ netPos: 2, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    const res = await dispatchSignal(tradovateInput({
+      signal: { action: "SELL", lots: 1, confidence: 0.7, reason: "smc_bos_short" },
+    }), svc);
+
+    expect(res.action).toBe("shadow_logged");
+    expect(res.reason).toContain("reverse from netPos=2");
+    const shadowUpdate = updateCalls.find((u) => u.payload.status === "skipped");
+    expect(shadowUpdate?.payload.reject_reason).toContain("reverse from netPos=2");
+  });
+
+  it("flat account + signal proceeds with proposedQty (no reversal math)", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 9 });
+    getPositionsMock.mockResolvedValue([]);  // empty = flat
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 3 },
+      },
+      signal: { action: "BUY", lots: 1, confidence: 0.7, reason: "smc_bos_long" },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(3);
   });
 });

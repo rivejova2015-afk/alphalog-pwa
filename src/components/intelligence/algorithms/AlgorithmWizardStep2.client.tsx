@@ -183,6 +183,12 @@ function OverridesFutures({ overrides, set }: { overrides: Record<string, string
       <Field label="Límite ops por día" hint="Engine default: 200">
         <NumInput value={overrides.daily_op_limit ?? ""} onChange={(v) => set("daily_op_limit", v)} step="10" min="10" placeholder="200" />
       </Field>
+      <Field label="SL × ATR" hint="Dispatcher: SL = ATR(14, M15) × multiplicador. Default 1.5.">
+        <NumInput value={overrides.sl_atr_mult ?? ""} onChange={(v) => set("sl_atr_mult", v)} step="0.1" min="0.1" placeholder="1.5" />
+      </Field>
+      <Field label="TP × ATR" hint="Dispatcher: TP = ATR(14, M15) × multiplicador. Default 3.0 (RR 1:2).">
+        <NumInput value={overrides.tp_atr_mult ?? ""} onChange={(v) => set("tp_atr_mult", v)} step="0.1" min="0.1" placeholder="3.0" />
+      </Field>
     </div>
   );
 }
