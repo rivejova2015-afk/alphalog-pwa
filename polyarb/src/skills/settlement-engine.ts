@@ -36,6 +36,7 @@ const GammaMarketSchema = z.object({
   closed:        z.boolean(),
   clobTokenIds:  z.string().default('[]'),
   conditionId:   z.string().optional(),
+  negRisk:       z.boolean().optional(),
 });
 
 const GammaEventSchema = z.object({
@@ -49,6 +50,7 @@ interface GammaMarket {
   closed: boolean;
   clobTokenIds: string;
   conditionId: string;
+  negRisk: boolean;
 }
 
 /**
@@ -77,6 +79,7 @@ async function fetchByClobConditionId(conditionId: string): Promise<GammaMarket 
       closed: m.closed,
       outcomePrices: JSON.stringify([yesPrice, noPrice]),
       clobTokenIds: '[]',
+      negRisk: false, // CLOB API doesn't expose this — caller should refetch via gamma if needed
     };
   } catch {
     return null;
@@ -100,7 +103,11 @@ async function fetchByGammaSlug(marketSlug: string): Promise<GammaMarket | null>
     }
     const market = parsed.data[0]?.markets?.[0];
     if (!market) return null;
-    return { ...market, conditionId: market.conditionId ?? '' };
+    return {
+      ...market,
+      conditionId: market.conditionId ?? '',
+      negRisk: market.negRisk ?? false,
+    };
   } catch {
     return null;
   }
@@ -347,7 +354,10 @@ export async function redeemPendingWins(
       }
 
       // clobTokenIds: [YES_token_id, NO_token_id] — pick based on outcome
-      const tokenId = pos.outcome === 'YES' ? tokenIds[0] : tokenIds[1];
+      const yesTokenId = tokenIds[0];
+      const noTokenId  = tokenIds[1];
+      const tokenId = pos.outcome === 'YES' ? yesTokenId : noTokenId;
+      const loserTokenId = pos.outcome === 'YES' ? noTokenId : yesTokenId;
       if (!tokenId) {
         console.warn(`[settlement] redeemPendingWins: tokenId incompleto ${pos.market_slug} outcome=${pos.outcome}`);
         continue;
@@ -357,7 +367,9 @@ export async function redeemPendingWins(
         conditionId: pos.condition_id,
         outcome: pos.outcome,
         tokenId,
+        loserTokenId,
         positionId: pos.id,
+        negRisk: market.negRisk,
       });
 
       if (result.redeemed) {

@@ -261,6 +261,30 @@ async function main(): Promise<void> {
     console.warn(`[500x] WARN realtime-metrics hydrate failed; starting cold: ${(err as Error).message}`);
   });
 
+  // Seed totalPnlUsd / wins / losses from previously-settled DB rows so the
+  // dashboard's "P&L Neto" tile survives bot restarts. Without this, every
+  // redeploy resets these counters to 0 and the user sees $0 P&L despite
+  // realized profits sitting in polyarb_positions.
+  try {
+    const { data: hydrate } = await supabase
+      .from('polyarb_positions')
+      .select('pnl_usd, exit_reason')
+      .eq('agent_id', config.agentId)
+      .in('exit_reason', ['settled_win', 'settled_loss']);
+    if (hydrate && hydrate.length > 0) {
+      const rows = hydrate as Array<{ pnl_usd: number | string | null; exit_reason: string }>;
+      metrics.totalPnlUsd = rows.reduce((s, r) => s + Number(r.pnl_usd ?? 0), 0);
+      metrics.wins   = rows.filter(r => r.exit_reason === 'settled_win').length;
+      metrics.losses = rows.filter(r => r.exit_reason === 'settled_loss').length;
+      console.log(
+        `[500x] Hydrated metrics from DB: pnl=$${metrics.totalPnlUsd.toFixed(4)} ` +
+        `wins=${metrics.wins} losses=${metrics.losses}`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[500x] WARN metrics hydrate from DB failed: ${(err as Error).message}`);
+  }
+
   const deps: LoopDeps50x = {
     config,
     binanceFeed,
@@ -268,6 +292,7 @@ async function main(): Promise<void> {
     positionTracker,
     orderManager,
     telemetryWriter,
+    ctfRedeemer,
     cbState,
     milestoneMap,
     fundamentalEngine,

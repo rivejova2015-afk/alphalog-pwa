@@ -53,7 +53,12 @@ import { detectRegime, type RegimeState } from '../../skills/regime-detector.js'
 import { computeReversalSignal } from '../../skills/reversal-radar.js';
 import { type FundamentalEngine, compositeEdgeMultiplier } from '../../analysis/fundamental-engine.js';
 import type { FundamentalSignal } from '../../analysis/types.js';
-import { settleTimedOutPosition } from '../../skills/settlement-engine.js';
+import {
+  settleTimedOutPosition,
+  sweepUnsettledPositions,
+  redeemPendingWins,
+} from '../../skills/settlement-engine.js';
+import type { CtfRedeemer } from '../../trading/ctf-redeemer.js';
 import { getSupabase } from '../../supabase.js';
 import {
   WindowGate,
@@ -198,6 +203,7 @@ export interface LoopDeps50x {
   positionTracker: PositionTracker;
   orderManager: OrderManager;
   telemetryWriter: TelemetryWriter;
+  ctfRedeemer: CtfRedeemer;
   cbState: CircuitBreakerState;
   /** conditionId → parsed milestone price (null = couldn't parse) */
   milestoneMap: Map<string, number | null>;
@@ -250,6 +256,8 @@ export interface LoopMetrics50x {
   lastSessionLogMs: number;
   /** Last session name that was logged. */
   lastSessionName: SessionName | null;
+  /** Last UTC ms the periodic settlement+redeem block ran. */
+  lastSettlementRunAt: number;
 }
 
 export function createLoopMetrics50x(startingEquity: number): LoopMetrics50x {
@@ -273,6 +281,7 @@ export function createLoopMetrics50x(startingEquity: number): LoopMetrics50x {
     lastEventActive: false,
     lastSessionLogMs: 0,
     lastSessionName: null,
+    lastSettlementRunAt: 0,
   };
 }
 
@@ -579,6 +588,22 @@ export async function tradingTick50x(
 
   drainEvents(cbState);
   updateTelemetry50x(deps, metrics, tickStart, session, sessionMult);
+
+  // Periodic on-chain settlement sweep + redeem of unredeemed wins.
+  // Runs every 5min in background — settlement-engine functions are
+  // idempotent and scoped by agent_id, so concurrent ticks are safe.
+  // Without this, the bot only redeems at startup and leaves USDC
+  // locked in CTF tokens between restarts.
+  const nowMs = Date.now();
+  if (nowMs - metrics.lastSettlementRunAt > 300_000) {
+    metrics.lastSettlementRunAt = nowMs;
+    void Promise.all([
+      sweepUnsettledPositions(supabase, config.agentId).catch((e: unknown) =>
+        console.warn(`[500x] periodic sweep failed: ${(e as Error).message}`)),
+      redeemPendingWins(supabase, deps.ctfRedeemer, config.agentId).catch((e: unknown) =>
+        console.warn(`[500x] periodic redeem failed: ${(e as Error).message}`)),
+    ]);
+  }
 }
 
 // ─── processMarket50x ────────────────────────────────────────────────────────
@@ -608,13 +633,13 @@ async function processMarket50x(
 
   if (isNearExpiry(windowInfo, now, 60_000)) return;
   if (deps.windowGate.hasEnteredWindow(orderbook.conditionId, orderbook.marketSlug)) return;
-  if (!isInEntryWindow(windowInfo, now, 60_000)) return;
+  if (!isInEntryWindow(windowInfo, now, params.entryWindowMs)) return;
 
   // Skip if already have an open position on this market
   if (positionTracker.open.some(p => p.conditionId === orderbook.conditionId)) return;
 
-  // Max 2 simultaneous positions
-  if (positionTracker.openCount >= 2) return;
+  // Cap on simultaneous positions (Phase C: configurable via env).
+  if (positionTracker.openCount >= params.maxOpenPositions) return;
 
   const priceHistory = binanceFeed.history;
   if (priceHistory.length < 10) return;
@@ -976,9 +1001,22 @@ async function processMarket50x(
   // sourcesAgreeing (1=$25, 2=$50, 3=$100). Only applied when v2 mode is on
   // and the confluence gate passed (cap is non-null).
   const kellyDerivedSize = accountValue * adjusted.fraction;
-  const finalSize = confluenceCapUsd != null
+  const cappedSize = confluenceCapUsd != null
     ? Math.min(kellyDerivedSize, confluenceCapUsd)
     : kellyDerivedSize;
+
+  // Polymarket CLOB min order = $1. With small bankroll, Kelly produces sub-$1
+  // orders that always 400. Floor to POLYMARKET_MIN_ORDER_USD when there's
+  // capital headroom; skip cleanly otherwise.
+  const POLYMARKET_MIN_ORDER_USD = 1.05;
+  let finalSize = cappedSize;
+  if (cappedSize < POLYMARKET_MIN_ORDER_USD) {
+    if (accountValue < POLYMARKET_MIN_ORDER_USD * 1.5) {
+      logTickSkip(orderbook.marketSlug, `bankroll_below_min ($${accountValue.toFixed(2)})`);
+      return;
+    }
+    finalSize = POLYMARKET_MIN_ORDER_USD;
+  }
   if (finalSize < 0.01) {
     logTickSkip(orderbook.marketSlug, `kelly_size_negligible (${finalSize.toFixed(4)})`);
     return;

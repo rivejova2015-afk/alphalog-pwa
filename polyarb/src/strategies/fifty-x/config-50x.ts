@@ -52,6 +52,11 @@ export interface FiftyXParams extends TradingParams {
   useDivergence: boolean;
   /** Phase B — Entropy-aware adaptive profit-take instead of fixed 0.70. */
   useAdaptiveTP: boolean;
+
+  /** Phase C — Hard cap on simultaneous open positions (was hardcoded 2). */
+  maxOpenPositions: number;
+  /** Phase C — Width of the entry window in ms (was hardcoded 60_000). */
+  entryWindowMs: number;
 }
 
 export interface FiftyXAgentConfig extends Omit<AgentConfig, 'params'> {
@@ -83,6 +88,8 @@ const DEFAULTS = {
   useStasis: true,
   useDivergence: true,
   useAdaptiveTP: true,
+  maxOpenPositions: 2,
+  entryWindowMs: 60_000,
 } as const;
 
 function envNum(key: string, fallback: number): number {
@@ -124,6 +131,8 @@ export async function loadFiftyXAgentConfig(): Promise<FiftyXAgentConfig> {
     useStasis:               envBool('POLYARB_50X_USE_STASIS',            DEFAULTS.useStasis),
     useDivergence:           envBool('POLYARB_50X_USE_DIVERGENCE',        DEFAULTS.useDivergence),
     useAdaptiveTP:           envBool('POLYARB_50X_USE_ADAPTIVE_TP',       DEFAULTS.useAdaptiveTP),
+    maxOpenPositions:        envNum('POLYARB_50X_MAX_OPEN_POSITIONS',     DEFAULTS.maxOpenPositions),
+    entryWindowMs:           envNum('POLYARB_50X_ENTRY_WINDOW_MS',        DEFAULTS.entryWindowMs),
   };
 
   return { ...base, params };
