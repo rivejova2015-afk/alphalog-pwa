@@ -7,8 +7,15 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { z } from 'zod';
 import { sendThresholdPush } from '@/lib/treasury/pushNotifications';
 import { logError } from "@/lib/log";
+
+// accountId is either the literal string "ALL" or a UUID. Other values are
+// rejected before hitting downstream filters to catch typos/malformed input.
+const previewSchema = z.object({
+  accountId: z.union([z.literal("ALL"), z.string().uuid()]).optional(),
+});
 
 interface PreviewRequest {
   accountId?: string; // "ALL" or UUID
@@ -76,8 +83,15 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const userId = sessionData.session.user.id;
-    const body = (await request.json()) as PreviewRequest;
-    const { accountId } = body;
+
+    let rawBody: unknown;
+    try { rawBody = await request.json(); } catch { return Response.json({ success: false, error: "Invalid JSON" }, { status: 400 }); }
+
+    const parsed = previewSchema.safeParse(rawBody ?? {});
+    if (!parsed.success) {
+      return Response.json({ success: false, error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
+    }
+    const { accountId } = parsed.data;
 
     // Get cycle info
     const todayUTC = new Date();

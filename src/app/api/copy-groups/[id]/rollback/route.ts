@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 import { logError } from "@/lib/log";
+
+const rollbackSchema = z.object({
+  version_int: z.number().int().positive(),
+});
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,11 +18,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const versionInt = Number(body?.version_int);
-
-    if (!Number.isFinite(versionInt)) {
-      return NextResponse.json({ error: "version_int is required" }, { status: 400 });
+    let versionInt: number;
+    try {
+      const raw = await request.json();
+      const normalized = raw && typeof raw === 'object' && raw !== null
+        ? { ...raw, version_int: Number((raw as Record<string, unknown>).version_int) }
+        : raw;
+      ({ version_int: versionInt } = rollbackSchema.parse(normalized));
+    } catch (err) {
+      const message = err instanceof z.ZodError ? err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') : 'Invalid request body';
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     const { data: snapshotRow, error: snapshotError } = await supabase

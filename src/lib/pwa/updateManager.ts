@@ -1,5 +1,5 @@
 import { captureException, captureMessage } from "@/lib/sentry";
-import { getSupabaseBrowserClient } from "@/lib/supabse/browser";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const RELOAD_FLAG_KEY = "__pwa_update_reloaded__";
 const DB_SIGNAL_KEY = "__pwa_update_db_signal__";

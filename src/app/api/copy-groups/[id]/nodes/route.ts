@@ -1,7 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 import { logError } from "@/lib/log";
+
+const createNodeSchema = z.object({
+  account_id: z.string().uuid(),
+  role: z.string().min(1).max(60),
+  status: z.string().max(60).optional(),
+  risk_pct: z.number().min(0).max(100).optional(),
+});
+
+const patchNodeSchema = z.object({
+  node_id: z.string().uuid(),
+  risk_pct: z.number().min(0).max(100).optional(),
+  status: z.string().max(60).optional(),
+  role: z.string().min(1).max(60).optional(),
+});
+
+const deleteNodeSchema = z.object({
+  node_id: z.string().uuid(),
+});
+
+function zodErrorMessage(err: unknown): string {
+  return err instanceof z.ZodError ? err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') : 'Invalid request body';
+}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,11 +36,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { account_id, role, status, risk_pct } = body || {};
-
-    if (!account_id || !role) {
-      return NextResponse.json({ error: "account_id and role are required" }, { status: 400 });
+    let account_id: string, role: string, status: string | undefined, risk_pct: number | undefined;
+    try {
+      const raw = await request.json();
+      ({ account_id, role, status, risk_pct } = createNodeSchema.parse(raw));
+    } catch (err) {
+      return NextResponse.json({ error: zodErrorMessage(err) }, { status: 400 });
     }
 
     const { data: node, error } = await supabase
@@ -68,11 +92,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { node_id, risk_pct, status, role } = body || {};
-
-    if (!node_id) {
-      return NextResponse.json({ error: "node_id is required" }, { status: 400 });
+    let node_id: string, risk_pct: number | undefined, status: string | undefined, role: string | undefined;
+    try {
+      const raw = await request.json();
+      ({ node_id, risk_pct, status, role } = patchNodeSchema.parse(raw));
+    } catch (err) {
+      return NextResponse.json({ error: zodErrorMessage(err) }, { status: 400 });
     }
 
     const updates: Record<string, unknown> = {};
@@ -123,11 +148,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { node_id } = body || {};
-
-    if (!node_id) {
-      return NextResponse.json({ error: "node_id is required" }, { status: 400 });
+    let node_id: string;
+    try {
+      const raw = await request.json();
+      ({ node_id } = deleteNodeSchema.parse(raw));
+    } catch (err) {
+      return NextResponse.json({ error: zodErrorMessage(err) }, { status: 400 });
     }
 
     const { error } = await supabase
