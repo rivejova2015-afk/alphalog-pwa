@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -8,6 +8,10 @@ export const dynamic = "force-dynamic";
 // GET /api/ops/alert-summary?hours=24
 // Returns aggregated counts of ops_alert_history rows by job_name + severity
 // over the last N hours (default 24, max 168 / 1 week).
+//
+// Auth: requires an authenticated user (any user). Reads are proxied through
+// the service-role client because ops_alert_history is service-role-only RLS
+// (migration 113) — it represents system-wide alerts, not user data.
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
@@ -18,7 +22,8 @@ export async function GET(req: NextRequest) {
     const hours = Math.min(168, Math.max(1, Number(raw ?? "24") || 24));
     const sinceIso = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
-    const { data, error } = await supabase
+    const svc = createServiceClient();
+    const { data, error } = await svc
       .from("ops_alert_history")
       .select("job_name, severity, message, created_at")
       .gte("created_at", sinceIso)

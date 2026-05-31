@@ -62,6 +62,23 @@ export interface BacktestConfig {
     permanentImpactCoef?: number;
     temporaryImpactCoef?: number;
   };
+  // Advanced opt-in pipeline (Plan v2 — Bloque C). Each flag is independent.
+  // When false / unset the orchestrator behaves identically to the legacy path.
+  useMl?: boolean;
+  mlParams?: {
+    horizon?:   number;  // bars ahead for label
+    threshold?: number;  // min return to label as 1
+  };
+  useMultiTf?: boolean;
+  multiTfParams?: {
+    higherTimeframes?: Timeframe[];
+  };
+  usePortfolio?: boolean;
+  portfolioLegs?: Array<{
+    configId: string;
+    symbol:   string;
+    weight:   number;
+  }>;
 }
 
 export type Operator = '>' | '<' | '>=' | '<=' | '==' | 'cross_above' | 'cross_below';

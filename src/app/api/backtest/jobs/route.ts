@@ -58,6 +58,22 @@ const configSchema = z.object({
   monteCarloIterations: z.number().int().min(0).max(10000).optional(),
   walkForwardWindows: z.number().int().min(0).max(20).optional(),
   stressTests: z.boolean().optional(),
+  // Advanced opt-in pipeline (Plan v2 — Bloque C). All independent.
+  useMl: z.boolean().optional(),
+  mlParams: z.object({
+    horizon:   z.number().int().min(1).max(200).optional(),
+    threshold: z.number().min(0).max(0.5).optional(),
+  }).optional(),
+  useMultiTf: z.boolean().optional(),
+  multiTfParams: z.object({
+    higherTimeframes: z.array(z.enum(TIMEFRAMES)).max(4).optional(),
+  }).optional(),
+  usePortfolio: z.boolean().optional(),
+  portfolioLegs: z.array(z.object({
+    configId: z.string().min(1).max(64),
+    symbol:   z.string().min(1).max(32),
+    weight:   z.number().positive(),
+  })).max(10).optional(),
 });
 
 export async function POST(request: NextRequest) {

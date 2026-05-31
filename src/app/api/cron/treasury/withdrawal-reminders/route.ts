@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { computeCycleStart } from '@/lib/treasury/payoutEngine';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
 import { safeCompareTokens } from '@/lib/security/timing';
-import { logError } from "@/lib/log";
+import { logError, logInfo } from "@/lib/log";
 
 // Type for push subscription
 type PushSubscription = {
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     const todayUTC = getUTCDateString();
     const today = parseDateString(todayUTC);
 
-    console.log(`[Treasury Withdrawal Reminders] Starting at ${todayUTC}`);
+    logInfo("cron.treasury.withdrawal", "starting", { todayUTC });
 
     // 4) Get users with active push subscriptions.
     // We only need user_id — auth.users cannot be joined cross-schema via
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!usersWithPush || usersWithPush.length === 0) {
-      console.log('[Treasury Withdrawal Reminders] No users with push subscriptions');
+      logInfo("cron.treasury.withdrawal", "no users with push subscriptions");
       return NextResponse.json({
         status: 'success',
         message: 'No users with active subscriptions',
@@ -128,9 +128,7 @@ export async function GET(request: NextRequest) {
     }
 
     const uniqueUserIds = [...new Set(usersWithPush.map((u) => u.user_id))];
-    console.log(
-      `[Treasury Withdrawal Reminders] Processing ${uniqueUserIds.length} users with active subscriptions`
-    );
+    logInfo("cron.treasury.withdrawal", "processing users", { count: uniqueUserIds.length });
 
     let sentNotifications = 0;
     const errors: string[] = [];
@@ -162,7 +160,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (!configs || configs.length === 0) {
-          console.log(`User ${userId}: No treasury configs found`);
+          logInfo("cron.treasury.withdrawal", "user has no treasury configs", { userId });
           continue;
         }
 
@@ -219,9 +217,9 @@ export async function GET(request: NextRequest) {
                 cycleStart: cycleStartStr,
               });
             } else {
-              console.log(
-                `User ${userId} / Account ${config.account_id}: Already sent withdrawal push for cycle ${cycleStartStr}`
-              );
+              logInfo("cron.treasury.withdrawal", "already sent for cycle (dedup)", {
+                userId, accountId: config.account_id, cycleStart: cycleStartStr,
+              });
             }
           }
         }
@@ -264,7 +262,7 @@ export async function GET(request: NextRequest) {
             }
 
             if (!subs || subs.length === 0) {
-              console.log(`User ${userId}: No push subscriptions found`);
+              logInfo("cron.treasury.withdrawal", "user has no push subscriptions", { userId });
               continue;
             }
 
@@ -304,9 +302,9 @@ export async function GET(request: NextRequest) {
                 logError("CronTreasuryWithdrawalReminders", { component: "cron.treasury.withdrawal-reminders", message: "Error updating cycle start for user ${userId}:", error: updateError instanceof Error ? updateError.message : String(updateError) });
               } else {
                 sentNotifications++;
-                console.log(
-                  `Sent notification to user ${userId} / Account ${notification.accountId}: ${notification.reason}`
-                );
+                logInfo("cron.treasury.withdrawal", "notification sent", {
+                  userId, accountId: notification.accountId, reason: notification.reason,
+                });
               }
             }
           } catch (notifError) {
@@ -320,9 +318,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(
-      `[Treasury Withdrawal Reminders] Completed: ${sentNotifications} notifications sent, ${errors.length} errors`
-    );
+    logInfo("cron.treasury.withdrawal", "completed", {
+      sent: sentNotifications, errors: errors.length,
+    });
 
     return NextResponse.json({
       status: 'success',

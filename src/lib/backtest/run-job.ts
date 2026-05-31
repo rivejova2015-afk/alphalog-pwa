@@ -68,6 +68,7 @@ export async function runBacktestJob(supabase: SupabaseClient, jobId: string): P
       sensitivity: null,
       regime: result.regime,
       robustness: result.robustness,
+      advanced: result.advanced,
     });
 
     await supabase

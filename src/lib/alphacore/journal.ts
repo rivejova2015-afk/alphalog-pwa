@@ -13,7 +13,7 @@ import type { BaseFields } from '@/lib/alphacore/types';
 import { mutateOfflineFirst, getOfflineBridge } from '@/lib/alphacore/offline/offlineBridge';
 import { preSubmitDedupeCheck } from '@/lib/alphacore/dedupe-checker';
 import type { MutationResponse } from '@/lib/alphacore/mutations';
-import { logError } from '@/lib/log';
+import { logError, logInfo } from '@/lib/log';
 
 // ============================================================================
 // TYPES
@@ -232,7 +232,7 @@ export async function createJournalEntry(
       {
         optimisticData: entryData,
         onOptimisticApplied: (data) => {
-          console.log('[JournalEntry] Created entry:', data.id);
+          logInfo('alphacore.journal', 'entry created', { id: data.id });
         }
       }
     );
@@ -320,7 +320,7 @@ export async function updateJournalEntry(
       },
       {
         onOptimisticApplied: () => {
-          console.log('[JournalEntry] Updated entry:', input.id);
+          logInfo('alphacore.journal', 'entry updated', { id: input.id });
         }
       }
     );
@@ -380,7 +380,7 @@ export async function deleteJournalEntry(
       },
       {
         onOptimisticApplied: () => {
-          console.log('[JournalEntry] Deleted entry:', entryId);
+          logInfo('alphacore.journal', 'entry deleted', { id: entryId });
         }
       }
     );
@@ -441,7 +441,7 @@ export async function restoreJournalEntry(
       },
       {
         onOptimisticApplied: () => {
-          console.log('[JournalEntry] Restored entry:', entryId);
+          logInfo('alphacore.journal', 'entry restored', { id: entryId });
         }
       }
     );
@@ -494,7 +494,7 @@ export async function syncJournalEntries() {
   try {
     const bridge = getOfflineBridge();
     const result = await bridge.syncNow();
-    console.log('[JournalEntry] Sync complete:', result);
+    logInfo('alphacore.journal', 'sync complete', { result });
     return result;
   } catch (error) {
     logError('Alphacore', {

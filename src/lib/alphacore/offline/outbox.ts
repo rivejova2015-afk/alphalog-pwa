@@ -25,7 +25,7 @@ import {
 } from './idb';
 
 import type { MutationRequest } from '../mutations';
-import { logError } from '@/lib/log';
+import { logError, logInfo, logWarn } from '@/lib/log';
 
 /**
  * Outbox sync configuration
@@ -103,7 +103,7 @@ export class OutboxManager {
     };
 
     const id = await addToOutbox(outboxEntry);
-    console.log(`[OutboxManager] Enqueued mutation: ${id}`);
+    logInfo('alphacore.outbox', 'mutation enqueued', { id, table: mutation.table });
 
     return id;
   }
@@ -125,7 +125,7 @@ export class OutboxManager {
       };
     }
 
-    console.log(`[OutboxManager] Syncing ${pendingEntries.length} pending mutations...`);
+    logInfo('alphacore.outbox', 'syncAll started', { pending: pendingEntries.length });
 
     const result: OutboxSyncResult = {
       success: true,
@@ -170,9 +170,11 @@ export class OutboxManager {
       });
     }
 
-    console.log(
-      `[OutboxManager] Sync complete: ${result.syncedCount} synced, ${result.failedCount} failed, ${result.conflictCount} conflicts`
-    );
+    logInfo('alphacore.outbox', 'syncAll complete', {
+      synced:    result.syncedCount,
+      failed:    result.failedCount,
+      conflicts: result.conflictCount,
+    });
 
     return result;
   }
@@ -210,7 +212,7 @@ export class OutboxManager {
     }
 
     const result = await response.json();
-    console.log(`[OutboxManager] Synced entry ${entry.id}`);
+    logInfo('alphacore.outbox', 'entry synced', { entryId: entry.id });
 
     // Update entry metadata with server response (e.g., real ID)
     if (result.data?.id && entry.payload.id?.startsWith('temp_')) {
@@ -219,7 +221,7 @@ export class OutboxManager {
       entry.payload.id = realId;
       // Replace temp ID references in all remaining pending entries
       replaceTempIdInPendingEntries(tempId, realId).catch((err) =>
-        console.warn('[OutboxManager] Failed to replace temp ID refs:', err)
+        logWarn('alphacore.outbox', 'failed to replace temp ID refs', { error: String(err) })
       );
     }
   }
@@ -235,15 +237,18 @@ export class OutboxManager {
         await this.syncEntry(entry);
 
         if (attempt > 1) {
-          console.log(`[OutboxManager] Entry ${entry.id} succeeded after ${attempt} attempts`);
+          logInfo('alphacore.outbox', 'entry succeeded after retries', { entryId: entry.id, attempts: attempt });
         }
 
         return { success: true as const, attempts: attempt, error: null };
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
-        console.warn(
-          `[OutboxManager] Attempt ${attempt}/${maxAttempts} failed for ${entry.id}: ${lastError.message}`
-        );
+        logWarn('alphacore.outbox', 'sync attempt failed', {
+          entryId:  entry.id,
+          attempt,
+          maxAttempts,
+          error:    lastError.message,
+        });
 
         const hasAttemptsLeft = attempt < maxAttempts;
         if (!hasAttemptsLeft) {
@@ -310,7 +315,7 @@ export class OutboxManager {
    * Called when connection restored
    */
   private async onLineRestored(): Promise<void> {
-    console.log('[OutboxManager] Online restored - triggering sync');
+    logInfo('alphacore.outbox', 'online restored — triggering sync');
     const result = await this.syncAll();
 
     if (!result.success) {
@@ -329,7 +334,7 @@ export class OutboxManager {
     this.autoSyncTimer = setInterval(async () => {
       const stats = await getOutboxStats();
       if (stats.pending > 0) {
-        console.log(`[OutboxManager] Auto-sync triggered (${stats.pending} pending)`);
+        logInfo('alphacore.outbox', 'auto-sync triggered', { pending: stats.pending });
         await this.syncAll();
       }
     }, this.config.autoSyncIntervalMs);
@@ -383,7 +388,7 @@ export class OutboxManager {
 
     if (success) {
       await deleteOutboxEntry(entryId);
-      console.log(`[OutboxManager] Retried entry ${entryId} successfully`);
+      logInfo('alphacore.outbox', 'entry retried successfully', { entryId });
       return;
     }
 
@@ -405,7 +410,7 @@ export class OutboxManager {
    */
   async cancel(entryId: string): Promise<void> {
     await deleteOutboxEntry(entryId);
-    console.log(`[OutboxManager] Cancelled entry ${entryId}`);
+    logInfo('alphacore.outbox', 'entry cancelled', { entryId });
   }
 
   /**
@@ -413,19 +418,19 @@ export class OutboxManager {
    * (Implementation in FASE 7 - conflict resolution)
    */
   async resolveConflict(entryId: string, resolution: 'local' | 'server' | 'merged'): Promise<void> {
-    console.log(`[OutboxManager] Resolving conflict ${entryId}: ${resolution}`);
+    logInfo('alphacore.outbox', 'resolving conflict', { entryId, resolution });
 
     if (resolution === 'server') {
       // Discard local change — server version wins
       await deleteOutboxEntry(entryId);
-      console.log(`[OutboxManager] Conflict ${entryId} resolved: discarded local change`);
+      logInfo('alphacore.outbox', 'conflict resolved (discarded local)', { entryId });
       return;
     }
 
     if (resolution === 'local') {
       // Re-queue with pending status — local version wins, force re-sync
       await updateOutboxStatus(entryId, 'pending', undefined);
-      console.log(`[OutboxManager] Conflict ${entryId} resolved: re-queued for sync`);
+      logInfo('alphacore.outbox', 'conflict resolved (re-queued)', { entryId });
       return;
     }
 
@@ -441,7 +446,7 @@ export class OutboxManager {
     for (const entry of entries) {
       await deleteOutboxEntry(entry.id);
     }
-    console.log('[OutboxManager] Cleared all entries');
+    logInfo('alphacore.outbox', 'cleared all entries', { count: entries.length });
   }
 }
 

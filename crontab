@@ -22,6 +22,16 @@
 *    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/coinarb-heartbeat
 0    22   *  *  *   curl --fail --max-time 60 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-daily-report
 
+# Bot ops monitoring + recovery (Plan v2 — Bloque B)
+# - bot-slo-monitor: every 3 min, watches heartbeat/ACK SLOs, alerts on breach
+# - bot-auto-recovery: every 5 min, restarts stale instances with 30min cooldown
+# - bot-daily-verify: once daily at 05:00 UTC, persists SLO + ACK summary to bot_events
+# - bot/arbitrage/latency/run: every minute, iterates enabled arbitrage_latency_pairs
+*/3  *    *  *  *   curl --fail --max-time 60  -X POST -H "Authorization: Bearer $CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/bot-slo-monitor
+*/5  *    *  *  *   curl --fail --max-time 60  -X POST -H "Authorization: Bearer $CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/bot-auto-recovery
+0    5    *  *  *   curl --fail --max-time 120 -X POST -H "Authorization: Bearer $CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/bot-daily-verify
+*    *    *  *  *   curl --fail --max-time 30  -X POST -H "Authorization: Bearer $CRON_SECRET" http://alphalog-pwa.internal:3000/api/bot/arbitrage/latency/run
+
 # Backtest pipeline
 15   *    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/backtest/paper-bridge
 30   4    *  *  *   curl --fail --max-time 300 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/backtest/daemon

@@ -29,7 +29,7 @@ import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
-import { logError } from "@/lib/log";
+import { logError, logInfo, logWarn } from "@/lib/log";
 
 interface PushSubscriptionJSON {
   endpoint: string;
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
     const currentMonthInt = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
-    console.log(`[Business Alerts] Starting at ${currentMonth}`);
+    logInfo("cron.business.alerts", "starting", { currentMonth });
 
     const results: AlertResult[] = [];
 
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!users || users.length === 0) {
-      console.log('No users with LLC info found');
+      logInfo("cron.business.alerts", "no users with LLC info found");
       return NextResponse.json(
         {
           success: true,
@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
           .is('deleted_at', null);
 
         if (tradesError) {
-          console.warn(`Error fetching trades for user ${userId}:`, tradesError);
+          logWarn("cron.business.alerts", "trades query failed", { userId, error: tradesError.message });
           continue;
         }
 
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
           .is('deleted_at', null);
 
         if (costsError) {
-          console.warn(`Error fetching costs for user ${userId}:`, costsError);
+          logWarn("cron.business.alerts", "costs query failed", { userId, error: costsError.message });
           continue;
         }
 
@@ -193,7 +193,7 @@ export async function GET(request: NextRequest) {
           .eq('user_id', userId);
 
         if (subsError) {
-          console.warn(`Error fetching subscriptions for user ${userId}:`, subsError);
+          logWarn("cron.business.alerts", "subscriptions query failed", { userId, error: subsError.message });
           continue;
         }
 
@@ -247,9 +247,9 @@ export async function GET(request: NextRequest) {
               subscription_count: pushSubs.length,
             });
 
-            console.log(
-              `Low runway alert sent to user ${userId}: ${sent.sent}/${pushSubs.length} subscriptions`
-            );
+            logInfo("cron.business.alerts", "low runway alert sent", {
+              userId, sent: sent.sent, total: pushSubs.length,
+            });
           }
         }
 
@@ -280,9 +280,9 @@ export async function GET(request: NextRequest) {
               subscription_count: pushSubs.length,
             });
 
-            console.log(
-              `Annual report alert sent to user ${userId}: ${sent.sent}/${pushSubs.length} subscriptions`
-            );
+            logInfo("cron.business.alerts", "annual report alert sent", {
+              userId, sent: sent.sent, total: pushSubs.length,
+            });
           }
         }
       } catch (error) {
@@ -292,7 +292,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 6) Return results
-    console.log(`[Business Alerts] Completed: ${results.length} alerts processed`);
+    logInfo("cron.business.alerts", "completed", { alerts: results.length });
 
     return NextResponse.json(
       {

@@ -11,7 +11,7 @@ import { InstrumentMultiSelect } from './InstrumentMultiSelect.client';
 import type { EngineConfig } from '@/lib/validations/engine-config';
 import { ENGINE_CONFIG_DEFAULT } from '@/lib/validations/engine-config';
 
-interface BotAccount { id: string; label: string; account_id: string; }
+export interface BotAccount { id: string; label: string; account_id: string; }
 
 interface CmeAccount {
   id: string;
@@ -586,8 +586,10 @@ function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _s
 // Step 2 overrides moved to ./AlgorithmWizardStep2.client.tsx
 
 // ─── Step extra: Latency Arb Pairing (renderiza sólo si template = latency_arb_mt5)
+// Exported for unit testing — used in-place by the wizard, but can be rendered
+// standalone in component tests to verify pairing validation logic.
 
-function StepLatencyArbPairing({
+export function StepLatencyArbPairing({
   botAccounts, fastBotAccountId, slowBotAccountId, setSlowBotAccountId,
   cfg, setCfg,
 }: {
