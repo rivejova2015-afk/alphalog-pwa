@@ -17,15 +17,18 @@ import { runEngineV1FullValidation } from "@/lib/engine/v1/backtest";
 import { extractMultiTf } from "@/lib/engine/v1/index";
 import { evaluateEngineGates } from "@/lib/engine/v1/quality-gates";
 import { theoreticalOptionPnl } from "@/lib/backtest/options-overlay";
-import { logError } from "@/lib/log";
+import { runAdvancedPipeline } from "@/lib/backtest/orchestrator";
+import { logError, logWarn } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
-import type { Timeframe, SimulatedTrade } from "@/types/backtest";
+import type { Timeframe, SimulatedTrade, BacktestConfig, Bar } from "@/types/backtest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 type Ctx = { params: Promise<{ id: string }> };
+
+const VALID_HIGHER_TFS = ["M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
 
 const bodySchema = z.object({
   symbol:                  z.string().min(1).max(20).optional(),
@@ -36,6 +39,15 @@ const bodySchema = z.object({
   tp_atr_mult:             z.number().positive().optional(),
   monte_carlo_iterations:  z.number().int().min(0).max(5000).optional(),
   walk_forward_windows:    z.number().int().min(0).max(12).optional(),
+  // Advanced opt-in pipeline (Plan v2 — Bloque C). When any flag is true the
+  // endpoint runs `runAdvancedPipeline` over the primary-TF bars after the
+  // engine-v1 baseline completes and returns the result under `advanced`.
+  use_ml:                  z.boolean().optional(),
+  ml_horizon:              z.number().int().min(1).max(50).optional(),
+  ml_threshold:            z.number().min(0).max(0.1).optional(),
+  use_multi_tf:            z.boolean().optional(),
+  multi_tf_higher:         z.array(z.enum(VALID_HIGHER_TFS)).min(1).max(3).optional(),
+  use_portfolio:           z.boolean().optional(),
 });
 
 const VALID_TFS: Timeframe[] = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"];
@@ -105,6 +117,60 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       },
     );
 
+    // Advanced opt-in pipeline (Plan v2 — Bloque C). Engine v1 returns the
+    // baseline + MC + WF; if the user toggled ML / multi-TF / portfolio we
+    // surface the extra block via the shared orchestrator helper. We pick the
+    // `bos_ob` TF (M15 by default) as the primary series — entry-TF (M1)
+    // would explode feature extraction and daily TFs lack resolution.
+    const useAdvanced =
+      parsed.data.use_ml === true ||
+      parsed.data.use_multi_tf === true ||
+      parsed.data.use_portfolio === true;
+
+    let advancedOutput: ReturnType<typeof runAdvancedPipeline> = { advanced: null, warnings: [] };
+    if (useAdvanced) {
+      const primaryEntry =
+        tfBars.find((e) => e.tf === "M15") ??
+        tfBars.find((e) => e.tf === "H1") ??
+        tfBars[0];
+      const primaryBars = (primaryEntry?.bars ?? []) as Bar[];
+      if (primaryBars.length < 50 && parsed.data.use_ml) {
+        logWarn("EngineBacktest", "Advanced ML skipped — primary bars < 50", {
+          component: "POST /api/algorithms/[id]/engine-backtest",
+          meta: { primary_tf: primaryEntry?.tf ?? null, bars: primaryBars.length },
+        });
+      }
+      const advancedCfg: BacktestConfig = {
+        // BacktestConfig requires several Engine-v1-irrelevant fields. Only
+        // the opt-in advanced flags + ml/tf params are actually read by
+        // runAdvancedPipeline; the rest are placeholders for the type system.
+        symbol,
+        timeframe:        (primaryEntry?.tf ?? "M15") as Timeframe,
+        from,
+        to,
+        initialBalance:   parsed.data.starting_equity ?? 10000,
+        contractSize:     100,
+        pointValue:       1,
+        spreadPoints:     0,
+        commissionPerLot: 0,
+        slippagePoints:   0,
+        direction:        "both",
+        parameters:       {},
+        rules:            { entry: [], exit: [], sizing: { type: "fixed_lots", lots: 0.01 } } as unknown as BacktestConfig["rules"],
+        useMl:            parsed.data.use_ml === true,
+        mlParams: {
+          horizon:   parsed.data.ml_horizon ?? 10,
+          threshold: parsed.data.ml_threshold ?? 0.001,
+        },
+        useMultiTf:       parsed.data.use_multi_tf === true,
+        multiTfParams: {
+          higherTimeframes: (parsed.data.multi_tf_higher ?? ["H4", "D1"]) as Timeframe[],
+        },
+        usePortfolio:     parsed.data.use_portfolio === true,
+      };
+      advancedOutput = runAdvancedPipeline(primaryBars, advancedCfg);
+    }
+
     // Options overlay: when the algorithm is market_type='options', augment
     // each trade with theoretical Black-Scholes P&L on an ATM contract.
     // Underlying-level entry/exit is what the engine evaluates; the contract
@@ -168,6 +234,9 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           tp_atr_mult:            parsed.data.tp_atr_mult ?? null,
           monte_carlo_iterations: parsed.data.monte_carlo_iterations ?? 0,
           walk_forward_windows:   parsed.data.walk_forward_windows ?? 0,
+          use_ml:                 parsed.data.use_ml === true,
+          use_multi_tf:           parsed.data.use_multi_tf === true,
+          use_portfolio:          parsed.data.use_portfolio === true,
         },
         bars_loaded:      tfBars.map((e) => ({ tf: e.tf, count: e.bars.length })),
         baseline_metrics: optionsOverlay
@@ -179,6 +248,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         duration_ms:      full.baseline.durationMs,
         monte_carlo:      full.monteCarlo,
         walk_forward:     full.walkForward,
+        advanced:         advancedOutput.advanced,
       })
       .select("id, created_at")
       .maybeSingle();
@@ -214,6 +284,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       options_overlay: optionsOverlay,
       monte_carlo: full.monteCarlo,
       walk_forward: full.walkForward,
+      advanced:           advancedOutput.advanced,
+      advanced_warnings:  advancedOutput.warnings,
       gates,
       promoted,
       run_id:     runRow?.id ?? null,
