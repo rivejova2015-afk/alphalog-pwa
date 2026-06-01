@@ -73,7 +73,11 @@ interface GateEvaluation {
 interface AdvancedPayload {
   ml:        { used: true; trainAcc: number; validAcc: number; featureNames: string[] } | null;
   multiTf:   { used: true; higherTimeframes: string[] } | null;
-  portfolio: { used: true; pendingFetch: true; reason: string } | null;
+  portfolio:
+    | { used: true; status: "pending";   reason: string }
+    | { used: true; status: "completed"; legCount: number; metrics: { totalPnl: number; totalReturnPct: number; sharpe: number; maxDrawdown: number; maxDrawdownPct: number; legCorrelations: { a: string; b: string; rho: number }[] }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
+    | { used: true; status: "failed";    reason: string }
+    | null;
 }
 
 interface BacktestResponse {
@@ -1044,8 +1048,32 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
                 {data.advanced.portfolio ? (
                   <div className="bg-[#0a0e1a] border border-[#1f2937] rounded p-2 space-y-1">
                     <p className="text-[10px] text-[#475569] uppercase tracking-wider">Portfolio</p>
-                    <p className="text-[10px] text-[#fbbf24] font-mono">pending — usar /backtest/jobs</p>
-                    <p className="text-[9px] text-[#475569]">{data.advanced.portfolio.reason}</p>
+                    {data.advanced.portfolio.status === "completed" ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
+                          <span className="text-[#475569]">legs</span>
+                          <span className="text-right text-[#e2e8f0]">{data.advanced.portfolio.legCount}</span>
+                          <span className="text-[#475569]">sharpe</span>
+                          <span className="text-right text-[#22d3ee]">{formatNum(data.advanced.portfolio.metrics.sharpe)}</span>
+                          <span className="text-[#475569]">return</span>
+                          <span className={`text-right ${data.advanced.portfolio.metrics.totalReturnPct >= 0 ? "text-[#34d399]" : "text-[#ef4444]"}`}>
+                            {formatNum(data.advanced.portfolio.metrics.totalReturnPct)}%
+                          </span>
+                          <span className="text-[#475569]">max DD</span>
+                          <span className="text-right text-[#ef4444]">{formatNum(data.advanced.portfolio.metrics.maxDrawdownPct)}%</span>
+                        </div>
+                      </>
+                    ) : data.advanced.portfolio.status === "failed" ? (
+                      <>
+                        <p className="text-[10px] text-[#ef4444] font-mono">failed</p>
+                        <p className="text-[9px] text-[#475569]">{data.advanced.portfolio.reason}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-[#fbbf24] font-mono">pending — usar /backtest/jobs</p>
+                        <p className="text-[9px] text-[#475569]">{data.advanced.portfolio.reason}</p>
+                      </>
+                    )}
                   </div>
                 ) : null}
               </div>

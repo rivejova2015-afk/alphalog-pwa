@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { runFullBacktest } from "@/lib/backtest/orchestrator";
+import { runPortfolio, type PortfolioLeg } from "@/lib/backtest/portfolio";
 import { computeGates } from "@/lib/quality-gates/runner";
-import { logError, logInfo } from "@/lib/log";
+import { logError, logInfo, logWarn } from "@/lib/log";
 import type { BacktestConfig } from "@/types/backtest";
+import type { AdvancedPipeline } from "@/lib/backtest/orchestrator";
 
 const ENGINE_VERSION = "v1";
 
@@ -56,6 +58,71 @@ export async function runBacktestJob(supabase: SupabaseClient, jobId: string): P
         .eq("id", job.id);
     });
 
+    // Portfolio wiring (Plan v2 — Gap #2). The pure orchestrator surfaces
+    // intent via advanced.portfolio.status='pending' because runPortfolio
+    // needs a SupabaseClient. Here we replace that block with the real
+    // multi-symbol result: clone cfg per leg substituting `symbol` and
+    // scaling `initialBalance` by the leg's normalized weight. Failures
+    // stay isolated — they downgrade portfolio to 'failed' without
+    // breaking the baseline.
+    let advanced: AdvancedPipeline | null = result.advanced;
+    if (advanced && advanced.portfolio?.status === 'pending') {
+      const legsInput = cfg.portfolioLegs ?? [];
+      if (legsInput.length >= 2) {
+        await supabase
+          .from("backtest_jobs")
+          .update({ current_phase: "portfolio", progress_pct: 92 })
+          .eq("id", job.id);
+        try {
+          const legs: PortfolioLeg[] = legsInput.map((leg) => ({
+            configId: leg.configId,
+            symbol:   leg.symbol,
+            weight:   leg.weight,
+            cfg: {
+              ...cfg,
+              symbol:         leg.symbol,
+              initialBalance: cfg.initialBalance * leg.weight,
+            },
+          }));
+          const portfolio = await runPortfolio(supabase, legs);
+          advanced = {
+            ...advanced,
+            portfolio: {
+              used:     true,
+              status:   'completed',
+              legCount: legs.length,
+              metrics:  portfolio.metrics,
+              equityPreviewLast50: portfolio.portfolioEquity.slice(-50),
+            },
+          };
+          logInfo("BacktestWorker", "portfolio completed", {
+            component: "run-job",
+            meta: { jobId: job.id, legCount: legs.length, sharpe: portfolio.metrics.sharpe },
+          });
+        } catch (portErr) {
+          const portMsg = portErr instanceof Error ? portErr.message : String(portErr);
+          advanced = {
+            ...advanced,
+            portfolio: { used: true, status: 'failed', reason: portMsg.slice(0, 200) },
+          };
+          result.warnings.push(`portfolio: ${portMsg}`);
+          logWarn("BacktestWorker", "portfolio failed", {
+            component: "run-job",
+            meta: { jobId: job.id, message: portMsg },
+          });
+        }
+      } else {
+        advanced = {
+          ...advanced,
+          portfolio: {
+            used:   true,
+            status: 'failed',
+            reason: `portfolioLegs requires at least 2 legs; got ${legsInput.length}`,
+          },
+        };
+      }
+    }
+
     await supabase.from("backtest_results").upsert({
       job_id: job.id,
       user_id: job.user_id,
@@ -68,7 +135,7 @@ export async function runBacktestJob(supabase: SupabaseClient, jobId: string): P
       sensitivity: null,
       regime: result.regime,
       robustness: result.robustness,
-      advanced: result.advanced,
+      advanced,
     });
 
     await supabase

@@ -68,12 +68,15 @@ describe('orchestrator advanced opt-in pipeline', () => {
     });
   });
 
-  it('usePortfolio=true marks pendingFetch with reason', async () => {
+  it('usePortfolio=true surfaces pending status with reason (real run happens in run-job)', async () => {
     const bars = makeBars(120);
     const out = await runFullBacktest(bars, baseCfg({ usePortfolio: true }));
-    expect(out.advanced?.portfolio?.used).toBe(true);
-    expect(out.advanced?.portfolio?.pendingFetch).toBe(true);
-    expect(out.advanced?.portfolio?.reason).toMatch(/Supabase/);
+    const p = out.advanced?.portfolio;
+    expect(p?.used).toBe(true);
+    expect(p?.status).toBe('pending');
+    if (p?.status === 'pending') {
+      expect(p.reason).toMatch(/Supabase/);
+    }
   });
 
   it('flags off → baseline metrics identical to flags on (no contamination)', async () => {

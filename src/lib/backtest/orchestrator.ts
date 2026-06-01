@@ -15,10 +15,26 @@ export interface MlAnalysis {
   featureNames: string[];
 }
 
+// Portfolio block has three lifecycle states. The pure orchestrator can only
+// surface intent ('pending') because runPortfolio needs a SupabaseClient.
+// run-job.ts replaces this block with the real result ('completed' or
+// 'failed') after calling runPortfolio with the per-leg cfg clones.
+export type PortfolioAnalysis =
+  | { used: true; status: 'pending';   reason: string }
+  | { used: true; status: 'completed'; legCount: number; metrics: {
+      totalPnl:        number;
+      totalReturnPct:  number;
+      sharpe:          number;
+      maxDrawdown:     number;
+      maxDrawdownPct:  number;
+      legCorrelations: { a: string; b: string; rho: number }[];
+    }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
+  | { used: true; status: 'failed';    reason: string };
+
 export interface AdvancedPipeline {
   ml:        MlAnalysis | null;
   multiTf:   { used: true; higherTimeframes: string[] } | null;
-  portfolio: { used: true; pendingFetch: true; reason: string } | null;
+  portfolio: PortfolioAnalysis | null;
 }
 
 export interface FullBacktestOutput {
@@ -163,10 +179,13 @@ export function runAdvancedPipeline(
   }
 
   if (cfg.usePortfolio) {
+    // Pure orchestrator only surfaces intent — run-job.ts replaces this
+    // block with `status: 'completed' | 'failed'` after wiring the
+    // SupabaseClient through runPortfolio.
     advanced.portfolio = {
-      used:         true,
-      pendingFetch: true,
-      reason:       'runPortfolio requires Supabase client — wire in run-job.ts',
+      used:   true,
+      status: 'pending',
+      reason: 'runPortfolio requires Supabase client — wired in run-job.ts',
     };
   }
 
