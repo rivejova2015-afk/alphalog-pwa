@@ -56,16 +56,18 @@ describe('orchestrator advanced opt-in pipeline', () => {
     expect(out.advanced?.ml?.featureNames.length).toBeGreaterThan(0);
   });
 
-  it('useMultiTf=true surfaces the higherTimeframes plan', async () => {
+  it('useMultiTf=true surfaces the higherTimeframes plan in pending status', async () => {
     const bars = makeBars(120);
     const out = await runFullBacktest(bars, baseCfg({
       useMultiTf:    true,
       multiTfParams: { higherTimeframes: ['H1', 'H4'] },
     }));
-    expect(out.advanced?.multiTf).toEqual({
-      used:             true,
-      higherTimeframes: ['H1', 'H4'],
-    });
+    const mt = out.advanced?.multiTf;
+    expect(mt?.used).toBe(true);
+    expect(mt?.status).toBe('pending');
+    if (mt?.status === 'pending') {
+      expect(mt.higherTimeframes).toEqual(['H1', 'H4']);
+    }
   });
 
   it('usePortfolio=true surfaces pending status with reason (real run happens in run-job)', async () => {

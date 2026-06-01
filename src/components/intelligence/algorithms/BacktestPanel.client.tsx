@@ -31,7 +31,11 @@ interface EquityPoint { ts: string; equity: number; drawdown: number }
 
 interface AdvancedPayload {
   ml:        { used: true; trainAcc: number; validAcc: number; featureNames: string[] } | null;
-  multiTf:   { used: true; higherTimeframes: string[] } | null;
+  multiTf:
+    | { used: true; status: 'pending';   higherTimeframes: string[] }
+    | { used: true; status: 'completed'; higherTimeframes: string[]; tradesFilteredCount: number; alignment: { byTf: Record<string, { bull: number; bear: number; neutral: number }>; totalPrimaryBars: number } }
+    | { used: true; status: 'failed';    higherTimeframes: string[]; reason: string }
+    | null;
   portfolio:
     | { used: true; status: 'pending';   reason: string }
     | { used: true; status: 'completed'; legCount: number; metrics: { totalPnl: number; totalReturnPct: number; sharpe: number; maxDrawdown: number; maxDrawdownPct: number; legCorrelations: { a: string; b: string; rho: number }[] }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
@@ -553,7 +557,16 @@ function ResultsAdvanced({ advanced }: { advanced: AdvancedPayload }) {
 
       {advanced.multiTf && (
         <section className="space-y-2" data-testid="advanced-multitf-block">
-          <h4 className="text-[11px] text-[#a78bfa] uppercase tracking-wider font-medium">Multi-TF</h4>
+          <h4 className="text-[11px] text-[#a78bfa] uppercase tracking-wider font-medium">
+            Multi-TF
+            <span className={`ml-2 text-[9px] uppercase tracking-wide ${
+              advanced.multiTf.status === 'completed' ? 'text-[#34d399]'
+              : advanced.multiTf.status === 'failed' ? 'text-[#ef4444]'
+              : 'text-[#fbbf24]'
+            }`}>
+              · {advanced.multiTf.status}
+            </span>
+          </h4>
           <div className="flex flex-wrap gap-1.5">
             {advanced.multiTf.higherTimeframes.map((tf) => (
               <span key={tf} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#06b6d4]/10 text-[#06b6d4] border border-[#06b6d4]/30">
@@ -561,7 +574,47 @@ function ResultsAdvanced({ advanced }: { advanced: AdvancedPayload }) {
               </span>
             ))}
           </div>
-          <p className="text-[10px] text-[#475569]">Intent surfacing — el evaluador real corre solo sobre el TF principal en este build.</p>
+          {advanced.multiTf.status === 'completed' && (
+            <>
+              <p className="text-[10px] text-[#cbd5e1]" data-testid="multitf-filtered-count">
+                <span className="font-mono text-[#34d399]">{advanced.multiTf.tradesFilteredCount}</span>
+                {' '}entradas bloqueadas por contradicción con TFs superiores.
+              </p>
+              <div className="space-y-1">
+                <p className="text-[9px] text-[#475569] uppercase tracking-wider">Distribución de bias</p>
+                {Object.entries(advanced.multiTf.alignment.byTf).map(([tf, dist]) => {
+                  const total = dist.bull + dist.bear + dist.neutral || 1;
+                  const bullPct = (dist.bull / total) * 100;
+                  const bearPct = (dist.bear / total) * 100;
+                  const neutralPct = (dist.neutral / total) * 100;
+                  return (
+                    <div key={tf} className="space-y-0.5">
+                      <div className="flex justify-between text-[9px] font-mono">
+                        <span className="text-[#94a3b8]">{tf}</span>
+                        <span className="text-[#475569]">
+                          <span className="text-[#34d399]">{bullPct.toFixed(0)}%</span> ·{' '}
+                          <span className="text-[#ef4444]">{bearPct.toFixed(0)}%</span> ·{' '}
+                          <span className="text-[#94a3b8]">{neutralPct.toFixed(0)}%</span>
+                        </span>
+                      </div>
+                      <div className="flex h-1.5 rounded overflow-hidden bg-[#0a0e1a]">
+                        <div className="bg-[#34d399]" style={{ width: `${bullPct}%` }} />
+                        <div className="bg-[#ef4444]" style={{ width: `${bearPct}%` }} />
+                        <div className="bg-[#94a3b8]/40" style={{ width: `${neutralPct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-[9px] text-[#475569]">bull · bear · neutral · {advanced.multiTf.alignment.totalPrimaryBars} bars</p>
+              </div>
+            </>
+          )}
+          {advanced.multiTf.status === 'failed' && (
+            <p className="text-[10px] text-[#ef4444] font-mono">{advanced.multiTf.reason}</p>
+          )}
+          {advanced.multiTf.status === 'pending' && (
+            <p className="text-[10px] text-[#475569]">Pending — el filter solo corre desde el flujo async (run-job).</p>
+          )}
         </section>
       )}
 

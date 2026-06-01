@@ -15,6 +15,17 @@ export interface MlAnalysis {
   featureNames: string[];
 }
 
+// Multi-TF block uses the same lifecycle pattern as portfolio. Pure
+// orchestrator can only surface intent ('pending') because the higher-TF
+// bars come from Supabase. run-job.ts hydrates cfg.multiTfBars and the
+// engine fills in the trades-filtered counter + bias distribution; the
+// worker then upgrades this block to 'completed' (or 'failed' on
+// missing bars).
+export type MultiTfAnalysis =
+  | { used: true; status: 'pending';   higherTimeframes: string[] }
+  | { used: true; status: 'completed'; higherTimeframes: string[]; tradesFilteredCount: number; alignment: { byTf: Record<string, { bull: number; bear: number; neutral: number }>; totalPrimaryBars: number } }
+  | { used: true; status: 'failed';    higherTimeframes: string[]; reason: string };
+
 // Portfolio block has three lifecycle states. The pure orchestrator can only
 // surface intent ('pending') because runPortfolio needs a SupabaseClient.
 // run-job.ts replaces this block with the real result ('completed' or
@@ -33,7 +44,7 @@ export type PortfolioAnalysis =
 
 export interface AdvancedPipeline {
   ml:        MlAnalysis | null;
-  multiTf:   { used: true; higherTimeframes: string[] } | null;
+  multiTf:   MultiTfAnalysis | null;
   portfolio: PortfolioAnalysis | null;
 }
 
@@ -172,8 +183,12 @@ export function runAdvancedPipeline(
   }
 
   if (cfg.useMultiTf) {
+    // Pure orchestrator surfaces intent. run-job.ts hydrates multiTfBars and
+    // upgrades this block to 'completed' (or 'failed' on load error) after
+    // the engine fills in tradesFilteredCount + alignment.
     advanced.multiTf = {
       used:             true,
+      status:           'pending',
       higherTimeframes: (cfg.multiTfParams?.higherTimeframes ?? ['H4', 'D1']) as string[],
     };
   }

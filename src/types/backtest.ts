@@ -73,6 +73,12 @@ export interface BacktestConfig {
   multiTfParams?: {
     higherTimeframes?: Timeframe[];
   };
+  // Hydrated by run-job.ts before invoking the engine — the pure orchestrator
+  // cannot fetch bars itself. When present together with useMultiTf, runBacktest
+  // builds a bias cache (close vs EMA50) and vetoes entries that contradict
+  // any higher TF. Keys are the timeframe label ('H4', 'D1'), values are the
+  // ascending-by-ts bar series.
+  multiTfBars?: Map<string, Bar[]>;
   usePortfolio?: boolean;
   portfolioLegs?: Array<{
     configId: string;
@@ -136,10 +142,21 @@ export interface BacktestMetrics {
   k_ratio: number;
 }
 
+export interface MultiTfFilterStats {
+  tradesFilteredCount: number;
+  alignment: {
+    byTf: Record<string, { bull: number; bear: number; neutral: number }>;
+    totalPrimaryBars: number;
+  };
+}
+
 export interface BacktestResult {
   metrics: BacktestMetrics;
   trades: SimulatedTrade[];
   equityCurve: EquityPoint[];
   finalBalance: number;
   durationMs: number;
+  // Populated only when cfg.useMultiTf + cfg.multiTfBars are both present.
+  // run-job.ts uses this to replace advanced.multiTf with the 'completed' shape.
+  multiTfStats?: MultiTfFilterStats;
 }

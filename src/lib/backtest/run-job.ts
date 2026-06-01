@@ -51,12 +51,82 @@ export async function runBacktestJob(supabase: SupabaseClient, jobId: string): P
 
     logInfo("BacktestWorker", `Loaded ${bars.length} bars`, { component: "run-job", meta: { jobId: job.id } });
 
+    // Multi-TF wiring (Plan v2 — Gap #4). When the user opted in, fetch
+    // higher-TF bars in parallel and hydrate cfg.multiTfBars so the engine
+    // can build a bias cache and veto contradictory entries. Failures here
+    // do NOT abort the run — we leave cfg.multiTfBars empty (filter no-op)
+    // and remember the reason to downgrade the advanced block downstream.
+    let multiTfLoadError: string | null = null;
+    if (cfg.useMultiTf) {
+      const higherTfs = cfg.multiTfParams?.higherTimeframes ?? ['H4', 'D1'];
+      await supabase
+        .from("backtest_jobs")
+        .update({ current_phase: "multi_tf_bars", progress_pct: 8 })
+        .eq("id", job.id);
+      try {
+        const loaded = await Promise.all(
+          higherTfs.map(async (tf) => {
+            const tfBars = await loadHistoricalBars(supabase, cfg.symbol, tf, cfg.from, cfg.to);
+            return [tf, tfBars] as const;
+          }),
+        );
+        const map = new Map<string, typeof bars>();
+        const skipped: string[] = [];
+        for (const [tf, tfBars] of loaded) {
+          if (tfBars.length >= 50) map.set(tf, tfBars);
+          else skipped.push(`${tf}(${tfBars.length}b)`);
+        }
+        if (map.size === 0) {
+          multiTfLoadError = `no higher-TF bars loaded (skipped: ${skipped.join(", ") || "all empty"})`;
+        } else {
+          cfg.multiTfBars = map;
+          if (skipped.length > 0) logWarn("BacktestWorker", `Multi-TF skipped sparse TFs: ${skipped.join(", ")}`, { component: "run-job", meta: { jobId: job.id } });
+        }
+      } catch (loadErr) {
+        multiTfLoadError = loadErr instanceof Error ? loadErr.message : String(loadErr);
+        logWarn("BacktestWorker", `Multi-TF bar load failed: ${multiTfLoadError}`, { component: "run-job", meta: { jobId: job.id } });
+      }
+    }
+
     const result = await runFullBacktest(bars, cfg, async ({ phase, pct }) => {
       await supabase
         .from("backtest_jobs")
         .update({ current_phase: phase, progress_pct: pct })
         .eq("id", job.id);
     });
+
+    // Multi-TF wiring upgrade (Gap #4). When useMultiTf is true, the engine
+    // attached multiTfStats to result.baseline. We replace the orchestrator's
+    // 'pending' block with 'completed' (or 'failed' if bar loading produced
+    // nothing usable).
+    let advanced: AdvancedPipeline | null = result.advanced;
+    if (advanced && advanced.multiTf?.status === 'pending') {
+      const higherTimeframes = advanced.multiTf.higherTimeframes;
+      if (multiTfLoadError) {
+        advanced = {
+          ...advanced,
+          multiTf: { used: true, status: 'failed', higherTimeframes, reason: multiTfLoadError },
+        };
+      } else if (result.baseline.multiTfStats) {
+        advanced = {
+          ...advanced,
+          multiTf: {
+            used:                true,
+            status:              'completed',
+            higherTimeframes,
+            tradesFilteredCount: result.baseline.multiTfStats.tradesFilteredCount,
+            alignment:           result.baseline.multiTfStats.alignment,
+          },
+        };
+      } else {
+        // Engine didn't fill stats — means cfg.multiTfBars was never set
+        // (defensive; shouldn't happen if we reach here without an error).
+        advanced = {
+          ...advanced,
+          multiTf: { used: true, status: 'failed', higherTimeframes, reason: 'engine did not produce multiTfStats' },
+        };
+      }
+    }
 
     // Portfolio wiring (Plan v2 — Gap #2). The pure orchestrator surfaces
     // intent via advanced.portfolio.status='pending' because runPortfolio
@@ -65,7 +135,6 @@ export async function runBacktestJob(supabase: SupabaseClient, jobId: string): P
     // scaling `initialBalance` by the leg's normalized weight. Failures
     // stay isolated — they downgrade portfolio to 'failed' without
     // breaking the baseline.
-    let advanced: AdvancedPipeline | null = result.advanced;
     if (advanced && advanced.portfolio?.status === 'pending') {
       const legsInput = cfg.portfolioLegs ?? [];
       if (legsInput.length >= 2) {

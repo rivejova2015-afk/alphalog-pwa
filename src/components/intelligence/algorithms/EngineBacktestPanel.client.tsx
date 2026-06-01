@@ -72,7 +72,11 @@ interface GateEvaluation {
 
 interface AdvancedPayload {
   ml:        { used: true; trainAcc: number; validAcc: number; featureNames: string[] } | null;
-  multiTf:   { used: true; higherTimeframes: string[] } | null;
+  multiTf:
+    | { used: true; status: 'pending';   higherTimeframes: string[] }
+    | { used: true; status: 'completed'; higherTimeframes: string[]; tradesFilteredCount: number; alignment: { byTf: Record<string, { bull: number; bear: number; neutral: number }>; totalPrimaryBars: number } }
+    | { used: true; status: 'failed';    higherTimeframes: string[]; reason: string }
+    | null;
   portfolio:
     | { used: true; status: "pending";   reason: string }
     | { used: true; status: "completed"; legCount: number; metrics: { totalPnl: number; totalReturnPct: number; sharpe: number; maxDrawdown: number; maxDrawdownPct: number; legCorrelations: { a: string; b: string; rho: number }[] }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
