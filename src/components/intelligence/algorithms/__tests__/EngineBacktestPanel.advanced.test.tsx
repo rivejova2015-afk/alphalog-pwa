@@ -77,13 +77,22 @@ describe("EngineBacktestPanel — advanced toggles (Gap #1)", () => {
     expect(body.use_portfolio).toBe(false);
   });
 
-  it("propagates each flag when its toggle is checked", async () => {
+  it("ML toggle activates use_ml but multi-TF and portfolio stay disabled (hardening Gap #4)", async () => {
     const captures: { url: string; body: unknown }[] = [];
     globalThis.fetch = buildFetchMock(captures) as unknown as typeof fetch;
     render(<EngineBacktestPanel algorithmId="algo-1" instruments={["XAUUSD"]} />);
+    const multiTf = screen.getByTestId("toggle-use-multi-tf") as HTMLInputElement;
+    const portfolio = screen.getByTestId("toggle-use-portfolio") as HTMLInputElement;
+    // The two cosmetic toggles are disabled in the sync panel by design —
+    // Engine v1 already runs the multi-TF SMC funnel, and portfolio needs
+    // the async flow's leg editor.
+    expect(multiTf.disabled).toBe(true);
+    expect(portfolio.disabled).toBe(true);
     fireEvent.click(screen.getByTestId("toggle-use-ml"));
-    fireEvent.click(screen.getByTestId("toggle-use-multi-tf"));
-    fireEvent.click(screen.getByTestId("toggle-use-portfolio"));
+    // Clicks on disabled inputs are no-ops; we still issue them defensively
+    // to prove the body shape doesn't drift.
+    fireEvent.click(multiTf);
+    fireEvent.click(portfolio);
     fireEvent.click(screen.getByText(/Validar Engine/));
     await waitFor(() => {
       expect(captures.some((c) => c.url.endsWith("/engine-backtest"))).toBe(true);
@@ -91,8 +100,8 @@ describe("EngineBacktestPanel — advanced toggles (Gap #1)", () => {
     const runCall = captures.find((c) => c.url.endsWith("/engine-backtest"))!;
     const body = runCall.body as Record<string, unknown>;
     expect(body.use_ml).toBe(true);
-    expect(body.use_multi_tf).toBe(true);
-    expect(body.use_portfolio).toBe(true);
+    expect(body.use_multi_tf).toBe(false);
+    expect(body.use_portfolio).toBe(false);
   });
 
   it("renders the advanced results card when response.advanced is populated", async () => {

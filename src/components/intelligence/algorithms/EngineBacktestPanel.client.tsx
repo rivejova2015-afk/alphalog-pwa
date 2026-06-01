@@ -171,8 +171,12 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [mcIters, setMcIters]         = useState("0");
   const [wfWindows, setWfWindows]     = useState("0");
   const [useMl, setUseMl]             = useState(false);
-  const [useMultiTf, setUseMultiTf]   = useState(false);
-  const [usePortfolio, setUsePortfolio] = useState(false);
+  // Multi-TF and Portfolio toggles are disabled in the sync flow on purpose
+  // (see Gap #4 hardening). Engine v1's SMC funnel already evaluates D1 → H1
+  // → M15 → M1, so an extra higher-TF filter would be redundant; the portfolio
+  // backtest needs SupabaseClient + per-leg legs editor which only live in the
+  // async flow. The toggles stay visible (with a disabled badge + tooltip) so
+  // users can discover the feature, but the wire-up always sends false here.
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
@@ -412,8 +416,8 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           monte_carlo_iterations: Number(mcIters) || 0,
           walk_forward_windows: Number(wfWindows) || 0,
           use_ml: useMl,
-          use_multi_tf: useMultiTf,
-          use_portfolio: usePortfolio,
+          use_multi_tf: false,
+          use_portfolio: false,
         }),
       });
       if (!res.ok) {
@@ -739,10 +743,10 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       <div className="border border-[#1f2937] rounded-lg p-3 space-y-2" data-testid="advanced-toggles">
         <div className="flex items-center gap-2 mb-1">
           <Brain size={11} className="text-[#a78bfa]" />
-          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado (opt-in)</p>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado · solo ML disponible en sync</p>
         </div>
         <p className="text-[10px] text-[#475569]">
-          Corre sobre el TF principal (M15) tras el baseline. Cada bloque es independiente — si uno falla los otros siguen.
+          Multi-TF y Portfolio viven en el flujo async — abrí <span className="font-mono text-[#06b6d4]">Backtest &amp; Validation</span> para configurarlos.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
           <label className="flex items-start gap-2 cursor-pointer" title="Logreg sobre features técnicas (RSI, ATR, EMA spread) con label de retorno forward.">
@@ -758,30 +762,32 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
               <span className="block text-[10px] text-[#475569]">Train/valid acc + feature names</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 cursor-pointer" title="Default H4 + D1 como TFs superiores.">
+          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Engine v1 ya evalúa el funnel D1 → H1 → M15 → M1 nativamente. El filtro de TF superior solo aplica al engine genérico del flujo async.">
             <input
               type="checkbox"
-              checked={useMultiTf}
-              onChange={(e) => setUseMultiTf(e.target.checked)}
+              checked={false}
+              disabled
+              readOnly
               className="mt-0.5 accent-[#a78bfa]"
               data-testid="toggle-use-multi-tf"
             />
             <span className="text-[11px] text-[#cbd5e1]">
               <span className="font-medium">Multi-TF</span>
-              <span className="block text-[10px] text-[#475569]">Intent surfacing — H4 + D1</span>
+              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">ya integrado en SMC funnel</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 cursor-pointer" title="Surface portfolio intent — la corrida multi-símbolo pasa por el async job runner.">
+          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Multi-símbolo necesita editor de legs + SupabaseClient. Disponible en /algorithms/[id] → Backtest & Validation.">
             <input
               type="checkbox"
-              checked={usePortfolio}
-              onChange={(e) => setUsePortfolio(e.target.checked)}
+              checked={false}
+              disabled
+              readOnly
               className="mt-0.5 accent-[#a78bfa]"
               data-testid="toggle-use-portfolio"
             />
             <span className="text-[11px] text-[#cbd5e1]">
               <span className="font-medium">Portfolio</span>
-              <span className="block text-[10px] text-[#475569]">Intent — corrida real vía /backtest/jobs</span>
+              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">solo en flujo async</span>
             </span>
           </label>
         </div>
