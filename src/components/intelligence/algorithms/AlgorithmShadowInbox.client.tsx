@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Filter, CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
+import { InfoBanner } from "./InfoBanner.client";
 
 // Mirror of cme_signals shape returned by /api/algorithms/[id]/signals.
 interface SignalRow {
@@ -97,6 +98,11 @@ export function AlgorithmShadowInbox({ algorithmId }: Props) {
 
   return (
     <div className="space-y-3">
+      <InfoBanner>
+        Historial completo de decisiones del dispatcher. En modo shadow todo se registra pero no se ejecuta —
+        es la previa para validar la calidad de los signals antes de flippear a live.
+      </InfoBanner>
+
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={12} className="text-[#475569]" />

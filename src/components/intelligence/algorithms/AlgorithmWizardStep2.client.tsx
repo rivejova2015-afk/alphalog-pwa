@@ -104,7 +104,9 @@ function BaseEngineCard() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-mono font-bold text-[#34d399] uppercase tracking-wider">Base Engine v1 — Multi-TF</p>
-          <p className="text-[10px] text-[#475569] mt-0.5">Análisis multi-timeframe ponderado, OB + FVG, cascada de probabilidad</p>
+          <p className="text-[10px] text-[#475569] mt-0.5">
+            Combina 6 timeframes ponderados. Detecta Order Blocks y Fair Value Gaps para construir bias direccional. Default inamovible.
+          </p>
         </div>
         <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border border-[#34d399]/40 bg-[#34d399]/10 text-[#34d399]">
           Siempre activo
@@ -128,12 +130,19 @@ function BaseEngineCard() {
 // ─── Module / Overlay row with toggle + collapsible sub-panel ────────────────
 
 function ModuleRow({
-  label, enabled, onToggle, children,
+  label, description, enabled, onToggle, children,
 }: {
-  label: string; enabled: boolean; onToggle: (b: boolean) => void; children?: React.ReactNode;
+  label: string;
+  description?: string;
+  enabled: boolean;
+  onToggle: (b: boolean) => void;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
+      {description && (
+        <p className="text-[11px] text-[#94a3b8] leading-relaxed px-1">{description}</p>
+      )}
       <Toggle enabled={enabled} onChange={onToggle} label={label} />
       {enabled && children && (
         <div className="ml-2 pl-3 border-l border-[#1f2937] space-y-3 pt-1">
@@ -257,7 +266,12 @@ export function AlgorithmWizardStep2(props: Props) {
       <section className="space-y-3">
         <SectionHeader title="Engine Modules" subtitle="Activa los módulos que quieras combinar con el base" />
 
-        <ModuleRow label="Capital Phases" enabled={m.capital_phases.enabled} onToggle={(b) => setModule("capital_phases", { enabled: b })}>
+        <ModuleRow
+          label="Capital Phases"
+          description="Escala el riesgo % progresivamente a medida que la cuenta crece. Útil para pasar fases de propfirm con tamaño chico al inicio y aumentar cuando el balance sube."
+          enabled={m.capital_phases.enabled}
+          onToggle={(b) => setModule("capital_phases", { enabled: b })}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Fases" hint="1–11 (default 11)">
               <NumInput value={m.capital_phases.phases} onChange={(v) => setModule("capital_phases", { phases: parseInt(v || "0", 10) })} step="1" min="1" />
@@ -274,7 +288,12 @@ export function AlgorithmWizardStep2(props: Props) {
           </div>
         </ModuleRow>
 
-        <ModuleRow label="Circuit Breaker" enabled={m.circuit_breaker.enabled} onToggle={(b) => setModule("circuit_breaker", { enabled: b })}>
+        <ModuleRow
+          label="Circuit Breaker"
+          description="Cierra el bot automáticamente si se cumplen los límites de pérdidas (consecutivas, diaria o semanal). Activá en propfirm para no violar las reglas de drawdown."
+          enabled={m.circuit_breaker.enabled}
+          onToggle={(b) => setModule("circuit_breaker", { enabled: b })}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Pérdidas consecutivas" hint="default 5">
               <NumInput value={m.circuit_breaker.consecutive_losses} onChange={(v) => setModule("circuit_breaker", { consecutive_losses: parseInt(v || "0", 10) })} step="1" min="1" />
@@ -288,7 +307,12 @@ export function AlgorithmWizardStep2(props: Props) {
           </div>
         </ModuleRow>
 
-        <ModuleRow label="Cascade Probability" enabled={m.cascade_probability.enabled} onToggle={(b) => setModule("cascade_probability", { enabled: b })}>
+        <ModuleRow
+          label="Cascade Probability"
+          description="Suma el bias de cada TF ponderado y bloquea entradas si la probabilidad no supera el umbral. Reduce trades ruidosos en zonas mixtas."
+          enabled={m.cascade_probability.enabled}
+          onToggle={(b) => setModule("cascade_probability", { enabled: b })}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Bias score mínimo" hint="0–100, default 60">
               <NumInput value={m.cascade_probability.min_bias_score} onChange={(v) => setModule("cascade_probability", { min_bias_score: Number(v || "0") })} step="1" min="0" />
@@ -304,7 +328,12 @@ export function AlgorithmWizardStep2(props: Props) {
       <section className="space-y-3">
         <SectionHeader title="Overlay Engines" subtitle="Capas adicionales — activa solo si las has validado" />
 
-        <ModuleRow label="Decision Engine" enabled={o.decision_engine.enabled} onToggle={(b) => setOverlay("decision_engine", { enabled: b })}>
+        <ModuleRow
+          label="Decision Engine"
+          description="Capa adicional que evalúa el score final antes de emitir signal. Usá si querés filtrar más allá del base engine — eleva la barra de calidad."
+          enabled={o.decision_engine.enabled}
+          onToggle={(b) => setOverlay("decision_engine", { enabled: b })}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Score mínimo de entrada" hint="default 60">
               <NumInput value={o.decision_engine.decision_score_min} onChange={(v) => setOverlay("decision_engine", { decision_score_min: Number(v || "0") })} step="1" min="0" />
@@ -315,7 +344,12 @@ export function AlgorithmWizardStep2(props: Props) {
           </div>
         </ModuleRow>
 
-        <ModuleRow label="Order Flow" enabled={o.order_flow.enabled} onToggle={(b) => setOverlay("order_flow", { enabled: b })}>
+        <ModuleRow
+          label="Order Flow"
+          description="Detecta sweep de liquidez en niveles equal-high/equal-low. Mejora timing de entrada después de barridos institucionales."
+          enabled={o.order_flow.enabled}
+          onToggle={(b) => setOverlay("order_flow", { enabled: b })}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Lookback bars" hint="default 10">
               <NumInput value={o.order_flow.sweep_lookback_bars} onChange={(v) => setOverlay("order_flow", { sweep_lookback_bars: parseInt(v || "0", 10) })} step="1" min="1" />
@@ -326,7 +360,12 @@ export function AlgorithmWizardStep2(props: Props) {
           </div>
         </ModuleRow>
 
-        <ModuleRow label="Range Gate" enabled={o.range_gate.enabled} onToggle={(b) => setOverlay("range_gate", { enabled: b })}>
+        <ModuleRow
+          label="Range Gate"
+          description="Bloquea trades si el rango actual está fuera de la banda configurada (puntos o ATR). Evita whipsaw en consolidaciones muy chatas o en explosiones de volatilidad."
+          enabled={o.range_gate.enabled}
+          onToggle={(b) => setOverlay("range_gate", { enabled: b })}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Modo" hint="RANGE_POINTS o RANGE_ATR">
               <SelectInput value={o.range_gate.range_gate_mode} onChange={(v) => setOverlay("range_gate", { range_gate_mode: v as "RANGE_POINTS" | "RANGE_ATR" })}>
