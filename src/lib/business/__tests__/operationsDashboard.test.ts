@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // server-only is stubbed in vitest.config.ts via alias
 // supabase server import isn't exercised by the pure builder tests; we only
@@ -10,8 +10,14 @@ vi.mock("@/lib/supabase/server", () => ({
 import { buildOperationsDashboard, type OperationsDashboardInput } from "../operationsDashboard";
 import type { BusinessCost } from "../types";
 
-const TODAY = new Date();
-const CURRENT_MONTH_STR = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, "0")}`;
+// Mid-month fixed date so makeCost(daysAgo=1) always lands in the same
+// calendar month as buildOperationsDashboard's currentMonth filter.
+// Without this, day-1-of-month runs see costs dated to the prior month
+// and filterCostsByMonth drops them → netPnlMonth = 0 instead of the
+// expected negative. CURRENT_MONTH_STR is derived after setSystemTime
+// in beforeEach so it always matches the faked clock.
+const FIXED_NOW = new Date(2026, 5, 15); // 2026-06-15
+let CURRENT_MONTH_STR = "";
 
 function makeCost(amount: number, daysAgo = 1): BusinessCost {
   const d = new Date();
@@ -47,6 +53,16 @@ function emptyInput(overrides: Partial<OperationsDashboardInput> = {}): Operatio
 }
 
 describe("buildOperationsDashboard", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    const now = new Date();
+    CURRENT_MONTH_STR = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   describe("decisionsPending", () => {
     it("retorna 0 cuando todas las decisions tienen 0 tasks pendientes", () => {
       const r = buildOperationsDashboard(emptyInput({
