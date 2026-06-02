@@ -69,6 +69,17 @@ let seededAlgoId: string | null = null;
 test.describe("Backtest advanced pipeline — render smoke", () => {
   test.describe.configure({ timeout: 60_000 });
 
+  // Skip the whole describe when Supabase admin credentials are not
+  // available. seedAlgorithm needs them to insert the row that the
+  // /intelligence/algorithms Server Component reads on initial render.
+  // CI environments without Supabase config (and the sandbox where this
+  // spec was authored) should skip cleanly instead of failing loudly.
+  // Same pattern as tests/e2e/dispatcher-smoke.spec.ts uses for CRON_SECRET.
+  const hasSupabaseAdmin =
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+  test.skip(!hasSupabaseAdmin, "NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required for seedAlgorithm");
+
   test.beforeAll(async () => {
     seededAlgoId = await seedAlgorithm(E2E_EMAIL);
   });
