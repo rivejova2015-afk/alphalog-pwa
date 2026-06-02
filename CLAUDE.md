@@ -780,10 +780,9 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - Loading skeletons en AccountComparisonTable, TradeHubOverviewWidget
 
 **Testing**
-- Vitest: 562 unit tests across 47 files (encryption, timingSafeEqual, xpConfig, bot/* signal-engine + arbitrage + regime + skills, cme/* market-hours + tradovate + vault + risk-manager + order-executor, quality-gates, alphashield, treasury, backtest, map-hot)
-- Coinarb subproject: 61 tests across 7 files (config, command-poller, feeds-watchdog, backtest-scoring, config-pause, circuit-breaker, daily-tracker)
-- Total combinado: 623 tests verde
-- Playwright E2E: auth, smoke, navigation, mobile-layout-fit, api-health
+- Vitest: **1292 unit tests across 98 files** — incluye toda la cobertura previa + nueva del Pipeline avanzado (multi-tf-filter, engine.multitf, run-job.portfolio, run-job.multitf, orchestrator advanced, EngineBacktestPanel + BacktestPanel jsdom).
+- Coinarb subproject: 140 tests across 14 files
+- Playwright E2E: 21 specs (auth, smoke, navigation, mobile-layout-fit, api-health, wizard-strategy, intelligence, dispatcher-smoke, polyarb, coinarb-unified-flow, tradehub, bot-control-selector, securities, inbox, **backtest-advanced**)
 
 **Features**
 - DashboardPerformancePanel: métricas reales (winRate, drawdown, topSetup, P&L períodos)
@@ -806,6 +805,16 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - console.log → logError: ~185 archivos restantes (cleanup gradual). Endpoints principales ya migrados (journal, accounts, tradehub/trades).
 
 ### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
+- **Pipeline avanzado de backtest end-to-end** (2026-06): cierre completo del Plan v2 (Gaps #1-#4 + hardening + sprint A/B).
+  - `useMl/useMultiTf/usePortfolio` flags en `BacktestConfig` + `AdvancedPipeline` (orchestrator.ts) con `MultiTfAnalysis` y `PortfolioAnalysis` como discriminated unions sobre `status: 'pending' | 'completed' | 'failed'`.
+  - Helper puro `runAdvancedPipeline(bars, cfg)` extraído del orchestrator y reutilizado por el endpoint sync (`/api/algorithms/[id]/engine-backtest`).
+  - `run-job.ts` (worker async) hidrata `cfg.multiTfBars` (parallel load por TF, skip <50 bars) + llama `runPortfolio(supabase, legs)` clonando cfg por leg con `initialBalance × weight`, y upgrade los bloques a `completed`/`failed` antes del upsert.
+  - Engine multi-TF filter: nuevo `src/lib/backtest/multi-tf-filter.ts` con bias EMA50 + búsqueda binaria por ts + `multiTfBlocks()` que veta entradas contradictorias. `runBacktest` en `engine.ts` adjunta `multiTfStats` (tradesFilteredCount + alignment bull/bear/neutral por TF).
+  - UI: `BacktestPanel.client.tsx` con 3 toggles + editor inline de legs + nuevo tab "Advanced" (condicional a `results.advanced != null`) que renderiza ML acc, Multi-TF (con barra horizontal de bias distribution + trades filtrados), Portfolio (legCount + métricas + tabla correlaciones coloreada por |ρ|). `EngineBacktestPanel.client.tsx` sync mantiene solo el toggle ML — Multi-TF + Portfolio quedan `disabled` con tooltip ("ya integrado en SMC funnel" / "solo en flujo async").
+  - Migrations 114 (`backtest_results.advanced`) + 115 (`engine_backtest_runs.advanced`) aplicadas en Supabase.
+  - Tests: +30 unit (multi-tf-filter, engine.multitf, run-job.portfolio, run-job.multitf, orchestrator.advanced, EngineBacktestPanel.advanced, BacktestPanel.advanced) + 1 E2E (`tests/e2e/backtest-advanced.spec.ts` con mock total via `page.route()` + seed via service-role admin).
+  - Fix flakiness pre-existente en `operationsDashboard.test.ts` con `vi.useFakeTimers()` + `setSystemTime(2026-06-15)` (los costos generados con `daysAgo=1` ya no cruzan el límite del mes en runs del día 1).
+  - Sync endpoint sigue aceptando `use_multi_tf` y `use_portfolio` por compat pero los ignora con `logWarn` — persistidos como `use_multi_tf_requested` / `use_portfolio_requested` en `params` para forensic queries.
 - `src/lib/alphacore/conflict-resolution.ts:434–489` `rollbackToSnapshot()` implementado y testeable.
 - `src/lib/alphacore/offline/outbox.ts:189–228` outbox sync implementado (POST/PATCH/DELETE vía `buildEndpoint`+`buildMethod`).
 - P&L periódico (daily/weekly/monthly) en `getPerformanceMetrics` calcula vía `pnlForPeriod()` + `startOfUtcDay/Week/Month` helpers.
