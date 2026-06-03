@@ -5,6 +5,7 @@ import type {
 import { sma, ema, rsi, atr, bbands } from './indicators';
 import { computeMetrics } from './statistics';
 import { computeSlippage, type SlippageParams } from './slippage';
+import { buildBiasCache, multiTfBlocks, summarizeAlignment } from './multi-tf-filter';
 
 interface IndicatorBundle {
   closes: number[];
@@ -128,6 +129,15 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
   const spreadCost = cfg.spreadPoints * point;
   const slipCost = cfg.slippagePoints * point;
 
+  // Higher-TF trend filter (Plan v2 — Gap #4). Precomputed once because the
+  // bias series is invariant of the primary loop. multiTfActive stays false
+  // when the user didn't opt in OR run-job didn't hydrate the bars.
+  const multiTfActive = cfg.useMultiTf === true
+    && cfg.multiTfBars instanceof Map
+    && cfg.multiTfBars.size > 0;
+  const biasCache = multiTfActive ? buildBiasCache(cfg.multiTfBars!) : null;
+  let tradesFilteredCount = 0;
+
   const slipParams: SlippageParams | null = cfg.slippageMode
     ? { mode: cfg.slippageMode, ...(cfg.slippageParams ?? {}) }
     : null;
@@ -192,8 +202,14 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
     }
 
     if (open.length < maxConc) {
-      const wantLong  = (cfg.direction === 'long'  || cfg.direction === 'both') && allConditions(bundle, rules.entryLong, i);
-      const wantShort = (cfg.direction === 'short' || cfg.direction === 'both') && allConditions(bundle, rules.entryShort, i);
+      const rawWantLong  = (cfg.direction === 'long'  || cfg.direction === 'both') && allConditions(bundle, rules.entryLong, i);
+      const rawWantShort = (cfg.direction === 'short' || cfg.direction === 'both') && allConditions(bundle, rules.entryShort, i);
+      let wantLong  = rawWantLong;
+      let wantShort = rawWantShort;
+      if (multiTfActive && biasCache) {
+        if (rawWantLong  && multiTfBlocks('long',  bar.ts, biasCache)) { wantLong  = false; tradesFilteredCount++; }
+        if (rawWantShort && multiTfBlocks('short', bar.ts, biasCache)) { wantShort = false; tradesFilteredCount++; }
+      }
       if (wantLong) {
         const lots = calcLots(rules, balance, rules.slPoints ?? null, cfg.pointValue);
         const entryPx = bar.close + spreadCost + dynamicSlip(bar, 'long', lots);
@@ -228,11 +244,18 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
   }
 
   const metrics = computeMetrics(trades, equity, cfg.initialBalance);
-  return {
+  const result: BacktestResult = {
     metrics,
     trades,
     equityCurve: equity,
     finalBalance: balance,
     durationMs: Date.now() - start,
   };
+  if (multiTfActive && biasCache) {
+    result.multiTfStats = {
+      tradesFilteredCount,
+      alignment: summarizeAlignment(bars, biasCache),
+    };
+  }
+  return result;
 }

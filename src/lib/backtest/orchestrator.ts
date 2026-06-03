@@ -15,10 +15,37 @@ export interface MlAnalysis {
   featureNames: string[];
 }
 
+// Multi-TF block uses the same lifecycle pattern as portfolio. Pure
+// orchestrator can only surface intent ('pending') because the higher-TF
+// bars come from Supabase. run-job.ts hydrates cfg.multiTfBars and the
+// engine fills in the trades-filtered counter + bias distribution; the
+// worker then upgrades this block to 'completed' (or 'failed' on
+// missing bars).
+export type MultiTfAnalysis =
+  | { used: true; status: 'pending';   higherTimeframes: string[] }
+  | { used: true; status: 'completed'; higherTimeframes: string[]; tradesFilteredCount: number; alignment: { byTf: Record<string, { bull: number; bear: number; neutral: number }>; totalPrimaryBars: number } }
+  | { used: true; status: 'failed';    higherTimeframes: string[]; reason: string };
+
+// Portfolio block has three lifecycle states. The pure orchestrator can only
+// surface intent ('pending') because runPortfolio needs a SupabaseClient.
+// run-job.ts replaces this block with the real result ('completed' or
+// 'failed') after calling runPortfolio with the per-leg cfg clones.
+export type PortfolioAnalysis =
+  | { used: true; status: 'pending';   reason: string }
+  | { used: true; status: 'completed'; legCount: number; metrics: {
+      totalPnl:        number;
+      totalReturnPct:  number;
+      sharpe:          number;
+      maxDrawdown:     number;
+      maxDrawdownPct:  number;
+      legCorrelations: { a: string; b: string; rho: number }[];
+    }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
+  | { used: true; status: 'failed';    reason: string };
+
 export interface AdvancedPipeline {
   ml:        MlAnalysis | null;
-  multiTf:   { used: true; higherTimeframes: string[] } | null;
-  portfolio: { used: true; pendingFetch: true; reason: string } | null;
+  multiTf:   MultiTfAnalysis | null;
+  portfolio: PortfolioAnalysis | null;
 }
 
 export interface FullBacktestOutput {
@@ -112,54 +139,70 @@ export async function runFullBacktest(
   // Advanced opt-in pipeline (Plan v2 — Bloque C). Only runs when caller
   // sets the corresponding flag in cfg. Each block is independent and
   // failure of one does not block the others.
-  let advanced: AdvancedPipeline | null = null;
-  if (cfg.useMl || cfg.useMultiTf || cfg.usePortfolio) {
-    advanced = { ml: null, multiTf: null, portfolio: null };
+  const adv = runAdvancedPipeline(bars, cfg);
+  warnings.push(...adv.warnings);
 
-    if (cfg.useMl && bars.length >= 50) {
-      try {
-        const feats     = extractFeatures(bars);
-        const labels    = buildLabels(bars, cfg.mlParams?.horizon ?? 10, cfg.mlParams?.threshold ?? 0.001);
-        const trainable = Math.min(feats.length, labels.length);
-        const features  = feats.slice(0, trainable);
-        const ys        = labels.slice(0, trainable);
-        // trainModel does its own train/valid split via opts.validationSplit (default 0.2)
-        const model: MlModel = trainModel(features, ys, { validationSplit: 0.3 });
-        advanced.ml = {
-          used:         true,
-          trainAcc:     model.trainAcc,
-          validAcc:     model.validAcc,
-          featureNames: model.featureNames,
-        };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        warnings.push(`ml_signal: ${msg}`);
-        logWarn('Backtest', 'ML signal failed', { component: 'orchestrator', meta: { message: msg } });
-      }
-    }
+  await onProgress?.({ phase: 'done', pct: 100 });
+  return { baseline, monteCarlo, walkForward, stress, regime, robustness, advanced: adv.advanced, warnings };
+}
 
-    if (cfg.useMultiTf) {
-      // Multi-TF requires a SupabaseClient and is wired via run-job's data
-      // layer, not from the pure orchestrator (which only sees `bars`).
-      // Mark the intent so the worker / endpoint can hydrate downstream.
-      advanced.multiTf = {
-        used:             true,
-        higherTimeframes: (cfg.multiTfParams?.higherTimeframes ?? ['H4', 'D1']) as string[],
-      };
-    }
+// Pure helper. Same logic the orchestrator runs internally — exported so the
+// synchronous `/api/algorithms/[id]/engine-backtest` endpoint can opt into the
+// advanced pipeline without re-running baseline / Monte Carlo / walk-forward.
+// `bars` must be the primary-TF series for the strategy being validated.
+export function runAdvancedPipeline(
+  bars: Bar[],
+  cfg: BacktestConfig,
+): { advanced: AdvancedPipeline | null; warnings: string[] } {
+  const warnings: string[] = [];
+  if (!cfg.useMl && !cfg.useMultiTf && !cfg.usePortfolio) {
+    return { advanced: null, warnings };
+  }
 
-    if (cfg.usePortfolio) {
-      // Portfolio backtest is multi-symbol → also needs SupabaseClient.
-      // Surface the intent to the worker so it can call runPortfolio()
-      // with the proper data hooks.
-      advanced.portfolio = {
+  const advanced: AdvancedPipeline = { ml: null, multiTf: null, portfolio: null };
+
+  if (cfg.useMl && bars.length >= 50) {
+    try {
+      const feats     = extractFeatures(bars);
+      const labels    = buildLabels(bars, cfg.mlParams?.horizon ?? 10, cfg.mlParams?.threshold ?? 0.001);
+      const trainable = Math.min(feats.length, labels.length);
+      const features  = feats.slice(0, trainable);
+      const ys        = labels.slice(0, trainable);
+      const model: MlModel = trainModel(features, ys, { validationSplit: 0.3 });
+      advanced.ml = {
         used:         true,
-        pendingFetch: true,
-        reason:       'runPortfolio requires Supabase client — wire in run-job.ts',
+        trainAcc:     model.trainAcc,
+        validAcc:     model.validAcc,
+        featureNames: model.featureNames,
       };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`ml_signal: ${msg}`);
+      logWarn('Backtest', 'ML signal failed', { component: 'orchestrator', meta: { message: msg } });
     }
   }
 
-  await onProgress?.({ phase: 'done', pct: 100 });
-  return { baseline, monteCarlo, walkForward, stress, regime, robustness, advanced, warnings };
+  if (cfg.useMultiTf) {
+    // Pure orchestrator surfaces intent. run-job.ts hydrates multiTfBars and
+    // upgrades this block to 'completed' (or 'failed' on load error) after
+    // the engine fills in tradesFilteredCount + alignment.
+    advanced.multiTf = {
+      used:             true,
+      status:           'pending',
+      higherTimeframes: (cfg.multiTfParams?.higherTimeframes ?? ['H4', 'D1']) as string[],
+    };
+  }
+
+  if (cfg.usePortfolio) {
+    // Pure orchestrator only surfaces intent — run-job.ts replaces this
+    // block with `status: 'completed' | 'failed'` after wiring the
+    // SupabaseClient through runPortfolio.
+    advanced.portfolio = {
+      used:   true,
+      status: 'pending',
+      reason: 'runPortfolio requires Supabase client — wired in run-job.ts',
+    };
+  }
+
+  return { advanced, warnings };
 }

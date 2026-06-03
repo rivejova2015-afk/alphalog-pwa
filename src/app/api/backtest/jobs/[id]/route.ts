@@ -29,7 +29,7 @@ export async function GET(
     if (job.status === "completed") {
       const { data: r } = await supabase
         .from("backtest_results")
-        .select("metrics, equity_curve, trades, monte_carlo, walk_forward, stress_tests, sensitivity")
+        .select("metrics, equity_curve, trades, monte_carlo, walk_forward, stress_tests, sensitivity, regime, robustness, advanced")
         .eq("job_id", id)
         .maybeSingle();
       results = r;

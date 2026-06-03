@@ -70,6 +70,20 @@ interface GateEvaluation {
   eligibleForPaper: boolean;
 }
 
+interface AdvancedPayload {
+  ml:        { used: true; trainAcc: number; validAcc: number; featureNames: string[] } | null;
+  multiTf:
+    | { used: true; status: 'pending';   higherTimeframes: string[] }
+    | { used: true; status: 'completed'; higherTimeframes: string[]; tradesFilteredCount: number; alignment: { byTf: Record<string, { bull: number; bear: number; neutral: number }>; totalPrimaryBars: number } }
+    | { used: true; status: 'failed';    higherTimeframes: string[]; reason: string }
+    | null;
+  portfolio:
+    | { used: true; status: "pending";   reason: string }
+    | { used: true; status: "completed"; legCount: number; metrics: { totalPnl: number; totalReturnPct: number; sharpe: number; maxDrawdown: number; maxDrawdownPct: number; legCorrelations: { a: string; b: string; rho: number }[] }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
+    | { used: true; status: "failed";    reason: string }
+    | null;
+}
+
 interface BacktestResponse {
   algorithm: { id: string; name: string; status: string };
   symbol: string;
@@ -85,6 +99,8 @@ interface BacktestResponse {
   };
   monte_carlo: MonteCarloPayload | null;
   walk_forward: WalkForwardPayload | null;
+  advanced?: AdvancedPayload | null;
+  advanced_warnings?: string[];
   gates?: GateEvaluation | null;
   promoted?: boolean;
   run_id?: string | null;
@@ -116,6 +132,7 @@ interface HistoryRow {
   monte_carlo: MonteCarloPayload | null;
   walk_forward: WalkForwardPayload | null;
   bars_loaded: { tf: string; count: number }[];
+  advanced: AdvancedPayload | null;
   created_at: string;
 }
 
@@ -153,6 +170,13 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
   const [tpAtrMult, setTp]            = useState("3.0");
   const [mcIters, setMcIters]         = useState("0");
   const [wfWindows, setWfWindows]     = useState("0");
+  const [useMl, setUseMl]             = useState(false);
+  // Multi-TF and Portfolio toggles are disabled in the sync flow on purpose
+  // (see Gap #4 hardening). Engine v1's SMC funnel already evaluates D1 → H1
+  // → M15 → M1, so an extra higher-TF filter would be redundant; the portfolio
+  // backtest needs SupabaseClient + per-leg legs editor which only live in the
+  // async flow. The toggles stay visible (with a disabled badge + tooltip) so
+  // users can discover the feature, but the wire-up always sends false here.
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
@@ -202,6 +226,7 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
       },
       monte_carlo: run.monte_carlo,
       walk_forward: run.walk_forward,
+      advanced: run.advanced,
       run_id: run.id,
       created_at: run.created_at,
     });
@@ -390,6 +415,9 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
           tp_atr_mult: Number(tpAtrMult) || 3.0,
           monte_carlo_iterations: Number(mcIters) || 0,
           walk_forward_windows: Number(wfWindows) || 0,
+          use_ml: useMl,
+          use_multi_tf: false,
+          use_portfolio: false,
         }),
       });
       if (!res.ok) {
@@ -712,6 +740,59 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
         </div>
       </div>
 
+      <div className="border border-[#1f2937] rounded-lg p-3 space-y-2" data-testid="advanced-toggles">
+        <div className="flex items-center gap-2 mb-1">
+          <Brain size={11} className="text-[#a78bfa]" />
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado · solo ML disponible en sync</p>
+        </div>
+        <p className="text-[10px] text-[#475569]">
+          Multi-TF y Portfolio viven en el flujo async — abrí <span className="font-mono text-[#06b6d4]">Backtest &amp; Validation</span> para configurarlos.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+          <label className="flex items-start gap-2 cursor-pointer" title="Logreg sobre features técnicas (RSI, ATR, EMA spread) con label de retorno forward.">
+            <input
+              type="checkbox"
+              checked={useMl}
+              onChange={(e) => setUseMl(e.target.checked)}
+              className="mt-0.5 accent-[#a78bfa]"
+              data-testid="toggle-use-ml"
+            />
+            <span className="text-[11px] text-[#cbd5e1]">
+              <span className="font-medium">ML signal</span>
+              <span className="block text-[10px] text-[#475569]">Train/valid acc + feature names</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Engine v1 ya evalúa el funnel D1 → H1 → M15 → M1 nativamente. El filtro de TF superior solo aplica al engine genérico del flujo async.">
+            <input
+              type="checkbox"
+              checked={false}
+              disabled
+              readOnly
+              className="mt-0.5 accent-[#a78bfa]"
+              data-testid="toggle-use-multi-tf"
+            />
+            <span className="text-[11px] text-[#cbd5e1]">
+              <span className="font-medium">Multi-TF</span>
+              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">ya integrado en SMC funnel</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Multi-símbolo necesita editor de legs + SupabaseClient. Disponible en /algorithms/[id] → Backtest & Validation.">
+            <input
+              type="checkbox"
+              checked={false}
+              disabled
+              readOnly
+              className="mt-0.5 accent-[#a78bfa]"
+              data-testid="toggle-use-portfolio"
+            />
+            <span className="text-[11px] text-[#cbd5e1]">
+              <span className="font-medium">Portfolio</span>
+              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">solo en flujo async</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
@@ -943,6 +1024,79 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {data.advanced && (
+            <div className="bg-[#151b28] border border-[#a78bfa]/30 rounded-lg p-3 space-y-2" data-testid="advanced-results">
+              <div className="flex items-center gap-2">
+                <Brain size={11} className="text-[#a78bfa]" />
+                <p className="text-[10px] text-[#a78bfa] uppercase tracking-wider font-medium">Pipeline avanzado</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {data.advanced.ml ? (
+                  <div className="bg-[#0a0e1a] border border-[#1f2937] rounded p-2 space-y-1">
+                    <p className="text-[10px] text-[#475569] uppercase tracking-wider">ML Signal</p>
+                    <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
+                      <span className="text-[#475569]">train acc</span>
+                      <span className="text-right text-[#34d399]">{formatPct(data.advanced.ml.trainAcc)}</span>
+                      <span className="text-[#475569]">valid acc</span>
+                      <span className="text-right text-[#22d3ee]">{formatPct(data.advanced.ml.validAcc)}</span>
+                    </div>
+                    <p className="text-[9px] text-[#475569] truncate" title={data.advanced.ml.featureNames.join(", ")}>
+                      features: {data.advanced.ml.featureNames.length}
+                    </p>
+                  </div>
+                ) : null}
+                {data.advanced.multiTf ? (
+                  <div className="bg-[#0a0e1a] border border-[#1f2937] rounded p-2 space-y-1">
+                    <p className="text-[10px] text-[#475569] uppercase tracking-wider">Multi-TF</p>
+                    <p className="text-[11px] text-[#e2e8f0] font-mono">{data.advanced.multiTf.higherTimeframes.join(" · ")}</p>
+                    <p className="text-[9px] text-[#475569]">intent surfaced</p>
+                  </div>
+                ) : null}
+                {data.advanced.portfolio ? (
+                  <div className="bg-[#0a0e1a] border border-[#1f2937] rounded p-2 space-y-1">
+                    <p className="text-[10px] text-[#475569] uppercase tracking-wider">Portfolio</p>
+                    {data.advanced.portfolio.status === "completed" ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
+                          <span className="text-[#475569]">legs</span>
+                          <span className="text-right text-[#e2e8f0]">{data.advanced.portfolio.legCount}</span>
+                          <span className="text-[#475569]">sharpe</span>
+                          <span className="text-right text-[#22d3ee]">{formatNum(data.advanced.portfolio.metrics.sharpe)}</span>
+                          <span className="text-[#475569]">return</span>
+                          <span className={`text-right ${data.advanced.portfolio.metrics.totalReturnPct >= 0 ? "text-[#34d399]" : "text-[#ef4444]"}`}>
+                            {formatNum(data.advanced.portfolio.metrics.totalReturnPct)}%
+                          </span>
+                          <span className="text-[#475569]">max DD</span>
+                          <span className="text-right text-[#ef4444]">{formatNum(data.advanced.portfolio.metrics.maxDrawdownPct)}%</span>
+                        </div>
+                      </>
+                    ) : data.advanced.portfolio.status === "failed" ? (
+                      <>
+                        <p className="text-[10px] text-[#ef4444] font-mono">failed</p>
+                        <p className="text-[9px] text-[#475569]">{data.advanced.portfolio.reason}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-[#fbbf24] font-mono">pending — usar /backtest/jobs</p>
+                        <p className="text-[9px] text-[#475569]">{data.advanced.portfolio.reason}</p>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              {Array.isArray(data.advanced_warnings) && data.advanced_warnings.length > 0 ? (
+                <div className="flex items-start gap-1.5 pt-1 border-t border-[#1f2937]">
+                  <AlertCircle size={11} className="text-[#fbbf24] mt-0.5" />
+                  <div className="text-[10px] text-[#fbbf24] font-mono space-y-0.5">
+                    {data.advanced_warnings.map((w, i) => (
+                      <div key={i}>{w}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

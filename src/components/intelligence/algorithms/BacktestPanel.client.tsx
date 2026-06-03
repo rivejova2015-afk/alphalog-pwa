@@ -29,6 +29,20 @@ interface JobRow {
 interface ConePoint { step: number; p5: number; p50: number; p95: number }
 interface EquityPoint { ts: string; equity: number; drawdown: number }
 
+interface AdvancedPayload {
+  ml:        { used: true; trainAcc: number; validAcc: number; featureNames: string[] } | null;
+  multiTf:
+    | { used: true; status: 'pending';   higherTimeframes: string[] }
+    | { used: true; status: 'completed'; higherTimeframes: string[]; tradesFilteredCount: number; alignment: { byTf: Record<string, { bull: number; bear: number; neutral: number }>; totalPrimaryBars: number } }
+    | { used: true; status: 'failed';    higherTimeframes: string[]; reason: string }
+    | null;
+  portfolio:
+    | { used: true; status: 'pending';   reason: string }
+    | { used: true; status: 'completed'; legCount: number; metrics: { totalPnl: number; totalReturnPct: number; sharpe: number; maxDrawdown: number; maxDrawdownPct: number; legCorrelations: { a: string; b: string; rho: number }[] }; equityPreviewLast50: { ts: string; equity: number; drawdown: number }[] }
+    | { used: true; status: 'failed';    reason: string }
+    | null;
+}
+
 interface JobResults {
   metrics: Record<string, number>;
   equity_curve: EquityPoint[];
@@ -51,10 +65,13 @@ interface JobResults {
     worstScenario: string;
     scenarios: { name: string; description: string; pnlVsBaseline: number }[];
   } | null;
+  advanced: AdvancedPayload | null;
 }
 
 const TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'] as const;
-type Tab = 'overview' | 'chart' | 'trades' | 'sensitivity';
+type Tab = 'overview' | 'chart' | 'trades' | 'sensitivity' | 'advanced';
+
+interface PortfolioLegDraft { configId: string; symbol: string; weight: number }
 
 const STATUS_COLORS: Record<JobRow['status'], string> = {
   queued: 'text-[#94a3b8]',
@@ -85,6 +102,13 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
   const [mcIterations, setMcIterations] = useState(1000);
   const [wfWindows, setWfWindows] = useState(5);
   const [stress, setStress] = useState(true);
+  const [useMl, setUseMl] = useState(false);
+  const [useMultiTf, setUseMultiTf] = useState(false);
+  const [usePortfolio, setUsePortfolio] = useState(false);
+  const [portfolioLegs, setPortfolioLegs] = useState<PortfolioLegDraft[]>([
+    { configId: 'leg-a', symbol: 'EURUSD', weight: 0.5 },
+    { configId: 'leg-b', symbol: 'XAUUSD', weight: 0.5 },
+  ]);
   const [rules, setRules] = useState<AlgorithmRules>(() => buildDefaultRules(defaultParameters));
 
   const loadJobs = useCallback(async () => {
@@ -117,6 +141,16 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
   }, []);
 
   async function handleRun() {
+    if (usePortfolio) {
+      if (portfolioLegs.length < 2) {
+        toast.error('Portfolio necesita al menos 2 legs');
+        return;
+      }
+      if (portfolioLegs.some((l) => !l.configId.trim() || !l.symbol.trim() || l.weight <= 0)) {
+        toast.error('Cada leg necesita configId, symbol y weight > 0');
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const config = {
@@ -137,6 +171,10 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
         monteCarloIterations: mcIterations,
         walkForwardWindows: wfWindows,
         stressTests: stress,
+        useMl,
+        useMultiTf,
+        usePortfolio,
+        ...(usePortfolio ? { portfolioLegs } : {}),
       };
 
       const r = await fetch('/api/backtest/jobs', {
@@ -218,6 +256,86 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
           </button>
           {showRules && <BacktestRuleBuilder rules={rules} onChange={setRules} />}
 
+          <div className="p-3 rounded bg-[#0f1322] border border-[#1f2937] space-y-2" data-testid="advanced-pipeline-section">
+            <p className="text-[10px] text-[#475569] uppercase tracking-wide font-medium">Pipeline avanzado (opt-in)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="flex items-start gap-2 cursor-pointer" title="Logreg sobre features técnicas (RSI/ATR/EMA spread).">
+                <input type="checkbox" checked={useMl} onChange={(e) => setUseMl(e.target.checked)} className="mt-0.5 accent-[#06b6d4]" data-testid="jobs-toggle-use-ml" />
+                <span className="text-[11px] text-[#cbd5e1]">
+                  <span className="font-medium">ML signal</span>
+                  <span className="block text-[10px] text-[#475569]">train/valid acc</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer" title="Surface higher TF intent — default H4 + D1.">
+                <input type="checkbox" checked={useMultiTf} onChange={(e) => setUseMultiTf(e.target.checked)} className="mt-0.5 accent-[#06b6d4]" data-testid="jobs-toggle-use-multi-tf" />
+                <span className="text-[11px] text-[#cbd5e1]">
+                  <span className="font-medium">Multi-TF</span>
+                  <span className="block text-[10px] text-[#475569]">higher timeframes</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer" title="Multi-símbolo. Cada leg corre la misma estrategia sobre su symbol.">
+                <input type="checkbox" checked={usePortfolio} onChange={(e) => setUsePortfolio(e.target.checked)} className="mt-0.5 accent-[#06b6d4]" data-testid="jobs-toggle-use-portfolio" />
+                <span className="text-[11px] text-[#cbd5e1]">
+                  <span className="font-medium">Portfolio</span>
+                  <span className="block text-[10px] text-[#475569]">multi-símbolo</span>
+                </span>
+              </label>
+            </div>
+
+            {usePortfolio && (
+              <div className="border-t border-[#1f2937] pt-2 space-y-1.5" data-testid="portfolio-legs-editor">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-[#475569] uppercase tracking-wide font-medium">Legs (mínimo 2)</p>
+                  <button
+                    type="button"
+                    onClick={() => setPortfolioLegs((legs) => [...legs, { configId: `leg-${legs.length + 1}`, symbol: 'EURUSD', weight: 0.25 }])}
+                    disabled={portfolioLegs.length >= 10}
+                    className="text-[10px] px-2 py-0.5 rounded bg-[#06b6d4]/10 text-[#06b6d4] hover:bg-[#06b6d4]/20 disabled:opacity-40"
+                    data-testid="portfolio-add-leg"
+                  >
+                    + leg
+                  </button>
+                </div>
+                {portfolioLegs.map((leg, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
+                    <input
+                      value={leg.configId}
+                      onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, configId: e.target.value } : l))}
+                      className={`${inp} col-span-4`}
+                      placeholder="leg id"
+                    />
+                    <input
+                      value={leg.symbol}
+                      onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, symbol: e.target.value.toUpperCase() } : l))}
+                      className={`${inp} col-span-4`}
+                      placeholder="SYMBOL"
+                    />
+                    <input
+                      type="number"
+                      step={0.05}
+                      min={0.05}
+                      max={1}
+                      value={leg.weight}
+                      onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, weight: Number(e.target.value) } : l))}
+                      className={`${inp} col-span-3`}
+                      placeholder="weight"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPortfolioLegs((legs) => legs.filter((_, i) => i !== idx))}
+                      disabled={portfolioLegs.length <= 2}
+                      className="col-span-1 text-[#ef4444] hover:text-[#fca5a5] disabled:opacity-30 text-xs"
+                      aria-label="remove leg"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <p className="text-[9px] text-[#475569]">Los weights se normalizan internamente al total. Capital inicial × weight por leg.</p>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end">
             <button
               onClick={handleRun}
@@ -274,6 +392,11 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
             <TabBtn active={tab === 'chart'}       onClick={() => setTab('chart')}>Equity</TabBtn>
             <TabBtn active={tab === 'trades'}      onClick={() => setTab('trades')}>Trades ({selectedResults.trades.length})</TabBtn>
             <TabBtn active={tab === 'sensitivity'} onClick={() => setTab('sensitivity')}>Sensitivity</TabBtn>
+            {selectedResults.advanced && (
+              <TabBtn active={tab === 'advanced'} onClick={() => setTab('advanced')}>
+                <span data-testid="advanced-tab-label">Advanced</span>
+              </TabBtn>
+            )}
           </div>
 
           {tab === 'overview' && <ResultsOverview results={selectedResults} />}
@@ -311,6 +434,9 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
                 rules,
               }}
             />
+          )}
+          {tab === 'advanced' && selectedResults.advanced && (
+            <ResultsAdvanced advanced={selectedResults.advanced} />
           )}
         </div>
       ))}
@@ -406,6 +532,144 @@ function ResultsOverview({ results }: { results: JobResults }) {
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ResultsAdvanced({ advanced }: { advanced: AdvancedPayload }) {
+  return (
+    <div className="space-y-3 p-3 rounded bg-[#0f1322] border border-[#1f2937]" data-testid="advanced-results-panel">
+      {advanced.ml && (
+        <section className="space-y-2" data-testid="advanced-ml-block">
+          <h4 className="text-[11px] text-[#a78bfa] uppercase tracking-wider font-medium">ML Signal</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Stat label="Train acc" value={fmtPct(advanced.ml.trainAcc)} colorize={advanced.ml.trainAcc - 0.5} />
+            <Stat label="Valid acc" value={fmtPct(advanced.ml.validAcc)} colorize={advanced.ml.validAcc - 0.5} />
+            <Stat label="Features"  value={String(advanced.ml.featureNames.length)} />
+            <Stat label="Gap" value={fmtPct(advanced.ml.trainAcc - advanced.ml.validAcc)} colorize={-(advanced.ml.trainAcc - advanced.ml.validAcc)} />
+          </div>
+          <p className="text-[10px] text-[#475569] font-mono truncate" title={advanced.ml.featureNames.join(', ')}>
+            {advanced.ml.featureNames.slice(0, 6).join(' · ')}{advanced.ml.featureNames.length > 6 ? ` · +${advanced.ml.featureNames.length - 6}` : ''}
+          </p>
+        </section>
+      )}
+
+      {advanced.multiTf && (
+        <section className="space-y-2" data-testid="advanced-multitf-block">
+          <h4 className="text-[11px] text-[#a78bfa] uppercase tracking-wider font-medium">
+            Multi-TF
+            <span className={`ml-2 text-[9px] uppercase tracking-wide ${
+              advanced.multiTf.status === 'completed' ? 'text-[#34d399]'
+              : advanced.multiTf.status === 'failed' ? 'text-[#ef4444]'
+              : 'text-[#fbbf24]'
+            }`}>
+              · {advanced.multiTf.status}
+            </span>
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {advanced.multiTf.higherTimeframes.map((tf) => (
+              <span key={tf} className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#06b6d4]/10 text-[#06b6d4] border border-[#06b6d4]/30">
+                {tf}
+              </span>
+            ))}
+          </div>
+          {advanced.multiTf.status === 'completed' && (
+            <>
+              <p className="text-[10px] text-[#cbd5e1]" data-testid="multitf-filtered-count">
+                <span className="font-mono text-[#34d399]">{advanced.multiTf.tradesFilteredCount}</span>
+                {' '}entradas bloqueadas por contradicción con TFs superiores.
+              </p>
+              <div className="space-y-1">
+                <p className="text-[9px] text-[#475569] uppercase tracking-wider">Distribución de bias</p>
+                {Object.entries(advanced.multiTf.alignment.byTf).map(([tf, dist]) => {
+                  const total = dist.bull + dist.bear + dist.neutral || 1;
+                  const bullPct = (dist.bull / total) * 100;
+                  const bearPct = (dist.bear / total) * 100;
+                  const neutralPct = (dist.neutral / total) * 100;
+                  return (
+                    <div key={tf} className="space-y-0.5">
+                      <div className="flex justify-between text-[9px] font-mono">
+                        <span className="text-[#94a3b8]">{tf}</span>
+                        <span className="text-[#475569]">
+                          <span className="text-[#34d399]">{bullPct.toFixed(0)}%</span> ·{' '}
+                          <span className="text-[#ef4444]">{bearPct.toFixed(0)}%</span> ·{' '}
+                          <span className="text-[#94a3b8]">{neutralPct.toFixed(0)}%</span>
+                        </span>
+                      </div>
+                      <div className="flex h-1.5 rounded overflow-hidden bg-[#0a0e1a]">
+                        <div className="bg-[#34d399]" style={{ width: `${bullPct}%` }} />
+                        <div className="bg-[#ef4444]" style={{ width: `${bearPct}%` }} />
+                        <div className="bg-[#94a3b8]/40" style={{ width: `${neutralPct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-[9px] text-[#475569]">bull · bear · neutral · {advanced.multiTf.alignment.totalPrimaryBars} bars</p>
+              </div>
+            </>
+          )}
+          {advanced.multiTf.status === 'failed' && (
+            <p className="text-[10px] text-[#ef4444] font-mono">{advanced.multiTf.reason}</p>
+          )}
+          {advanced.multiTf.status === 'pending' && (
+            <p className="text-[10px] text-[#475569]">Pending — el filter solo corre desde el flujo async (run-job).</p>
+          )}
+        </section>
+      )}
+
+      {advanced.portfolio && advanced.portfolio.status === 'completed' && (
+        <section className="space-y-2" data-testid="advanced-portfolio-completed">
+          <h4 className="text-[11px] text-[#a78bfa] uppercase tracking-wider font-medium">Portfolio · {advanced.portfolio.legCount} legs</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Stat label="Total P&L" value={fmtUsd(advanced.portfolio.metrics.totalPnl)} colorize={advanced.portfolio.metrics.totalPnl} />
+            <Stat label="Return"    value={`${advanced.portfolio.metrics.totalReturnPct.toFixed(2)}%`} colorize={advanced.portfolio.metrics.totalReturnPct} />
+            <Stat label="Sharpe"    value={advanced.portfolio.metrics.sharpe.toFixed(3)} colorize={advanced.portfolio.metrics.sharpe} />
+            <Stat label="Max DD"    value={`${advanced.portfolio.metrics.maxDrawdownPct.toFixed(2)}%`} colorize={-Math.abs(advanced.portfolio.metrics.maxDrawdownPct)} />
+          </div>
+          {advanced.portfolio.metrics.legCorrelations.length > 0 && (
+            <div className="overflow-x-auto">
+              <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1">Correlaciones</p>
+              <table className="w-full text-[10px] font-mono">
+                <thead className="text-[#475569]">
+                  <tr>
+                    <th className="text-left py-1 px-2">Leg A</th>
+                    <th className="text-left py-1 px-2">Leg B</th>
+                    <th className="text-right py-1 px-2">ρ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {advanced.portfolio.metrics.legCorrelations.map((c, i) => {
+                    const absR = Math.abs(c.rho);
+                    const color = absR > 0.7 ? 'text-[#ef4444]' : absR > 0.4 ? 'text-[#fbbf24]' : 'text-[#34d399]';
+                    return (
+                      <tr key={i} className="border-t border-[#1f2937]">
+                        <td className="py-1 px-2 text-[#e2e8f0]">{c.a}</td>
+                        <td className="py-1 px-2 text-[#e2e8f0]">{c.b}</td>
+                        <td className={`py-1 px-2 text-right ${color}`}>{c.rho.toFixed(3)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[9px] text-[#475569] mt-1">|ρ|&gt;0.7 alta correlación · entre 0.4–0.7 moderada · &lt;0.4 baja.</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {advanced.portfolio && advanced.portfolio.status === 'failed' && (
+        <section className="space-y-1 border border-[#ef4444]/30 bg-[#ef4444]/5 rounded p-2" data-testid="advanced-portfolio-failed">
+          <h4 className="text-[11px] text-[#ef4444] uppercase tracking-wider font-medium">Portfolio · failed</h4>
+          <p className="text-[10px] text-[#ef4444] font-mono">{advanced.portfolio.reason}</p>
+        </section>
+      )}
+
+      {advanced.portfolio && advanced.portfolio.status === 'pending' && (
+        <section className="space-y-1 border border-[#fbbf24]/30 bg-[#fbbf24]/5 rounded p-2" data-testid="advanced-portfolio-pending">
+          <h4 className="text-[11px] text-[#fbbf24] uppercase tracking-wider font-medium">Portfolio · pending</h4>
+          <p className="text-[10px] text-[#fbbf24] font-mono">{advanced.portfolio.reason}</p>
+        </section>
       )}
     </div>
   );

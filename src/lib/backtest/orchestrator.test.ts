@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runFullBacktest } from './orchestrator';
+import { runFullBacktest, runAdvancedPipeline } from './orchestrator';
 import type { Bar, BacktestConfig } from '@/types/backtest';
 
 // Generate enough bars to satisfy regime (60), ml-signal (50), robustness (10 trades).
@@ -56,24 +56,29 @@ describe('orchestrator advanced opt-in pipeline', () => {
     expect(out.advanced?.ml?.featureNames.length).toBeGreaterThan(0);
   });
 
-  it('useMultiTf=true surfaces the higherTimeframes plan', async () => {
+  it('useMultiTf=true surfaces the higherTimeframes plan in pending status', async () => {
     const bars = makeBars(120);
     const out = await runFullBacktest(bars, baseCfg({
       useMultiTf:    true,
       multiTfParams: { higherTimeframes: ['H1', 'H4'] },
     }));
-    expect(out.advanced?.multiTf).toEqual({
-      used:             true,
-      higherTimeframes: ['H1', 'H4'],
-    });
+    const mt = out.advanced?.multiTf;
+    expect(mt?.used).toBe(true);
+    expect(mt?.status).toBe('pending');
+    if (mt?.status === 'pending') {
+      expect(mt.higherTimeframes).toEqual(['H1', 'H4']);
+    }
   });
 
-  it('usePortfolio=true marks pendingFetch with reason', async () => {
+  it('usePortfolio=true surfaces pending status with reason (real run happens in run-job)', async () => {
     const bars = makeBars(120);
     const out = await runFullBacktest(bars, baseCfg({ usePortfolio: true }));
-    expect(out.advanced?.portfolio?.used).toBe(true);
-    expect(out.advanced?.portfolio?.pendingFetch).toBe(true);
-    expect(out.advanced?.portfolio?.reason).toMatch(/Supabase/);
+    const p = out.advanced?.portfolio;
+    expect(p?.used).toBe(true);
+    expect(p?.status).toBe('pending');
+    if (p?.status === 'pending') {
+      expect(p.reason).toMatch(/Supabase/);
+    }
   });
 
   it('flags off → baseline metrics identical to flags on (no contamination)', async () => {
@@ -83,5 +88,59 @@ describe('orchestrator advanced opt-in pipeline', () => {
     // Baseline metrics must match exactly — advanced pipeline does not mutate baseline.
     expect(on.baseline.metrics).toEqual(off.baseline.metrics);
     expect(on.baseline.finalBalance).toBe(off.baseline.finalBalance);
+  });
+});
+
+// Direct helper tests — the sync endpoint /api/algorithms/[id]/engine-backtest
+// calls runAdvancedPipeline() without going through runFullBacktest, so we
+// verify the helper in isolation.
+describe('runAdvancedPipeline (sync endpoint path)', () => {
+  it('all flags off → advanced=null, no warnings', () => {
+    const bars = makeBars(100);
+    const out  = runAdvancedPipeline(bars, baseCfg());
+    expect(out.advanced).toBeNull();
+    expect(out.warnings).toEqual([]);
+  });
+
+  it('useMl with <50 bars → ml stays null, no throw', () => {
+    const bars = makeBars(20);
+    const out  = runAdvancedPipeline(bars, baseCfg({ useMl: true }));
+    expect(out.advanced).not.toBeNull();
+    expect(out.advanced?.ml).toBeNull();
+  });
+
+  it('useMl with enough bars → ml block populated', () => {
+    const bars = makeBars(120);
+    const out  = runAdvancedPipeline(bars, baseCfg({ useMl: true }));
+    expect(out.advanced?.ml?.used).toBe(true);
+    expect(typeof out.advanced?.ml?.trainAcc).toBe('number');
+    expect(typeof out.advanced?.ml?.validAcc).toBe('number');
+  });
+
+  it('useMultiTf default → ["H4", "D1"]', () => {
+    const bars = makeBars(60);
+    const out  = runAdvancedPipeline(bars, baseCfg({ useMultiTf: true }));
+    expect(out.advanced?.multiTf?.higherTimeframes).toEqual(['H4', 'D1']);
+  });
+
+  it('useMultiTf custom → respects multiTfParams', () => {
+    const bars = makeBars(60);
+    const out  = runAdvancedPipeline(bars, baseCfg({
+      useMultiTf:    true,
+      multiTfParams: { higherTimeframes: ['H1'] },
+    }));
+    expect(out.advanced?.multiTf?.higherTimeframes).toEqual(['H1']);
+  });
+
+  it('all three flags together → all three sub-blocks present', () => {
+    const bars = makeBars(120);
+    const out  = runAdvancedPipeline(bars, baseCfg({
+      useMl:        true,
+      useMultiTf:   true,
+      usePortfolio: true,
+    }));
+    expect(out.advanced?.ml).not.toBeNull();
+    expect(out.advanced?.multiTf).not.toBeNull();
+    expect(out.advanced?.portfolio).not.toBeNull();
   });
 });

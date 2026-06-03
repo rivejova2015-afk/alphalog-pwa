@@ -34,6 +34,16 @@ jobs:
         run: npm run lint
 
       - name: Build
+        env:
+          # Dummy values: el build de Next.js intenta hacer SSG de páginas
+          # auth-gated (p. ej. /dashboard/bot-control) que invocan
+          # createBrowserClient() en useMemo durante el prerender del shell.
+          # Sin estas vars, @supabase/ssr lanza durante `next build`.
+          # Las claves reales no se usan — sólo se requiere que el cliente
+          # se construya; los selects nunca se ejecutan en prerender porque
+          # están en useEffect.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
         run: npm run build
 
   e2e:

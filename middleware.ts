@@ -2,7 +2,19 @@ import { type NextRequest, NextResponse } from "next/server";
 import { proxy } from "./src/proxy";
 import { applySecurityHeaders } from "./src/lib/security/headers";
 import { triggerSecurityAlert } from "./src/lib/security/securityAlert";
-import nodeCrypto from "node:crypto";
+
+// Constant-time string equality. Edge-runtime compatible — we avoid
+// `node:crypto.timingSafeEqual` because the middleware runs on Edge by
+// default in Next.js 16 and the Node module is not available there.
+// Inline XOR over char codes preserves the timing-safe property.
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
 
 // Module-level constant to avoid re-allocation on every request
 const HONEYPOT_PATHS = [
@@ -73,10 +85,8 @@ export async function middleware(request: NextRequest) {
 
   // Always enforce CSRF on API mutations (unless machine-to-machine with auth header)
   if (isApi && isMutating && !isPublicApi && !hasAuthHeader) {
-    const csrfHeader = request.headers.get("x-csrf-token");
-    const csrfA = Buffer.from(csrfHeader || "");
-    const csrfB = Buffer.from(csrfToken);
-    const csrfValid = csrfA.length === csrfB.length && nodeCrypto.timingSafeEqual(csrfA, csrfB);
+    const csrfHeader = request.headers.get("x-csrf-token") ?? "";
+    const csrfValid = timingSafeEqualStr(csrfHeader, csrfToken);
     if (!csrfValid) {
       const ipHint = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
       // Trigger security alert (fire-and-forget)
