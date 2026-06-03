@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 import { logError } from "@/lib/log";
+
+// Validates link payloads to protect against malformed UUIDs, negative
+// multipliers, and unknown link types reaching the DB.
+const linkSchema = z.object({
+  parent_account_id: z.string().uuid(),
+  child_account_id: z.string().uuid(),
+  copy_multiplier: z.number().positive().max(100).optional(),
+  link_type: z.enum(["solid", "shadow"]).optional(),
+});
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,21 +23,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const { parent_account_id, child_account_id, copy_multiplier, link_type } = body || {};
 
-    if (!parent_account_id || !child_account_id) {
-      return NextResponse.json({ error: "parent_account_id and child_account_id are required" }, { status: 400 });
+    let body: unknown;
+    try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+    const parsed = linkSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
+    }
+
+    if (parsed.data.parent_account_id === parsed.data.child_account_id) {
+      return NextResponse.json({ error: "parent and child must differ" }, { status: 400 });
     }
 
     const { data: link, error } = await supabase
       .from("copy_group_links")
       .insert({
         copy_group_id: id,
-        parent_account_id,
-        child_account_id,
-        copy_multiplier: copy_multiplier ?? 1,
-        link_type: link_type || "solid",
+        parent_account_id: parsed.data.parent_account_id,
+        child_account_id: parsed.data.child_account_id,
+        copy_multiplier: parsed.data.copy_multiplier ?? 1,
+        link_type: parsed.data.link_type ?? "solid",
       })
       .select()
       .single();

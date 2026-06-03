@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createSnapshotVersion, recordCopyGroupEvent, reportCopyGroupError } from "@/lib/copygroups/server";
 import { logError } from "@/lib/log";
+
+const patchSchema = z.object({
+  flags: z.record(z.string(), z.unknown()).default({}),
+});
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,8 +18,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const { id } = await params;
-    const body = await request.json();
-    const flags = body?.flags && typeof body.flags === "object" ? body.flags : {};
+    let flags: Record<string, unknown>;
+    try {
+      const raw = await request.json();
+      ({ flags } = patchSchema.parse(raw));
+    } catch (err) {
+      const message = err instanceof z.ZodError ? err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') : 'Invalid request body';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
 
     const { error } = await supabase
       .from("copy_group_experiments")

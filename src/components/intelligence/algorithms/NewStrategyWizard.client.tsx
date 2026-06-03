@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/browser';
 import type { AlgorithmTemplate } from '@/types/algorithms';
 import { AlgorithmWizardStep2 } from './AlgorithmWizardStep2.client';
 import { InstrumentMultiSelect } from './InstrumentMultiSelect.client';
+import { InfoBanner } from './InfoBanner.client';
 import type { EngineConfig } from '@/lib/validations/engine-config';
 import { ENGINE_CONFIG_DEFAULT } from '@/lib/validations/engine-config';
 
@@ -168,6 +169,11 @@ function StepForex({ name, setName,
 
   return (
     <div className="space-y-4">
+      <InfoBanner>
+        Estrategia de Forex sobre MT4/MT5. El bot pollea cada bar M1 y devuelve BUY/SELL/HOLD;
+        el EA en tu terminal ejecuta la orden localmente. No es server-side dispatch.
+      </InfoBanner>
+
       {forexTemplates.length > 0 && (
         <Field label="Plantilla de EA" hint="Elegí un EA preconfigurado o construí desde cero.">
           <Select value={selectedTemplateKey} onChange={onTemplateChange}>
@@ -224,7 +230,7 @@ function StepForex({ name, setName,
         </div>
       </Field>
 
-      <Field label="Nombre de la estrategia *">
+      <Field label="Nombre de la estrategia *" hint="Cómo querés identificar esta estrategia en tu dashboard. No afecta el comportamiento.">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="Gold Arb v1" autoFocus
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
@@ -234,7 +240,7 @@ function StepForex({ name, setName,
         <InstrumentMultiSelect value={instruments} onChange={setInstruments} error={instrumentsError} />
       </Field>
 
-      <Field label="Dirección">
+      <Field label="Dirección" hint="Long = solo señales BUY. Short = solo SELL. Both = el engine decide por bar.">
         <DirectionChips value={direction} onChange={(v) => setDirection(v as Direction)}
           options={[
             { value: 'long',  label: 'Long bias'  },
@@ -336,7 +342,12 @@ function StepFutures({
 
   return (
     <div className="space-y-4">
-      <Field label="Nombre de la estrategia *">
+      <InfoBanner>
+        Estrategia de futuros sobre Tradovate. El cron del servidor (cada minuto) evalúa el engine y
+        coloca órdenes vía la API de Tradovate. Empieza en modo shadow hasta que confirmes los signals.
+      </InfoBanner>
+
+      <Field label="Nombre de la estrategia *" hint="Cómo querés identificar esta estrategia en tu dashboard. No afecta el comportamiento.">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="ES Mean Reversion v1"
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
@@ -352,7 +363,7 @@ function StepFutures({
         )}
       </Field>
 
-      <Field label="Dirección">
+      <Field label="Dirección" hint="Long = solo señales BUY. Short = solo SELL. Both = el engine decide por bar.">
         <DirectionChips value={direction} onChange={(v) => setDirection(v as Direction)}
           options={[
             { value: 'long',  label: 'Long bias'  },
@@ -538,7 +549,12 @@ function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _s
 
   return (
     <div className="space-y-4">
-      <Field label="Nombre de la estrategia *">
+      <InfoBanner tone="amber">
+        Estrategias de opciones vía IBKR. La ejecución real está en desarrollo — por ahora el engine
+        evalúa y los signals quedan en shadow (auditables en el Shadow Inbox del modal).
+      </InfoBanner>
+
+      <Field label="Nombre de la estrategia *" hint="Cómo querés identificar esta estrategia en tu dashboard. No afecta el comportamiento.">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="SPX Iron Condor v1"
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
@@ -547,7 +563,7 @@ function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _s
       <Field label="Subyacentes *" hint="Hasta 10 simbolos. El primero se usa como referencia.">
         <InstrumentMultiSelect value={instruments} onChange={setInstruments} error={instrumentsError} />
       </Field>
-      <Field label="Estrategia">
+      <Field label="Estrategia" hint="Define la estructura del spread (iron condor, vertical, straddle…). Cada estrategia tiene perfil de riesgo distinto.">
         <Select value={strategy} onChange={setStrategy}>
           {OPTIONS_STRATEGIES.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
@@ -559,7 +575,7 @@ function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _s
         <p className="text-[10px] text-[#475569] -mt-1">{selectedStrat.desc}</p>
       )}
 
-      <Field label="Dirección / Bias">
+      <Field label="Dirección / Bias" hint="Bullish = solo entradas BUY del subyacente. Bearish = solo SELL. Neutral = espera mean-reversion. Both = el engine decide.">
         <DirectionChips value={direction} onChange={(v) => setDirection(v as OptionsDirection)}
           options={[
             { value: 'bullish', label: 'Bullish'  },

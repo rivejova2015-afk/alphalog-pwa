@@ -66,6 +66,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         funded_amount: number | null;
         max_daily_loss: number | null;
         max_trailing_dd: number | null;
+        is_paper: boolean | null;
       } | null;
       options: { available: boolean } | null;
     } = {
@@ -148,12 +149,13 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         funded_amount: null,
         max_daily_loss: null,
         max_trailing_dd: null,
+        is_paper: null,
       };
 
       if (cmeAccountNum) {
         const { data: cmeAcc } = await supabase
           .from("algo_cme_accounts")
-          .select("id, account_type, provider_name, account_number, funded_amount, max_daily_loss, max_trailing_dd, cme_connections(status, broker_type, token_expires_at, last_connected_at)")
+          .select("id, account_type, provider_name, account_number, funded_amount, max_daily_loss, max_trailing_dd, is_paper, cme_connections(status, broker_type, token_expires_at, last_connected_at)")
           .eq("user_id", user.id)
           .eq("account_number", cmeAccountNum)
           .is("deleted_at", null)
@@ -175,6 +177,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
             funded_amount: cmeAcc.funded_amount,
             max_daily_loss: cmeAcc.max_daily_loss,
             max_trailing_dd: cmeAcc.max_trailing_dd,
+            is_paper: typeof cmeAcc.is_paper === "boolean" ? cmeAcc.is_paper : null,
           };
         }
       }

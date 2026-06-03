@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
 import { AlgorithmShadowInbox } from "./AlgorithmShadowInbox.client";
+import TradovateConnectModal from "./TradovateConnectModal.client";
+import { InfoBanner } from "./InfoBanner.client";
 
 type ConnectionStatus = "live" | "stale" | "synced" | "pending";
 
@@ -57,6 +59,7 @@ interface ConnectionsResponse {
     funded_amount: number | null;
     max_daily_loss: number | null;
     max_trailing_dd: number | null;
+    is_paper: boolean | null;
   } | null;
   options: { available: boolean } | null;
 }
@@ -167,7 +170,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                   />
                 )}
                 {data.algorithm.market_type === "futures" && data.cme && (
-                  <CmeSection data={data.cme} />
+                  <CmeSection data={data.cme} onRefresh={fetchAll} />
                 )}
                 {data.algorithm.market_type === "options" && (
                   <OptionsSection />
@@ -182,8 +185,12 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                   <DispatcherSection algorithm={algorithm} />
                 )}
 
-                <div className="mt-6 pt-5 border-t border-[#1f2937]">
-                  <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-3">Quality Gates Tier-1</h3>
+                <div className="mt-6 pt-5 border-t border-[#1f2937] space-y-3">
+                  <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium">Quality Gates Tier-1</h3>
+                  <InfoBanner>
+                    Tests cuantitativos que el algoritmo debe pasar para promover de paper → approved → live automáticamente.
+                    Si una gate falla, el cron de promoción la deja en paper y loggea la causa.
+                  </InfoBanner>
                   <QualityGatesPanel algorithmId={algorithmId} />
                 </div>
               </>
@@ -280,6 +287,11 @@ function Mt5Section({
         Plataforma · {data.platform ?? defaultPlatform}
       </div>
 
+      <InfoBanner>
+        El token de pairing autoriza a tu EA a recibir signals. Cada N segundos el EA pollea el endpoint
+        de signal y obtiene BUY/SELL/HOLD para ejecutar localmente en MT5. El servidor nunca coloca órdenes en forex.
+      </InfoBanner>
+
       {hasInstance ? (
         <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4">
           <div className="flex items-center justify-between mb-3">
@@ -334,8 +346,11 @@ function Mt5Section({
 }
 
 // ─── CME / Futures section ──────────────────────────────────────────────────
-function CmeSection({ data }: { data: NonNullable<ConnectionsResponse["cme"]> }) {
+function CmeSection({ data, onRefresh }: { data: NonNullable<ConnectionsResponse["cme"]>; onRefresh: () => void }) {
   const linked = Boolean(data.cme_account_id);
+  const connected = data.connection_status === "connected";
+  const [showConnectModal, setShowConnectModal] = useState(false);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-slate-500 font-medium">
@@ -343,17 +358,40 @@ function CmeSection({ data }: { data: NonNullable<ConnectionsResponse["cme"]> })
         Plataforma · Futuros (CME)
       </div>
 
+      {connected ? (
+        <InfoBanner tone="emerald">
+          Conexión Tradovate activa. El token vence en {data.token_expires_at ? formatRelative(data.token_expires_at) : "—"} y se renueva
+          automáticamente antes de cada ejecución. Si ves error de auth, re-conectá manualmente con el botón de abajo.
+        </InfoBanner>
+      ) : (
+        <InfoBanner>
+          Conectá tus credenciales de Tradovate para que el cron del servidor coloque órdenes en tu cuenta cuando el engine emita signal.
+          Los datos se cifran en el vault — la password nunca se persiste en texto plano.
+        </InfoBanner>
+      )}
+
       {linked ? (
         <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-100">{data.provider_name ?? "Proveedor"}</span>
-            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
-              data.account_type === "propfirm"
-                ? "bg-amber-950 text-amber-400 border-amber-800"
-                : "bg-emerald-950 text-emerald-400 border-emerald-800"
-            }`}>
-              {data.account_type === "propfirm" ? "Propfirm" : "Broker Real"}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {data.is_paper !== null && (
+                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                  data.is_paper
+                    ? "bg-amber-950 text-amber-400 border-amber-800"
+                    : "bg-red-950 text-red-400 border-red-800"
+                }`}>
+                  {data.is_paper ? "Paper" : "Live"}
+                </span>
+              )}
+              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                data.account_type === "propfirm"
+                  ? "bg-amber-950 text-amber-400 border-amber-800"
+                  : "bg-emerald-950 text-emerald-400 border-emerald-800"
+              }`}>
+                {data.account_type === "propfirm" ? "Propfirm" : "Broker Real"}
+              </span>
+            </div>
           </div>
           <dl className="grid grid-cols-2 gap-y-2 text-xs">
             <Row label="Número de cuenta"     value={data.account_number ?? "—"} mono />
@@ -370,18 +408,44 @@ function CmeSection({ data }: { data: NonNullable<ConnectionsResponse["cme"]> })
         <div className="rounded-lg bg-[#151b28] border border-dashed border-[#1f2937] p-4 text-center">
           <p className="text-sm text-slate-400 mb-1">Sin cuenta CME vinculada</p>
           <p className="text-xs text-slate-600 mb-3">
-            Esta estrategia requiere una cuenta CME (propfirm o broker real) para conectarse.
+            Esta estrategia requiere una cuenta CME (propfirm o broker real). Creala en el wizard de nueva estrategia.
           </p>
         </div>
       )}
 
-      <a
-        href="/intelligence/algorithms"
-        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition"
-      >
-        <ExternalLink className="w-4 h-4" />
-        {linked ? "Gestionar conexión Tradovate" : "Conectar cuenta CME"}
-      </a>
+      {linked && (
+        <button
+          type="button"
+          onClick={() => setShowConnectModal(true)}
+          disabled={!data.cme_account_id}
+          className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition disabled:opacity-40 ${
+            connected ? "bg-emerald-700 hover:bg-emerald-600" : "bg-amber-600 hover:bg-amber-500"
+          }`}
+        >
+          {connected ? <Check className="w-4 h-4" /> : <Cloud className="w-4 h-4" />}
+          {connected ? "Re-conectar Tradovate (renovar token)" : "Conectar Tradovate"}
+        </button>
+      )}
+      {!linked && (
+        <a
+          href="/intelligence/algorithms"
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition"
+        >
+          <ExternalLink className="w-4 h-4" />
+          Crear cuenta CME en el wizard
+        </a>
+      )}
+
+      {showConnectModal && data.cme_account_id && (
+        <TradovateConnectModal
+          cmeAccountId={data.cme_account_id}
+          providerName={data.provider_name}
+          accountNumber={data.account_number}
+          isPaper={data.is_paper ?? true}
+          onClose={() => setShowConnectModal(false)}
+          onSuccess={onRefresh}
+        />
+      )}
     </div>
   );
 }
@@ -394,6 +458,11 @@ function OptionsSection() {
         <Cloud className="w-3 h-3" />
         Plataforma · Opciones
       </div>
+
+      <InfoBanner tone="amber">
+        La ejecución real para opciones está en desarrollo. Por ahora el engine evalúa los signals y los
+        deja en estado <span className="font-mono">shadow_logged</span> — los podés auditar abajo en el Shadow Inbox.
+      </InfoBanner>
 
       <div className="rounded-lg bg-[#151b28] border border-violet-900/40 p-6 text-center">
         <Lock className="w-8 h-8 text-violet-400 mx-auto mb-3" />
@@ -879,6 +948,13 @@ function DispatcherSection({ algorithm }: { algorithm: AlgorithmRow }) {
         Dispatcher Telemetry
       </h3>
 
+      <div className="mb-3">
+        <InfoBanner>
+          El cron del servidor evalúa esta estrategia cada minuto y actualiza estos campos. Si la última ejecución queda
+          vieja (más de 5 min) revisar logs de <span className="font-mono">/api/cron/algorithms/tradovate-poll</span> en Fly.
+        </InfoBanner>
+      </div>
+
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-xs">
         <Row label="Última ejecución" value={lastAt ? `${formatRelative(lastAt)} · ${new Date(lastAt).toLocaleString()}` : "(nunca)"} mono />
         <Row label="Bar más reciente" value={lastBarTs ? new Date(lastBarTs).toLocaleString() : "—"} mono />
@@ -886,6 +962,13 @@ function DispatcherSection({ algorithm }: { algorithm: AlgorithmRow }) {
         <dd className={`text-right font-mono ${actionColor}`}>{action ?? "—"}</dd>
         <Row label="Motivo" value={reason ?? "—"} mono />
       </dl>
+
+      <p className="mt-2 text-[10px] text-[#475569] leading-relaxed">
+        <span className="text-emerald-400 font-mono">placed</span> = orden colocada en live ·
+        <span className="text-amber-400 font-mono ml-1">shadow_logged</span> = decisión registrada sin ejecutar (shadow mode) ·
+        <span className="text-slate-400 font-mono ml-1">skipped</span> = sin signal o gate bloqueó ·
+        <span className="text-red-400 font-mono ml-1">failed</span> = error técnico.
+      </p>
 
       {shouldWarn && (
         <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-red-950/40 border border-red-900/60 text-red-300 text-xs">

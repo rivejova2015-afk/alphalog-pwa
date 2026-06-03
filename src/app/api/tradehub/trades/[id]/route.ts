@@ -10,7 +10,7 @@ import { autoFixTradeUpdate } from "@/lib/validation/autoFix";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { asString } from "@/lib/validation/nullGuards";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 import { resolveRouteId } from "@/lib/api/routeParams";
 
 /**
@@ -52,7 +52,7 @@ export async function PATCH(
           changes: { auto_fix: fixed.changes },
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log auto-fix:", e));
+      ).catch(e => logWarn("TradeHub", "Audit log auto-fix failed", { error: String(e) }));
     }
 
     const validation = validatePayloadSafe(tradeUpdateSchema, fixed.data);
@@ -68,7 +68,7 @@ export async function PATCH(
           errorMessage: `Validation failed: ${Object.values(validation.errors).join("; ")}`,
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log validation error:", e));
+      ).catch(e => logWarn("TradeHub", "Audit log validation error failed", { error: String(e) }));
 
       return NextResponse.json(
         validationErrorResponse(validation.errors),
@@ -180,7 +180,7 @@ export async function PATCH(
           userId,
         });
       } catch (mirrorError) {
-        console.warn("[TradeHub] Mirroring update failed:", mirrorError);
+        logWarn("TradeHub", "Mirroring update failed", { error: String(mirrorError) });
       }
     }
 
@@ -208,7 +208,7 @@ export async function PATCH(
             }, {} as Record<string, unknown>),
           },
           request
-        ).catch(e => console.warn("[Audit] Failed to log trade update:", e));
+        ).catch(e => logWarn("TradeHub", "Audit log trade update failed", { error: String(e) }));
       }
     } else {
       logAuditFromRequest(
@@ -220,7 +220,7 @@ export async function PATCH(
           changes: { restored: true },
         },
         request
-      ).catch(e => console.warn("[Audit] Failed to log trade restore:", e));
+      ).catch(e => logWarn("TradeHub", "Audit log trade restore failed", { error: String(e) }));
     }
 
     const responsePayload = {
@@ -325,7 +325,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove(evidencePaths);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete evidence files:", storageErr);
+        logWarn("TradeHub", "Failed to delete evidence files", { error: String(storageErr) });
       }
     }
 
@@ -360,7 +360,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove(reportPaths);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete report evidence files:", storageErr);
+        logWarn("TradeHub", "Failed to delete report evidence files", { error: String(storageErr) });
       }
     }
 
@@ -377,7 +377,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove([existingTrade.screenshot_path]);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete trade screenshot:", storageErr);
+        logWarn("TradeHub", "Failed to delete trade screenshot", { error: String(storageErr) });
       }
     }
 
@@ -403,7 +403,7 @@ export async function DELETE(
         resourceId: id,
       },
       request
-    ).catch(e => console.warn("[Audit] Failed to log trade delete:", e));
+    ).catch(e => logWarn("TradeHub", "Audit log trade delete failed", { error: String(e) }));
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

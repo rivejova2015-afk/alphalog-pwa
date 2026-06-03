@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createInitialVersion, reportCopyGroupError } from "@/lib/copygroups/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logError } from "@/lib/log";
+
+const createGroupSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,11 +52,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const name = typeof body?.name === "string" ? body.name.trim() : "";
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    let name: string;
+    try {
+      const raw = await request.json();
+      ({ name } = createGroupSchema.parse(raw));
+    } catch (err) {
+      const message = err instanceof z.ZodError ? err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') : 'Invalid request body';
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     const { data: group, error } = await supabase

@@ -6,15 +6,16 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { z } from 'zod';
 import { checkAiRateLimit } from '@/lib/security/aiRateLimit';
 import { computeIntegrityHash } from '@/lib/security/integrity';
 import { encryptNumeric, encryptForDomain } from '@/lib/security/encryption';
 import { logError } from "@/lib/log";
 
-interface CreatePayoutRequest {
-  accountId: string; // UUID
-  note?: string; // Optional note for the payout
-}
+const createSchema = z.object({
+  accountId: z.string().uuid(),
+  note: z.string().max(500).optional(),
+});
 
 interface CreatePayoutResponse {
   success: boolean;
@@ -62,16 +63,15 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    const body = (await request.json()) as CreatePayoutRequest;
-    const { accountId, note } = body;
-
-    // Validate input
-    if (!accountId) {
-      return Response.json(
-        { success: false, error: 'accountId is required' },
-        { status: 400 }
-      );
+    let parsed: z.infer<typeof createSchema>;
+    try {
+      const raw = await request.json();
+      parsed = createSchema.parse(raw);
+    } catch (err) {
+      const message = err instanceof z.ZodError ? err.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') : 'Invalid request body';
+      return Response.json({ success: false, error: message }, { status: 400 });
     }
+    const { accountId, note } = parsed;
 
     // Fetch account, config, and trades
     const todayUTC = new Date();
