@@ -14,6 +14,7 @@
 BEGIN;
 
 DROP POLICY IF EXISTS "ops_alert_history_read_authenticated" ON public.ops_alert_history;
+DROP POLICY IF EXISTS "ops_alert_history_service" ON public.ops_alert_history;
 
 CREATE POLICY "ops_alert_history_service"
   ON public.ops_alert_history
