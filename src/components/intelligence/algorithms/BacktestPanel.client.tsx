@@ -13,6 +13,11 @@ interface BacktestPanelProps {
   algorithmId: string;
   defaultSymbol?: string;
   defaultParameters?: Record<string, unknown>;
+  // Research-mode hints: when the algorithm has no cuenta vinculada
+  // (linkedBotAccountId === null), the Initial Balance input prefills with
+  // defaultBacktestBalance instead of the hardcoded $10K. Both safe to omit.
+  linkedBotAccountId?: string | null;
+  defaultBacktestBalance?: number | null;
 }
 
 interface JobRow {
@@ -81,7 +86,20 @@ const STATUS_COLORS: Record<JobRow['status'], string> = {
   cancelled: 'text-[#94a3b8]',
 };
 
-export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultParameters }: BacktestPanelProps) {
+export function BacktestPanel({
+  algorithmId,
+  defaultSymbol = 'XAUUSD',
+  defaultParameters,
+  linkedBotAccountId = null,
+  defaultBacktestBalance = null,
+}: BacktestPanelProps) {
+  // Prefill Initial Balance with the persisted default when the algorithm is
+  // in research mode (no cuenta vinculada). Falls back to $10K otherwise.
+  const initialBalanceDefault = (linkedBotAccountId === null
+    && defaultBacktestBalance != null
+    && defaultBacktestBalance > 0)
+    ? defaultBacktestBalance
+    : 10000;
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -98,7 +116,7 @@ export function BacktestPanel({ algorithmId, defaultSymbol = 'XAUUSD', defaultPa
   const [timeframe, setTimeframe] = useState<typeof TIMEFRAMES[number]>('H1');
   const [from, setFrom] = useState(oneYearAgo.toISOString().slice(0, 10));
   const [to, setTo] = useState(today.toISOString().slice(0, 10));
-  const [initialBalance, setInitialBalance] = useState(10000);
+  const [initialBalance, setInitialBalance] = useState(initialBalanceDefault);
   const [mcIterations, setMcIterations] = useState(1000);
   const [wfWindows, setWfWindows] = useState(5);
   const [stress, setStress] = useState(true);

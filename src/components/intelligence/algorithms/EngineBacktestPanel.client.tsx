@@ -142,7 +142,23 @@ const LOWER_IS_BETTER = new Set(["maxDrawdownPct", "maxDrawdown", "avgLoss"]);
 interface Props {
   algorithmId: string;
   instruments: string[];
+  // Research-mode props: when the algorithm has no cuenta vinculada
+  // (linkedBotAccountId === null), the panel prompts for an initial capital
+  // explicitly. defaultBacktestBalance prefills that input; null falls back to
+  // $10K. Both safe to omit — defaults preserve the previous behaviour.
+  linkedBotAccountId?: string | null;
+  defaultBacktestBalance?: number | null;
 }
+
+// Quick presets shown above the capital input in research mode. Click sets
+// the input to that value. Ordered ascending. Tweak freely — no DB impact.
+const CAPITAL_PRESETS: { label: string; value: number }[] = [
+  { label: "$1K",   value: 1_000   },
+  { label: "$10K",  value: 10_000  },
+  { label: "$50K",  value: 50_000  },
+  { label: "$100K", value: 100_000 },
+  { label: "$250K", value: 250_000 },
+];
 
 function rangeDefault(daysBack: number): { from: string; to: string } {
   const now = new Date();
@@ -160,12 +176,26 @@ function formatNum(v: number | undefined, digits = 2): string {
   return v.toFixed(digits);
 }
 
-export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
+export function EngineBacktestPanel({
+  algorithmId,
+  instruments,
+  linkedBotAccountId = null,
+  defaultBacktestBalance = null,
+}: Props) {
   const defaults = rangeDefault(90);
+  const isResearchMode = linkedBotAccountId === null;
+  // Initial capital prefill: persisted default first, then $10K fallback.
+  // Saved as string so the controlled <input type=number> stays happy.
+  const initialEquity = defaultBacktestBalance != null && defaultBacktestBalance > 0
+    ? String(defaultBacktestBalance)
+    : "10000";
   const [symbol, setSymbol]           = useState(instruments[0] ?? "XAUUSD");
   const [from, setFrom]               = useState(defaults.from);
   const [to, setTo]                   = useState(defaults.to);
-  const [startingEquity, setStarting] = useState("10000");
+  const [startingEquity, setStarting] = useState(initialEquity);
+  // True when the user changed the value vs the persisted default — used to
+  // surface "Guardar como default" only when there's something new to save.
+  const [savingDefault, setSavingDefault] = useState(false);
   const [slAtrMult, setSl]            = useState("1.5");
   const [tpAtrMult, setTp]            = useState("3.0");
   const [mcIters, setMcIters]         = useState("0");
@@ -262,6 +292,32 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
     } finally {
       setDeletingAll(false);
       setConfirmDeleteAll(false);
+    }
+  }
+
+  async function saveAsDefault() {
+    const value = Number(startingEquity);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error("Capital inválido");
+      return;
+    }
+    setSavingDefault(true);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ default_backtest_balance: value }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      toast.success(`Default actualizado: $${value.toLocaleString()}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setSavingDefault(false);
     }
   }
 
@@ -691,6 +747,82 @@ export function EngineBacktestPanel({ algorithmId, instruments }: Props) {
 
       {compareRuns.length === 2 && (
         <CompareView a={compareRuns[0]} b={compareRuns[1]} algorithmId={algorithmId} />
+      )}
+
+      {/* Research-mode capital banner — only when the algorithm has no cuenta
+          vinculada. Lets the user pick a fictional starting capital with
+          one-tap presets and optionally persist it as the algorithm default.
+          The detailed input below (in the grid) stays as the fine-grained
+          control; this banner just makes the choice obvious. */}
+      {isResearchMode && (
+        <div className="rounded-xl border border-[#a78bfa]/30 bg-[#a78bfa]/5 p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p className="text-[11px] font-mono font-bold text-[#a78bfa] uppercase tracking-wider">
+                Modo research — sin cuenta vinculada
+              </p>
+              <p className="text-[10px] text-[#94a3b8] mt-0.5">
+                Elegí un capital ficticio para evaluar la estrategia. Podés vincular una cuenta real después desde el detalle del algoritmo.
+              </p>
+            </div>
+            {savingDefault ? (
+              <span className="text-[10px] text-[#475569]">Guardando…</span>
+            ) : (
+              defaultBacktestBalance != null && Number(startingEquity) !== defaultBacktestBalance && (
+                <button
+                  type="button"
+                  onClick={saveAsDefault}
+                  className="text-[10px] font-mono text-[#a78bfa] hover:text-[#c4b5fd] transition-colors underline-offset-2 hover:underline"
+                >
+                  Guardar como default
+                </button>
+              )
+            )}
+            {savingDefault === false && defaultBacktestBalance == null && Number(startingEquity) > 0 && (
+              <button
+                type="button"
+                onClick={saveAsDefault}
+                className="text-[10px] font-mono text-[#a78bfa] hover:text-[#c4b5fd] transition-colors underline-offset-2 hover:underline"
+              >
+                Guardar como default
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1.5">
+              Capital inicial ($)
+            </label>
+            <input
+              type="number"
+              value={startingEquity}
+              onChange={(e) => setStarting(e.target.value)}
+              step="100"
+              min="100"
+              className="w-full rounded-lg bg-[#0a0e1a] border border-[#a78bfa]/40 text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#a78bfa] font-mono"
+            />
+          </div>
+
+          <div className="flex gap-1.5 flex-wrap">
+            {CAPITAL_PRESETS.map((p) => {
+              const active = Number(startingEquity) === p.value;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setStarting(String(p.value))}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold border transition-colors ${
+                    active
+                      ? "border-[#a78bfa] bg-[#a78bfa]/15 text-[#a78bfa]"
+                      : "border-[#1f2937] bg-transparent text-[#475569] hover:border-[#a78bfa]/40 hover:text-[#94a3b8]"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Form */}

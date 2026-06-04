@@ -11,12 +11,15 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 const updateSchema = z.object({
-  name:          z.string().min(1).max(80).optional(),
-  description:   z.string().max(500).optional(),
-  status:        z.enum(["draft", "paper", "approved", "live", "paused", "archived"]).optional(),
-  parameters:    z.record(z.string(), z.unknown()).optional(),
-  engine_config: EngineConfigSchema.optional(),
-  instruments:   z.array(z.string().min(1)).min(1).max(10).optional(),
+  name:                     z.string().min(1).max(80).optional(),
+  description:              z.string().max(500).optional(),
+  status:                   z.enum(["draft", "paper", "approved", "live", "paused", "archived"]).optional(),
+  parameters:               z.record(z.string(), z.unknown()).optional(),
+  engine_config:            EngineConfigSchema.optional(),
+  instruments:              z.array(z.string().min(1)).min(1).max(10).optional(),
+  // Optional default capital prefilled in the backtest panel when the algorithm
+  // has no linked_bot_account_id. Pass `null` to clear; omit to leave unchanged.
+  default_backtest_balance: z.number().positive().nullable().optional(),
 });
 
 // GET /api/algorithms/[id]
@@ -91,6 +94,7 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     if (parsed.data.parameters !== undefined) payload.parameters = parsed.data.parameters;
     if (parsed.data.engine_config !== undefined) payload.engine_config = parsed.data.engine_config;
     if (parsed.data.instruments !== undefined)   payload.instrument    = parsed.data.instruments;
+    if (parsed.data.default_backtest_balance !== undefined) payload.default_backtest_balance = parsed.data.default_backtest_balance;
 
     if (Object.keys(payload).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
