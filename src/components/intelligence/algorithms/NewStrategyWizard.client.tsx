@@ -249,9 +249,9 @@ function StepForex({ name, setName,
           ]} />
       </Field>
 
-      <Field label="Cuenta MT4/MT5" hint="El engine conectará esta estrategia con la cuenta seleccionada.">
+      <Field label="Cuenta MT4/MT5 (opcional)" hint="Si no la vinculás ahora, la estrategia queda en modo research y podés hacer backtests con capital ficticio. Vinculá una cuenta después desde el detalle del algoritmo.">
         <Select value={botAccountId} onChange={(v) => { setBotAccountId(v); setShowAddAccount(false); }}>
-          <option value="">— Sin vincular —</option>
+          <option value="">— Sin vincular (modo research) —</option>
           {botAccounts.map((a) => (
             <option key={a.id} value={a.id}>{a.label} ({a.account_id})</option>
           ))}
