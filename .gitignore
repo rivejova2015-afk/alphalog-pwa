@@ -80,3 +80,12 @@ reference/*.zip
 
 
 .env*.local
+
+# Local-only sandbox deploy artifacts: the sandbox proxy intercepts TLS so
+# the Dockerfile.cron's curl step fails. Local deploys pre-download
+# supercronic + temporarily swap Dockerfile.cron for a COPY-based variant.
+# These files exist only during a manual deploy and never belong in CI.
+supercronic.bin
+Dockerfile.cron.local
+Dockerfile.cron.bak
+Dockerfile.cron.original
