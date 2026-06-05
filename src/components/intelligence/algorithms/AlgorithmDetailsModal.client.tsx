@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play, Activity, Wifi, WifiOff, Inbox, Radio } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Bitcoin, Pause, Play, Activity, Wifi, WifiOff, Inbox, Radio, Files } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
@@ -19,6 +20,10 @@ interface AlgorithmRow {
   status: string;
   parameters: Record<string, unknown> | null;
   engine_config: Record<string, unknown> | null;
+  // Research mode: when this is null the algorithm has no cuenta vinculada
+  // and the modal surfaces a "Deploy to account" section. Once linked, the
+  // existing Mt5/Cme/Options Section takes over.
+  linked_bot_account_id?: string | null;
   // Sprint E — dispatcher telemetry (server cron writes these every minute
   // for Tradovate/IBKR algos; null on EA-driven MT4/MT5 since the EA polls
   // a different endpoint).
@@ -26,6 +31,12 @@ interface AlgorithmRow {
   last_signal_bar_ts?:   string | null;
   last_dispatch_action?: string | null;
   last_dispatch_reason?: string | null;
+}
+
+interface BotAccountOption {
+  id: string;
+  label: string;
+  account_id: string;
 }
 
 interface ConnectionsResponse {
@@ -71,11 +82,32 @@ interface Props {
 }
 
 export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onClose }: Props) {
+  const router = useRouter();
   const [algorithm, setAlgorithm] = useState<AlgorithmRow | null>(null);
   const [data, setData]           = useState<ConnectionsResponse | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
   const [pairing, setPairing]     = useState<{ token: string; expiresAt: string } | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
+
+  async function handleDuplicate() {
+    setDuplicating(true);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}/duplicate`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      toast.success(`Duplicado: "${json.algorithm?.name ?? "copia"}"`);
+      router.refresh();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setDuplicating(false);
+    }
+  }
 
   async function fetchAll() {
     setLoading(true);
@@ -134,14 +166,26 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
               <h2 className="text-base font-semibold text-slate-100">Detalles de conexión</h2>
               <span className="text-xs text-slate-500">· {algorithmName}</span>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-slate-500 hover:text-slate-200 transition"
-              aria-label="Cerrar"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleDuplicate}
+                disabled={duplicating || loading}
+                className="text-slate-500 hover:text-[#a78bfa] transition disabled:opacity-40 disabled:cursor-not-allowed p-1 rounded"
+                aria-label="Duplicar estrategia"
+                title="Duplicar como nueva estrategia draft"
+              >
+                <Files size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-slate-500 hover:text-slate-200 transition p-1 rounded"
+                aria-label="Cerrar"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="p-5">
@@ -152,6 +196,20 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
+            )}
+
+            {/* Research mode banner: surfaces "Deploy to account" when a forex
+                algorithm has no cuenta vinculada. Only forex is wired in this
+                first iteration because the deploy endpoint expects bot_account
+                ids. Futures (CME) y options usan algo_cme_accounts / IBKR
+                account fields que viven en parameters jsonb — un sprint
+                separado puede extender este banner para ese flujo. */}
+            {!loading && !error && algorithm && algorithm.market_type === "forex" && !algorithm.linked_bot_account_id && (
+              <DeployToAccountSection
+                algorithmId={algorithmId}
+                currentStatus={algorithm.status}
+                onDeployed={fetchAll}
+              />
             )}
 
             {!loading && !error && algorithm?.market_type === "crypto" && (
@@ -990,6 +1048,148 @@ function DispatcherSection({ algorithm }: { algorithm: AlgorithmRow }) {
         </h4>
         <AlgorithmShadowInbox algorithmId={algorithm.id} />
       </div>
+    </div>
+  );
+}
+
+// ─── Deploy to account section (forex MVP) ─────────────────────────────────
+// Renders when the algorithm has no cuenta vinculada. Loads the user's
+// bot_accounts, lets them pick one, and orchestrates the two-step approve
+// + deploy flow on the backend. After success, refreshes the modal so the
+// normal Mt5Section takes over and this banner disappears.
+function DeployToAccountSection({
+  algorithmId,
+  currentStatus,
+  onDeployed,
+}: {
+  algorithmId: string;
+  currentStatus: string;
+  onDeployed: () => void;
+}) {
+  const [accounts, setAccounts]       = useState<BotAccountOption[]>([]);
+  const [loadingAccs, setLoadingAccs] = useState(true);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [notes, setNotes]             = useState("");
+  const [deploying, setDeploying]     = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Same shape the wizard uses (id, label, account_id). We hit Supabase
+        // directly via the browser client to skip a server round-trip — the
+        // values are non-secret and already gated by RLS.
+        const { createClient } = await import("@/lib/supabase/browser");
+        const sb = createClient();
+        const { data } = await sb.from("bot_accounts").select("id, label, account_id");
+        if (!cancelled) setAccounts((data ?? []) as BotAccountOption[]);
+      } finally {
+        if (!cancelled) setLoadingAccs(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleDeploy() {
+    if (!selectedAccountId) {
+      toast.error("Elegí una cuenta para vincular");
+      return;
+    }
+    setDeploying(true);
+    try {
+      // Step 1: promote to "approved" if we're still on draft/paper.
+      // The deploy endpoint rejects anything other than approved/live, so
+      // this orquesta el upgrade transparentemente para el usuario.
+      if (currentStatus === "draft" || currentStatus === "paper") {
+        const approveRes = await fetch(`/api/algorithms/${algorithmId}/approve`, { method: "POST" });
+        if (!approveRes.ok) {
+          const body = await approveRes.json().catch(() => ({}));
+          toast.error(`Approve falló: ${body.error ?? approveRes.status}`);
+          return;
+        }
+      }
+
+      // Step 2: deploy with the selected bot_account(s). Endpoint marks the
+      // algorithm as "live" and inserts an algorithm_deployments row.
+      const res = await fetch(`/api/algorithms/${algorithmId}/deploy`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          bot_account_ids: [selectedAccountId],
+          notes:           notes.trim() || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `Deploy falló: HTTP ${res.status}`);
+        return;
+      }
+      toast.success("Estrategia vinculada y desplegada");
+      onDeployed();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setDeploying(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-[#a78bfa]/30 bg-[#a78bfa]/5 p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-[#a78bfa] font-mono uppercase tracking-wider flex items-center gap-2">
+          <Cloud className="w-4 h-4" />
+          Vincular a una cuenta
+        </h3>
+        <p className="text-xs text-[#94a3b8] mt-1 leading-relaxed">
+          Esta estrategia está en modo research (sin cuenta vinculada). Elegí una cuenta MT4/MT5 para desplegarla.
+          Internamente se hace approve + deploy en un solo paso.
+        </p>
+      </div>
+
+      {loadingAccs ? (
+        <div className="h-20 bg-slate-800/40 rounded animate-pulse" />
+      ) : accounts.length === 0 ? (
+        <div className="text-xs text-[#94a3b8] py-3 px-4 rounded-lg border border-[#1f2937] bg-[#0a0e1a]">
+          No tenés cuentas MT4/MT5 cargadas todavía. Agregalas desde el wizard de nueva estrategia o desde Bot Control.
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1.5">Cuenta destino</label>
+            <select
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+              className="w-full rounded-lg bg-[#0a0e1a] border border-[#a78bfa]/40 text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#a78bfa]"
+            >
+              <option value="">— Elegí una cuenta —</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.label} ({a.account_id})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1.5">Notas (opcional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              maxLength={300}
+              placeholder="ej. live tras 30d paper trading OK"
+              className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDeploy}
+            disabled={deploying || !selectedAccountId}
+            className="w-full py-2.5 rounded-lg bg-[#a78bfa] hover:bg-[#c4b5fd] text-[#0a0e1a] text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {deploying ? "Vinculando…" : "Deploy to account"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

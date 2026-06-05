@@ -805,6 +805,14 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - console.log → logError: ~185 archivos restantes (cleanup gradual). Endpoints principales ya migrados (journal, accounts, tradehub/trades).
 
 ### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
+- **Algoritmos sin cuenta vinculada (research mode)** (2026-06): primer paso para desacoplar la creación/backtest de la vinculación a una cuenta operativa.
+  - Migration 120: nueva columna nullable `algorithms.default_backtest_balance NUMERIC` para persistir el capital ficticio por algo.
+  - `EngineBacktestPanel.client.tsx` detecta `linkedBotAccountId === null` y muestra un banner "Modo research — sin cuenta vinculada" con input destacado de capital inicial + 5 presets ($1K/$10K/$50K/$100K/$250K) y botón "Guardar como default" que persiste vía `PUT /api/algorithms/[id]` (schema extendido con `default_backtest_balance`).
+  - `BacktestPanel.client.tsx` también prefilla `Initial Balance` con el default persistido cuando el algo está en research mode.
+  - `AlgorithmDetailsModal.client.tsx` renderiza `DeployToAccountSection` para algos `forex` sin cuenta vinculada: selector de bot_account + notas + botón "Deploy to account" que orquesta `/approve` (si status='paper') seguido de `/deploy` (transición a `live`). Banner solo para forex en esta iteración; futures/options usan `algo_cme_accounts` y un sprint separado puede extender el banner.
+  - Nuevo endpoint `POST /api/algorithms/[id]/duplicate` clona el algo preservando config (parameters, engine_config, default_backtest_balance) pero reset a `status='draft'`, `linked_bot_account_id=null` y métricas operacionales a 0. Nombre con sufijo `(copia)` / `(copia 2)` / ... para evitar colisiones. Botón "Duplicar estrategia" con ícono `Files` en el header del detail modal.
+  - Wizard de nueva estrategia (`NewStrategyWizard.client.tsx`): label de cuenta MT4/MT5 cambia a "(opcional)" y opción default a "— Sin vincular (modo research) —" con hint explicando que se puede vincular después.
+  - Tests: +8 unit (`EngineBacktestPanel.research-mode.test.tsx` con 6 casos: visibilidad del banner, prefill, presets, save default; `AlgorithmDetailsModal.duplicate.test.tsx` con 2 casos: render del botón + flow POST duplicate + onClose). 1300/1300 verde, 0 regresiones.
 - **Pipeline avanzado de backtest end-to-end** (2026-06): cierre completo del Plan v2 (Gaps #1-#4 + hardening + sprint A/B).
   - `useMl/useMultiTf/usePortfolio` flags en `BacktestConfig` + `AdvancedPipeline` (orchestrator.ts) con `MultiTfAnalysis` y `PortfolioAnalysis` como discriminated unions sobre `status: 'pending' | 'completed' | 'failed'`.
   - Helper puro `runAdvancedPipeline(bars, cfg)` extraído del orchestrator y reutilizado por el endpoint sync (`/api/algorithms/[id]/engine-backtest`).

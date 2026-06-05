@@ -16,7 +16,7 @@ export default async function AlgorithmsPage() {
   const algorithms = userData?.user
     ? (await supabase
         .from("algorithms")
-        .select("id, name, instrument, status, parameters, market_type, direction, linked_bot_account_id, pnl_today, pnl_total, win_rate, trade_count, profit_factor, max_drawdown_pct, sort_index, created_at, platform, last_dispatch_at, last_signal_bar_ts, last_dispatch_action, last_dispatch_reason")
+        .select("id, name, instrument, status, parameters, market_type, direction, linked_bot_account_id, default_backtest_balance, pnl_today, pnl_total, win_rate, trade_count, profit_factor, max_drawdown_pct, sort_index, created_at, platform, last_dispatch_at, last_signal_bar_ts, last_dispatch_action, last_dispatch_reason")
         .eq("user_id", userData.user.id)
         .is("deleted_at", null)
         .order("sort_index", { ascending: true })
@@ -53,6 +53,7 @@ export default async function AlgorithmsPage() {
       status,
       algoStatus: a.status as string,
       linkedBotAccountId: (a.linked_bot_account_id as string | null) ?? null,
+      defaultBacktestBalance: a.default_backtest_balance != null ? Number(a.default_backtest_balance) : null,
       pnlToday: Number(a.pnl_today ?? 0),
       pnlTotal: Number(a.pnl_total ?? 0),
       winRate: Number(a.win_rate ?? 0),

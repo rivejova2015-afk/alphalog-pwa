@@ -28,6 +28,7 @@ interface AlgoData {
   status: 'ACTIVE' | 'PAUSED' | 'ERROR';
   algoStatus?: string;
   linkedBotAccountId?: string | null;
+  defaultBacktestBalance?: number | null;
   pnlToday: number;
   pnlTotal: number;
   winRate: number;
@@ -270,12 +271,16 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   algorithmId={algo.id}
                   defaultSymbol={algo.instrument[0] ?? 'XAUUSD'}
                   defaultParameters={algo.parameters}
+                  linkedBotAccountId={algo.linkedBotAccountId ?? null}
+                  defaultBacktestBalance={algo.defaultBacktestBalance ?? null}
                 />
 
                 {/* Engine v1 backtest — direct evaluator + ATR-sized trades */}
                 <EngineBacktestPanel
                   algorithmId={algo.id}
                   instruments={algo.instrument}
+                  linkedBotAccountId={algo.linkedBotAccountId ?? null}
+                  defaultBacktestBalance={algo.defaultBacktestBalance ?? null}
                 />
 
                 {/* Recent trades */}
