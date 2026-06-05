@@ -180,18 +180,32 @@ export class OutboxManager {
   }
 
   /**
-   * Sync a single outbox entry
+   * Sync a single outbox entry.
+   *
+   * Two drain modes coexist:
+   *   - Generic alphacore endpoint (default): POST/PATCH/DELETE on
+   *     /api/alphacore/{table}/{id?}/{op}, body wrapped as
+   *     { payload, metadata, outboxId }. Used by mutations enqueued via
+   *     getOfflineBridge().mutate(...).
+   *   - Custom endpoint (when metadata.endpoint is set): drains to the
+   *     domain-specific route (eg. /api/journal) with the raw payload as the
+   *     body, exactly as the UI would have sent it online. Used by feature
+   *     panels that fall back to the outbox on network errors without
+   *     adopting the full alphacore generic endpoint contract.
    */
   private async syncEntry(entry: IDBOutboxEntry): Promise<void> {
-    // Endpoint shape: POST/PATCH/DELETE on /api/alphacore/{table}/{id?}/{op}.
-    // Both helpers below resolve verb + path from the entry's operation.
     const endpoint = this.buildEndpoint(entry);
-    const method = this.buildMethod(entry.operation);
+    const method = this.buildMethod(entry);
+    const useDirectBody = entry.metadata?.bodyMode === 'direct';
 
     const csrfToken = document.cookie
       .split('; ')
       .find((row) => row.startsWith('al_csrf='))
       ?.split('=')[1] ?? '';
+
+    const body = useDirectBody
+      ? entry.payload
+      : { payload: entry.payload, metadata: entry.metadata, outboxId: entry.id };
 
     const response = await fetch(endpoint, {
       method,
@@ -199,11 +213,7 @@ export class OutboxManager {
         'Content-Type': 'application/json',
         'x-csrf-token': csrfToken,
       },
-      body: JSON.stringify({
-        payload: entry.payload,
-        metadata: entry.metadata,
-        outboxId: entry.id, // For idempotency
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -276,11 +286,20 @@ export class OutboxManager {
   }
 
   /**
-   * Build API endpoint from entry
+   * Build API endpoint from entry.
+   *
+   * Honors `metadata.endpoint` when present (custom drain target — usually
+   * the same route the online UI uses, so the server-side validation /
+   * encryption / audit pipeline runs unchanged). Falls back to the generic
+   * alphacore route otherwise.
    */
   private buildEndpoint(entry: IDBOutboxEntry): string {
-    const base = `/api/alphacore/${entry.table}`;
+    const customEndpoint = entry.metadata?.endpoint;
+    if (typeof customEndpoint === 'string' && customEndpoint.length > 0) {
+      return customEndpoint;
+    }
 
+    const base = `/api/alphacore/${entry.table}`;
     switch (entry.operation) {
       case 'create':
         return `${base}/create`;
@@ -295,10 +314,19 @@ export class OutboxManager {
   }
 
   /**
-   * Build HTTP method from operation
+   * Build HTTP method from entry.
+   *
+   * Honors `metadata.method` when present (eg. a custom endpoint that uses
+   * DELETE with a body, or PUT instead of PATCH). Falls back to the
+   * operation → verb mapping used by the generic alphacore route.
    */
-  private buildMethod(operation: string): string {
-    switch (operation) {
+  private buildMethod(entry: IDBOutboxEntry): string {
+    const customMethod = entry.metadata?.method;
+    if (typeof customMethod === 'string' && customMethod.length > 0) {
+      return String(customMethod).toUpperCase();
+    }
+
+    switch (entry.operation) {
       case 'create':
         return 'POST';
       case 'update':

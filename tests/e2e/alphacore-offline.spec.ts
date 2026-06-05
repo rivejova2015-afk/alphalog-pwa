@@ -200,6 +200,65 @@ test.describe("AlphaCore offline outbox", () => {
     await softDeleteViaJournalApi(request, csrf, firstId);
   });
 
+  test("journal form falls back to outbox when offline and drains on reconnect (full cycle)", async ({ page, context, baseURL }) => {
+    // Go online to /business/journal so the CsrfBridge bootstrap runs and
+    // the OutboxManager singleton is alive with its `online` listener.
+    await page.goto("/business/journal", { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Allow the React effect that calls bootstrapOutbox() to run.
+    await page.waitForTimeout(1200);
+
+    const marker = `e2e-cycle-${Date.now()}`;
+    const text = `Reflexión offline ${marker} con detalle suficiente para validar`;
+
+    // Snapshot existing entry ids so we can assert the new one is brand new.
+    const requestCtx = context.request;
+    const csrf = await getCsrfToken(context, baseURL ?? page.url());
+
+    // Go offline — POST /api/journal will throw TypeError "Failed to fetch".
+    await context.setOffline(true);
+    await page.waitForTimeout(400);
+
+    // Open the form and submit. The panel should catch the network error,
+    // enqueue to the outbox, close the form and render the entry as pending.
+    await page.getByRole("button", { name: /nueva entrada/i }).click();
+    await page.locator("textarea").first().fill(text);
+    await page.getByRole("button", { name: /guardar entrada/i }).click();
+
+    // The "Sincronizando" pill should appear on the new row.
+    await expect(page.getByText(/sincronizando/i).first()).toBeVisible({ timeout: 8000 });
+    // And the entry text should be present (optimistic render).
+    await expect(page.getByText(marker).first()).toBeVisible({ timeout: 4000 });
+
+    // Reconnect — the OutboxManager's `online` listener fires syncAll().
+    await context.setOffline(false);
+
+    // Wait for the panel's post-reconnect refresh (3.5s) + a margin for the
+    // POST round-trip + the outbox-pending poll (every 7s).
+    await page.waitForTimeout(12000);
+
+    // The "Sincronizando" pill should be gone after the entry persists.
+    // (We don't assert .toHaveCount(0) because other tests running in
+    // parallel could leave unrelated pending rows; instead we re-query
+    // the server and assert the entry exists with a real id.)
+    const list = await requestCtx.get(JOURNAL_PATH);
+    expect(list.ok()).toBe(true);
+    const body = await list.json().catch(() => null);
+    const entries: Array<{ id: string; text?: string | null }> = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.entries)
+        ? body.entries
+        : Array.isArray(body?.data)
+          ? body.data
+          : [];
+
+    const found = entries.find((e) => typeof e.text === "string" && e.text.includes(marker));
+    expect(found, `entry with marker "${marker}" should have synced to the server`).toBeTruthy();
+
+    if (found?.id) {
+      await softDeleteViaJournalApi(requestCtx, csrf, found.id);
+    }
+  });
+
   test("outbox update + delete endpoints round-trip a journal entry", async ({ page, context, baseURL }) => {
     const request = context.request;
     const csrf = await getCsrfToken(context, baseURL ?? page.url());
