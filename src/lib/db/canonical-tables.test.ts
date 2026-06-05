@@ -38,18 +38,10 @@ function scan(): Hit[] {
 }
 
 // Files that legitimately use the legacy `trading_algorithms` schema today.
-// They predate the `algorithms`-canonical migration and are tracked as tech debt.
-// Run `npm run audit:tables:offline` to see the full list. This baseline blocks
-// new violations without forcing a big-bang migration.
-const LEGACY_TRADING_ALGORITHMS_FILES = new Set<string>([
-  // POST surface kept on legacy table — wizard inserts directly into algorithms.
-  "app/api/algorithms/route.ts",
-  // Pending migration to canonical:
-  "app/api/algorithms/[id]/pairing-token/route.ts",
-  "app/api/algorithms/[id]/quality-gates/recompute/route.ts",
-  "app/api/webhooks/mt/route.ts",
-  "lib/bot/arbitrage/risk-guard.ts",
-]);
+// Currently empty — the migration to the canonical `algorithms` table is
+// complete. The Set is kept (rather than removed) so future legacy fixtures
+// can be re-added without changing the test structure.
+const LEGACY_TRADING_ALGORITHMS_FILES = new Set<string>([]);
 
 function norm(p: string): string { return p.replace(/\\/g, "/"); }
 

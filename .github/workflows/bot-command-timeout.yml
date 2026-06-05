@@ -9,12 +9,12 @@ jobs:
     steps:
       - name: Call bot-command-timeout
         env:
-          SUPABASE_FUNCTIONS_BASE_URL: ${{ secrets.SUPABASE_FUNCTIONS_BASE_URL }}
+          SUPABASE_FUNCTIONS_URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
         run: |
-          if [ -z "$SUPABASE_FUNCTIONS_BASE_URL" ]; then
-            echo "Missing SUPABASE_FUNCTIONS_BASE_URL secret" >&2
+          if [ -z "$SUPABASE_FUNCTIONS_URL" ]; then
+            echo "Missing SUPABASE_FUNCTIONS_URL secret" >&2
             exit 1
           fi
-          curl -sS -X POST "$SUPABASE_FUNCTIONS_BASE_URL/bot-command-timeout" \
+          curl -sS -X POST "$SUPABASE_FUNCTIONS_URL/bot-command-timeout" \
             -H "Content-Type: application/json" \
             -d "{}"

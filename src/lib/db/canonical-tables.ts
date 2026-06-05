@@ -36,8 +36,10 @@ export const CANONICAL_TABLES = {
 // Code MUST NOT reference these — the audit script will flag any usage.
 export const DEPRECATED_TABLES: Record<string, string> = {
   // 058 created `trading_algorithms` but the rest of the app standardized on
-  // `algorithms` (044). Reads from `trading_algorithms` will silently return
-  // empty results — that's the exact bug class this registry guards against.
+  // `algorithms` (044). Migration completed in 2026-06: the page, wizard,
+  // and all endpoints now read/write `algorithms`. The legacy table was
+  // never populated in production (0 rows) so dropping it is safe — kept
+  // here as a guard against accidental new references.
   trading_algorithms: "algorithms",
 };
 

@@ -48,8 +48,8 @@ function checkRuntimeEnv(): HealthCheck {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     optionalWarnings.push("SUPABASE_SERVICE_ROLE_KEY");
   }
-  if (!process.env.SUPABASE_FUNCTIONS_BASE_URL) {
-    optionalWarnings.push("SUPABASE_FUNCTIONS_BASE_URL");
+  if (!process.env.SUPABASE_FUNCTIONS_URL) {
+    optionalWarnings.push("SUPABASE_FUNCTIONS_URL");
   }
   if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
     optionalWarnings.push("NEXT_PUBLIC_VAPID_PUBLIC_KEY");
@@ -116,12 +116,12 @@ async function checkSupabaseReadiness(): Promise<HealthCheck> {
 }
 
 function checkBotRemoteConfig(): HealthCheck {
-  const hasFunctionsBaseUrl = Boolean(process.env.SUPABASE_FUNCTIONS_BASE_URL);
+  const hasFunctionsBaseUrl = Boolean(process.env.SUPABASE_FUNCTIONS_URL);
   if (!hasFunctionsBaseUrl) {
     return {
       status: "degraded",
       message: "Bot remote base URL is not configured",
-      details: "SUPABASE_FUNCTIONS_BASE_URL missing",
+      details: "SUPABASE_FUNCTIONS_URL missing",
     };
   }
 
@@ -224,12 +224,12 @@ async function checkBotRuntime(): Promise<HealthCheck> {
 }
 
 async function checkBotFunctionsReachability(): Promise<HealthCheck> {
-  const base = process.env.SUPABASE_FUNCTIONS_BASE_URL;
+  const base = process.env.SUPABASE_FUNCTIONS_URL;
   if (!base) {
     return {
       status: "degraded",
       message: "Bot functions reachability skipped",
-      details: "SUPABASE_FUNCTIONS_BASE_URL missing",
+      details: "SUPABASE_FUNCTIONS_URL missing",
     };
   }
 

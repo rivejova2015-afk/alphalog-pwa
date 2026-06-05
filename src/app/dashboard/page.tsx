@@ -64,11 +64,11 @@ export default async function Dashboard() {
         {/* Quick links */}
         <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { href: "/dashboard/tradehub",   label: "TradeHub",   emoji: "📊" },
-            { href: "/dashboard/bot-control", label: "Bot Control", emoji: "🤖" },
-            { href: "/dashboard/algorithms",  label: "Algoritmos", emoji: "⚡" },
-            { href: "/dashboard/terminal",   label: "Terminal",   emoji: "📡" },
-            { href: "/dashboard/copy-groups", label: "Copy Groups", emoji: "🔗" },
+            { href: "/dashboard/tradehub",       label: "TradeHub",     emoji: "📊" },
+            { href: "/dashboard/bot-control",    label: "Bot Control",  emoji: "🤖" },
+            { href: "/intelligence/algorithms",  label: "Algoritmos",   emoji: "⚡" },
+            { href: "/dashboard/terminal",       label: "Terminal",     emoji: "📡" },
+            { href: "/dashboard/copy-groups",    label: "Copy Groups",  emoji: "🔗" },
           ].map(({ href, label, emoji }) => (
             <a key={href} href={href}
               className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 text-sm font-medium text-slate-300 hover:border-slate-600 hover:text-slate-100 transition-all">
