@@ -5,6 +5,7 @@ import UpdateManager from "@/components/pwa/UpdateManager";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
 import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
 import IOSInstallBanner from "@/components/push/IOSInstallBanner.client";
+import ConflictBadge from "@/components/alphacore/ConflictBadge.client";
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -52,6 +53,7 @@ export default function RootLayout({
         <UpdateManager />
         <CsrfBridge />
         <IOSInstallBanner />
+        <ConflictBadge />
         <Toaster position="bottom-right" theme="dark" richColors closeButton />
       </body>
     </html>
