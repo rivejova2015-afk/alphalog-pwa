@@ -100,12 +100,24 @@ jobs:
 
   # ============================================================================
   # CRON: alphalog-cron (supercronic sidecar) — paralelo con web
+  #
+  # NOTE (2026-06): el secret FLY_API_TOKEN configurado en GitHub tiene scope
+  # solo sobre `alphalog-pwa`, no `alphalog-cron`. Hasta que se actualice
+  # con un token de organización (https://fly.io/user/personal_access_tokens
+  # → Create org-scoped token), este job no puede pushear el cron al registry.
+  # `continue-on-error: true` evita marcar el run completo como rojo cada vez
+  # que se mergea algo a main. El cron sidecar tiene un Dockerfile estable
+  # (descarga supercronic + COPY crontab) que rara vez cambia — los pocos
+  # cambios al crontab se aplican con un deploy manual via flyctl desde la
+  # máquina del dev. Quitar `continue-on-error: true` cuando el token se
+  # actualice y este job vuelva a pasar.
   # ============================================================================
   deploy-cron:
     name: Deploy cron sidecar (alphalog-cron)
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_cron != true }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -127,8 +139,8 @@ jobs:
             --wait-timeout 180
 
   # ============================================================================
-  # SUMMARY: agrega un check final que reporta el estado combinado de ambos
-  # deploys. Útil para branch protection rules que requieran 1 sola check.
+  # SUMMARY: reporta el estado combinado pero solo falla si el WEB falla.
+  # El cron tiene continue-on-error y su failure se loggea pero no rompe el run.
   # ============================================================================
   deploy-summary:
     name: Deploy Summary
@@ -142,9 +154,13 @@ jobs:
           cron="${{ needs.deploy-cron.result }}"
           echo "Web deploy:  $web"
           echo "Cron deploy: $cron"
-          # Fail summary si cualquiera fall (excluye 'skipped' del fail).
-          if [[ "$web" == "failure" || "$cron" == "failure" ]]; then
-            echo "::error::At least one deploy failed."
+          if [[ "$cron" == "failure" ]]; then
+            echo "::warning::Cron deploy failed — known issue with FLY_API_TOKEN scope. Run \`flyctl deploy --app alphalog-cron\` manually if the crontab changed."
+          fi
+          # Only WEB failure breaks the run. Cron is best-effort until the
+          # token is updated.
+          if [[ "$web" == "failure" ]]; then
+            echo "::error::Web deploy failed."
             exit 1
           fi
           echo "All requested deploys succeeded."
