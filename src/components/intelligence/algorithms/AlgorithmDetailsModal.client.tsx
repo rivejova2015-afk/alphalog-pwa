@@ -230,6 +230,9 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                 {data.algorithm.market_type === "futures" && data.cme && (
                   <CmeSection data={data.cme} onRefresh={fetchAll} />
                 )}
+                {data.algorithm.market_type === "futures" && algorithm && (
+                  <KellySection algorithm={algorithm} onSaved={fetchAll} />
+                )}
                 {data.algorithm.market_type === "options" && (
                   <OptionsSection />
                 )}
@@ -504,6 +507,158 @@ function CmeSection({ data, onRefresh }: { data: NonNullable<ConnectionsResponse
           onSuccess={onRefresh}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Kelly position sizing section (futures only) ───────────────────────────
+//
+// Surfaces the 3 auto-populated stats (kelly_win_rate / kelly_avg_win_usd /
+// kelly_avg_loss_usd) that engine-backtest writes into algorithm.parameters,
+// plus the user-tunable knobs (enabled, fraction, min/max contracts).
+//
+// When the algo has no auto-populated stats yet, the section explains how to
+// trigger them (run an engine-backtest with ≥30 trades).
+//
+function KellySection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved: () => void }) {
+  const params = (algorithm.parameters ?? {}) as Record<string, unknown>;
+
+  // Auto-populated by engine-backtest. Read-only here.
+  const autoWinRate    = typeof params.kelly_win_rate           === "number" ? params.kelly_win_rate    : null;
+  const autoAvgWin     = typeof params.kelly_avg_win_usd        === "number" ? params.kelly_avg_win_usd : null;
+  const autoAvgLoss    = typeof params.kelly_avg_loss_usd       === "number" ? params.kelly_avg_loss_usd : null;
+  const sampleSize     = typeof params.kelly_inputs_sample_size === "number" ? params.kelly_inputs_sample_size : null;
+  const updatedAt      = typeof params.kelly_inputs_updated_at  === "string" ? params.kelly_inputs_updated_at : null;
+  const sourceTag      = typeof params.kelly_inputs_source      === "string" ? params.kelly_inputs_source : null;
+  const hasStats       = autoWinRate != null && autoAvgWin != null && autoAvgLoss != null;
+
+  // User-tunable.
+  const [enabled, setEnabled]     = useState<boolean>(params.kelly_enabled === true);
+  const [fraction, setFraction]   = useState<string>(num(params.kelly_fraction, 0.5));
+  const [minK, setMinK]           = useState<string>(num(params.kelly_min_contracts, 1));
+  const [maxK, setMaxK]           = useState<string>(num(params.kelly_max_contracts, 10));
+  const [saving, setSaving]       = useState(false);
+
+  async function save() {
+    if (!hasStats && enabled) {
+      toast.error("Kelly necesita stats del backtest — corré un engine-backtest con ≥30 trades primero.");
+      return;
+    }
+    const fracNum = Number(fraction);
+    if (!Number.isFinite(fracNum) || fracNum <= 0 || fracNum > 1) {
+      toast.error("kelly_fraction debe estar entre 0 y 1 (recomendado 0.25–0.5).");
+      return;
+    }
+    const minNum = Math.max(0, Math.round(Number(minK)));
+    const maxNum = Math.max(minNum, Math.round(Number(maxK)));
+    if (!Number.isFinite(minNum) || !Number.isFinite(maxNum)) {
+      toast.error("min/max contracts deben ser enteros válidos.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const merged: Record<string, unknown> = {
+        ...params,
+        kelly_enabled:       enabled,
+        kelly_fraction:      fracNum,
+        kelly_min_contracts: minNum,
+        kelly_max_contracts: maxNum,
+      };
+      const res = await fetch(`/api/algorithms/${algorithm.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parameters: merged }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error ?? `Error ${res.status}`);
+        return;
+      }
+      toast.success(enabled
+        ? `Kelly activado (fraction=${fracNum}, ${minNum}–${maxNum} contratos)`
+        : "Kelly desactivado — el dispatcher usa contracts_per_trade manual.");
+      onSaved();
+    } catch (e) {
+      toast.error(`Error: ${e instanceof Error ? e.message : "desconocido"}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 pt-5 border-t border-[#1f2937] space-y-3">
+      <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium">Position Sizing — Kelly Criterion</h3>
+      <InfoBanner>
+        Calcula contratos por trade con la fórmula de Kelly: <code className="text-slate-300">f* = p − (1−p)/R</code>.
+        Multiplica por fractional Kelly (recomendado 0.25–0.5 por estabilidad), aplica como riesgo USD,
+        y divide por el riesgo por contrato (SL ticks × tick value). Failure-open: si los inputs faltan
+        o el equity no se puede leer, cae al <code className="text-slate-300">contracts_per_trade</code> manual.
+      </InfoBanner>
+
+      {/* Auto-populated stats — read-only display. */}
+      <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-100">Stats del backtest</span>
+          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+            hasStats
+              ? "bg-emerald-950 text-emerald-400 border-emerald-800"
+              : "bg-amber-950 text-amber-400 border-amber-800"
+          }`}>
+            {hasStats ? "Auto-poblado" : "Sin datos"}
+          </span>
+        </div>
+
+        {hasStats ? (
+          <dl className="grid grid-cols-3 gap-y-2 text-xs">
+            <Row label="Win rate"   value={`${(autoWinRate! * 100).toFixed(1)}%`} />
+            <Row label="Avg win"    value={`$${autoAvgWin!.toFixed(2)}`} />
+            <Row label="Avg loss"   value={`$${autoAvgLoss!.toFixed(2)}`} />
+            <Row label="Sample"     value={sampleSize != null ? `${sampleSize} trades` : "—"} />
+            <Row label="Actualizado" value={updatedAt ? formatRelative(updatedAt) : "—"} />
+            <Row label="Fuente"     value={sourceTag ?? "—"} mono />
+          </dl>
+        ) : (
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Aún no hay stats. Corré un engine-backtest con ≥30 trades y edge positivo —
+            el endpoint <code className="text-slate-300">/api/algorithms/[id]/engine-backtest</code> persiste
+            win_rate, avg_win y avg_loss en <code className="text-slate-300">parameters</code> automáticamente.
+          </p>
+        )}
+      </div>
+
+      {/* User-tunable knobs. */}
+      <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
+        <label className="flex items-center justify-between cursor-pointer">
+          <span className="text-sm font-semibold text-slate-100">Activar Kelly sizing</span>
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            disabled={saving}
+            className="h-4 w-4 accent-emerald-600 cursor-pointer"
+            aria-label="Activar Kelly sizing"
+          />
+        </label>
+
+        <div className="grid grid-cols-3 gap-3">
+          <NumField label="Fractional Kelly" value={fraction} onChange={setFraction} step="0.05" hint="0.5 = half-Kelly (recomendado)" />
+          <NumField label="Min contratos"    value={minK}     onChange={setMinK}     step="1"    hint="Default 1" />
+          <NumField label="Max contratos"    value={maxK}     onChange={setMaxK}     step="1"    hint="Default 10" />
+        </div>
+
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-40 flex items-center gap-1.5"
+          >
+            <Save size={11} />
+            {saving ? "Guardando…" : "Guardar Kelly config"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
