@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * Whitelist of tables allowed for AlphaCore offline sync mutations.
@@ -101,7 +101,7 @@ export async function DELETE(
         changes: { source: "alphacore_offline", soft_delete: true },
       },
       request
-    ).catch((e) => console.warn("[Audit] Failed to log alphacore delete:", e));
+    ).catch((e) => logWarn("Alphacore", "Failed to log alphacore delete", { component: "alphacore.delete.audit", error: e instanceof Error ? e.message : String(e) }));
 
     // 6. Return success
     return NextResponse.json({

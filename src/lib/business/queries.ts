@@ -31,18 +31,10 @@ import type {
   LLCInfo,
   LLCInboxItem,
 } from './types';
+import { logError } from '@/lib/log';
 
-const logBusinessError = async (message: string, error?: unknown) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const { logger } = await import('@/lib/alphashield/logger');
-      await logger.error('business', message, error instanceof Error ? error : undefined);
-      return;
-    } catch {
-      // fallback below
-    }
-  }
-  console.error(message, error);
+const logBusinessError = (message: string, error?: unknown) => {
+  logError('Business', { component: 'business.queries', message, error: error instanceof Error ? error.message : String(error) });
 };
 
 const readCsrfCookie = (): string => {

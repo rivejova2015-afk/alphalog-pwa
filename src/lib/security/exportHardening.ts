@@ -1,6 +1,7 @@
 // src/lib/security/exportHardening.ts
 import { z } from "zod";
 import { type AuditLogEntry } from "./auditLog";
+import { logWarn } from "@/lib/log";
 
 /**
  * Export hardening utilities
@@ -151,7 +152,7 @@ export async function logExportEvent(
     status: entry.status === "success" ? "success" : entry.status === "blocked" ? "failure" : "failure",
     errorMessage: entry.reason,
     ipHint: entry.ipHint,
-  }).catch(e => console.warn("[Audit] Failed to log export:", e));
+  }).catch(e => logWarn("ExportAudit", "Failed to log export", { component: "security.export.audit", error: e instanceof Error ? e.message : String(e) }));
 }
 
 /**

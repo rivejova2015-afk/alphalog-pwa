@@ -1,7 +1,7 @@
 // src/app/api/attachments/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { logError as captureError } from "@/lib/log";
+import { logError as captureError, logWarn } from "@/lib/log";
 
 const MAX_FILE_MB = 100;
 const BLOCKED_EXTENSIONS = [".exe", ".bat"];
@@ -180,7 +180,7 @@ export async function DELETE(request: NextRequest) {
       .remove([attachment.path]);
 
     if (storageError) {
-      console.warn("Warning: failed to delete file from storage:", storageError);
+      logWarn("Attachments", "failed to delete file from storage", { component: "attachments.delete.storage", error: storageError instanceof Error ? storageError.message : String(storageError) });
       // Don't fail the request - metadata is already soft-deleted
     }
 

@@ -3,13 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value);
   } catch (err) {
-    console.warn("[Terminal] Failed to decrypt evidence:", err);
+    logWarn("TerminalEvidence", "Failed to decrypt evidence", { component: "terminal.evidence.decrypt", error: err instanceof Error ? err.message : String(err) });
     return value ?? "";
   }
 };

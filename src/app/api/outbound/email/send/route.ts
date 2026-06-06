@@ -19,7 +19,7 @@ import { sendEmailResponseSchema, sendEmailSchema, validatePayloadSafe, validati
 import { recordBugFromRequest } from '@/lib/security/bugRecorder';
 import { retryAsync, isRetryableError } from '@/lib/security/retry';
 import { autoFixSendEmail } from '@/lib/validation/autoFix';
-import { logError } from '@/lib/log';
+import { logError, logInfo, logWarn } from '@/lib/log';
 import { enforceResponseContract } from '@/lib/validation/contractGuard';
 
 export const runtime = 'nodejs';
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         status: 'partial',
         changes: { auto_fix: fixed.changes },
         ipHint: request.headers.get('x-forwarded-for') || 'unknown',
-      }).catch(e => console.warn('[Audit] Failed to log auto-fix:', e));
+      }).catch(e => logWarn("OutboundEmail", "Failed to log auto-fix", { component: "outbound.email.audit.autofix", error: e instanceof Error ? e.message : String(e) }));
     }
 
     const validation = validatePayloadSafe(sendEmailSchema, fixed.data);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         status: 'failure',
         errorMessage: `Validation failed: ${Object.values(validation.errors).join("; ")}`,
         ipHint: request.headers.get('x-forwarded-for') || 'unknown',
-      }).catch(e => console.warn('[Audit] Failed to log validation error:', e));
+      }).catch(e => logWarn("OutboundEmail", "Failed to log validation error", { component: "outbound.email.audit.validation", error: e instanceof Error ? e.message : String(e) }));
 
       return NextResponse.json(
         validationErrorResponse(validation.errors),
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
           maxDelayMs: 2000,
           shouldRetry: isRetryableError,
           onRetry: (error, attempt, delayMs) => {
-            console.warn(`[SecureMail] Retry ${attempt} in ${delayMs}ms:`, error instanceof Error ? error.message : error);
+            logWarn("OutboundEmail", "Retry", { component: "outbound.email.retry", attempt, delayMs, error: error instanceof Error ? error.message : String(error) });
           },
         }
       );
@@ -200,9 +200,9 @@ export async function POST(request: NextRequest) {
         resourceId: message.id,
         changes: { to_email, subject_ciphertext: subject_ciphertext.slice(0, 50) },
         ipHint: request.headers.get('x-forwarded-for') || 'unknown',
-      }).catch(e => console.warn('[Audit] Failed to log email send:', e));
+      }).catch(e => logWarn("OutboundEmail", "Failed to log email send", { component: "outbound.email.audit.send", error: e instanceof Error ? e.message : String(e) }));
 
-      console.log('Email sent:', message.id, mailbox.email_alias, '→', to_email);
+      logInfo("OutboundEmail", "Email sent", { component: "outbound.email.sent", messageId: message.id, from: mailbox.email_alias, to: to_email });
 
       const responsePayload = {
         success: true,

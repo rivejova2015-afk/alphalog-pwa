@@ -9,6 +9,8 @@
  * - Server NEVER has access to plaintext
  */
 
+import { logError } from '@/lib/log';
+
 import * as openpgp from 'openpgp';
 
 /**
@@ -53,7 +55,7 @@ export async function generateKeypair(
       kdf,
     };
   } catch (error) {
-    console.error('Failed to generate PGP key pair:', error);
+    logError('OpenPGP', { component: 'crypto.openpgp.generateKey', message: 'Failed to generate PGP key pair', error: error instanceof Error ? error.message : String(error) });
     throw new Error('Key generation failed');
   }
 }
@@ -78,7 +80,7 @@ export async function encryptText(
 
     return encrypted as string;
   } catch (error) {
-    console.error('Failed to encrypt text:', error);
+    logError('OpenPGP', { component: 'crypto.openpgp.encryptText', message: 'Failed to encrypt text', error: error instanceof Error ? error.message : String(error) });
     throw new Error('Text encryption failed');
   }
 }
@@ -112,7 +114,7 @@ export async function decryptText(
 
     return decrypted as string;
   } catch (error) {
-    console.error('Failed to decrypt text:', error);
+    logError('OpenPGP', { component: 'crypto.openpgp.decryptText', message: 'Failed to decrypt text', error: error instanceof Error ? error.message : String(error) });
     throw new Error('Text decryption failed - check passphrase');
   }
 }
@@ -138,7 +140,7 @@ export async function encryptBytes(
 
     return encrypted as Uint8Array;
   } catch (error) {
-    console.error('Failed to encrypt bytes:', error);
+    logError('OpenPGP', { component: 'crypto.openpgp.encryptBytes', message: 'Failed to encrypt bytes', error: error instanceof Error ? error.message : String(error) });
     throw new Error('Binary encryption failed');
   }
 }
@@ -173,7 +175,7 @@ export async function decryptBytes(
 
     return decrypted as Uint8Array;
   } catch (error) {
-    console.error('Failed to decrypt bytes:', error);
+    logError('OpenPGP', { component: 'crypto.openpgp.decryptBytes', message: 'Failed to decrypt bytes', error: error instanceof Error ? error.message : String(error) });
     throw new Error('Binary decryption failed - check passphrase');
   }
 }

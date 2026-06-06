@@ -5,7 +5,7 @@ import { encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { z } from "zod";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * Whitelist of tables allowed for AlphaCore offline sync mutations.
@@ -160,7 +160,7 @@ export async function PATCH(
         changes: { source: "alphacore_offline", fields: Object.keys(fields) },
       },
       request
-    ).catch((e) => console.warn("[Audit] Failed to log alphacore update:", e));
+    ).catch((e) => logWarn("Alphacore", "Failed to log alphacore update", { component: "alphacore.update.audit", error: e instanceof Error ? e.message : String(e) }));
 
     // 8. Return the updated record
     return NextResponse.json({

@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { auditSprints, type AuditReport } from '@/lib/alphashield/sprintAudit';
 import { logger } from '@/lib/alphashield/logger';
-import { logError as captureError } from "@/lib/log";
+import { logError as captureError, logInfo } from "@/lib/log";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`[AlphaShield Audit] Starting audit for user ${user.user.id}`);
+    logInfo("AlphaShieldAudit", "Starting audit", { component: "alphashield.audit.start", userId: user.user.id });
 
     // Run audit
     const report = await auditSprints();
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         userId: user.user.id,
       });
     } else {
-      console.log(`[AlphaShield Audit] Audit saved to app_logs`);
+      logInfo("AlphaShieldAudit", "Audit saved to app_logs", { component: "alphashield.audit.persisted" });
     }
 
     // Return audit report

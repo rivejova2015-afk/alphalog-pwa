@@ -4,6 +4,8 @@
  * No external dependencies
  */
 
+import { logWarn } from "@/lib/log";
+
 // Generic entity type for extensibility
 export type Entity = { id?: string; updated_at?: string };
 
@@ -126,7 +128,7 @@ export async function saveSnapshot(
 
     tx.commit();
   } catch (err) {
-    console.warn("[IDB] Error saving snapshot:", err);
+    logWarn("IDB", "Error saving snapshot", { component: "offline.idb.save", error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -142,7 +144,7 @@ export async function getSnapshot(): Promise<DashboardSnapshot | null> {
       req.onerror = () => resolve(null);
     });
   } catch (err) {
-    console.warn("[IDB] Error reading snapshot:", err);
+    logWarn("IDB", "Error reading snapshot", { component: "offline.idb.read", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }
@@ -161,6 +163,6 @@ export async function clearSnapshot(): Promise<void> {
 
     tx.commit();
   } catch (err) {
-    console.warn("[IDB] Error clearing snapshot:", err);
+    logWarn("IDB", "Error clearing snapshot", { component: "offline.idb.clear", error: err instanceof Error ? err.message : String(err) });
   }
 }

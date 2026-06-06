@@ -9,7 +9,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { sendThresholdPush } from '@/lib/treasury/pushNotifications';
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 // accountId is either the literal string "ALL" or a UUID. Other values are
 // rejected before hitting downstream filters to catch typos/malformed input.
@@ -263,7 +263,7 @@ export async function POST(request: Request): Promise<Response> {
         );
 
         if (!pushSent) {
-          console.warn(`[preview] Could not send threshold push for ${account.name} (no subscriptions?)`);
+          logWarn("TreasuryPayouts", "Could not send threshold push (no subscriptions?)", { component: "treasury.payouts.preview.push", accountName: account.name });
         }
       }
     }

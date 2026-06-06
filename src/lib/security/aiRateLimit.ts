@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * Check if an AI endpoint call is allowed under the rate limit.
@@ -26,7 +27,7 @@ export async function checkAiRateLimit(
 
     if (!supabaseUrl || !supabaseServiceKey) {
       // Fail open: if service client unavailable, allow the request
-      console.warn("[aiRateLimit] Supabase service key missing, allowing request");
+      logWarn("AIRateLimit", "Supabase service key missing, allowing request", { component: "security.aiRateLimit.missingKey" });
       return { allowed: true };
     }
 
@@ -49,7 +50,7 @@ export async function checkAiRateLimit(
     });
 
     if (error) {
-      console.warn(`[aiRateLimit] RPC error for ${endpointKey}:`, error.message);
+      logWarn("AIRateLimit", "RPC error", { component: "security.aiRateLimit.rpc", endpoint: endpointKey, error: error.message });
       // Fail open on RPC error
       return { allowed: true };
     }
@@ -70,7 +71,7 @@ export async function checkAiRateLimit(
 
     return { allowed: true };
   } catch (error) {
-    console.error("[aiRateLimit] Unexpected error:", error);
+    logError("AIRateLimit", { component: "security.aiRateLimit.unexpected", message: "Unexpected error", error: error instanceof Error ? error.message : String(error) });
     // Fail open on any exception
     return { allowed: true };
   }

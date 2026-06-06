@@ -3,13 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value);
   } catch (err) {
-    console.warn("[TradeHub] Failed to decrypt report content:", err);
+    logWarn("TradeHubReports", "Failed to decrypt report content", { component: "tradehub.reports.generate.decrypt", error: err instanceof Error ? err.message : String(err) });
     return value ?? null;
   }
 };
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify(pushPayload),
     }).catch((error) => {
-      console.warn('Failed to send push notification:', error);
+      logWarn("TradeHubReports", "Failed to send push notification", { component: "tradehub.reports.generate.push", error: error instanceof Error ? error.message : String(error) });
       // Don't fail the request if push fails
     });
 

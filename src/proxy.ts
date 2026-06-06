@@ -1,6 +1,7 @@
 // src/proxy.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { triggerSecurityAlert } from "@/lib/security/securityAlert";
+import { logError, logInfo } from "@/lib/log";
 
 /**
  * Lightweight proxy for middleware
@@ -140,7 +141,7 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
           if (deviceError.code === "PGRST205") {
             return response;
           }
-          console.error("[Proxy] Device lookup error:", deviceError);
+          logError("Proxy", { component: "proxy.deviceLookup", message: "Device lookup error", error: deviceError instanceof Error ? deviceError.message : String(deviceError) });
         } else if (!device) {
           await supabase.from("auth_device_sessions").insert({
             user_id: data.user.id,
@@ -282,7 +283,7 @@ export async function proxy(request: NextRequest, options: ProxyOptions = {}) {
     }
   } catch (error) {
     // Log but don't fail: auth is optional for public routes
-    console.debug("[Proxy] Auth check failed (optional):", error instanceof Error ? error.message : error);
+    logInfo("Proxy", "Auth check failed (optional)", { component: "proxy.auth.optional", error: error instanceof Error ? error.message : String(error) });
   }
 
   return response;

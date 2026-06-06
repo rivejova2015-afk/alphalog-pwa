@@ -1,6 +1,7 @@
 import "server-only";
 import { decryptText } from "@/lib/security/encryption";
 import type { PaperTrade, TradingRule, LLMExtractionResult } from "./types";
+import { logError } from "@/lib/log";
 
 export async function extractTradingRules(
   paperTrades: PaperTrade[],
@@ -79,7 +80,7 @@ Schema exacto:
     });
 
     if (!response.ok) {
-      console.error("Anthropic API error:", response.status);
+      logError("LLMRules", { component: "bot.skills.llm-rules.anthropic", message: "Anthropic API error", status: response.status });
       return [];
     }
 
@@ -102,7 +103,7 @@ Schema exacto:
       createdAt: new Date().toISOString(),
     }));
   } catch (error) {
-    console.error("LLM rule extraction error:", error);
+    logError("LLMRules", { component: "bot.skills.llm-rules.extraction", message: "LLM rule extraction error", error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }

@@ -4,18 +4,10 @@
  */
 
 import { sendPushToSubscriptions } from '../push/webpush.server';
+import { logError, logInfo } from '@/lib/log';
 
-const logTreasuryError = async (message: string, error?: unknown) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const { logger } = await import('@/lib/alphashield/logger');
-      await logger.error('treasury', message, error instanceof Error ? error : undefined);
-      return;
-    } catch {
-      // fallback below
-    }
-  }
-  console.error(message, error);
+const logTreasuryError = (message: string, error?: unknown) => {
+  logError('TreasuryPush', { component: 'treasury.push', message, error: error instanceof Error ? error.message : String(error) });
 };
 
 interface ThresholdPushPayload {
@@ -48,7 +40,7 @@ export async function sendThresholdPush(
 
     if (subError || !subscriptions || subscriptions.length === 0) {
       // No subscriptions - skip notification but don't fail
-      console.log(`[sendThresholdPush] No subscriptions for user ${userId}`);
+      logInfo('TreasuryPush', 'No subscriptions for user', { component: 'treasury.push.noSubscriptions', userId });
       return false;
     }
 
@@ -64,7 +56,7 @@ export async function sendThresholdPush(
       .filter(Boolean);
 
     if (parsedSubs.length === 0) {
-      console.log(`[sendThresholdPush] No valid subscriptions for user ${userId}`);
+      logInfo('TreasuryPush', 'No valid subscriptions for user', { component: 'treasury.push.noValidSubscriptions', userId });
       return false;
     }
 
@@ -100,7 +92,7 @@ export async function sendThresholdPush(
         );
       }
 
-      console.log(`[sendThresholdPush] Sent to ${result.sent} subscriptions`);
+      logInfo('TreasuryPush', 'Sent to subscriptions', { component: 'treasury.push.sent', count: result.sent });
       return true;
     }
 

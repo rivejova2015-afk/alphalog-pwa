@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { newsItemResponseSchema } from "@/lib/validation/schemas";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * GET /api/terminal/news?instrumentId={id}
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     const contractResult = enforceResponseContract(newsItemResponseSchema.array(), decrypted);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] GET /api/terminal/news contract violation:", contractResult.errors);
+      logWarn("TerminalNews", "GET contract violation", { component: "terminal.news.contract.get", errors: contractResult.errors });
     }
 
     return NextResponse.json(decrypted, {
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     const contractResult = enforceResponseContract(newsItemResponseSchema, responsePayload);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] POST /api/terminal/news contract violation:", contractResult.errors);
+      logWarn("TerminalNews", "POST contract violation", { component: "terminal.news.contract.post", errors: contractResult.errors });
     }
 
     return NextResponse.json(responsePayload);

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -272,7 +272,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove(evidencePaths);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete evidence files:", storageErr);
+        logWarn("Accounts", "Failed to delete evidence files", { component: "accounts.delete.storage.evidence", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
       }
     }
 
@@ -316,7 +316,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove(tradeEvidencePaths);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete trade_evidence files:", storageErr);
+        logWarn("Accounts", "Failed to delete trade_evidence files", { component: "accounts.delete.storage.trade_evidence", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
       }
     }
 
@@ -333,7 +333,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove(screenshotPaths);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete trade screenshots:", storageErr);
+        logWarn("Accounts", "Failed to delete trade screenshots", { component: "accounts.delete.storage.screenshots", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
       }
     }
 

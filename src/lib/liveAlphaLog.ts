@@ -2,6 +2,7 @@
 // Lightweight service that opens Supabase realtime channels and notifies on any data change.
 
 import { createClient } from "@/lib/supabase/browser";
+import { logWarn } from "@/lib/log";
 
 export type LiveAlphaLogStatus = "connecting" | "connected" | "stopped" | "error";
 
@@ -72,7 +73,7 @@ export function startLiveAlphaLog(options: LiveAlphaLogOptions = {}): LiveAlphaL
       try {
         supabase.removeChannel(ch);
       } catch (err) {
-        console.warn("[LiveAlphaLog] removeChannel error", err);
+        logWarn("LiveAlphaLog", "removeChannel error", { component: "liveAlphaLog.removeChannel", error: err instanceof Error ? err.message : String(err) });
       }
     });
   };

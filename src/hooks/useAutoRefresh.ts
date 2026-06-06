@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { logError, logInfo } from "@/lib/log";
+import { logError, logInfo, logWarn } from "@/lib/log";
 
 interface UseAutoRefreshOptions<T> {
   key: string;
@@ -320,17 +320,5 @@ export function useAutoRefresh<T>({
   };
 }
 
-/**
- * Helper para loguear warnings (simplificado)
- */
-function logWarn(key: string, message: string, meta?: any): void {
-  if (process.env.NODE_ENV === "development") {
-    console.warn(
-      `%c[${key}] ${message}`,
-      "color: #f59e0b; font-weight: bold;",
-      meta
-    );
-  } else {
-    console.warn(`[${key}]`, message, meta);
-  }
-}
+// `logWarn` is re-exported above from `@/lib/log` (already imported by
+// users of this hook). No local wrapper needed.

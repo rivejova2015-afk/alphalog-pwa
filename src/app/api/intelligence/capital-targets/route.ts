@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { capitalTargetResponseSchema } from "@/lib/validation/schemas";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 type CapitalTargetType = "real" | "propfirm";
 type ManualFieldKey =
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
 
     const contractResult = enforceResponseContract(capitalTargetResponseSchema.array(), result);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] GET /api/intelligence/capital-targets contract violation:", contractResult.errors);
+      logWarn("CapitalTargets", "GET contract violation", { component: "intelligence.capital-targets.contract.get", errors: contractResult.errors });
     }
 
     return NextResponse.json(result, {
@@ -322,7 +322,7 @@ export async function POST(request: NextRequest) {
 
     const contractResult = enforceResponseContract(capitalTargetResponseSchema, data);
     if (!contractResult.ok) {
-      console.warn("[ContractGuard] POST /api/intelligence/capital-targets contract violation:", contractResult.errors);
+      logWarn("CapitalTargets", "POST contract violation", { component: "intelligence.capital-targets.contract.post", errors: contractResult.errors });
     }
 
     return NextResponse.json(data, { status: 201 });

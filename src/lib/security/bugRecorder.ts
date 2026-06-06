@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import crypto from "crypto";
 import { hashUserAgent } from "@/lib/security/auditLog";
 import { classifyBug } from "@/lib/security/bugTriage";
+import { logError, logWarn } from "@/lib/log";
 
 export interface BugReportInput {
   userId?: string | null;
@@ -81,7 +82,7 @@ const insertFallbackAppLog = async (
 ) => {
   if (!fallbackUserId) {
     if (!warnedMissingUserFallback) {
-      console.warn("[BugRecorder] RPC missing and no user context for fallback log");
+      logWarn("BugRecorder", "RPC missing and no user context for fallback log", { component: "security.bugRecorder.missingContext" });
       warnedMissingUserFallback = true;
     }
     return null;
@@ -113,7 +114,7 @@ const insertFallbackAppLog = async (
     .single();
 
   if (appLogError) {
-    console.error("[BugRecorder] RPC missing and fallback app_logs insert failed:", appLogError);
+    logError("BugRecorder", { component: "security.bugRecorder.fallbackFailed", message: "RPC missing and fallback app_logs insert failed", error: appLogError instanceof Error ? appLogError.message : String(appLogError) });
     return null;
   }
 
@@ -126,7 +127,7 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceKey) {
-      console.warn("[BugRecorder] Missing Supabase service credentials");
+      logWarn("BugRecorder", "Missing Supabase service credentials", { component: "security.bugRecorder.missingCredentials" });
       return null;
     }
 
@@ -175,7 +176,7 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
         });
       }
 
-      console.error("[BugRecorder] Failed to record bug:", error);
+      logError("BugRecorder", { component: "security.bugRecorder.recordFailed", message: "Failed to record bug", error: error instanceof Error ? error.message : String(error) });
       return null;
     }
 
@@ -197,12 +198,12 @@ export async function recordBugReport(input: BugReportInput): Promise<string | n
     });
 
     if (triageError) {
-      console.warn("[BugRecorder] Failed to log triage:", triageError);
+      logWarn("BugRecorder", "Failed to log triage", { component: "security.bugRecorder.triageFailed", error: triageError instanceof Error ? triageError.message : String(triageError) });
     }
 
     return bugId;
   } catch (err) {
-    console.error("[BugRecorder] Unexpected error:", err);
+    logError("BugRecorder", { component: "security.bugRecorder.unexpected", message: "Unexpected error", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }

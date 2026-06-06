@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { logError } from '@/lib/log';
 
 export interface AccountGroup {
   name: string;
@@ -98,7 +99,7 @@ export async function getAccountGroups(userId: string): Promise<AccountGroup[]> 
       .is('deleted_at', null);
 
     if (error) {
-      console.error('[Dashboard] Error fetching accounts:', error);
+      logError('Dashboard', { component: 'dashboard.queries.accounts', message: 'Error fetching accounts', error: error instanceof Error ? error.message : String(error) });
       return [];
     }
 
@@ -118,7 +119,7 @@ export async function getAccountGroups(userId: string): Promise<AccountGroup[]> 
 
     return Array.from(grouped.values());
   } catch (error) {
-    console.error('[Dashboard] Accounts grouping failed:', error);
+    logError('Dashboard', { component: 'dashboard.queries.grouping', message: 'Accounts grouping failed', error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -157,11 +158,11 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
     ]);
 
     if (tradesResult.error) {
-      console.error('[Dashboard] Error fetching trades:', tradesResult.error);
+      logError('Dashboard', { component: 'dashboard.queries.trades', message: 'Error fetching trades', error: tradesResult.error instanceof Error ? tradesResult.error.message : String(tradesResult.error) });
       return getEmptyMetrics();
     }
     if (accountsResult.error) {
-      console.error('[Dashboard] Error fetching accounts for base capital:', accountsResult.error);
+      logError('Dashboard', { component: 'dashboard.queries.baseCapital', message: 'Error fetching accounts for base capital', error: accountsResult.error instanceof Error ? accountsResult.error.message : String(accountsResult.error) });
     }
 
     // ---------------------------------------------------------------------------
@@ -268,7 +269,7 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
       losingTrades,
     };
   } catch (error) {
-    console.error('[Dashboard] Performance metrics calculation failed:', error);
+    logError('Dashboard', { component: 'dashboard.queries.metrics', message: 'Performance metrics calculation failed', error: error instanceof Error ? error.message : String(error) });
     return getEmptyMetrics();
   }
 }

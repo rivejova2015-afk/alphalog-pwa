@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { encryptText } from '@/lib/security/encryption';
-import { logError } from '@/lib/log';
+import { logError, logInfo, logWarn } from '@/lib/log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (allowedError || !allowedSender) {
-      console.warn('Unauthorized sender rejected:', fromEmail, '→', toEmail);
+      logWarn("InboundEmail", "Unauthorized sender rejected", { component: "inbound.email.unauthorizedSender", fromEmail, toEmail });
       // REJECT: Do not store, do not notify
       return NextResponse.json({ message: 'Sender not authorized' }, { status: 200 });
     }
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 
       for (const attachment of inboundMessage.Attachments) {
         if (attachment.ContentLength > maxSize) {
-          console.warn('Attachment too large:', attachment.Name, attachment.ContentLength);
+          logWarn("InboundEmail", "Attachment too large", { component: "inbound.email.attachmentTooLarge", name: attachment.Name, size: attachment.ContentLength });
           continue;
         }
 
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
         // Store attachment metadata
         const filenameCiphertext = encryptText(attachment.Name);
         if (!filenameCiphertext) {
-          console.warn('Skipping attachment due to encryption error:', attachment.Name);
+          logWarn("InboundEmail", "Skipping attachment due to encryption error", { component: "inbound.email.attachmentEncryptionError", name: attachment.Name });
           continue;
         }
 
@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('Inbound message stored:', message.id, fromEmail, '→', toEmail);
+    logInfo("InboundEmail", "Inbound message stored", { component: "inbound.email.stored", messageId: message.id, fromEmail, toEmail });
 
     return NextResponse.json({ message: 'Message received' }, { status: 200 });
   } catch (error) {

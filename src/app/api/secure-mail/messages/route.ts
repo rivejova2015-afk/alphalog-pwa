@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value) || "";
   } catch (error) {
-    console.warn("[SecureMail] Decrypt failed:", error);
+    logWarn("SecureMail", "Decrypt failed", { component: "secure-mail.messages.decrypt", error: error instanceof Error ? error.message : String(error) });
     return value || "";
   }
 };

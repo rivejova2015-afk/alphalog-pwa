@@ -11,7 +11,7 @@ import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { computeGoalStatus } from "@/lib/map-hot/goalStatus";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 type GoalRow = {
   id: string;
@@ -234,7 +234,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const response = mapRowToResponse(full as unknown as GoalRow);
     const contract = enforceResponseContract(mapHotGoalResponseSchema, response);
     if (!contract.ok) {
-      console.warn("map_hot_goal response contract violation:", contract.errors);
+      logWarn("MapHotGoals", "response contract violation", { component: "map-hot.goals.[id].contract", errors: contract.errors });
     }
 
     await logAuditFromRequest(
