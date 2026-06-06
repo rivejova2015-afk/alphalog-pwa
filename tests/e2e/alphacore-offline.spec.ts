@@ -304,4 +304,193 @@ test.describe("AlphaCore offline outbox", () => {
     const afterDelete = await findJournalEntry(request, (entry) => entry.id === id);
     expect(afterDelete, "soft-deleted entry should be hidden from GET /api/journal").toBeFalsy();
   });
+
+  test("conflicts page renders seeded conflict, retries, and resolves via 'use server'", async ({ page }) => {
+    // Seeding via IDB directly is the most reliable way to produce a
+    // conflict in CI: triggering one via the OutboxManager would require
+    // failing a real server endpoint past the retry budget, which is
+    // brittle. The conflicts page reads `status='conflict'` rows from the
+    // outbox store — we don't care how they got there.
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Give the bundle a moment so IndexedDB has been opened at least once
+    // by the global outbox bootstrap.
+    await page.waitForTimeout(1500);
+
+    const marker = `e2e-conflict-${Date.now()}`;
+
+    type SeededEntry = {
+      id: string;
+      mutationId: string;
+      operation: string;
+      table: string;
+      payload: { text: string; [k: string]: unknown };
+      createdAt: number;
+      retryCount: number;
+      maxRetries: number;
+      status: string;
+      lastError: string;
+      metadata: { endpoint: string; method: string; bodyMode: string };
+    };
+
+    // page.evaluate runs in the page context, so it has access to the real
+    // IndexedDB the app uses. We open with DB_NAME='alphalog', store
+    // 'outbox' (matches src/lib/alphacore/offline/idb.ts).
+    const seeded = await page.evaluate(async (markerArg: string): Promise<SeededEntry> => {
+      const DB_NAME = "alphalog";
+      const STORE = "outbox";
+
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+
+      const entry: SeededEntry = {
+        id: `e2e-seed-${markerArg}`,
+        mutationId: `mut-${markerArg}`,
+        operation: "create",
+        table: "journal_entries",
+        payload: { text: `Conflict seed ${markerArg}` },
+        createdAt: Date.now(),
+        retryCount: 3,
+        maxRetries: 3,
+        status: "conflict",
+        lastError: "Seeded by E2E: server returned 409 — newer version exists",
+        metadata: { endpoint: "/api/journal", method: "POST", bodyMode: "direct" },
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([STORE], "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore(STORE).put(entry);
+      });
+
+      db.close();
+      return entry;
+    }, marker);
+
+    expect(seeded.status, "seed inserted a conflict entry").toBe("conflict");
+
+    // The global ConflictBadge polls every 8s with a 1.5s initial delay.
+    // Navigating to /dashboard/conflicts is faster than waiting for it to
+    // surface — that interaction is covered by the unit tests for
+    // `ConflictBadge` + `useConflictCount`.
+    await page.goto("/dashboard/conflicts", { waitUntil: "domcontentloaded", timeout: 60000 });
+
+    // The seeded payload text should be visible in the conflict card.
+    await expect(page.getByText(marker, { exact: false }).first()).toBeVisible({ timeout: 8000 });
+    // Endpoint metadata should be rendered.
+    await expect(page.getByText("/api/journal").first()).toBeVisible();
+    // Retry / fingerprint counters.
+    await expect(page.getByText(/reintentos:\s*3\/3/i).first()).toBeVisible();
+
+    // Resolve as "server" — the entry should disappear from the list and
+    // the empty state should render.
+    await page.getByRole("button", { name: /usar versión del servidor/i }).first().click();
+
+    // Empty state copy when no conflicts remain.
+    await expect(page.getByText(/no hay conflictos pendientes/i)).toBeVisible({ timeout: 6000 });
+
+    // Verify directly in IDB that the entry was removed (not just hidden in UI).
+    const remaining = await page.evaluate(async (id: string): Promise<unknown> => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("alphalog");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const result = await new Promise<unknown>((resolve, reject) => {
+        const tx = db.transaction(["outbox"], "readonly");
+        const req = tx.objectStore("outbox").get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return result;
+    }, seeded.id);
+
+    expect(remaining, "resolve='server' deletes the outbox entry").toBeFalsy();
+  });
+
+  test("conflict 'force local' re-queues the entry as pending", async ({ page }) => {
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(1500);
+
+    const marker = `e2e-conflict-local-${Date.now()}`;
+    const seededId = `e2e-seed-local-${marker}`;
+
+    await page.evaluate(
+      async ({ id, mark }: { id: string; mark: string }) => {
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          const req = indexedDB.open("alphalog");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(["outbox"], "readwrite");
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.objectStore("outbox").put({
+            id,
+            mutationId: `mut-${mark}`,
+            operation: "create",
+            table: "journal_entries",
+            payload: { text: `Force local ${mark}` },
+            createdAt: Date.now(),
+            retryCount: 3,
+            maxRetries: 3,
+            status: "conflict",
+            lastError: "Seeded: 412 precondition failed",
+            metadata: { endpoint: "/api/journal", method: "POST", bodyMode: "direct" },
+          });
+        });
+        db.close();
+      },
+      { id: seededId, mark: marker }
+    );
+
+    await page.goto("/dashboard/conflicts", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await expect(page.getByText(marker, { exact: false }).first()).toBeVisible({ timeout: 8000 });
+
+    await page.getByRole("button", { name: /forzar versión local/i }).first().click();
+    await expect(page.getByText(/no hay conflictos pendientes/i)).toBeVisible({ timeout: 6000 });
+
+    // Force-local does NOT delete — it flips status='pending' so the
+    // OutboxManager retries it next sync. Verify directly.
+    const stored = await page.evaluate(async (id: string) => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("alphalog");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const row = await new Promise<{ status?: string } | undefined>((resolve, reject) => {
+        const tx = db.transaction(["outbox"], "readonly");
+        const req = tx.objectStore("outbox").get(id);
+        req.onsuccess = () => resolve(req.result as { status?: string } | undefined);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return row;
+    }, seededId);
+
+    expect(stored, "entry should still exist after 'force local'").toBeTruthy();
+    expect(stored?.status, "force-local flips status to 'pending'").toBe("pending");
+
+    // Cleanup so the next test doesn't see a leftover pending entry that
+    // would try to POST garbage to /api/journal during global online events.
+    await page.evaluate(async (id: string) => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("alphalog");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(["outbox"], "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore("outbox").delete(id);
+      });
+      db.close();
+    }, seededId);
+  });
 });
