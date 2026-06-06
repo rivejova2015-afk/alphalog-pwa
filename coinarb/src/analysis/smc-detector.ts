@@ -374,13 +374,20 @@ export function evaluatePremiumDiscount(
     currentPrice < microMid * (1 - PD_MICRO_BAND) ? 'DISCOUNT' :
     currentPrice > microMid * (1 + PD_MICRO_BAND) ? 'PREMIUM' : 'EQUILIBRIUM';
 
+  // PD allowed combinations. Two layers:
+  //   1. Strict zone-aligned setups (original 6 combos) — best quality.
+  //   2. Relaxed EQ+EQ added 2026-06-06 because the old BOS/CHOCH override
+  //      almost never fired in practice (BOS happens DURING moves, not during
+  //      consolidation when EQ+EQ shows up). Quality is delegated to
+  //      downstream sweep + CHOCH + confluence gates.
   const allowed =
     (bias === 'BUY'  && macroZone === 'DISCOUNT'    && microZone === 'DISCOUNT')    ||
     (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'PREMIUM')     ||
     (bias === 'BUY'  && macroZone === 'EQUILIBRIUM' && microZone === 'DISCOUNT')    ||
     (bias === 'SELL' && macroZone === 'EQUILIBRIUM' && microZone === 'PREMIUM')     ||
     (bias === 'BUY'  && macroZone === 'DISCOUNT'    && microZone === 'EQUILIBRIUM') ||
-    (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM');
+    (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM') ||
+    (macroZone === 'EQUILIBRIUM' && microZone === 'EQUILIBRIUM');
 
   return {
     allowed,
