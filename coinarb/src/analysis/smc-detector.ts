@@ -374,13 +374,24 @@ export function evaluatePremiumDiscount(
     currentPrice < microMid * (1 - PD_MICRO_BAND) ? 'DISCOUNT' :
     currentPrice > microMid * (1 + PD_MICRO_BAND) ? 'PREMIUM' : 'EQUILIBRIUM';
 
+  // PD allowed combinations. Three layers:
+  //   1. Strict zone-aligned setups (original 6 combos) — best quality.
+  //   2. EQ+EQ when bias is directional — neutral zones where MTF +
+  //      downstream sweep/CHOCH/confluence still gate quality.
+  //   3. Counter-macro pullback combos — mean-reversion plays where macro
+  //      shows one zone and micro just pulled back to the opposite. Valid
+  //      SMC pattern for ranging markets where the bot would otherwise sit
+  //      out entirely. Sweep + CHOCH must still confirm direction downstream.
   const allowed =
     (bias === 'BUY'  && macroZone === 'DISCOUNT'    && microZone === 'DISCOUNT')    ||
     (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'PREMIUM')     ||
     (bias === 'BUY'  && macroZone === 'EQUILIBRIUM' && microZone === 'DISCOUNT')    ||
     (bias === 'SELL' && macroZone === 'EQUILIBRIUM' && microZone === 'PREMIUM')     ||
     (bias === 'BUY'  && macroZone === 'DISCOUNT'    && microZone === 'EQUILIBRIUM') ||
-    (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM');
+    (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM') ||
+    (macroZone === 'EQUILIBRIUM' && microZone === 'EQUILIBRIUM') ||
+    (bias === 'BUY'  && macroZone === 'PREMIUM'     && microZone === 'DISCOUNT')    ||
+    (bias === 'SELL' && macroZone === 'DISCOUNT'    && microZone === 'PREMIUM');
 
   return {
     allowed,
