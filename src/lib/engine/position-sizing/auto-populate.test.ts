@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import type { BacktestMetrics } from "@/types/backtest";
-import { buildKellyInputs, mergeKellyInputs, KELLY_MIN_SAMPLE_TRADES } from "./auto-populate";
+import {
+  buildKellyInputs,
+  buildKellyInputsFromTrades,
+  mergeKellyInputs,
+  KELLY_MIN_SAMPLE_TRADES,
+  type ClosedTrade,
+} from "./auto-populate";
 
 const baseMetrics: BacktestMetrics = {
   totalTrades:          50,
@@ -117,5 +123,64 @@ describe("mergeKellyInputs", () => {
     const mergedFromUndefined = mergeKellyInputs(undefined, payload);
     expect(mergedFromNull.kelly_win_rate).toBe(0.6);
     expect(mergedFromUndefined.kelly_win_rate).toBe(0.6);
+  });
+});
+
+describe("buildKellyInputsFromTrades", () => {
+  const tOpts = { sourceTag: "paper_trades:algo-xyz", nowIso: "2026-06-05T00:00:00Z" };
+
+  function makeTrades(wins: number, losses: number, avgWin: number, avgLoss: number): ClosedTrade[] {
+    const out: ClosedTrade[] = [];
+    for (let i = 0; i < wins; i++)   out.push({ pnl:  avgWin,        status: "closed" });
+    for (let i = 0; i < losses; i++) out.push({ pnl: -avgLoss,       status: "closed" });
+    return out;
+  }
+
+  it("returns null when sample size is below the 30-trade floor", () => {
+    const trades = makeTrades(10, 10, 100, 50);
+    expect(buildKellyInputsFromTrades(trades, tOpts)).toBeNull();
+  });
+
+  it("computes payload from a profitable paper history", () => {
+    const trades = makeTrades(20, 15, 120, 60);
+    const out = buildKellyInputsFromTrades(trades, tOpts);
+    expect(out).not.toBeNull();
+    expect(out!.kelly_win_rate).toBeCloseTo(20 / 35, 4);
+    expect(out!.kelly_avg_win_usd).toBe(120);
+    expect(out!.kelly_avg_loss_usd).toBe(60);
+    expect(out!.kelly_inputs_sample_size).toBe(35);
+    expect(out!.kelly_inputs_source).toBe("paper_trades:algo-xyz");
+  });
+
+  it("ignores open / non-closed trades", () => {
+    const trades: ClosedTrade[] = [
+      ...makeTrades(20, 15, 100, 50),
+      { pnl: 5000,    status: "open" },     // ignored
+      { pnl: null,    status: "pending" },  // ignored
+    ];
+    const out = buildKellyInputsFromTrades(trades, tOpts)!;
+    expect(out.kelly_inputs_sample_size).toBe(35);
+    expect(out.kelly_avg_win_usd).toBe(100);
+  });
+
+  it("returns null when there are no winning trades", () => {
+    const trades = makeTrades(0, 40, 0, 50);
+    expect(buildKellyInputsFromTrades(trades, tOpts)).toBeNull();
+  });
+
+  it("returns null when there are no losing trades (winRate=1)", () => {
+    const trades = makeTrades(40, 0, 100, 0);
+    expect(buildKellyInputsFromTrades(trades, tOpts)).toBeNull();
+  });
+
+  it("treats pnl=0 trades as part of sample but neutral to win/loss", () => {
+    const wins   = makeTrades(20, 0, 100, 0);
+    const losses = makeTrades(0, 15, 0, 50);
+    const breakEven: ClosedTrade[] = Array.from({ length: 5 }, () => ({ pnl: 0, status: "closed" }));
+    const out = buildKellyInputsFromTrades([...wins, ...losses, ...breakEven], tOpts)!;
+    expect(out.kelly_inputs_sample_size).toBe(40);
+    expect(out.kelly_win_rate).toBeCloseTo(20 / 40, 4);
+    // avg_loss counts the 5 break-evens as part of the loss denominator.
+    expect(out.kelly_avg_loss_usd).toBeCloseTo((15 * 50) / 20, 2);
   });
 });

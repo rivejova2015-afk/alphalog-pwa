@@ -73,3 +73,54 @@ export function mergeKellyInputs(
     ...payload,
   };
 }
+
+/**
+ * Build a Kelly payload directly from closed paper trades. Used by the
+ * paper-review cron so live paper data overrides the engine-backtest stats
+ * once enough fills accumulate (>=30 closed trades). Same rejection rules
+ * as buildKellyInputs.
+ *
+ * Pure function; the cron supplies the rows.
+ */
+export interface ClosedTrade {
+  pnl:    number | null;
+  status: string;
+}
+
+export function buildKellyInputsFromTrades(
+  trades: ClosedTrade[],
+  opts: AutoPopulateOptions,
+): KellyInputsPayload | null {
+  const closed = trades.filter((t) => t.status === "closed" && typeof t.pnl === "number");
+  const sampleSize = closed.length;
+
+  const minTrades = opts.minTrades ?? KELLY_MIN_SAMPLE_TRADES;
+  if (sampleSize < minTrades) return null;
+
+  let wins = 0;
+  let grossWin = 0;
+  let grossLoss = 0;
+  for (const t of closed) {
+    const pnl = t.pnl as number;
+    if (pnl > 0) { wins++; grossWin += pnl; }
+    else if (pnl < 0) { grossLoss += Math.abs(pnl); }
+    // pnl === 0 → counted toward sampleSize but doesn't help either side.
+  }
+  const losses = sampleSize - wins;
+
+  const winRate = wins / sampleSize;
+  const avgWin  = wins   > 0 ? grossWin  / wins   : 0;
+  const avgLoss = losses > 0 ? grossLoss / losses : 0;
+
+  if (winRate <= 0 || winRate >= 1) return null;
+  if (avgWin <= 0 || avgLoss <= 0)  return null;
+
+  return {
+    kelly_win_rate:           winRate,
+    kelly_avg_win_usd:        avgWin,
+    kelly_avg_loss_usd:       avgLoss,
+    kelly_inputs_updated_at:  opts.nowIso,
+    kelly_inputs_source:      opts.sourceTag,
+    kelly_inputs_sample_size: sampleSize,
+  };
+}

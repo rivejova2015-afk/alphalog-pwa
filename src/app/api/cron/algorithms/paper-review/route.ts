@@ -10,17 +10,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { evaluatePaperGates, type PaperTrade } from "@/lib/engine/v1/paper-gates";
-import { logError, logInfo } from "@/lib/log";
+import { buildKellyInputsFromTrades, mergeKellyInputs } from "@/lib/engine/position-sizing/auto-populate";
+import { logError, logInfo, logWarn } from "@/lib/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 interface AlgoRow {
-  id: string;
-  user_id: string;
-  name: string;
-  status: string;
+  id:         string;
+  user_id:    string;
+  name:       string;
+  status:     string;
+  parameters: Record<string, unknown> | null;
 }
 
 function authorize(req: NextRequest): boolean {
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
 
   const { data: algos, error: algoErr } = await svc
     .from("algorithms")
-    .select("id, user_id, name, status")
+    .select("id, user_id, name, status, parameters")
     .eq("status", "paper")
     .is("deleted_at", null);
 
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: algoErr.message }, { status: 500 });
   }
 
-  const summary: { algorithmId: string; promoted: boolean; closedTrades: number; reason?: string }[] = [];
+  const summary: { algorithmId: string; promoted: boolean; closedTrades: number; kellyRefreshed: boolean; reason?: string }[] = [];
 
   for (const algo of (algos ?? []) as AlgoRow[]) {
     try {
@@ -64,8 +66,34 @@ export async function GET(request: NextRequest) {
         .limit(500);
 
       if (tradesErr) {
-        summary.push({ algorithmId: algo.id, promoted: false, closedTrades: 0, reason: tradesErr.message });
+        summary.push({ algorithmId: algo.id, promoted: false, closedTrades: 0, kellyRefreshed: false, reason: tradesErr.message });
         continue;
+      }
+
+      // Sprint P — refresh Kelly inputs from live paper trades. Live data
+      // overrides whatever the engine-backtest wrote when there are ≥30
+      // closed trades. Failure-open: if the update fails, log + move on
+      // (promotion gate evaluation still runs).
+      let kellyRefreshed = false;
+      const kellyPayload = buildKellyInputsFromTrades((trades ?? []) as { pnl: number | null; status: string }[], {
+        sourceTag: `paper_trades:${algo.id}`,
+        nowIso:    new Date().toISOString(),
+      });
+      if (kellyPayload) {
+        const mergedParams = mergeKellyInputs(algo.parameters, kellyPayload);
+        const { error: kellyErr } = await svc
+          .from("algorithms")
+          .update({ parameters: mergedParams })
+          .eq("id", algo.id)
+          .eq("user_id", algo.user_id);
+        if (kellyErr) {
+          logWarn("PaperReview", "kelly refresh failed (proceeding with promotion gates)", {
+            component: "kelly-refresh",
+            meta: { algorithmId: algo.id, error: kellyErr.message },
+          });
+        } else {
+          kellyRefreshed = true;
+        }
       }
 
       const evaluation = evaluatePaperGates((trades ?? []) as PaperTrade[]);
@@ -76,6 +104,7 @@ export async function GET(request: NextRequest) {
           algorithmId: algo.id,
           promoted: false,
           closedTrades: evaluation.closedTrades,
+          kellyRefreshed,
           reason: `gates_failed:${failed.join(",")}`,
         });
         continue;
@@ -89,7 +118,7 @@ export async function GET(request: NextRequest) {
         .eq("status", "paper");
 
       if (promoteErr) {
-        summary.push({ algorithmId: algo.id, promoted: false, closedTrades: evaluation.closedTrades, reason: promoteErr.message });
+        summary.push({ algorithmId: algo.id, promoted: false, closedTrades: evaluation.closedTrades, kellyRefreshed, reason: promoteErr.message });
         continue;
       }
 
@@ -103,16 +132,17 @@ export async function GET(request: NextRequest) {
           daysLive: evaluation.daysLive,
         },
       });
-      summary.push({ algorithmId: algo.id, promoted: true, closedTrades: evaluation.closedTrades });
+      summary.push({ algorithmId: algo.id, promoted: true, closedTrades: evaluation.closedTrades, kellyRefreshed });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logError("PaperReview", { component: "per-algo", message: msg, meta: { algorithmId: algo.id } });
-      summary.push({ algorithmId: algo.id, promoted: false, closedTrades: 0, reason: msg });
+      summary.push({ algorithmId: algo.id, promoted: false, closedTrades: 0, kellyRefreshed: false, reason: msg });
     }
   }
 
   const promotedCount = summary.filter((s) => s.promoted).length;
-  logInfo("PaperReview", `reviewed ${summary.length} algorithms, promoted ${promotedCount}`, { component: "cron" });
+  const kellyRefreshedCount = summary.filter((s) => s.kellyRefreshed).length;
+  logInfo("PaperReview", `reviewed ${summary.length} algorithms, promoted ${promotedCount}, kelly refreshed ${kellyRefreshedCount}`, { component: "cron" });
 
-  return NextResponse.json({ ok: true, reviewed: summary.length, promoted: promotedCount, summary });
+  return NextResponse.json({ ok: true, reviewed: summary.length, promoted: promotedCount, kelly_refreshed: kellyRefreshedCount, summary });
 }
