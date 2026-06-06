@@ -38,12 +38,21 @@
 
 # Bars ingest + algorithms
 10   *    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/bars/ingest
+# Tradovate intraday refresh (Sprint M — latency mejora) — every 5 min, keeps
+# historical_bars warm for active futures algos. Skips silently when no
+# connections exist. Scoped to symbols of paper/live futures algos.
+*/5  *    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/bars/tradovate-fetch
 45   5    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/algorithms/paper-review
 *    *    *  *  *   curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/algorithms/tradovate-poll
 0    23   *  *  1-5 curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/bars/cme-settle-fetch
 
 # Map / progress snapshots
 5    0    *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/map-hot/snapshot
+
+# DB cleanup (Sprint L) — purges api_rate_limits (>2h), app_logs (>30d),
+# progress_events (>60d), app_update_events (>30d), cme_signals terminal (>90d).
+# api_rate_limits hourly window means this needs to run frequently — every 3h.
+0    */3  *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/db/cleanup
 
 # Business hub + Treasury — Sprint 5 (activación 70% dormido).
 # NOTE: these endpoints are GET (not POST) — use `-X GET` explicitly.

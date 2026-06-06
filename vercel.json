@@ -47,12 +47,20 @@
       "schedule": "10 * * * *"
     },
     {
+      "path": "/api/cron/bars/tradovate-fetch",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/algorithms/paper-review",
       "schedule": "45 5 * * *"
     },
     {
       "path": "/api/cron/algorithms/tradovate-poll",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/db/cleanup",
+      "schedule": "0 */3 * * *"
     },
     {
       "path": "/api/cron/bars/cme-settle-fetch",

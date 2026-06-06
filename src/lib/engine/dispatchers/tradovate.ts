@@ -16,11 +16,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { executeSignal, type CmeSignal } from "@/lib/cme/order-executor";
-import { getPositions, tradovateRenew } from "@/lib/cme/tradovate";
+import { getPositions, getCashBalance, tradovateRenew } from "@/lib/cme/tradovate";
 import { readCmeAccessToken, storeCmeAccessToken } from "@/lib/cme/vault";
 import { tickSizeFor, rootSymbolOf } from "@/lib/cme/tick-sizes";
+import { tickValueFor } from "@/lib/cme/tick-values";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { computeAtrFromBars } from "./atr";
+import { computeKellyContracts } from "../position-sizing/kelly";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import { getDispatchMode, type DispatchInput, type DispatchResult } from "./types";
 
@@ -168,6 +170,58 @@ async function computeSlTpTicks(
   }
 }
 
+/**
+ * Fetch the account's current netLiq from Tradovate to feed Kelly sizing.
+ * Returns null on any failure — Kelly path will fall back to manual qty.
+ *
+ * Reuses the same connection row + token-renewal pattern as netAccountPosition,
+ * but doesn't share state with it to keep both flows independently failure-open.
+ */
+async function fetchAccountEquity(
+  svc: SupabaseClient,
+  cmeAccountId: string,
+  userId: string,
+): Promise<number | null> {
+  try {
+    const { data: conn } = await svc
+      .from("cme_connections")
+      .select("id, tradovate_account_id, token_expires_at")
+      .eq("user_id", userId)
+      .eq("cme_account_id", cmeAccountId)
+      .eq("status", "connected")
+      .maybeSingle();
+    if (!conn) return null;
+
+    const { data: acct } = await svc
+      .from("algo_cme_accounts")
+      .select("is_paper")
+      .eq("id", cmeAccountId)
+      .maybeSingle();
+    const isPaper = acct?.is_paper ?? true;
+
+    let token = await readCmeAccessToken(conn.id);
+    if (!token) return null;
+
+    const expiresAt = conn.token_expires_at ? new Date(conn.token_expires_at) : null;
+    const tenMinFromNow = new Date(Date.now() + 10 * 60 * 1000);
+    if (expiresAt && expiresAt < tenMinFromNow) {
+      try {
+        const renewed = await tradovateRenew(token, isPaper);
+        token = renewed.accessToken;
+        await storeCmeAccessToken(conn.id, token);
+        await svc.from("cme_connections").update({ token_expires_at: renewed.expirationTime }).eq("id", conn.id);
+      } catch {
+        // Fall through with stale token — getCashBalance will fail and we return null.
+      }
+    }
+
+    const balance = await getCashBalance(token, conn.tradovate_account_id as number, isPaper);
+    return balance.netLiq;
+  } catch {
+    return null;
+  }
+}
+
 export async function dispatchTradovate(
   input: DispatchInput,
   svc: SupabaseClient,
@@ -239,6 +293,55 @@ export async function dispatchTradovate(
   const rootSym = rootSymbolOf(contract);
   const { slTicks, tpTicks, method } = await computeSlTpTicks(svc, rootSym, params);
 
+  // Kelly position sizing — opt-in via algo.parameters.kelly_enabled.
+  // When enabled, override `quantity` with `floor(equity × f × frac / risk)`.
+  // Requires backtest-derived stats persisted in algo.parameters. Failure-open:
+  // any missing input or fetch failure falls back to the manual quantity.
+  let sizingMethod: string = "manual";
+  if (params.kelly_enabled === true && !isReversal) {
+    const tickValue = tickValueFor(rootSym);
+    const winRate   = num(params.kelly_win_rate, NaN);
+    const avgWin    = num(params.kelly_avg_win_usd, NaN);
+    const avgLoss   = num(params.kelly_avg_loss_usd, NaN);
+    const frac      = num(params.kelly_fraction, 0.5);
+    const minK      = Math.max(0, Math.round(num(params.kelly_min_contracts, 1)));
+    const maxK      = Math.max(minK, Math.round(num(params.kelly_max_contracts, 10)));
+
+    if (tickValue == null || !Number.isFinite(winRate) || !Number.isFinite(avgWin) || !Number.isFinite(avgLoss)) {
+      logWarn("DispatchTradovate", `Kelly skipped: missing inputs (tickValue=${tickValue}, winRate=${winRate}, avgWin=${avgWin}, avgLoss=${avgLoss}) — using manual qty`, {
+        component: "kelly", meta: { algoId: algo.id },
+      });
+    } else {
+      const equity = await fetchAccountEquity(svc, cmeAccountId, algo.user_id);
+      if (equity == null || equity <= 0) {
+        logWarn("DispatchTradovate", `Kelly skipped: equity fetch returned ${equity} — using manual qty`, {
+          component: "kelly", meta: { algoId: algo.id },
+        });
+      } else {
+        const kelly = computeKellyContracts({
+          equityUSD:       equity,
+          winRate,
+          avgWinUSD:       avgWin,
+          avgLossUSD:      avgLoss,
+          slTicks,
+          tickValueUSD:    tickValue,
+          fractionalKelly: frac,
+          minContracts:    minK,
+          maxContracts:    maxK,
+        });
+
+        if (kelly.contracts > 0) {
+          quantity = kelly.contracts;
+          sizingMethod = `kelly(${kelly.method},f*=${kelly.rawFraction.toFixed(3)},applied=${kelly.appliedFraction.toFixed(3)},risk=$${kelly.dollarRiskUSD.toFixed(0)})`;
+        } else {
+          // Negative edge or invalid → skip the trade entirely.
+          logInfo("DispatchTradovate", `skip ${signal.action} ${contract} — kelly_${kelly.method} (f*=${kelly.rawFraction.toFixed(3)}, algo=${algo.id})`);
+          return { ok: true, action: "skipped", reason: `kelly_${kelly.method}` };
+        }
+      }
+    }
+  }
+
   // Step 1: insert a pending signal row. This is the audit trail entry. It
   // exists for every dispatch attempt, including shadow + failed ones.
   const { data: inserted, error: insErr } = await svc
@@ -293,7 +396,7 @@ export async function dispatchTradovate(
         meta: { algoId: algo.id, cmeSignalId },
       });
     }
-    logInfo("DispatchTradovate", `shadow ${signal.action} ${contract} x${quantity} SL=${slTicks}t TP=${tpTicks}t (${method}${reversalTag}, algo=${algo.id})`);
+    logInfo("DispatchTradovate", `shadow ${signal.action} ${contract} x${quantity} SL=${slTicks}t TP=${tpTicks}t sizing=${sizingMethod} (${method}${reversalTag}, algo=${algo.id})`);
     return {
       ok: true, action: "shadow_logged",
       cmeSignalId,
@@ -317,7 +420,7 @@ export async function dispatchTradovate(
   try {
     const result = await executeSignal(cmeSignal, svc);
     if (result.success) {
-      logInfo("DispatchTradovate", `live ${signal.action} ${contract} x${quantity} placed orderId=${result.orderId} SL=${slTicks}t TP=${tpTicks}t (${method}${reversalTag}, algo=${algo.id})`);
+      logInfo("DispatchTradovate", `live ${signal.action} ${contract} x${quantity} placed orderId=${result.orderId} SL=${slTicks}t TP=${tpTicks}t sizing=${sizingMethod} (${method}${reversalTag}, algo=${algo.id})`);
       return {
         ok: true, action: "placed",
         cmeSignalId,
