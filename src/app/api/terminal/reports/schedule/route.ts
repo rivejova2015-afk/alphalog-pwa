@@ -2,32 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { Asset } from "@/lib/news/sources";
 import { logError } from "@/lib/log";
+import {
+  buildCronFromPR,
+  normalizeQStashBaseUrl,
+  toUtcFromPR,
+} from "@/lib/terminal/scheduleHelpers";
 
 const allowedAssets: Asset[] = ["US500", "XAUUSD"];
 const QSTASH_BASE_URL = "https://qstash.upstash.io/v2/schedules";
-
-const toUtcFromPR = (datetimePR: string) => {
-  const [datePart, timePart] = datetimePR.split("T");
-  if (!datePart || !timePart) return null;
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hour, minute] = timePart.split(":").map(Number);
-  if ([year, month, day, hour, minute].some((n) => Number.isNaN(n))) {
-    return null;
-  }
-  // Puerto Rico is UTC-4 year-round.
-  return new Date(Date.UTC(year, month - 1, day, hour + 4, minute));
-};
-
-const buildCronFromPR = (datetimePR: string) => {
-  const scheduledUtc = toUtcFromPR(datetimePR);
-  if (!scheduledUtc) return null;
-  const minute = scheduledUtc.getUTCMinutes();
-  const hour = scheduledUtc.getUTCHours();
-  const day = scheduledUtc.getUTCDate();
-  const month = scheduledUtc.getUTCMonth() + 1;
-  // Cron in UTC: runs yearly on that date; we'll cancel after first run.
-  return `${minute} ${hour} ${day} ${month} *`;
-};
 
 const getRunUrl = () => {
   const base =
@@ -36,11 +18,6 @@ const getRunUrl = () => {
     process.env.NEXT_PUBLIC_CANONICAL_HOST;
   if (!base) return null;
   return `${base.replace(/\/$/, "")}/api/terminal/reports/run-scheduled`;
-};
-
-const normalizeQStashBaseUrl = (value: string) => {
-  const trimmed = value.replace(/\/+$/, "");
-  return trimmed.endsWith("/schedules") ? trimmed : `${trimmed}/schedules`;
 };
 
 const getQStashBaseUrl = () =>
