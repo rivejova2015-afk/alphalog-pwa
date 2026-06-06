@@ -18,7 +18,8 @@ import { extractMultiTf } from "@/lib/engine/v1/index";
 import { evaluateEngineGates } from "@/lib/engine/v1/quality-gates";
 import { theoreticalOptionPnl } from "@/lib/backtest/options-overlay";
 import { runAdvancedPipeline } from "@/lib/backtest/orchestrator";
-import { logError, logWarn } from "@/lib/log";
+import { buildKellyInputs, mergeKellyInputs } from "@/lib/engine/position-sizing/auto-populate";
+import { logError, logInfo, logWarn } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
 import type { Timeframe, SimulatedTrade, BacktestConfig, Bar } from "@/types/backtest";
 
@@ -287,6 +288,32 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       else logError("EngineBacktest", { component: "auto-promote", message: promoteErr.message });
     }
 
+    // Sprint N — auto-populate Kelly inputs into algorithms.parameters when the
+    // sample is statistically meaningful (≥30 trades, positive edge). User can
+    // then opt-in by setting kelly_enabled=true; no manual transcription of
+    // win_rate / avg_win / avg_loss needed.
+    let kellyPopulated = false;
+    const kellyPayload = buildKellyInputs(full.baseline.metrics, {
+      sourceTag: `engine_backtest:${runRow?.id ?? "unknown"}`,
+      nowIso:    new Date().toISOString(),
+    });
+    if (kellyPayload) {
+      const mergedParams = mergeKellyInputs(algo.parameters as Record<string, unknown> | null, kellyPayload);
+      const { error: kellyErr } = await supabase
+        .from("algorithms")
+        .update({ parameters: mergedParams })
+        .eq("id", algo.id)
+        .eq("user_id", user.id);
+      if (kellyErr) {
+        logError("EngineBacktest", { component: "kelly-auto-populate", message: kellyErr.message });
+      } else {
+        kellyPopulated = true;
+        logInfo("EngineBacktest", `Kelly inputs persisted: winRate=${kellyPayload.kelly_win_rate.toFixed(3)} avgWin=$${kellyPayload.kelly_avg_win_usd.toFixed(2)} avgLoss=$${kellyPayload.kelly_avg_loss_usd.toFixed(2)} n=${kellyPayload.kelly_inputs_sample_size}`, {
+          component: "kelly-auto-populate", meta: { algoId: algo.id, runId: runRow?.id },
+        });
+      }
+    }
+
     return NextResponse.json({
       algorithm: {
         id: algo.id,
@@ -306,6 +333,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       advanced_warnings:  advancedOutput.warnings,
       gates,
       promoted,
+      kelly_populated: kellyPopulated,
+      kelly_inputs:    kellyPayload,
       run_id:     runRow?.id ?? null,
       created_at: runRow?.created_at ?? null,
     }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
