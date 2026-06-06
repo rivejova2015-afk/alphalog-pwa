@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { logError } from "@/lib/log";
 interface Agent {
   id: string;
   name: string;
@@ -213,7 +214,7 @@ export default function CoinarbDashboard() {
         setTrades(body.data ?? []);
       }
     } catch (err) {
-      console.error("[coinarb] telemetry fetch failed", err);
+      logError("CoinarbDashboard", { component: "coinarbdashboard", message: "[coinarb] telemetry fetch failed", error: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 
@@ -225,7 +226,7 @@ export default function CoinarbDashboard() {
         setPositions(body.data ?? []);
       }
     } catch (err) {
-      console.error("[coinarb] positions fetch failed", err);
+      logError("CoinarbDashboard", { component: "coinarbdashboard", message: "[coinarb] positions fetch failed", error: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 
@@ -238,7 +239,7 @@ export default function CoinarbDashboard() {
       if (eRes.ok) setExecStats(await eRes.json());
       if (pRes.ok) setPnlStats(await pRes.json());
     } catch (err) {
-      console.error("[coinarb] stats fetch failed", err);
+      logError("CoinarbDashboard", { component: "coinarbdashboard", message: "[coinarb] stats fetch failed", error: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 
@@ -250,7 +251,7 @@ export default function CoinarbDashboard() {
         setDecisions(body.data ?? []);
       }
     } catch (err) {
-      console.error("[coinarb] decisions fetch failed", err);
+      logError("CoinarbDashboard", { component: "coinarbdashboard", message: "[coinarb] decisions fetch failed", error: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 
@@ -259,7 +260,7 @@ export default function CoinarbDashboard() {
       const res = await fetch("/api/coinarb/decisions/skip-reasons", { cache: "no-store" });
       if (res.ok) setSkipReasons(await res.json());
     } catch (err) {
-      console.error("[coinarb] skip-reasons fetch failed", err);
+      logError("CoinarbDashboard", { component: "coinarbdashboard", message: "[coinarb] skip-reasons fetch failed", error: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 
@@ -278,7 +279,7 @@ export default function CoinarbDashboard() {
       if (cor.ok) setCorrelation(await cor.json());
       if (dd.ok) setDrawdown(await dd.json());
     } catch (err) {
-      console.error("[coinarb] phase2 stats fetch failed", err);
+      logError("CoinarbDashboard", { component: "coinarbdashboard", message: "[coinarb] phase2 stats fetch failed", error: err instanceof Error ? err.message : String(err) });
     }
   }, []);
 

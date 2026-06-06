@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import CategorySelect from "./CategorySelect.client";
 import TrashToggle from "./TrashToggle.client";
 
+import { logError } from "@/lib/log";
 interface Category {
   id: string;
   name: string;
@@ -38,7 +39,7 @@ export default function FiltersBar({ onFiltersChange }: FiltersBarProps) {
         setCategories(data.items || []);
       }
     } catch (error) {
-      console.error("Error loading categories:", error);
+      logError("FiltersBar", { component: "filtersbar", message: "Error loading categories", error: error instanceof Error ? error.message : String(error) });
     }
   };
 

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createBusinessDecision } from "@/lib/business/queries";
 import { createClient } from "@/lib/supabase/browser";
 
+import { logError } from "@/lib/log";
 interface DecisionFormProps {
   onClose: () => void;
   onSave: () => void;
@@ -63,7 +64,7 @@ export default function DecisionForm({ onClose, onSave }: DecisionFormProps) {
 
       onSave();
     } catch (err) {
-      console.error("Error saving decision:", err);
+      logError("DecisionForm", { component: "decisionform", message: "Error saving decision", error: err instanceof Error ? err.message : String(err) });
       setError("Failed to save decision");
     } finally {
       setSaving(false);

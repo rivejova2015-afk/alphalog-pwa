@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { logger } from "@/lib/alphashield/logger";
 
+import { logWarn } from "@/lib/log";
 type Asset = "XAUUSD";
 
 type Job = {
@@ -69,7 +70,7 @@ export default function TerminalReportsBot() {
         await Promise.all(keys.map((key) => caches.delete(key)));
       }
     } catch (err) {
-      console.warn("[Terminal] Failed to reset PWA cache:", err);
+      logWarn("TerminalReportsBot", "[Terminal] Failed to reset PWA cache", { component: "terminalreportsbot", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setIsResettingSw(false);
       window.location.reload();

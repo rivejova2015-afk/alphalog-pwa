@@ -210,10 +210,7 @@ export async function logAuditEvent(
             .single();
 
           if (appLogError) {
-            console.error(
-              "[Audit] RPC missing and all fallback inserts failed:",
-              appLogError
-            );
+            logError("Audit", { component: "security.audit.rpcMissing.fallbackFailed", message: "RPC missing and all fallback inserts failed", error: appLogError instanceof Error ? appLogError.message : String(appLogError) });
             return null;
           }
 

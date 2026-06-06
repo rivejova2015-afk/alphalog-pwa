@@ -4,6 +4,7 @@
 import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/browser";
 
+import { logError } from "@/lib/log";
 interface AttachmentsUploaderProps {
   logId: string;
   onUploadSuccess?: () => void;
@@ -91,7 +92,7 @@ export default function AttachmentsUploader({
           .upload(path, file, { upsert: false });
 
         if (uploadError) {
-          console.error("Storage upload error:", uploadError);
+          logError("AttachmentsUploader", { component: "attachmentsuploader", message: "Storage upload error", error: uploadError instanceof Error ? uploadError.message : String(uploadError) });
           setError(`Error al subir "${file.name}": ${uploadError.message}`);
           setUploadProgress((prev) => {
             const newProgress = { ...prev };
@@ -116,7 +117,7 @@ export default function AttachmentsUploader({
 
         if (!metadataResponse.ok) {
           const errorData = await metadataResponse.json();
-          console.error("Metadata creation error:", errorData);
+          logError("AttachmentsUploader", { component: "attachmentsuploader", message: "Metadata creation error", error: errorData instanceof Error ? errorData.message : String(errorData) });
           setError(`Error al guardar metadatos de "${file.name}"`);
           continue;
         }
@@ -134,7 +135,7 @@ export default function AttachmentsUploader({
       // Notify parent to refresh
       onUploadSuccess?.();
     } catch (err: any) {
-      console.error("Error uploading file:", err);
+      logError("AttachmentsUploader", { component: "attachmentsuploader", message: "Error uploading file", error: err instanceof Error ? err.message : String(err) });
       setError(`Error: ${err.message || "No se pudo subir el archivo"}`);
     } finally {
       setUploading(false);

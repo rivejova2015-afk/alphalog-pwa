@@ -9,6 +9,8 @@
  */
 'use client';
 
+import { logError } from '@/lib/log';
+
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import TreasuryTabs from '@/components/treasury/TreasuryTabs.client';
@@ -82,7 +84,7 @@ export default function TreasuryPageClient({
           }
         }
       } catch (err) {
-        console.error('Error initializing treasury data:', err);
+        logError('TreasuryPage', { component: 'dashboard.treasury.init', message: 'Error initializing treasury data', error: err instanceof Error ? err.message : String(err) });
       }
     };
 

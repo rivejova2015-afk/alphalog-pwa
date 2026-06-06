@@ -5,6 +5,7 @@ import { TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui';
 
+import { logError } from "@/lib/log";
 interface SnapshotPoint {
   recorded_at: string;
   current_value: number;
@@ -57,7 +58,7 @@ export function GoalHistoryChart({ goals, daysWindow = 30 }: Props) {
       const json = (await res.json()) as ApiResponse;
       setData(json);
     } catch (err) {
-      console.error('Error loading goal snapshots:', err);
+      logError('GoalHistoryChart', { component: 'goalhistorychart', message: 'Error loading goal snapshots', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to load history');
       setData(null);
     } finally {

@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { SystemDiagnostics } from '@/components/logs/SystemDiagnostics.client';
 import { RecentErrors } from '@/components/logs/RecentErrors.client';
 import BotOpsDailyReportCard from '@/components/logs/BotOpsDailyReportCard.client';
+import { logError, logWarn } from '@/lib/log';
 import SprintStatus from '@/components/logs/SprintStatus.client';
 import { generateDebugBundle, copyDebugBundleToClipboard, validateBundleIsSanitized, DebugBundle } from '@/lib/alphashield/debugBundle';
 import { generateCodexFixPrompt, copyPromptToClipboard } from '@/lib/alphashield/codexPrompt';
@@ -70,7 +71,7 @@ export default function SystemPage() {
         if (!mounted) return;
         setPrompt(generatedPrompt);
       } catch (error) {
-        console.error('Error loading system page:', error);
+        logError('SystemDiagnosticsPage', { component: 'dashboard.logs.system.load', message: 'Error loading system page', error: error instanceof Error ? error.message : String(error) });
         if (mounted) {
           setLoadingError('Diagnostics advanced data is temporarily unavailable. Core system panels remain active.');
         }
@@ -93,7 +94,7 @@ export default function SystemPage() {
     // Validate before copying
     const validation = validateBundleIsSanitized(debugBundle);
     if (!validation.isSafe) {
-      console.warn('Bundle contains potential sensitive data:', validation.issues);
+      logWarn('SystemDiagnosticsPage', 'Bundle contains potential sensitive data', { component: 'dashboard.logs.system.copyBundle.validation', issues: validation.issues });
     }
 
     const success = await copyDebugBundleToClipboard(debugBundle);

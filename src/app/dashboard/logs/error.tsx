@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, BookOpen } from 'lucide-react';
+import { logError } from '@/lib/log';
 
 export default function LogsError({
   error,
@@ -11,7 +12,7 @@ export default function LogsError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[LogsError]', error);
+    logError('LogsError', { component: 'dashboard.logs.errorBoundary', message: error.message, error: error.stack, code: error.digest });
   }, [error]);
 
   return (

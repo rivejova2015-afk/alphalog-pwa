@@ -6,6 +6,7 @@ import { useState } from "react";
 import { createBusinessMilestone } from "@/lib/business/queries";
 import { createClient } from "@/lib/supabase/browser";
 
+import { logError } from "@/lib/log";
 interface MilestoneFormProps {
   onClose: () => void;
   onSave: () => void;
@@ -55,7 +56,7 @@ export default function MilestoneForm({ onClose, onSave }: MilestoneFormProps) {
 
       onSave();
     } catch (err) {
-      console.error("Error saving milestone:", err);
+      logError("MilestoneForm", { component: "milestoneform", message: "Error saving milestone", error: err instanceof Error ? err.message : String(err) });
       setError("Failed to save milestone");
     } finally {
       setSaving(false);

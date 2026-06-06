@@ -17,6 +17,7 @@ import type { BusinessCost } from "@/lib/business/types";
 import type { Trade } from "@/lib/treasury/calculations";
 import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
+import { logError } from "@/lib/log";
 interface KPIPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -54,7 +55,7 @@ export default function KPIPanel({ offlineData }: KPIPanelProps) {
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
     } catch (err) {
-      console.error("Error loading KPI data:", err);
+      logError("KPIPanel", { component: "kpipanel", message: "Error loading KPI data", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setCostsLoading(false);
     }

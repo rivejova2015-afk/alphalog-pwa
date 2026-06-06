@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { AuditReport } from '@/lib/alphashield/sprintAudit';
 
+import { logError } from "@/lib/log";
 interface SprintStatusProps {
   onAuditComplete?: (report: AuditReport) => void;
 }
@@ -28,7 +29,7 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
         setError(null);
       }
     } catch (err) {
-      console.error('[SprintStatus] Failed to fetch last audit:', err);
+      logError('SprintStatus', { component: 'sprintstatus', message: '[SprintStatus] Failed to fetch last audit', error: err instanceof Error ? err.message : String(err) });
     }
   };
 
@@ -49,7 +50,7 @@ export default function SprintStatus({ onAuditComplete }: SprintStatusProps) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);
-      console.error('[SprintStatus] Audit error:', err);
+      logError('SprintStatus', { component: 'sprintstatus', message: '[SprintStatus] Audit error', error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { isOffline } from "@/lib/offline/snapshot";
 import { BOT_PROFILE_CONFIG, BotMode } from "@/components/bot-control/profileConfig";
 
+import { logError } from "@/lib/log";
 interface BotRow {
   id: string;
   name: string;
@@ -172,7 +173,7 @@ export default function BotControlSelector({ basePath }: BotControlSelectorProps
 
         setCardState(perMode);
       } catch (err) {
-        console.error("[BotControlSelector] load error:", err);
+        logError("BotControlSelector", { component: "botcontrolselector", message: "[BotControlSelector] load error", error: err instanceof Error ? err.message : String(err) });
         setError(err instanceof Error ? err.message : "No se pudo cargar Bot Control.");
       } finally {
         setLoading(false);

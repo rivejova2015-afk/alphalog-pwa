@@ -7,6 +7,7 @@ import {
   getFormattedErrorLog,
   getTopBugs,
 } from '@/lib/alphacore/alphashield';
+import { logError } from '@/lib/log';
 
 /**
  * AlphaShield Debug Utilities Component
@@ -31,7 +32,7 @@ export default function AlphaShieldDebugTools() {
       setBundleCopied(true);
       setTimeout(() => setBundleCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy debug bundle:', error);
+      logError('AlphaShieldDebug', { component: 'alphashieldDebug.copyBundle', message: 'Failed to copy debug bundle', error: error instanceof Error ? error.message : String(error) });
       alert('Failed to copy debug bundle. Check console for details.');
     }
   };
@@ -43,7 +44,7 @@ export default function AlphaShieldDebugTools() {
       setPromptCopied(true);
       setTimeout(() => setPromptCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy prompt:', error);
+      logError('AlphaShieldDebug', { component: 'alphashieldDebug.copyPrompt', message: 'Failed to copy prompt', error: error instanceof Error ? error.message : String(error) });
       alert('Failed to copy prompt. Check console for details.');
     }
   };

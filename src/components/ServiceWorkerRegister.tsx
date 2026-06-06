@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
 
+import { logWarn, logInfo } from "@/lib/log";
 export default function ServiceWorkerRegister() {
   useEffect(() => {
     // Only register SW in production or when explicitly enabled
@@ -10,12 +11,12 @@ export default function ServiceWorkerRegister() {
     const isProduction = process.env.NODE_ENV === "production";
 
     if (!enableSW && !isProduction) {
-      console.log("[SW] Registration disabled in dev. Set NEXT_PUBLIC_ENABLE_SW=true to enable");
+      logInfo("ServiceWorkerRegister", "Registration disabled in dev. Set NEXT_PUBLIC_ENABLE_SW=true to enable", { component: "serviceworkerregister" });
       return;
     }
 
     if (!("serviceWorker" in navigator)) {
-      console.warn("[SW] Service Worker not supported");
+      logWarn("ServiceWorkerRegister", "Service Worker not supported", { component: "serviceworkerregister.unsupported" });
       return;
     }
 
@@ -24,13 +25,13 @@ export default function ServiceWorkerRegister() {
     navigator.serviceWorker
       .register("/sw.js")
       .then((reg) => {
-        console.log("[SW] Registered successfully");
+        logInfo("ServiceWorkerRegister", "Registered successfully", { component: "serviceworkerregister" });
         intervalId = setInterval(() => {
           reg.update();
         }, 60000);
       })
       .catch((err) => {
-        console.warn("[SW] Registration failed:", err);
+        logWarn("ServiceWorkerRegister", "[SW] Registration failed", { component: "serviceworkerregister", error: err instanceof Error ? err.message : String(err) });
       });
 
     return () => {

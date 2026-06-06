@@ -7,6 +7,7 @@ import { GoalCard } from './GoalCard';
 import { GoalFormModal } from './GoalFormModal.client';
 import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 
+import { logError } from "@/lib/log";
 type GoalStatus = 'ON_TRACK' | 'BELOW_PACE' | 'EXCEEDED' | 'WARNING';
 type GoalTimeframe = 'annual' | 'quarterly' | 'monthly' | 'weekly';
 
@@ -96,7 +97,7 @@ export function GoalGrid() {
       const data = (await res.json()) as ApiGoal[];
       setGoals(data.map(apiToUi));
     } catch (err) {
-      console.error('Error loading map-hot goals:', err);
+      logError('GoalGrid', { component: 'goalgrid', message: 'Error loading map-hot goals', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to load goals');
     } finally {
       setLoading(false);
@@ -149,7 +150,7 @@ export function GoalGrid() {
       setEditingGoal(null);
       await loadGoals();
     } catch (err) {
-      console.error('Error saving goal:', err);
+      logError('GoalGrid', { component: 'goalgrid', message: 'Error saving goal', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to save goal');
     }
   };
@@ -169,7 +170,7 @@ export function GoalGrid() {
       setConfirmDeleteId(null);
       setGoals((prev) => prev.filter((g) => g.id !== id));
     } catch (err) {
-      console.error('Error deleting goal:', err);
+      logError('GoalGrid', { component: 'goalgrid', message: 'Error deleting goal', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to delete goal');
     }
   };

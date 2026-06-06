@@ -6,6 +6,7 @@ import { BookOpen, Search, Filter, Zap, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 import { JournalEntryList } from "@/components/journal/JournalEntryList.client";
 import { JournalEntryForm } from "@/components/journal/JournalEntryForm.client";
+import { logError } from "@/lib/log";
 import BackToDashboardButton from "@/components/BackToDashboardButton.client";
 import MobileModuleTabSelect from "@/components/navigation/MobileModuleTabSelect.client";
 
@@ -127,7 +128,7 @@ export default function JournalPage() {
           setUserId(user.id);
         }
       } catch (err) {
-        console.error("[Journal] Error getting user:", err);
+        logError("Journal", { component: "dashboard.logs.getUser", message: "Error getting user", error: err instanceof Error ? err.message : String(err) });
       } finally {
         setIsLoading(false);
       }

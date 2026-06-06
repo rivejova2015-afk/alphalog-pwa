@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 import { MilestoneFormModal } from './MilestoneFormModal.client';
 
+import { logError } from "@/lib/log";
 type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 type MilestoneStatus = 'completed' | 'active' | 'upcoming';
 
@@ -58,7 +59,7 @@ export function FutureProgressTracker() {
       );
       setMilestones(sorted);
     } catch (err) {
-      console.error('Error loading milestones:', err);
+      logError('FutureProgressTracker', { component: 'futureprogresstracker', message: 'Error loading milestones', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to load milestones');
     } finally {
       setLoading(false);
@@ -99,7 +100,7 @@ export function FutureProgressTracker() {
       setEditing(null);
       await load();
     } catch (err) {
-      console.error('Error saving milestone:', err);
+      logError('FutureProgressTracker', { component: 'futureprogresstracker', message: 'Error saving milestone', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to save milestone');
     }
   };
@@ -119,7 +120,7 @@ export function FutureProgressTracker() {
       setConfirmDeleteId(null);
       setMilestones((prev) => prev.filter((m) => m.id !== id));
     } catch (err) {
-      console.error('Error deleting milestone:', err);
+      logError('FutureProgressTracker', { component: 'futureprogresstracker', message: 'Error deleting milestone', error: err instanceof Error ? err.message : String(err) });
       toast.error(err instanceof Error ? err.message : 'Failed to delete milestone');
     }
   };

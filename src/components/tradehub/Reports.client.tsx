@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { logger } from "@/lib/alphashield/logger";
 
+import { logError } from "@/lib/log";
 interface Report {
   id: string;
   week_start: string;
@@ -96,7 +97,7 @@ export default function Reports() {
       const message = err?.message || "Error al generar reporte";
       setError("No se pudo generar el reporte. Intenta de nuevo.");
       if (process.env.NODE_ENV !== "production") {
-        console.error("[TradeHub] Generate report error", err);
+        logError("Reports", { component: "reports", message: "[TradeHub] Generate report error", error: err instanceof Error ? err.message : String(err) });
       }
       await logger.error(
         "tradehub",

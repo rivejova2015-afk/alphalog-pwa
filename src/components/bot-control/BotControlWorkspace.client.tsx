@@ -12,6 +12,7 @@ import { IVSurfacePanel } from "@/components/bot-control/panels/IVSurfacePanel.c
 import { EngineDevToolsPanel } from "@/components/bot-control/panels/EngineDevToolsPanel.client";
 import { SkillsPanel } from "@/components/bot-control/panels/SkillsPanel.client";
 
+import { logError } from "@/lib/log";
 interface Bot {
   id: string;
   name: string;
@@ -362,7 +363,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
         settings_override: overridesResult.data || [],
       });
     } catch (err) {
-      console.error("[BotControl] loadData error:", err);
+      logError("BotControlWorkspace", { component: "botcontrolworkspace", message: "[BotControl] loadData error", error: err instanceof Error ? err.message : String(err) });
       setError("No se pudo cargar la información del bot.");
     } finally {
       setLoading(false);
@@ -444,7 +445,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
 
       await loadData();
     } catch (err) {
-      console.error("[BotControl] createCommand error:", err);
+      logError("BotControlWorkspace", { component: "botcontrolworkspace", message: "[BotControl] createCommand error", error: err instanceof Error ? err.message : String(err) });
       setError("No se pudo enviar el comando.");
     } finally {
       setLoading(false);
@@ -473,7 +474,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
       dirtyGlobalRef.current = false;
       await createCommand(COMMANDS.APPLY_SETTINGS, undefined, { scope: "global" });
     } catch (err) {
-      console.error("[BotControl] applyGlobalSettings error:", err);
+      logError("BotControlWorkspace", { component: "botcontrolworkspace", message: "[BotControl] applyGlobalSettings error", error: err instanceof Error ? err.message : String(err) });
       setError("No se pudo aplicar settings globales.");
       setLoading(false);
     }
@@ -507,7 +508,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
       };
       await createCommand(COMMANDS.APPLY_SETTINGS, [accountId], { scope: "override" });
     } catch (err) {
-      console.error("[BotControl] applyOverrideSettings error:", err);
+      logError("BotControlWorkspace", { component: "botcontrolworkspace", message: "[BotControl] applyOverrideSettings error", error: err instanceof Error ? err.message : String(err) });
       setError("No se pudo aplicar override por cuenta.");
       setLoading(false);
     }
@@ -644,7 +645,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
       setNotice("Cuenta MT5 agregada y vinculada correctamente.");
       await loadData();
     } catch (err) {
-      console.error("[BotControl] add bot account error:", err);
+      logError("BotControlWorkspace", { component: "botcontrolworkspace", message: "[BotControl] add bot account error", error: err instanceof Error ? err.message : String(err) });
       setError(normalizeError(err, "No se pudo agregar la cuenta MT5."));
     } finally {
       setLoading(false);
@@ -676,7 +677,7 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
       setNotice("Cuenta vinculada correctamente.");
       await loadData();
     } catch (err) {
-      console.error("[BotControl] relink bot account error:", err);
+      logError("BotControlWorkspace", { component: "botcontrolworkspace", message: "[BotControl] relink bot account error", error: err instanceof Error ? err.message : String(err) });
       setError(normalizeError(err, "No se pudo vincular la cuenta seleccionada."));
     } finally {
       setLoading(false);

@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import Image from "next/image";
 
+import { logError } from "@/lib/log";
 interface Attachment {
   id: string;
   filename: string;
@@ -44,7 +45,7 @@ export default function AttachmentsList({
       const data: Attachment[] = await response.json();
       setAttachments(data || []);
     } catch (err: any) {
-      console.error("Error fetching attachments:", err);
+      logError("AttachmentsList", { component: "attachmentslist", message: "Error fetching attachments", error: err instanceof Error ? err.message : String(err) });
       setError("Error al cargar adjuntos");
     } finally {
       setLoading(false);
@@ -84,7 +85,7 @@ export default function AttachmentsList({
       setDeleteConfirm(null);
       setError("");
     } catch (err: any) {
-      console.error("Error deleting attachment:", err);
+      logError("AttachmentsList", { component: "attachmentslist", message: "Error deleting attachment", error: err instanceof Error ? err.message : String(err) });
       setError("Error al eliminar adjunto. Intenta de nuevo.");
     } finally {
       setDeleting(false);

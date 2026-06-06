@@ -12,6 +12,7 @@ import MilestoneForm from "../forms/MilestoneForm.client";
 import type { BusinessMilestone } from "@/lib/business/types";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 
+import { logError } from "@/lib/log";
 interface RoadmapPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -33,7 +34,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
       const data = await loadBusinessMilestones(offlineData);
       setMilestones((data || []) as BusinessMilestone[]);
     } catch (err) {
-      console.error("Error loading milestones:", err);
+      logError("RoadmapPanel", { component: "roadmappanel", message: "Error loading milestones", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
       await loadMilestones();
       toast.success("Estado actualizado");
     } catch (err) {
-      console.error("Error updating milestone:", err);
+      logError("RoadmapPanel", { component: "roadmappanel", message: "Error updating milestone", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo actualizar el estado");
     }
   }
@@ -56,7 +57,7 @@ export default function RoadmapPanel({ offlineData, isReadOnly }: RoadmapPanelPr
       await loadMilestones();
       toast.success("Milestone eliminado");
     } catch (err) {
-      console.error("Error deleting milestone:", err);
+      logError("RoadmapPanel", { component: "roadmappanel", message: "Error deleting milestone", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo eliminar el milestone");
     } finally {
       setConfirmDeleteId(null);

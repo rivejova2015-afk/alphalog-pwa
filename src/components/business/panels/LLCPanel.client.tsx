@@ -12,6 +12,7 @@ import LLCInfoForm from "../forms/LLCInfoForm.client";
 import type { LLCInfo, LLCInboxItem } from "@/lib/business/types";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 
+import { logError } from "@/lib/log";
 interface LLCPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -40,7 +41,7 @@ export default function LLCPanel({ offlineData, isReadOnly }: LLCPanelProps) {
       setLlcInfo(llc as LLCInfo | null);
       setInboxItems((inbox || []) as LLCInboxItem[]);
     } catch (err) {
-      console.error("Error loading LLC data:", err);
+      logError("LLCPanel", { component: "llcpanel", message: "Error loading LLC data", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -52,7 +53,7 @@ export default function LLCPanel({ offlineData, isReadOnly }: LLCPanelProps) {
       await loadData();
       toast.success("Ítem eliminado");
     } catch (err) {
-      console.error("Error deleting item:", err);
+      logError("LLCPanel", { component: "llcpanel", message: "Error deleting item", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo eliminar");
     } finally {
       setConfirmDeleteId(null);
@@ -66,7 +67,7 @@ export default function LLCPanel({ offlineData, isReadOnly }: LLCPanelProps) {
       setEditingItemId(null);
       toast.success("Estado actualizado");
     } catch (err) {
-      console.error("Error updating item status:", err);
+      logError("LLCPanel", { component: "llcpanel", message: "Error updating item status", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo actualizar el estado");
     }
   }
@@ -93,7 +94,7 @@ export default function LLCPanel({ offlineData, isReadOnly }: LLCPanelProps) {
       setNewItemTitle("");
       setShowNewItem(false);
     } catch (err) {
-      console.error('Error creating inbox item:', err);
+      logError('LLCPanel', { component: 'llcpanel', message: 'Error creating inbox item', error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo crear el ítem");
     } finally {
       setSavingNewItem(false);

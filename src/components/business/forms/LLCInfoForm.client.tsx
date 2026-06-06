@@ -6,6 +6,7 @@ import { useState } from "react";
 import { upsertLLCInfo } from "@/lib/business/queries";
 import { createClient } from "@/lib/supabase/browser";
 
+import { logError } from "@/lib/log";
 interface LLCInfoFormProps {
   onClose: () => void;
   onSave: () => void;
@@ -64,7 +65,7 @@ export default function LLCInfoForm({ onClose, onSave }: LLCInfoFormProps) {
 
       onSave();
     } catch (err) {
-      console.error("Error saving LLC info:", err);
+      logError("LLCInfoForm", { component: "llcinfoform", message: "Error saving LLC info", error: err instanceof Error ? err.message : String(err) });
       setError("Failed to save LLC information");
     } finally {
       setSaving(false);

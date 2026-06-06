@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import SeedCategoriesButton from "./SeedCategoriesButton.client";
 
+import { logError } from "@/lib/log";
 interface Category {
   id: string;
   name: string;
@@ -32,7 +33,7 @@ export default function CategorySelect({
         setCategories(data.items || []);
       }
     } catch (error) {
-      console.error("Error loading categories:", error);
+      logError("CategorySelect", { component: "categoryselect", message: "Error loading categories", error: error instanceof Error ? error.message : String(error) });
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import TagsInput from "./TagsInput.client";
 import AttachmentsUploader from "./AttachmentsUploader.client";
 import AttachmentsList from "./AttachmentsList.client";
 
+import { logError } from "@/lib/log";
 interface Log {
   id: string;
   title: string;
@@ -67,7 +68,7 @@ export default function LogEditor({ log, onSave, onClose }: LogEditorProps) {
       });
       onClose();
     } catch (err: any) {
-      console.error("Error saving log:", err);
+      logError("LogEditor", { component: "logeditor", message: "Error saving log", error: err instanceof Error ? err.message : String(err) });
       if (err.message?.includes("already_exists")) {
         setError(
           "Ya existe un log con ese título hoy (UTC). Cambia el título o edita el existente."

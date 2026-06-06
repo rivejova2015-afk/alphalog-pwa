@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Wallet } from 'lucide-react';
+import { logError } from '@/lib/log';
 
 export default function TreasuryError({
   error,
@@ -11,7 +12,7 @@ export default function TreasuryError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[TreasuryError]', error);
+    logError('TreasuryError', { component: 'dashboard.treasury.errorBoundary', message: error.message, error: error.stack, code: error.digest });
   }, [error]);
 
   return (

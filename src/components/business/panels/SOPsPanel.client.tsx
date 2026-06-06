@@ -12,6 +12,7 @@ import SOPForm from "../forms/SOPForm.client";
 import type { BusinessSOP, BusinessSOPItem, BusinessSOPRun, BusinessSOPRunItem } from "@/lib/business/types";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 
+import { logError } from "@/lib/log";
 interface SOPsPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -42,7 +43,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       const data = await loadBusinessSOPs(offlineData);
       setSops((data || []) as BusinessSOP[]);
     } catch (err) {
-      console.error("Error loading SOPs:", err);
+      logError("SOPsPanel", { component: "sopspanel", message: "Error loading SOPs", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       await loadRunItems(created.id);
       toast.success("SOP run creado");
     } catch (err) {
-      console.error("Error creating run:", err);
+      logError("SOPsPanel", { component: "sopspanel", message: "Error creating run", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo crear el run");
     }
   }
@@ -79,7 +80,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       setSelectedSop(null);
       toast.success("SOP eliminado");
     } catch (err) {
-      console.error("Error deleting SOP:", err);
+      logError("SOPsPanel", { component: "sopspanel", message: "Error deleting SOP", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo eliminar el SOP");
     } finally {
       setConfirmDeleteSopId(null);
@@ -92,7 +93,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       const data = await getBusinessSOPWithItems(sopId);
       setSopItems(data?.items || []);
     } catch (err) {
-      console.error("Error loading SOP items:", err);
+      logError("SOPsPanel", { component: "sopspanel", message: "Error loading SOP items", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setItemsLoading(false);
     }
@@ -111,7 +112,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       await loadSopItems(sopId);
       toast.success("Ítem añadido");
     } catch (err) {
-      console.error('Error adding SOP item:', err);
+      logError('SOPsPanel', { component: 'sopspanel', message: 'Error adding SOP item', error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo añadir el ítem");
     }
   }
@@ -127,7 +128,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       if (selectedSop) await loadSopItems(selectedSop);
       toast.success("Ítem eliminado");
     } catch (err) {
-      console.error('Error deleting SOP item:', err);
+      logError('SOPsPanel', { component: 'sopspanel', message: 'Error deleting SOP item', error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo eliminar el ítem");
     } finally {
       setConfirmDeleteItemId(null);
@@ -140,7 +141,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       const data = await getBusinessSOPRuns(sopId);
       setRuns(data || []);
     } catch (err) {
-      console.error('Error loading SOP runs:', err);
+      logError('SOPsPanel', { component: 'sopspanel', message: 'Error loading SOP runs', error: err instanceof Error ? err.message : String(err) });
     } finally {
       setRunsLoading(false);
     }
@@ -152,7 +153,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       const data = await getBusinessSOPRunItems(runId);
       setRunItems(data || []);
     } catch (err) {
-      console.error('Error loading run items:', err);
+      logError('SOPsPanel', { component: 'sopspanel', message: 'Error loading run items', error: err instanceof Error ? err.message : String(err) });
     } finally {
       setRunItemsLoading(false);
     }
@@ -167,7 +168,7 @@ export default function SOPsPanel({ offlineData, isReadOnly }: SOPsPanelProps) {
       }
       if (selectedRunId) await loadRunItems(selectedRunId);
     } catch (err) {
-      console.error('Error toggling run item:', err);
+      logError('SOPsPanel', { component: 'sopspanel', message: 'Error toggling run item', error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo actualizar el ítem");
     }
   }
