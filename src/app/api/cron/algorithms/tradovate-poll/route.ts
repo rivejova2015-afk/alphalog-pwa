@@ -28,6 +28,7 @@ import { timingSafeEqual } from "crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { runEngineV1 } from "@/lib/engine/v1/index";
 import { dispatchSignal, getDispatchMode } from "@/lib/engine/dispatchers/index";
+import { isGlobexOpen } from "@/lib/cme/market-hours";
 import { logError, logInfo } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
 
@@ -173,6 +174,22 @@ async function handler(request: NextRequest) {
   const startedAt = Date.now();
   const svc = createServiceClient();
   const mode = getDispatchMode();
+
+  // Sprint S — short-circuit when CME Globex is closed. The dispatcher cron
+  // runs every minute; ~80h/week (Fri 17:00 ET → Sun 18:00 ET + nightly
+  // maintenance) the market is shut and there's nothing to do. Skipping here
+  // avoids needless Yahoo + Tradovate API calls. Opt-out: set
+  // SKIP_MARKET_HOURS_CHECK=true to bypass (useful for E2E + smoke tests).
+  if (process.env.SKIP_MARKET_HOURS_CHECK !== "true" && !isGlobexOpen(new Date())) {
+    return NextResponse.json({
+      ok:           true,
+      mode,
+      duration_ms:  Date.now() - startedAt,
+      skipped:      "globex_closed",
+      counts:       { algosScanned: 0, placed: 0, shadowLogged: 0, skipped: 0, failed: 0, noSymbol: 0 },
+      per_algo:     [],
+    }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
+  }
 
   // Walks every algo whose platform is dispatched server-side (Tradovate
   // futures, IBKR options — both go through src/lib/engine/dispatchers).

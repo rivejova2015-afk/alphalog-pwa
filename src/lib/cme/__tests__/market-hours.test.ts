@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isMarketHours, nextMarketOpen } from "../market-hours";
+import { isMarketHours, nextMarketOpen, isGlobexOpen } from "../market-hours";
 
 describe("market-hours", () => {
   describe("isMarketHours", () => {
@@ -53,6 +53,52 @@ describe("market-hours", () => {
       // 09:00 ET en STD = 14:00 UTC
       const jan = new Date("2026-01-05T14:00:00Z"); // lunes
       expect(isMarketHours(jan)).toBe(false);
+    });
+  });
+
+  describe("isGlobexOpen", () => {
+    it("falso en sábado (cerrado todo el día)", () => {
+      const sat = new Date("2026-05-02T18:00:00Z");
+      expect(isGlobexOpen(sat)).toBe(false);
+    });
+
+    it("falso domingo antes de 18:00 ET (open de la semana)", () => {
+      // Domingo 17:59 ET (DST) = 21:59 UTC
+      const sun = new Date("2026-05-03T21:59:00Z");
+      expect(isGlobexOpen(sun)).toBe(false);
+    });
+
+    it("verdadero domingo a partir de 18:00 ET", () => {
+      // Domingo 18:00 ET (DST) = 22:00 UTC
+      const sun = new Date("2026-05-03T22:00:00Z");
+      expect(isGlobexOpen(sun)).toBe(true);
+    });
+
+    it("verdadero lunes 10:00 ET (RTH window)", () => {
+      const mon = new Date("2026-05-04T14:00:00Z");
+      expect(isGlobexOpen(mon)).toBe(true);
+    });
+
+    it("falso lunes 17:30 ET (daily maintenance)", () => {
+      // Lunes 17:30 ET (DST) = 21:30 UTC
+      const mon = new Date("2026-05-04T21:30:00Z");
+      expect(isGlobexOpen(mon)).toBe(false);
+    });
+
+    it("verdadero lunes 18:00 ET (reapertura post-maintenance)", () => {
+      const mon = new Date("2026-05-04T22:00:00Z");
+      expect(isGlobexOpen(mon)).toBe(true);
+    });
+
+    it("falso viernes 17:30 ET (cerró para fin de semana)", () => {
+      // Viernes 17:30 ET (DST) = 21:30 UTC
+      const fri = new Date("2026-05-08T21:30:00Z");
+      expect(isGlobexOpen(fri)).toBe(false);
+    });
+
+    it("verdadero viernes 16:00 ET (todavía abierto pre-cierre)", () => {
+      const fri = new Date("2026-05-08T20:00:00Z");
+      expect(isGlobexOpen(fri)).toBe(true);
     });
   });
 

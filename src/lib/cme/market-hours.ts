@@ -30,6 +30,33 @@ function toETMinutes(utcDate: Date): { dayOfWeek: number; minutesOfDay: number }
   };
 }
 
+/**
+ * True when CME Globex (electronic) is open for equity-index/metals/energy
+ * futures. Globex runs Sunday 18:00 ET → Friday 17:00 ET, with a daily 60-min
+ * maintenance break 17:00–18:00 ET on weekdays.
+ *
+ * Used by the dispatcher cron (Sprint S) to early-skip when no instrument
+ * can fill — saves Yahoo/Tradovate API budget during the weekend and the
+ * nightly maintenance window.
+ *
+ * Note: per-contract sessions vary slightly (grains shorter, FX nearly 24/5).
+ * This function picks the most common Globex window (index/metals/energy) as
+ * a conservative default. Algos that need wider coverage can override via
+ * `parameters.session_filter='always'`.
+ */
+export function isGlobexOpen(now: Date = new Date()): boolean {
+  const { dayOfWeek, minutesOfDay } = toETMinutes(now);
+  // Saturday: fully closed.
+  if (dayOfWeek === 6) return false;
+  // Sunday: opens at 18:00 ET.
+  if (dayOfWeek === 0) return minutesOfDay >= 18 * 60;
+  // Friday: closes at 17:00 ET.
+  if (dayOfWeek === 5) return minutesOfDay < 17 * 60;
+  // Monday–Thursday: closed for the 17:00–18:00 ET maintenance window.
+  if (minutesOfDay >= 17 * 60 && minutesOfDay < 18 * 60) return false;
+  return true;
+}
+
 export function isMarketHours(now: Date = new Date()): boolean {
   const { dayOfWeek, minutesOfDay } = toETMinutes(now);
   if (dayOfWeek === 0 || dayOfWeek === 6) return false; // weekend

@@ -89,6 +89,30 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
   const [error, setError]         = useState<string | null>(null);
   const [pairing, setPairing]     = useState<{ token: string; expiresAt: string } | null>(null);
   const [duplicating, setDuplicating] = useState(false);
+  const [activating, setActivating]   = useState(false);
+
+  async function handleActivate() {
+    setActivating(true);
+    try {
+      const res = await fetch(`/api/algorithms/${algorithmId}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: "draft" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      toast.success("Estrategia activada — corré un engine-backtest para promoverla a paper.");
+      await fetchAll();
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setActivating(false);
+    }
+  }
 
   async function handleDuplicate() {
     setDuplicating(true);
@@ -167,6 +191,18 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
               <span className="text-xs text-slate-500">· {algorithmName}</span>
             </div>
             <div className="flex items-center gap-1">
+              {algorithm?.status === "paused" && (
+                <button
+                  type="button"
+                  onClick={handleActivate}
+                  disabled={activating || loading}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-800/60 transition disabled:opacity-40"
+                  aria-label="Activar estrategia"
+                  title="Mover paused → draft. El engine-backtest la auto-promoverá a paper si pasa las gates."
+                >
+                  <Play size={11} /> {activating ? "Activando…" : "Activar"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleDuplicate}
