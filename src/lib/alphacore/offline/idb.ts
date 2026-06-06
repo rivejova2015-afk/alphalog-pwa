@@ -178,6 +178,35 @@ export async function updateOutboxStatus(
 }
 
 /**
+ * Replace the payload of a pending outbox entry without changing its status
+ * or any other metadata.
+ *
+ * Used when the user edits a row that is still pending (hasn't drained
+ * yet). Instead of enqueueing a separate UPDATE that would have to be
+ * resolved against the not-yet-existent server id at sync time, we mutate
+ * the CREATE payload in place — when it finally drains it carries the
+ * latest values directly.
+ */
+export async function updateOutboxPayload(id: string, payload: unknown): Promise<void> {
+  const entry = await getOutboxEntry(id);
+  if (!entry) {
+    throw new Error(`Outbox entry not found: ${id}`);
+  }
+
+  const db = await initDB();
+  const updated: IDBOutboxEntry = { ...entry, payload };
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([OUTBOX_STORE], 'readwrite');
+    const store = transaction.objectStore(OUTBOX_STORE);
+    const request = store.put(updated);
+
+    request.onerror = () => reject(new Error(`Failed to update outbox payload: ${request.error}`));
+    request.onsuccess = () => resolve();
+  });
+}
+
+/**
  * Delete outbox entry (after successful sync)
  */
 export async function deleteOutboxEntry(id: string): Promise<void> {

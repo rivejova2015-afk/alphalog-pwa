@@ -110,6 +110,41 @@ describe('OutboxManager — custom endpoint drain (metadata.endpoint / method / 
     expect(headers['x-csrf-token']).toBe('tok-123');
   });
 
+  it('honors metadata.method=PATCH for trades update offline', async () => {
+    // Scenario: user edits a server-side trade while offline. NewTradesLog
+    // enqueues a PATCH to /api/tradehub/trades/{id} with the raw payload.
+    // When the outbox drains, the request must hit the exact route the UI
+    // would have called online — no generic alphacore wrapper.
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'trade-42' }),
+    });
+
+    const mgr = newManager();
+    await mgr.enqueue({
+      table: 'trades',
+      payload: { id: 'trade-42', symbol: 'XAUUSD', pnl: 123 },
+      metadata: {
+        id: 'm-patch',
+        operation: 'update',
+        table: 'trades',
+        endpoint: '/api/tradehub/trades/trade-42',
+        method: 'PATCH',
+        bodyMode: 'direct',
+      } as never,
+    });
+
+    await mgr.syncAll();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('/api/tradehub/trades/trade-42');
+    expect((init as RequestInit).method).toBe('PATCH');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({ id: 'trade-42', symbol: 'XAUUSD', pnl: 123 });
+  });
+
   it('honors metadata.method (eg. DELETE) when drainging to a custom endpoint', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

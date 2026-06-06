@@ -11,6 +11,11 @@ import {
 } from "@/lib/alphacore/offline/networkFallback";
 import { deleteOutboxEntry } from "@/lib/alphacore/offline/idb";
 import type { IDBOutboxEntry } from "@/lib/alphacore/offline/idb";
+import {
+  isPendingId,
+  outboxIdToPendingId,
+  pendingIdToOutboxId,
+} from "@/lib/alphacore/offline/pendingIds";
 
 type Mood = "excellent" | "good" | "neutral" | "bad" | "terrible";
 
@@ -66,14 +71,6 @@ function formatDate(iso: string) {
   });
 }
 
-// Marker injected into the optimistic id so the rest of the component can
-// tell server-backed rows from outbox-pending rows without a separate flag.
-const PENDING_ID_PREFIX = "pending:";
-
-function isPendingId(id: string): boolean {
-  return id.startsWith(PENDING_ID_PREFIX);
-}
-
 function outboxEntryToOptimistic(entry: IDBOutboxEntry): JournalEntry {
   const p = (entry.payload || {}) as Partial<{
     text: string;
@@ -87,7 +84,7 @@ function outboxEntryToOptimistic(entry: IDBOutboxEntry): JournalEntry {
   }>;
   const createdAtIso = new Date(entry.createdAt).toISOString();
   return {
-    id: `${PENDING_ID_PREFIX}${entry.id}`,
+    id: outboxIdToPendingId(entry.id),
     text: typeof p.text === "string" ? p.text : "",
     mood: (p.mood as Mood) ?? null,
     mood_score: typeof p.mood_score === "number" ? p.mood_score : null,
@@ -242,7 +239,7 @@ export default function JournalPanel() {
     // Pending entries live only in the IDB outbox — there's no server row to
     // delete yet, so we just cancel the outbox enqueue.
     if (isPendingId(id)) {
-      const outboxId = id.slice(PENDING_ID_PREFIX.length);
+      const outboxId = pendingIdToOutboxId(id);
       try {
         await deleteOutboxEntry(outboxId);
         setConfirmDeleteId(null);
