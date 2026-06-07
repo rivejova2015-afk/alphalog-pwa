@@ -391,7 +391,13 @@ export function evaluatePremiumDiscount(
     (bias === 'SELL' && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM') ||
     (macroZone === 'EQUILIBRIUM' && microZone === 'EQUILIBRIUM') ||
     (bias === 'BUY'  && macroZone === 'PREMIUM'     && microZone === 'DISCOUNT')    ||
-    (bias === 'SELL' && macroZone === 'DISCOUNT'    && microZone === 'PREMIUM');
+    (bias === 'SELL' && macroZone === 'DISCOUNT'    && microZone === 'PREMIUM')     ||
+    // Partial pullback variants — macro contradicts bias, micro retraced to
+    // the middle of its range. Weaker mean-reversion entry than the full
+    // pullback (D<->P) but caught the dominant residual SKIP pattern in
+    // production telemetry (BTC SELL+DISCOUNT+EQ was 50 skips in 90min).
+    (bias === 'BUY'  && macroZone === 'PREMIUM'     && microZone === 'EQUILIBRIUM') ||
+    (bias === 'SELL' && macroZone === 'DISCOUNT'    && microZone === 'EQUILIBRIUM');
 
   return {
     allowed,
