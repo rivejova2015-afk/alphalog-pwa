@@ -82,6 +82,41 @@ jobs:
       - name: Build (pre-built strategy for Fly)
         # Genera .next/standalone + .next/static. Sin esto, el COPY en
         # Dockerfile falla con "no such file".
+        #
+        # IMPORTANTE: las NEXT_PUBLIC_* se inlinean en BUILD-TIME en el bundle
+        # del browser. Si faltan acá, el JS compilado lleva `undefined` literal
+        # y los `fly secrets` del runtime NO las rescatan (esos solo aplican a
+        # process.env del server, no al bundle ya generado). Cada secret de
+        # GitHub debe existir en Repo → Settings → Secrets and variables → Actions.
+        #
+        # Las SENTRY_* (sin NEXT_PUBLIC_) son build-time del plugin para subir
+        # source maps al release. Sin SENTRY_AUTH_TOKEN el build pasa pero los
+        # stack traces en producción salen minificados.
+        env:
+          # Supabase (browser client + RLS)
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Push notifications (VAPID public key, browser-visible)
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          # Captcha en /auth/page.tsx
+          NEXT_PUBLIC_HCAPTCHA_SITE_KEY: ${{ secrets.NEXT_PUBLIC_HCAPTCHA_SITE_KEY }}
+          # URLs canónicas (sitemap, security headers, secure mail)
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_CANONICAL_HOST: ${{ secrets.NEXT_PUBLIC_CANONICAL_HOST }}
+          NEXT_PUBLIC_SECURE_MAIL_DOMAIN: ${{ secrets.NEXT_PUBLIC_SECURE_MAIL_DOMAIN }}
+          NEXT_PUBLIC_SECURE_MAIL_MAX_EMAIL_ATTACHMENT_BYTES: ${{ secrets.NEXT_PUBLIC_SECURE_MAIL_MAX_EMAIL_ATTACHMENT_BYTES }}
+          # Feature flags (browser-side checks en featureFlags.ts)
+          NEXT_PUBLIC_ENABLE_AAB: ${{ secrets.NEXT_PUBLIC_ENABLE_AAB }}
+          NEXT_PUBLIC_ENABLE_SYSTEM_LOGS: ${{ secrets.NEXT_PUBLIC_ENABLE_SYSTEM_LOGS }}
+          NEXT_PUBLIC_ENABLE_SW: ${{ secrets.NEXT_PUBLIC_ENABLE_SW }}
+          # Version stamp para debugBundle + SystemDiagnostics
+          NEXT_PUBLIC_BUILD_VERSION: ${{ github.sha }}
+          # Sentry — DSNs (runtime) + auth para upload de source maps (build)
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Setup Flyctl
