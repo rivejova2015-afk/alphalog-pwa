@@ -11,6 +11,7 @@ import {
   renderArchivePdf,
   type PolyarbArchiveDataset,
 } from "@/lib/polyarb/archive";
+import { logWarn } from "@/lib/log";
 
 const BUCKET = "log_attachments";
 
@@ -45,7 +46,7 @@ async function cleanupStorage(
   try {
     await supabase.storage.from(BUCKET).remove(paths);
   } catch (err) {
-    console.warn("[polyarb/archive] cleanup failed:", err);
+    logWarn("PolyarbArchive", "cleanup failed", { component: "polyarb.archive-history.cleanup", error: err instanceof Error ? err.message : String(err) });
   }
 }
 

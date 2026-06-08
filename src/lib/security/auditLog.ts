@@ -1,6 +1,7 @@
 // src/lib/security/auditLog.ts
 import { createServerClient } from "@supabase/ssr";
 import crypto from "crypto";
+import { logError, logWarn } from "@/lib/log";
 
 export type AuditAction =
   | "create"
@@ -130,7 +131,7 @@ export async function logAuditEvent(
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceKey) {
-      console.warn("[Audit] Missing Supabase credentials for audit logging");
+      logWarn("Audit", "Missing Supabase credentials for audit logging", { component: "security.audit.missingCredentials" });
       return null;
     }
 
@@ -209,10 +210,7 @@ export async function logAuditEvent(
             .single();
 
           if (appLogError) {
-            console.error(
-              "[Audit] RPC missing and all fallback inserts failed:",
-              appLogError
-            );
+            logError("Audit", { component: "security.audit.rpcMissing.fallbackFailed", message: "RPC missing and all fallback inserts failed", error: appLogError instanceof Error ? appLogError.message : String(appLogError) });
             return null;
           }
 
@@ -222,13 +220,13 @@ export async function logAuditEvent(
         return (fallbackData?.id as string | undefined) ?? null;
       }
 
-      console.error("[Audit] Failed to log event:", error);
+      logError("Audit", { component: "security.audit.insertFailed", message: "Failed to log event", error: error instanceof Error ? error.message : String(error) });
       return null;
     }
 
     return data as string;
   } catch (err) {
-    console.error("[Audit] Exception logging event:", err);
+    logError("Audit", { component: "security.audit.exception", message: "Exception logging event", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }

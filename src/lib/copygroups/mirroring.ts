@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { captureException } from "@/lib/sentry";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/log";
 
 interface TradeRow {
   id: string;
@@ -31,11 +32,11 @@ interface DescendantRow {
   parent_account_id: string;
 }
 
-const logError = (error: unknown, context: Record<string, unknown>) => {
+const logMirrorError = (error: unknown, context: Record<string, unknown>) => {
   if (process.env.NODE_ENV === "production") {
     captureException(error, context);
   }
-  console.error("[CopyGroups][Mirroring]", error, context);
+  logError("CopyGroupsMirroring", { component: "copygroups.mirroring", message: error instanceof Error ? error.message : String(error), payload: context });
 };
 
 export const mirrorTradeOnCreate = async (options: {
@@ -90,7 +91,7 @@ export const mirrorTradeOnCreate = async (options: {
   );
 
   if (descendantsError) {
-    logError(descendantsError, { action: "get_descendants", copy_group_id: group.id });
+    logMirrorError(descendantsError, { action: "get_descendants", copy_group_id: group.id });
     return { mirrored: 0 };
   }
 
@@ -204,7 +205,7 @@ export const mirrorTradeOnCreate = async (options: {
 
       mirrored += 1;
     } catch (error) {
-      logError(error, { action: "mirror_trade", copy_group_id: group.id });
+      logMirrorError(error, { action: "mirror_trade", copy_group_id: group.id });
     }
   }
 
@@ -464,7 +465,7 @@ export const mirrorTradeOnDelete = async (options: {
       .is("deleted_at", null);
 
     if (tradeDeleteErr) {
-      logError(tradeDeleteErr, { action: "mirror_delete_slave", slave_trade_id: link.slave_trade_id });
+      logMirrorError(tradeDeleteErr, { action: "mirror_delete_slave", slave_trade_id: link.slave_trade_id });
       continue;
     }
 

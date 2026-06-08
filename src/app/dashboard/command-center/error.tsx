@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Terminal } from 'lucide-react';
+import { logError } from '@/lib/log';
 
 export default function CommandCenterError({
   error,
@@ -11,7 +12,7 @@ export default function CommandCenterError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[CommandCenterError]', error);
+    logError('CommandCenterError', { component: 'dashboard.commandCenter.errorBoundary', message: error.message, error: error.stack, code: error.digest });
   }, [error]);
 
   return (

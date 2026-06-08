@@ -1,15 +1,17 @@
 /**
  * AlphaCore Offline - IndexedDB Helpers
- * 
+ *
  * Manages IndexedDB for:
  * - OutboxEntry queue (mutations waiting to sync)
  * - AlphaCore metadata (fingerprints, conflict tracking)
- * 
+ *
  * Database: alphalog
  * Stores:
  * - outbox: Queued mutations for offline-first
  * - alphacore_metadata: Dedup fingerprints, conflict history
  */
+
+import { logInfo, logWarn } from '@/lib/log';
 
 const DB_NAME = 'alphalog';
 const DB_VERSION = 2; // Updated for AlphaCore offline support
@@ -55,7 +57,7 @@ export async function initDB(): Promise<IDBDatabase> {
       const db = request.result;
       // Verify stores exist
       if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
-        console.warn('[AlphaCore IDB] Outbox store missing - recreate database');
+        logWarn('AlphaCoreIDB', 'Outbox store missing - recreate database', { component: 'alphacore.idb.upgrade.missing' });
       }
       resolve(db);
     };
@@ -69,7 +71,7 @@ export async function initDB(): Promise<IDBDatabase> {
         outboxStore.createIndex('table', 'table', { unique: false });
         outboxStore.createIndex('status', 'status', { unique: false });
         outboxStore.createIndex('createdAt', 'createdAt', { unique: false });
-        console.log('[AlphaCore IDB] Created outbox store');
+        logInfo('AlphaCoreIDB', 'Created outbox store', { component: 'alphacore.idb.upgrade.createOutbox' });
       }
 
       // Create metadata store if not exists
@@ -78,7 +80,7 @@ export async function initDB(): Promise<IDBDatabase> {
         metadataStore.createIndex('table', 'table', { unique: false });
         metadataStore.createIndex('entityId', 'entityId', { unique: false });
         metadataStore.createIndex('timestamp', 'timestamp', { unique: false });
-        console.log('[AlphaCore IDB] Created metadata store');
+        logInfo('AlphaCoreIDB', 'Created metadata store', { component: 'alphacore.idb.upgrade.createMetadata' });
       }
     };
   });
@@ -103,7 +105,7 @@ export async function addToOutbox(entry: Omit<IDBOutboxEntry, 'id'>): Promise<st
 
     request.onerror = () => reject(new Error(`Failed to add to outbox: ${request.error}`));
     request.onsuccess = () => {
-      console.log(`[AlphaCore IDB] Added outbox entry: ${id}`);
+      logInfo('AlphaCoreIDB', 'Added outbox entry', { component: 'alphacore.idb.outbox.added', id });
       resolve(id);
     };
   });
@@ -171,9 +173,38 @@ export async function updateOutboxStatus(
 
     request.onerror = () => reject(new Error(`Failed to update outbox: ${request.error}`));
     request.onsuccess = () => {
-      console.log(`[AlphaCore IDB] Updated outbox ${id}: ${status}`);
+      logInfo('AlphaCoreIDB', 'Updated outbox status', { component: 'alphacore.idb.outbox.updated', id, outboxStatus: status });
       resolve();
     };
+  });
+}
+
+/**
+ * Replace the payload of a pending outbox entry without changing its status
+ * or any other metadata.
+ *
+ * Used when the user edits a row that is still pending (hasn't drained
+ * yet). Instead of enqueueing a separate UPDATE that would have to be
+ * resolved against the not-yet-existent server id at sync time, we mutate
+ * the CREATE payload in place — when it finally drains it carries the
+ * latest values directly.
+ */
+export async function updateOutboxPayload(id: string, payload: unknown): Promise<void> {
+  const entry = await getOutboxEntry(id);
+  if (!entry) {
+    throw new Error(`Outbox entry not found: ${id}`);
+  }
+
+  const db = await initDB();
+  const updated: IDBOutboxEntry = { ...entry, payload };
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([OUTBOX_STORE], 'readwrite');
+    const store = transaction.objectStore(OUTBOX_STORE);
+    const request = store.put(updated);
+
+    request.onerror = () => reject(new Error(`Failed to update outbox payload: ${request.error}`));
+    request.onsuccess = () => resolve();
   });
 }
 
@@ -190,7 +221,7 @@ export async function deleteOutboxEntry(id: string): Promise<void> {
 
     request.onerror = () => reject(new Error(`Failed to delete outbox: ${request.error}`));
     request.onsuccess = () => {
-      console.log(`[AlphaCore IDB] Deleted outbox entry: ${id}`);
+      logInfo('AlphaCoreIDB', 'Deleted outbox entry', { component: 'alphacore.idb.outbox.deleted', id });
       resolve();
     };
   });
@@ -245,7 +276,7 @@ export async function clearOutbox(): Promise<void> {
 
     request.onerror = () => reject(new Error(`Failed to clear outbox: ${request.error}`));
     request.onsuccess = () => {
-      console.log('[AlphaCore IDB] Cleared outbox');
+      logInfo('AlphaCoreIDB', 'Cleared outbox', { component: 'alphacore.idb.outbox.cleared' });
       resolve();
     };
   });
@@ -374,7 +405,7 @@ export async function clearEntityMetadata(table: string, entityId: string): Prom
 
     transaction.onerror = () => reject(new Error(`Failed to clear metadata: ${transaction.error}`));
     transaction.oncomplete = () => {
-      console.log(`[AlphaCore IDB] Cleared metadata for ${table}:${entityId}`);
+      logInfo('AlphaCoreIDB', 'Cleared metadata', { component: 'alphacore.idb.metadata.cleared', table, entityId });
       resolve();
     };
   });
@@ -449,7 +480,7 @@ export async function clearAllData(): Promise<void> {
 
     transaction.onerror = () => reject(new Error(`Failed to clear all: ${transaction.error}`));
     transaction.oncomplete = () => {
-      console.log('[AlphaCore IDB] Cleared all data');
+      logInfo('AlphaCoreIDB', 'Cleared all data', { component: 'alphacore.idb.cleared' });
       resolve();
     };
   });

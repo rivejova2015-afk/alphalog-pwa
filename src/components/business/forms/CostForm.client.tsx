@@ -6,6 +6,7 @@ import { useState } from "react";
 import { COST_CATEGORIES } from "@/lib/business/types";
 import { createBusinessCost } from "@/lib/business/queries";
 
+import { logError } from "@/lib/log";
 interface CostFormProps {
   onClose: () => void;
   onSave: () => void;
@@ -76,13 +77,13 @@ export default function CostForm({ onClose, onSave }: CostFormProps) {
             }),
           });
         } catch (err) {
-          console.error("Error creating cost template:", err);
+          logError("CostForm", { component: "costform", message: "Error creating cost template", error: err instanceof Error ? err.message : String(err) });
         }
       }
 
       onSave();
     } catch (err) {
-      console.error("Error saving cost:", err);
+      logError("CostForm", { component: "costform", message: "Error saving cost", error: err instanceof Error ? err.message : String(err) });
       setError("Failed to save cost");
     } finally {
       setSaving(false);

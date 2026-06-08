@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { logError, logInfo } from "@/lib/log";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -41,11 +42,11 @@ export async function createClient() {
               errorMessage?.includes('Cookies can only be modified') ||
               errorDigest?.includes('NEXT_DYNAMIC_ASYNC_CLIENT_COMPONENT')
             ) {
-              console.debug('[Supabase] Cookie set deferred to middleware/route handler');
+              logInfo('Supabase', 'Cookie set deferred to middleware/route handler', { component: 'supabase.server.cookie.deferred' });
               // Silently continue - middleware or a Route Handler will update cookies
             } else {
               // For other errors, log but don't fail
-              console.error('[Supabase] Cookie set error:', errorMessage || error);
+              logError('Supabase', { component: 'supabase.server.cookie.error', message: errorMessage || String(error) });
             }
           }
         },

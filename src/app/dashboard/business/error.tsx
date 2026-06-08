@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, BarChart3 } from 'lucide-react';
+import { logError } from '@/lib/log';
 
 export default function BusinessError({
   error,
@@ -11,7 +12,7 @@ export default function BusinessError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error('[BusinessError]', error);
+    logError('BusinessError', { component: 'dashboard.business.errorBoundary', message: error.message, error: error.stack, code: error.digest });
   }, [error]);
 
   return (

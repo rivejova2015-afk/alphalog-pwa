@@ -780,7 +780,7 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - Loading skeletons en AccountComparisonTable, TradeHubOverviewWidget
 
 **Testing**
-- Vitest: **1292 unit tests across 98 files** — incluye toda la cobertura previa + nueva del Pipeline avanzado (multi-tf-filter, engine.multitf, run-job.portfolio, run-job.multitf, orchestrator advanced, EngineBacktestPanel + BacktestPanel jsdom).
+- Vitest: **1356 unit tests across 106 files** — incluye toda la cobertura previa + sprint 2026-06 (offline-first journal/trades + conflicts UI + QStash terminal reports verify/helpers).
 - Coinarb subproject: 140 tests across 14 files
 - Playwright E2E: 21 specs (auth, smoke, navigation, mobile-layout-fit, api-health, wizard-strategy, intelligence, dispatcher-smoke, polyarb, coinarb-unified-flow, tradehub, bot-control-selector, securities, inbox, **backtest-advanced**)
 
@@ -800,11 +800,38 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 - Suscripción multi-usuario real (actualmente 1 usuario).
 <!-- (resolved sprint 6) Coinarb segunda capa cubierta: analysis/ (smc-detector, mtf-analyzer, liquidity-map, candle-builder), validators/ (volume-delta, volume-profile, fear-greed, liquidation-heatmap) y risk/phase-manager.ts ahora tienen 79 tests en coinarb/tests/. -->
 - AAB drag/drop nodos: 20% madurez en `AabTreeView.client.tsx`. Bloqueado por spec UX.
-- TerminalReportsBot QStash scheduling: mencionado pero no implementado. Decidir entre construir o eliminar la mención.
-- alphacore-offline E2E: falta spec que pruebe mutation offline → reconciliación online (requiere setup complejo de IndexedDB mock).
-- console.log → logError: ~185 archivos restantes (cleanup gradual). Endpoints principales ya migrados (journal, accounts, tradehub/trades).
+<!-- (resolved 2026-06) TerminalReportsBot QStash scheduling: el módulo está completo end-to-end (verify + schedule + run-scheduled + UI). Cobertura con 26 unit tests nuevos. Ver entrada en ✅ Reciente. -->
+<!-- (resolved 2026-06) alphacore-offline E2E: spec del full cycle (offline submit → online drain → entry persiste) en alphacore-offline.spec.ts. -->
+<!-- (resolved 2026-06) console.log → logError sweep cerrado: de 335 ocurrencias en 120 archivos → 60 en 10. Todo lo migrable está hecho (API routes 100%, server libs 100%, UI components, error boundaries, dashboard pages). Lo que queda es intencional: src/lib/log.ts (el logger), src/lib/toast.ts, src/lib/alphashield/* (sistema de logging client-side propio que tiene que usar console como sink final), src/lib/alphacore/testing.ts (harness), JSDoc examples, y contenido educativo XSS demo. Ver entrada en ✅ Reciente. -->
 
 ### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
+- **Trades offline-first edit + delete** (2026-06): cierra el caso `update`/`delete` que faltaba en `NewTradesLog`. Tres escenarios:
+  - **Editar trade pending** (no drenó todavía): muta el payload del CREATE en outbox in-place via `updateOutboxPayload(outboxId, payload)`. Cuando finalmente drena, el CREATE lleva los valores finales — cero id-resolution drama. Helper nuevo en `src/lib/alphacore/offline/idb.ts`.
+  - **Editar trade server-side sin red**: encola PATCH a `/api/tradehub/trades/{id}` con `bodyMode='direct'` + update optimista en `trades` local.
+  - **Borrar trade pending**: `deleteOutboxEntry(outboxId)` directo, sin HTTP.
+  - **Borrar trade server-side sin red**: encola DELETE + remove optimista. El outbox drena cuando vuelve la red.
+  - `src/lib/alphacore/offline/pendingIds.ts` (nuevo): módulo puro con `PENDING_ID_PREFIX`, `isPendingId`, `pendingIdToOutboxId`, `outboxIdToPendingId`. Antes vivía duplicado inline en JournalPanel y NewTradesLog; ahora ambos importan del helper único. Tests directos del helper (7) + caso PATCH drainage (1) en outbox.test → 1364 unit verde.
+  - UI: las pending rows pasaron de "—" en Acciones a "Editar" + "Descartar" (semántica de cancel-outbox en vez de soft-delete) con tooltip explicativo.
+- **Sweep console.* → logError/logInfo/logWarn** (2026-06): cierre del item del Pendiente de observabilidad. Pasaron de 335 ocurrencias en 120 archivos → 60 en 10. Cobertura:
+  - **API routes**: 100% migradas (31 archivos). Incluye `/api/webhooks/mt5`, `/api/inbound/email`, `/api/outbound/email/send`, todos los `/api/terminal/*`, `/api/tradehub/{evidence,reports}`, `/api/intelligence/capital-targets`, `/api/secure-mail/*`, `/api/map-hot/*`, `/api/alphacore/*`, `/api/ops/bot-slo-alert`, `/api/treasury/payouts/preview`, etc.
+  - **Server libs**: 25 archivos. Helpers `logBusinessError/logTreasuryError` que internamente llamaban `console.error` reescritos para delegar a `logError`. Renames defensivos (`logError` local en `copygroups/mirroring.ts` → `logMirrorError`) para evitar shadowing con el import del logger central. `pwa/updateManager.ts` y `logging/reportLogs.ts` mantienen su API pero delegan al logger central en dev (Sentry en prod).
+  - **UI components**: 35 archivos migrados con script `/tmp/migrate_logger.mjs` que aplica regex sobre patrones uniformes `console.error("msg", err)` + auto-import. Cubre `business/{panels,forms}`, `logs`, `terminal`, `bot-control`, `map-hot`, `coinarb`, `push`, `ServiceWorkerRegister`, `LogoutButton`, `tradehub/Reports`.
+  - **Error boundaries**: 6 archivos (`error.tsx` global + treasury/logs/business/commandCenter + dashboard). Todos loguean al boundary con `component`, `message`, `stack` y `digest` para deduplicación en Sentry/app_logs.
+  - **Dashboard pages + auth**: 7 archivos (auth/callback, auth/page, dashboard/logs/{page,system,pwa}, treasury/page.client, tradehub/page).
+  - **Convención uniforme**: todos los call sites siguen `log{Error,Warn,Info}("ModuleName", "what failed", { component: "module.specific.location", ...context, error: e instanceof Error ? e.message : String(e) })`. El `component` permite agregar por sub-sistema en Sentry y filtrar en `app_logs`.
+  - **Skips intencionales** (60 ocurrencias en 10 archivos): `src/lib/log.ts` (el logger), `src/lib/toast.ts`, `src/lib/alphashield/*` (sistema de logging client-side propio que usa console como sink final), `src/lib/alphacore/testing.ts` (harness), `src/lib/alphacore/journal.ts` (JSDoc examples), `src/lib/securities/cybersec/lessons.ts` (contenido educativo XSS demo).
+  - 1364 unit tests verde, 0 regresiones, 0 errores TS (1 colisión `LogMeta.status: number` con `status: 'pending' | 'failed' | ...` de outbox resuelta renombrando a `outboxStatus`).
+- **Offline-first end-to-end para Journal + Trades + Conflicts UI** (2026-06): cierre del módulo AlphaCore offline.
+  - `OutboxManager` ahora soporta endpoints custom: `metadata.endpoint` / `metadata.method` / `metadata.bodyMode='direct'` permiten drenar a rutas de dominio (`/api/journal`, `/api/tradehub/trades`) con el payload raw, sin el wrapper genérico. `MutationMetadata` extendido en `src/lib/alphacore/types.ts`.
+  - `src/lib/alphacore/offline/networkFallback.ts` (nuevo) expone `isNetworkError` (matriz de errores Chromium/FF/Safari/Node + `!navigator.onLine`, AbortError NO), `enqueueOfflineMutation`, `getPendingForTable`, `bootstrapOutbox`. `CsrfBridge.client.tsx` llama `bootstrapOutbox()` al cargar — el listener `window.online` + autoSync están vivos globalmente.
+  - JournalPanel + NewTradesLog: handleSave cae al outbox cuando `isNetworkError(err)` → entry aparece en la lista con borde ámbar + badge "⏳ Sincronizando". Refresh tras `online` (3.5s) + poll cada 7s. Delete offline en JournalPanel también. Trades: solo create (edit/delete offline requieren resolución de id real al sync time).
+  - Conflict resolution UI: nuevo `ConflictBadge.client.tsx` global en root layout (pill bottom-left "⚠ N conflicto(s)" con toast Sonner en transición 0→N, auto-oculto en `/auth`, `/dashboard/conflicts`, `/offline`, `/health`). Nuevo hook `useConflictCount({ intervalMs, firstPollDelayMs, disabled })`. Página `/dashboard/conflicts` reescrita con Sonner, botón "Reintentar ahora" (`mgr.retryEntry`), metadata expandida (retryCount/maxRetries, fingerprint, endpoint custom), copy-payload.
+  - Tests: +56 unit (`networkFallback.test.ts` 15, `outbox.test.ts` 4, `useConflictCount.test.tsx` 5, `ConflictBadge.test.tsx` 6, `verify.test.ts` 14, `scheduleHelpers.test.ts` 12) — 1300 → 1356 verde, 0 regresiones. E2E: 8 specs en `alphacore-offline.spec.ts` × 3 browsers, cubriendo full cycle journal create offline → reconnect → persistencia server-side + 2 specs de conflict resolution (seed IDB + assert UI + assert IDB post-resolve).
+- **Terminal Reports Bot — QStash scheduling completo** (2026-06): el módulo siempre estuvo implementado (UI `TerminalReportsSchedulePanel`, routes `/schedule` POST/GET/DELETE + `/run-scheduled` con verify HMAC + `runReportPipeline`), pero sin cobertura de tests ni docs. Cleanup + cobertura:
+  - `src/lib/qstash/verify.ts`: `verifyJwt` exportado para tests directos, `_internal_signQStashToken` para fabricar tokens válidos en specs/dev. Rotation con CURRENT + NEXT keys soportada. Comentarios JSDoc.
+  - `src/lib/terminal/scheduleHelpers.ts` (nuevo): `toUtcFromPR`, `buildCronFromPR`, `normalizeQStashBaseUrl` extraídos de los route handlers (eran private). PR es UTC-4 year-round (sin DST).
+  - `run-scheduled/route.ts`: dedup del código de verify QStash que duplicaba `verify.ts` (~50 LOC); ahora importa el módulo compartido.
+  - Tests: 14 verify (JWT válido/expirado/nbf futuro/sub mismatch/iss mismatch/body tampering/rotation/malformed/legacy sin body claim) + 12 scheduleHelpers (timezone math con rollover día/mes/año + normalize URL).
 - **Algoritmos sin cuenta vinculada (research mode)** (2026-06): primer paso para desacoplar la creación/backtest de la vinculación a una cuenta operativa.
   - Migration 120: nueva columna nullable `algorithms.default_backtest_balance NUMERIC` para persistir el capital ficticio por algo.
   - `EngineBacktestPanel.client.tsx` detecta `linkedBotAccountId === null` y muestra un banner "Modo research — sin cuenta vinculada" con input destacado de capital inicial + 5 presets ($1K/$10K/$50K/$100K/$250K) y botón "Guardar como default" que persiste vía `PUT /api/algorithms/[id]` (schema extendido con `default_backtest_balance`).

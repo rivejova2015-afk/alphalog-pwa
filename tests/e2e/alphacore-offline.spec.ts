@@ -1,18 +1,71 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext, type BrowserContext } from "@playwright/test";
 import { login } from "./utils/auth";
 
-// Verifies the AlphaCore offline outbox loop end-to-end:
-//   1. Navigate to a CRUD page (journal) while online.
-//   2. Toggle the browser context offline.
-//   3. Attempt a mutation — should be captured by the IndexedDB outbox
-//      (we don't assert on internal IDB here; just that the UI doesn't blow up
-//      and the page stays responsive).
-//   4. Toggle back online and wait for reconciliation.
+// Cubre el ciclo offline-first de AlphaCore en dos capas:
 //
-// This is a smoke-level coverage: the goal is to catch regressions where the
-// offline flow throws unhandled errors or hangs the UI. Deep assertions on
-// outbox internals are intentionally out of scope (would tie the test to
-// implementation details).
+// 1) Smoke UI — la página de journal sobrevive el toggle offline ↔ online
+//    sin romper el render (regresiones del shell de la PWA).
+//
+// 2) Contrato server-side del outbox — los endpoints genéricos
+//    `/api/alphacore/[table]/...` son el destino al que el OutboxManager
+//    drena las mutations encoladas cuando vuelve la conexión. Si esos
+//    endpoints rompen, todas las mutations offline se pierden en silencio
+//    (entran a `conflict` tras agotar retries). Probarlos directamente vía
+//    HTTP es lo más cercano que tenemos a un cycle completo sin reproducir
+//    la inicialización del OutboxManager dentro del browser context.
+
+const ALPHACORE_PATH = "/api/alphacore/journal_entries";
+const JOURNAL_PATH = "/api/journal";
+
+async function getCsrfToken(context: BrowserContext, baseURL: string): Promise<string> {
+  const url = new URL(baseURL);
+  const cookies = await context.cookies(url.origin);
+  const csrf = cookies.find((c) => c.name === "al_csrf");
+  return csrf?.value ?? "";
+}
+
+async function createEntryViaAlphacore(
+  request: APIRequestContext,
+  csrf: string,
+  payload: Record<string, unknown>,
+  outboxId?: string
+) {
+  return request.post(`${ALPHACORE_PATH}/create`, {
+    headers: { "x-csrf-token": csrf, "Content-Type": "application/json" },
+    data: { payload, ...(outboxId ? { outboxId } : {}) },
+  });
+}
+
+async function findJournalEntry(
+  request: APIRequestContext,
+  matcher: (entry: { id: string; title?: string | null; content?: string | null }) => boolean
+) {
+  const res = await request.get(JOURNAL_PATH);
+  if (!res.ok()) return null;
+  const body = await res.json().catch(() => null);
+  const list: Array<{ id: string; title?: string | null; content?: string | null }> =
+    Array.isArray(body)
+      ? body
+      : Array.isArray(body?.entries)
+        ? body.entries
+        : Array.isArray(body?.data)
+          ? body.data
+          : [];
+  return list.find(matcher) ?? null;
+}
+
+async function softDeleteViaJournalApi(
+  request: APIRequestContext,
+  csrf: string,
+  id: string
+) {
+  await request
+    .delete(JOURNAL_PATH, {
+      headers: { "x-csrf-token": csrf, "Content-Type": "application/json" },
+      data: { id },
+    })
+    .catch(() => undefined);
+}
 
 test.describe("AlphaCore offline outbox", () => {
   test.describe.configure({ timeout: 90000 });
@@ -24,24 +77,19 @@ test.describe("AlphaCore offline outbox", () => {
   test("journal page survives offline → online toggle without crashing", async ({ page, context }) => {
     await page.goto("/business/journal", { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    // Page should render. Test passes if no JS error overlay shows up.
     await page.waitForTimeout(1500);
     const initialContent = await page.locator("body").textContent();
     expect((initialContent?.trim().length ?? 0)).toBeGreaterThan(0);
 
-    // Go offline. The PWA should keep rendering (cached SW or in-memory state).
     await context.setOffline(true);
     await page.waitForTimeout(800);
 
-    // Body still has content (no white screen).
     const offlineContent = await page.locator("body").textContent();
     expect((offlineContent?.trim().length ?? 0)).toBeGreaterThan(0);
 
-    // No <error.tsx> rendered (Next would show "Error" heading on boundary).
     const errorHeading = page.getByRole("heading", { name: /^error$/i });
     await expect(errorHeading).toHaveCount(0);
 
-    // Toggle back online — should not crash on reconnect.
     await context.setOffline(false);
     await page.waitForTimeout(2000);
 
@@ -50,8 +98,6 @@ test.describe("AlphaCore offline outbox", () => {
   });
 
   test("offline page is reachable when service worker is registered", async ({ page }) => {
-    // /offline is the PWA fallback. Even when reachable directly, it should
-    // render a 200 with a body.
     const response = await page.goto("/offline", { waitUntil: "domcontentloaded", timeout: 60000 });
     const status = response?.status() ?? 0;
     expect(status).not.toBe(500);
@@ -59,5 +105,392 @@ test.describe("AlphaCore offline outbox", () => {
 
     const content = await page.locator("body").textContent();
     expect((content?.trim().length ?? 0)).toBeGreaterThan(0);
+  });
+
+  test("outbox create endpoint persists a journal entry and it appears in GET /api/journal", async ({ page, context, baseURL }) => {
+    const request = context.request;
+    const csrf = await getCsrfToken(context, baseURL ?? page.url());
+
+    const marker = `e2e-outbox-create-${Date.now()}`;
+    const titlePayload = `T-${marker}`;
+    const contentPayload = JSON.stringify({ text: `Body-${marker}`, mood_score: 7 });
+
+    const createRes = await createEntryViaAlphacore(
+      request,
+      csrf,
+      {
+        title: titlePayload,
+        content: contentPayload,
+        mood: "good",
+        date: new Date().toISOString().slice(0, 10),
+      },
+      `e2e-${marker}`
+    );
+
+    expect(createRes.status(), `expected 2xx from outbox create, got ${createRes.status()}`).toBeLessThan(300);
+    const createBody = await createRes.json();
+    expect(createBody?.success).toBe(true);
+    expect(createBody?.data?.id).toBeTruthy();
+    const createdId = createBody.data.id as string;
+
+    // The entry should be visible via the regular GET /api/journal route.
+    // Title is AES-encrypted in DB but decrypted on the way out, so we can
+    // match against the plaintext marker.
+    const found = await findJournalEntry(request, (entry) =>
+      typeof entry.title === "string" && entry.title.includes(marker)
+    );
+    expect(found, `entry with marker "${marker}" should be returned by /api/journal`).toBeTruthy();
+    expect(found?.id).toBe(createdId);
+
+    await softDeleteViaJournalApi(request, csrf, createdId);
+  });
+
+  test("outbox create endpoint is idempotent when retried with the same outboxId", async ({ page, context, baseURL }) => {
+    const request = context.request;
+    const csrf = await getCsrfToken(context, baseURL ?? page.url());
+
+    const marker = `e2e-outbox-idem-${Date.now()}`;
+    const payload = {
+      title: `T-${marker}`,
+      content: JSON.stringify({ text: `Body-${marker}` }),
+      mood: "neutral",
+      date: new Date().toISOString().slice(0, 10),
+    };
+    const outboxId = `e2e-idem-${marker}`;
+
+    const first = await createEntryViaAlphacore(request, csrf, payload, outboxId);
+    expect(first.status()).toBeLessThan(300);
+    const firstBody = await first.json();
+    const firstId = firstBody?.data?.id as string;
+    expect(firstId).toBeTruthy();
+
+    // The OutboxManager retries on transient failures. If the first POST
+    // actually succeeded on the server but the response never reached the
+    // client (network blip), the retry must NOT create a duplicate row.
+    // The endpoint short-circuits when `outboxId` is provided AND the
+    // payload's `id` matches an existing row, so we send the server-issued
+    // id on the retry to simulate a real retry-after-success scenario.
+    const second = await createEntryViaAlphacore(
+      request,
+      csrf,
+      { ...payload, id: firstId },
+      outboxId
+    );
+    expect(second.status()).toBeLessThan(300);
+    const secondBody = await second.json();
+    expect(secondBody?.idempotent).toBe(true);
+    expect(secondBody?.data?.id).toBe(firstId);
+
+    // Only one row should exist for this marker.
+    const matches: Array<{ id: string }> = [];
+    const list = await request.get(JOURNAL_PATH);
+    const listJson = await list.json().catch(() => null);
+    const entries: Array<{ id: string; title?: string | null }> = Array.isArray(listJson)
+      ? listJson
+      : Array.isArray(listJson?.entries)
+        ? listJson.entries
+        : Array.isArray(listJson?.data)
+          ? listJson.data
+          : [];
+    for (const e of entries) {
+      if (typeof e.title === "string" && e.title.includes(marker)) matches.push({ id: e.id });
+    }
+    expect(matches.length, `expected exactly 1 entry for marker "${marker}", got ${matches.length}`).toBe(1);
+
+    await softDeleteViaJournalApi(request, csrf, firstId);
+  });
+
+  test("journal form falls back to outbox when offline and drains on reconnect (full cycle)", async ({ page, context, baseURL }) => {
+    // Go online to /business/journal so the CsrfBridge bootstrap runs and
+    // the OutboxManager singleton is alive with its `online` listener.
+    await page.goto("/business/journal", { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Allow the React effect that calls bootstrapOutbox() to run.
+    await page.waitForTimeout(1200);
+
+    const marker = `e2e-cycle-${Date.now()}`;
+    const text = `Reflexión offline ${marker} con detalle suficiente para validar`;
+
+    // Snapshot existing entry ids so we can assert the new one is brand new.
+    const requestCtx = context.request;
+    const csrf = await getCsrfToken(context, baseURL ?? page.url());
+
+    // Go offline — POST /api/journal will throw TypeError "Failed to fetch".
+    await context.setOffline(true);
+    await page.waitForTimeout(400);
+
+    // Open the form and submit. The panel should catch the network error,
+    // enqueue to the outbox, close the form and render the entry as pending.
+    await page.getByRole("button", { name: /nueva entrada/i }).click();
+    await page.locator("textarea").first().fill(text);
+    await page.getByRole("button", { name: /guardar entrada/i }).click();
+
+    // The "Sincronizando" pill should appear on the new row.
+    await expect(page.getByText(/sincronizando/i).first()).toBeVisible({ timeout: 8000 });
+    // And the entry text should be present (optimistic render).
+    await expect(page.getByText(marker).first()).toBeVisible({ timeout: 4000 });
+
+    // Reconnect — the OutboxManager's `online` listener fires syncAll().
+    await context.setOffline(false);
+
+    // Wait for the panel's post-reconnect refresh (3.5s) + a margin for the
+    // POST round-trip + the outbox-pending poll (every 7s).
+    await page.waitForTimeout(12000);
+
+    // The "Sincronizando" pill should be gone after the entry persists.
+    // (We don't assert .toHaveCount(0) because other tests running in
+    // parallel could leave unrelated pending rows; instead we re-query
+    // the server and assert the entry exists with a real id.)
+    const list = await requestCtx.get(JOURNAL_PATH);
+    expect(list.ok()).toBe(true);
+    const body = await list.json().catch(() => null);
+    const entries: Array<{ id: string; text?: string | null }> = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.entries)
+        ? body.entries
+        : Array.isArray(body?.data)
+          ? body.data
+          : [];
+
+    const found = entries.find((e) => typeof e.text === "string" && e.text.includes(marker));
+    expect(found, `entry with marker "${marker}" should have synced to the server`).toBeTruthy();
+
+    if (found?.id) {
+      await softDeleteViaJournalApi(requestCtx, csrf, found.id);
+    }
+  });
+
+  test("outbox update + delete endpoints round-trip a journal entry", async ({ page, context, baseURL }) => {
+    const request = context.request;
+    const csrf = await getCsrfToken(context, baseURL ?? page.url());
+
+    const marker = `e2e-outbox-cycle-${Date.now()}`;
+    const createRes = await createEntryViaAlphacore(request, csrf, {
+      title: `T-${marker}`,
+      content: JSON.stringify({ text: `Body-${marker}` }),
+      mood: "good",
+      date: new Date().toISOString().slice(0, 10),
+    });
+    expect(createRes.status()).toBeLessThan(300);
+    const createBody = await createRes.json();
+    const id = createBody?.data?.id as string;
+    expect(id).toBeTruthy();
+
+    // Update via alphacore PATCH
+    const updatedTitle = `T-${marker}-updated`;
+    const updateRes = await request.patch(`${ALPHACORE_PATH}/${id}/update`, {
+      headers: { "x-csrf-token": csrf, "Content-Type": "application/json" },
+      data: {
+        payload: { title: updatedTitle, mood: "excellent" },
+        outboxId: `e2e-cycle-update-${marker}`,
+      },
+    });
+    expect(updateRes.status(), `expected 2xx from outbox update, got ${updateRes.status()}`).toBeLessThan(300);
+
+    // Verify update is reflected via the regular GET route
+    const afterUpdate = await findJournalEntry(request, (entry) => entry.id === id);
+    expect(afterUpdate, "entry should still exist after update").toBeTruthy();
+    expect(
+      typeof afterUpdate?.title === "string" && afterUpdate.title.includes(`${marker}-updated`),
+      "updated title should be visible after PATCH"
+    ).toBe(true);
+
+    // Delete via alphacore DELETE
+    const deleteRes = await request.delete(`${ALPHACORE_PATH}/${id}/delete`, {
+      headers: { "x-csrf-token": csrf },
+    });
+    expect(deleteRes.status(), `expected 2xx from outbox delete, got ${deleteRes.status()}`).toBeLessThan(300);
+
+    // Entry should no longer be returned by /api/journal (soft-deleted)
+    const afterDelete = await findJournalEntry(request, (entry) => entry.id === id);
+    expect(afterDelete, "soft-deleted entry should be hidden from GET /api/journal").toBeFalsy();
+  });
+
+  test("conflicts page renders seeded conflict, retries, and resolves via 'use server'", async ({ page }) => {
+    // Seeding via IDB directly is the most reliable way to produce a
+    // conflict in CI: triggering one via the OutboxManager would require
+    // failing a real server endpoint past the retry budget, which is
+    // brittle. The conflicts page reads `status='conflict'` rows from the
+    // outbox store — we don't care how they got there.
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Give the bundle a moment so IndexedDB has been opened at least once
+    // by the global outbox bootstrap.
+    await page.waitForTimeout(1500);
+
+    const marker = `e2e-conflict-${Date.now()}`;
+
+    type SeededEntry = {
+      id: string;
+      mutationId: string;
+      operation: string;
+      table: string;
+      payload: { text: string; [k: string]: unknown };
+      createdAt: number;
+      retryCount: number;
+      maxRetries: number;
+      status: string;
+      lastError: string;
+      metadata: { endpoint: string; method: string; bodyMode: string };
+    };
+
+    // page.evaluate runs in the page context, so it has access to the real
+    // IndexedDB the app uses. We open with DB_NAME='alphalog', store
+    // 'outbox' (matches src/lib/alphacore/offline/idb.ts).
+    const seeded = await page.evaluate(async (markerArg: string): Promise<SeededEntry> => {
+      const DB_NAME = "alphalog";
+      const STORE = "outbox";
+
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+
+      const entry: SeededEntry = {
+        id: `e2e-seed-${markerArg}`,
+        mutationId: `mut-${markerArg}`,
+        operation: "create",
+        table: "journal_entries",
+        payload: { text: `Conflict seed ${markerArg}` },
+        createdAt: Date.now(),
+        retryCount: 3,
+        maxRetries: 3,
+        status: "conflict",
+        lastError: "Seeded by E2E: server returned 409 — newer version exists",
+        metadata: { endpoint: "/api/journal", method: "POST", bodyMode: "direct" },
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([STORE], "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore(STORE).put(entry);
+      });
+
+      db.close();
+      return entry;
+    }, marker);
+
+    expect(seeded.status, "seed inserted a conflict entry").toBe("conflict");
+
+    // The global ConflictBadge polls every 8s with a 1.5s initial delay.
+    // Navigating to /dashboard/conflicts is faster than waiting for it to
+    // surface — that interaction is covered by the unit tests for
+    // `ConflictBadge` + `useConflictCount`.
+    await page.goto("/dashboard/conflicts", { waitUntil: "domcontentloaded", timeout: 60000 });
+
+    // The seeded payload text should be visible in the conflict card.
+    await expect(page.getByText(marker, { exact: false }).first()).toBeVisible({ timeout: 8000 });
+    // Endpoint metadata should be rendered.
+    await expect(page.getByText("/api/journal").first()).toBeVisible();
+    // Retry / fingerprint counters.
+    await expect(page.getByText(/reintentos:\s*3\/3/i).first()).toBeVisible();
+
+    // Resolve as "server" — the entry should disappear from the list and
+    // the empty state should render.
+    await page.getByRole("button", { name: /usar versión del servidor/i }).first().click();
+
+    // Empty state copy when no conflicts remain.
+    await expect(page.getByText(/no hay conflictos pendientes/i)).toBeVisible({ timeout: 6000 });
+
+    // Verify directly in IDB that the entry was removed (not just hidden in UI).
+    const remaining = await page.evaluate(async (id: string): Promise<unknown> => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("alphalog");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const result = await new Promise<unknown>((resolve, reject) => {
+        const tx = db.transaction(["outbox"], "readonly");
+        const req = tx.objectStore("outbox").get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return result;
+    }, seeded.id);
+
+    expect(remaining, "resolve='server' deletes the outbox entry").toBeFalsy();
+  });
+
+  test("conflict 'force local' re-queues the entry as pending", async ({ page }) => {
+    await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(1500);
+
+    const marker = `e2e-conflict-local-${Date.now()}`;
+    const seededId = `e2e-seed-local-${marker}`;
+
+    await page.evaluate(
+      async ({ id, mark }: { id: string; mark: string }) => {
+        const db: IDBDatabase = await new Promise((resolve, reject) => {
+          const req = indexedDB.open("alphalog");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(["outbox"], "readwrite");
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          tx.objectStore("outbox").put({
+            id,
+            mutationId: `mut-${mark}`,
+            operation: "create",
+            table: "journal_entries",
+            payload: { text: `Force local ${mark}` },
+            createdAt: Date.now(),
+            retryCount: 3,
+            maxRetries: 3,
+            status: "conflict",
+            lastError: "Seeded: 412 precondition failed",
+            metadata: { endpoint: "/api/journal", method: "POST", bodyMode: "direct" },
+          });
+        });
+        db.close();
+      },
+      { id: seededId, mark: marker }
+    );
+
+    await page.goto("/dashboard/conflicts", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await expect(page.getByText(marker, { exact: false }).first()).toBeVisible({ timeout: 8000 });
+
+    await page.getByRole("button", { name: /forzar versión local/i }).first().click();
+    await expect(page.getByText(/no hay conflictos pendientes/i)).toBeVisible({ timeout: 6000 });
+
+    // Force-local does NOT delete — it flips status='pending' so the
+    // OutboxManager retries it next sync. Verify directly.
+    const stored = await page.evaluate(async (id: string) => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("alphalog");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const row = await new Promise<{ status?: string } | undefined>((resolve, reject) => {
+        const tx = db.transaction(["outbox"], "readonly");
+        const req = tx.objectStore("outbox").get(id);
+        req.onsuccess = () => resolve(req.result as { status?: string } | undefined);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return row;
+    }, seededId);
+
+    expect(stored, "entry should still exist after 'force local'").toBeTruthy();
+    expect(stored?.status, "force-local flips status to 'pending'").toBe("pending");
+
+    // Cleanup so the next test doesn't see a leftover pending entry that
+    // would try to POST garbage to /api/journal during global online events.
+    await page.evaluate(async (id: string) => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const req = indexedDB.open("alphalog");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(["outbox"], "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore("outbox").delete(id);
+      });
+      db.close();
+    }, seededId);
   });
 });

@@ -3,6 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
 import { normalizeTradeDirection } from "@/lib/trade/normalize";
+import {
+  enqueueOfflineMutation,
+  getPendingForTable,
+  isNetworkError,
+} from "@/lib/alphacore/offline/networkFallback";
+import {
+  deleteOutboxEntry,
+  updateOutboxPayload,
+  type IDBOutboxEntry,
+} from "@/lib/alphacore/offline/idb";
+import {
+  isPendingId as isPendingTradeId,
+  pendingIdToOutboxId as pendingTradeIdToOutboxId,
+  outboxIdToPendingId,
+} from "@/lib/alphacore/offline/pendingIds";
+import { CloudOff } from "lucide-react";
 
 interface Account {
   id: string;
@@ -145,6 +161,16 @@ function normalizeTradeStatus(input: unknown): "open" | "closed" {
 
 export default function NewTradesLog() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [pendingTradesRaw, setPendingTradesRaw] = useState<IDBOutboxEntry[]>([]);
+
+  const refreshPendingTrades = useCallback(async () => {
+    try {
+      const pending = await getPendingForTable("trades");
+      setPendingTradesRaw(pending.filter((e) => e.operation === "create"));
+    } catch {
+      // Reading the outbox is best-effort.
+    }
+  }, []);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [setups, setSetups] = useState<Setup[]>([]);
 
@@ -213,13 +239,67 @@ export default function NewTradesLog() {
     void refreshAll();
   }, [refreshAll]);
 
+  const pendingTrades = useMemo<Trade[]>(() => {
+    return pendingTradesRaw.map((entry) => {
+      const p = (entry.payload || {}) as Partial<Trade> & { account_id?: string };
+      return {
+        id: outboxIdToPendingId(entry.id),
+        account_id: p.account_id || "",
+        symbol: p.symbol || "",
+        direction: (p.direction === "SELL" ? "SELL" : "BUY") as "BUY" | "SELL",
+        status: (p.status === "open" ? "open" : "closed") as "open" | "closed",
+        entry_date: p.entry_date || new Date(entry.createdAt).toISOString().slice(0, 10),
+        exit_date: p.exit_date ?? null,
+        entry_price: typeof p.entry_price === "number" ? p.entry_price : 0,
+        exit_price: typeof p.exit_price === "number" ? p.exit_price : 0,
+        lots: typeof p.lots === "number" ? p.lots : 0,
+        stop_loss_price: typeof p.stop_loss_price === "number" ? p.stop_loss_price : 0,
+        take_profit_price: typeof p.take_profit_price === "number" ? p.take_profit_price : 0,
+        pnl: typeof p.pnl === "number" ? p.pnl : null,
+        pnl_percent: typeof p.pnl_percent === "number" ? p.pnl_percent : null,
+        notes: typeof p.notes === "string" ? p.notes : null,
+        setup_id: typeof p.setup_id === "string" ? p.setup_id : null,
+        is_featured_in_report: Boolean(p.is_featured_in_report),
+        created_at: new Date(entry.createdAt).toISOString(),
+      };
+    });
+  }, [pendingTradesRaw]);
+
   const sortedTrades = useMemo(() => {
-    return [...trades].sort((a, b) => {
+    // Pending trades go on top — the user just registered them and would be
+    // confused not seeing them in the list.
+    const sortedPending = [...pendingTrades].sort((a, b) => {
       const left = new Date(a.exit_date || a.entry_date).getTime();
       const right = new Date(b.exit_date || b.entry_date).getTime();
       return right - left;
     });
-  }, [trades]);
+    const sortedServer = [...trades].sort((a, b) => {
+      const left = new Date(a.exit_date || a.entry_date).getTime();
+      const right = new Date(b.exit_date || b.entry_date).getTime();
+      return right - left;
+    });
+    return [...sortedPending, ...sortedServer];
+  }, [trades, pendingTrades]);
+
+  // Refresh pending list on mount and periodically so successful background
+  // syncs flip the badge off without the user reloading.
+  useEffect(() => {
+    void refreshPendingTrades();
+    if (typeof window === "undefined") return;
+    const onOnline = () => {
+      window.setTimeout(() => {
+        void refreshPendingTrades();
+        void fetchTrades(filterAccountId || undefined);
+      }, 3500);
+    };
+    window.addEventListener("online", onOnline);
+    const intervalId = window.setInterval(() => void refreshPendingTrades(), 7000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshPendingTrades, filterAccountId]);
 
   const resetForm = useCallback(() => {
     setForm((prev) => ({
@@ -318,40 +398,113 @@ export default function NewTradesLog() {
       setSaving(true);
 
       const isEditing = Boolean(editingTradeId);
+      const editingPending = isEditing && editingTradeId !== null && isPendingTradeId(editingTradeId);
+
+      // Special path: the user is editing a row that is still pending in
+      // the outbox (the server has never seen it). Instead of enqueueing a
+      // PATCH that would need to resolve the not-yet-existent server id at
+      // sync time, mutate the CREATE payload in place — when it finally
+      // drains it carries the latest values.
+      if (editingPending && editingTradeId) {
+        try {
+          await updateOutboxPayload(
+            pendingTradeIdToOutboxId(editingTradeId),
+            payload as Record<string, unknown>
+          );
+          await refreshPendingTrades();
+          setShowForm(false);
+          resetForm();
+          setError("");
+        } catch {
+          setError("No se pudo actualizar el trade pendiente.");
+        } finally {
+          setSaving(false);
+        }
+        return;
+      }
+
       const endpoint = isEditing ? `/api/tradehub/trades/${editingTradeId}` : "/api/tradehub/trades";
       const method = isEditing ? "PATCH" : "POST";
 
-      const response = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      try {
+        const response = await fetch(endpoint, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      if (!response.ok) {
-        throw new Error(await parseApiError(response, "No se pudo guardar el trade"));
-      }
-
-      const savedTrade = (await response.json()) as { id?: string; account_id?: string };
-      const tradeId = savedTrade.id || editingTradeId;
-
-      if (tradeId) {
-        try {
-          await uploadScreenshotIfNeeded(tradeId);
-        } catch (screenshotError) {
-          setError(screenshotError instanceof Error ? screenshotError.message : "No se pudo subir screenshot");
+        if (!response.ok) {
+          throw new Error(await parseApiError(response, "No se pudo guardar el trade"));
         }
 
-        notifyTradeUpdate({
-          reason: isEditing ? "update" : "create",
-          tradeId,
-          accountId: savedTrade.account_id || form.account_id,
-          source: "tradehub:new-trades-log",
-        });
-      }
+        const savedTrade = (await response.json()) as { id?: string; account_id?: string };
+        const tradeId = savedTrade.id || editingTradeId;
 
-      await fetchTrades(filterAccountId || undefined);
-      setShowForm(false);
-      resetForm();
+        if (tradeId) {
+          try {
+            await uploadScreenshotIfNeeded(tradeId);
+          } catch (screenshotError) {
+            setError(
+              screenshotError instanceof Error ? screenshotError.message : "No se pudo subir screenshot"
+            );
+          }
+
+          notifyTradeUpdate({
+            reason: isEditing ? "update" : "create",
+            tradeId,
+            accountId: savedTrade.account_id || form.account_id,
+            source: "tradehub:new-trades-log",
+          });
+        }
+
+        await fetchTrades(filterAccountId || undefined);
+        setShowForm(false);
+        resetForm();
+      } catch (innerErr) {
+        if (!isNetworkError(innerErr)) {
+          throw innerErr;
+        }
+        // Network-only fallback: queue create OR update against an existing
+        // server-side trade. Screenshots are intentionally NOT queued (they
+        // need a real id; cargarlas tras drain queda fuera del scope).
+        try {
+          if (isEditing && editingTradeId) {
+            await enqueueOfflineMutation({
+              endpoint: `/api/tradehub/trades/${editingTradeId}`,
+              method: "PATCH",
+              table: "trades",
+              payload: { ...(payload as Record<string, unknown>), id: editingTradeId },
+              operation: "update",
+            });
+            // Optimistic local update so the row reflects the new values
+            // without a refetch.
+            setTrades((prev) =>
+              prev.map((t) =>
+                t.id === editingTradeId
+                  ? {
+                      ...t,
+                      ...(payload as Record<string, unknown>),
+                    } as typeof t
+                  : t
+              )
+            );
+          } else {
+            await enqueueOfflineMutation({
+              endpoint: "/api/tradehub/trades",
+              method: "POST",
+              table: "trades",
+              payload: payload as Record<string, unknown>,
+              operation: "create",
+            });
+            await refreshPendingTrades();
+          }
+          setShowForm(false);
+          resetForm();
+          setError("");
+        } catch {
+          setError("Sin conexión y tampoco se pudo encolar offline.");
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar el trade");
     } finally {
@@ -362,6 +515,19 @@ export default function NewTradesLog() {
   const handleDelete = async (trade: Trade) => {
     const confirmed = window.confirm(`Eliminar operacion ${trade.symbol}? Esta accion es permanente.`);
     if (!confirmed) return;
+
+    // Pending trade — never made it to the server. Cancel the outbox
+    // entry directly; no DELETE call needed.
+    if (isPendingTradeId(trade.id)) {
+      try {
+        await deleteOutboxEntry(pendingTradeIdToOutboxId(trade.id));
+        setError("");
+        await refreshPendingTrades();
+      } catch {
+        setError("No se pudo descartar el trade pendiente.");
+      }
+      return;
+    }
 
     try {
       setError("");
@@ -379,6 +545,24 @@ export default function NewTradesLog() {
 
       await fetchTrades(filterAccountId || undefined);
     } catch (err) {
+      if (isNetworkError(err)) {
+        try {
+          await enqueueOfflineMutation({
+            endpoint: `/api/tradehub/trades/${trade.id}`,
+            method: "DELETE",
+            table: "trades",
+            payload: { id: trade.id },
+            operation: "delete",
+          });
+          // Hide the row immediately — the outbox will drain the delete
+          // when the connection comes back.
+          setTrades((prev) => prev.filter((t) => t.id !== trade.id));
+          setError("");
+        } catch {
+          setError("Sin conexión y tampoco se pudo encolar el borrado.");
+        }
+        return;
+      }
       setError(err instanceof Error ? err.message : "No se pudo eliminar el trade");
     }
   };
@@ -676,11 +860,28 @@ export default function NewTradesLog() {
                 const accountName = trade.account?.name || accounts.find((acc) => acc.id === trade.account_id)?.name || "-";
                 const setupName = trade.setup?.name || setups.find((setup) => setup.id === trade.setup_id)?.name || "-";
                 const accountCurrency = accounts.find((acc) => acc.id === trade.account_id)?.currency || "USD";
+                const isPending = isPendingTradeId(trade.id);
 
                 return (
-                  <tr key={trade.id} className="border-b border-slate-800/60">
+                  <tr
+                    key={trade.id}
+                    className={`border-b ${
+                      isPending ? "border-amber-800/40 bg-amber-950/15" : "border-slate-800/60"
+                    }`}
+                  >
                     <td data-label="Symbol" className="px-3 py-2 font-medium text-slate-50">
-                      {trade.symbol}
+                      <div className="flex items-center gap-2">
+                        <span>{trade.symbol}</span>
+                        {isPending && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-300"
+                            title="Este trade aún no se sincronizó con el servidor"
+                          >
+                            <CloudOff className="w-3 h-3" />
+                            Sync
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td data-label="Cuenta" className="px-3 py-2">{accountName}</td>
                     <td data-label="Setup" className="px-3 py-2">{setupName}</td>
@@ -702,14 +903,16 @@ export default function NewTradesLog() {
                         <button
                           onClick={() => openEdit(trade)}
                           className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-100 hover:bg-slate-700"
+                          title={isPending ? "Editar el payload pendiente antes del sync" : undefined}
                         >
                           Editar
                         </button>
                         <button
                           onClick={() => void handleDelete(trade)}
                           className="rounded bg-red-900/50 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
+                          title={isPending ? "Descartar el trade pendiente del outbox" : undefined}
                         >
-                          Eliminar
+                          {isPending ? "Descartar" : "Eliminar"}
                         </button>
                       </div>
                     </td>

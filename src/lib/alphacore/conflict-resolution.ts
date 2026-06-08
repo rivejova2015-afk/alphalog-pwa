@@ -9,7 +9,7 @@
  */
 
 import type { EntityOperation } from '@/lib/alphacore/types';
-import { logError } from '@/lib/log';
+import { logError, logInfo } from '@/lib/log';
 
 /**
  * Conflict detection result
@@ -328,13 +328,13 @@ export async function logConflict(
   metadata: ConflictMetadata,
   resolution: ConflictResolution
 ): Promise<void> {
-  // Log to console for now - can be integrated with AlphaShield later
-  console.log('[ConflictResolution]', {
+  logInfo('ConflictResolution', 'resolved', {
+    component: 'alphacore.conflict.resolved',
     entityId: metadata.entityId,
     table: metadata.table,
     conflictType: metadata.conflictType,
     resolution: metadata.resolution,
-    conflictId: resolution.conflictId
+    conflictId: resolution.conflictId,
   });
 }
 
@@ -435,7 +435,8 @@ export function createRollbackSnapshot(
 export async function rollbackToSnapshot(
   snapshot: RollbackSnapshot
 ): Promise<void> {
-  console.log('[Rollback] Starting rollback for conflict:', {
+  logInfo('Rollback', 'Starting rollback for conflict', {
+    component: 'alphacore.rollback.start',
     entityId: snapshot.entityId,
     table: snapshot.table,
     operation: snapshot.operation,
@@ -483,7 +484,8 @@ export async function rollbackToSnapshot(
     );
   }
 
-  console.log('[Rollback] Successfully restored entity to pre-conflict state:', {
+  logInfo('Rollback', 'Successfully restored entity to pre-conflict state', {
+    component: 'alphacore.rollback.success',
     entityId: snapshot.entityId,
     table: snapshot.table,
     conflictId: snapshot.conflictId,

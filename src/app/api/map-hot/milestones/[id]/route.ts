@@ -10,7 +10,7 @@ import { autoFixMapHotMilestone } from "@/lib/validation/autoFix";
 import { enforceResponseContract } from "@/lib/validation/contractGuard";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 type MilestoneRow = {
   id: string;
@@ -124,7 +124,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const response = mapRow(full as unknown as MilestoneRow);
     const contract = enforceResponseContract(mapHotMilestoneResponseSchema, response);
     if (!contract.ok) {
-      console.warn("map_hot_milestone response contract violation:", contract.errors);
+      logWarn("MapHotMilestones", "response contract violation", { component: "map-hot.milestones.[id].contract", errors: contract.errors });
     }
 
     await logAuditFromRequest(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { bootstrapOutbox } from "@/lib/alphacore/offline/networkFallback";
 
 const CSRF_COOKIE = "al_csrf";
 const CSRF_HEADER = "x-csrf-token";
@@ -29,6 +30,13 @@ const isSameOrigin = (input: RequestInfo | URL) => {
 };
 
 export default function CsrfBridge() {
+  useEffect(() => {
+    // Initialize the offline outbox singleton so it listens to `online`
+    // events and runs the auto-sync interval globally, regardless of which
+    // route the user lands on. Safe to call repeatedly.
+    bootstrapOutbox();
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.fetch !== "function") return;
 

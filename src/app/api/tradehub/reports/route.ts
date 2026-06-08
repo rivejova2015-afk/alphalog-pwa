@@ -3,13 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value);
   } catch (err) {
-    console.warn("[TradeHub] Failed to decrypt weekly report:", err);
+    logWarn("TradeHubReports", "Failed to decrypt weekly report", { component: "tradehub.reports.decrypt", error: err instanceof Error ? err.message : String(err) });
     return value ?? "";
   }
 };

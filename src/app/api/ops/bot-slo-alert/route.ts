@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { captureException, captureMessage } from "@/lib/sentry";
 import { safeCompareTokens } from "@/lib/security/timing";
-import { logError } from "@/lib/log";
+import { logError, logInfo } from "@/lib/log";
 
 export const runtime = "nodejs";
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    console.info("[bot-slo-alert]", context);
+    logInfo("BotSloAlert", "ingested", { component: "ops.bot-slo-alert.context", context: context as unknown as Record<string, unknown> });
   }
 
   return NextResponse.json({ ok: true, receivedAt: new Date().toISOString() });

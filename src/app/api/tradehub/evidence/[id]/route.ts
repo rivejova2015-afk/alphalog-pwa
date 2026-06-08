@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRouteId } from "@/lib/api/routeParams";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
@@ -165,7 +165,7 @@ export async function DELETE(
         try {
           await supabase.storage.from("log_attachments").remove([tradeEvidence.file_path]);
         } catch (storageErr) {
-          console.warn("Warning: Failed to delete evidence file:", storageErr);
+          logWarn("TradeHubEvidence", "Failed to delete evidence file", { component: "tradehub.evidence.[id].delete.storage", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
         }
       }
 
@@ -205,7 +205,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove([existingEvidence.image_path]);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete evidence file:", storageErr);
+        logWarn("TradeHubEvidence", "Failed to delete evidence file", { component: "tradehub.evidence.[id].delete.storage.fallback", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
       }
     }
 

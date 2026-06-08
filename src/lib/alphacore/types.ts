@@ -39,15 +39,30 @@ export interface MutationMetadata {
   id: string; // Unique mutation ID
   operation: EntityOperation;
   table: string;
-  entityName: string; // Human-readable name (e.g., "Account", "Trade")
-  module: ModuleName;
+  entityName?: string; // Human-readable name (e.g., "Account", "Trade")
+  module?: ModuleName;
   subsection?: SubsectionName;
-  timestamp: number; // Date.now()
-  status: MutationStatus;
-  retryCount: number;
-  maxRetries: number;
+  timestamp?: number; // Date.now()
+  status?: MutationStatus;
+  retryCount?: number;
+  maxRetries?: number;
   lastError?: string;
   fingerprint?: string; // For deduplication and error tracking
+  /**
+   * Custom drain target for the OutboxManager. When set, the outbox POSTs/
+   * PATCHes to this URL instead of the generic `/api/alphacore/...` route.
+   * Used by feature panels that fall back to the outbox on network errors
+   * without migrating to the generic endpoint contract.
+   */
+  endpoint?: string;
+  /** Override HTTP verb. Defaults to operation → verb mapping. */
+  method?: string;
+  /**
+   * Body shape used when draining:
+   *   - 'wrapped' (default): `{ payload, metadata, outboxId }` — generic alphacore route
+   *   - 'direct': raw payload — domain-specific route that doesn't know about the outbox
+   */
+  bodyMode?: 'wrapped' | 'direct';
 }
 
 /**

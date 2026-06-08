@@ -6,6 +6,7 @@
 
 import { isOffline, hasSession, getBusinessOfflineData } from "@/lib/offline/snapshot";
 import type { DashboardSnapshot } from "@/lib/offline/idb";
+import { logWarn } from "@/lib/log";
 
 export type BusinessOfflineData = DashboardSnapshot["business"];
 
@@ -26,7 +27,7 @@ export async function loadBusinessCosts(
       const { getBusinessCosts } = await import("@/lib/business/queries");
       return await getBusinessCosts();
     } catch (err) {
-      console.warn("[Business Offline] Error fetching costs, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error fetching costs, falling back to snapshot", { component: "business.offline.costs.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -35,7 +36,7 @@ export async function loadBusinessCosts(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.costs || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot costs:", err);
+    logWarn("BusinessOffline", "Error loading snapshot costs", { component: "business.offline.costs.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -55,7 +56,7 @@ export async function loadBusinessMilestones(
       const { getBusinessMilestones } = await import("@/lib/business/queries");
       return await getBusinessMilestones();
     } catch (err) {
-      console.warn("[Business Offline] Error fetching milestones, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error fetching milestones, falling back to snapshot", { component: "business.offline.milestones.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -63,7 +64,7 @@ export async function loadBusinessMilestones(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.milestones || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot milestones:", err);
+    logWarn("BusinessOffline", "Error loading snapshot milestones", { component: "business.offline.milestones.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -83,7 +84,7 @@ export async function loadBusinessSOPs(
       const { getBusinessSOPs } = await import("@/lib/business/queries");
       return await getBusinessSOPs();
     } catch (err) {
-      console.warn("[Business Offline] Error fetching SOPs, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error fetching SOPs, falling back to snapshot", { component: "business.offline.sops.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -91,7 +92,7 @@ export async function loadBusinessSOPs(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.sops || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot SOPs:", err);
+    logWarn("BusinessOffline", "Error loading snapshot SOPs", { component: "business.offline.sops.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -112,7 +113,7 @@ export async function loadBusinessSOPItems(
       // This returns cached sop_items from snapshot or empty array
       return [];
     } catch (err) {
-      console.warn("[Business Offline] Error with SOP items, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error with SOP items, falling back to snapshot", { component: "business.offline.sopItems.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -120,7 +121,7 @@ export async function loadBusinessSOPItems(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.sop_items || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot SOP items:", err);
+    logWarn("BusinessOffline", "Error loading snapshot SOP items", { component: "business.offline.sopItems.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -141,7 +142,7 @@ export async function loadBusinessSOPRuns(
       // This returns cached sop_runs from snapshot or empty array
       return [];
     } catch (err) {
-      console.warn("[Business Offline] Error with SOP runs, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error with SOP runs, falling back to snapshot", { component: "business.offline.sopRuns.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -149,7 +150,7 @@ export async function loadBusinessSOPRuns(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.sop_runs || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot SOP runs:", err);
+    logWarn("BusinessOffline", "Error loading snapshot SOP runs", { component: "business.offline.sopRuns.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -169,7 +170,7 @@ export async function loadBusinessDecisions(
       const { getBusinessDecisions } = await import("@/lib/business/queries");
       return await getBusinessDecisions();
     } catch (err) {
-      console.warn("[Business Offline] Error fetching decisions, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error fetching decisions, falling back to snapshot", { component: "business.offline.decisions.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -177,7 +178,7 @@ export async function loadBusinessDecisions(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.decisions || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot decisions:", err);
+    logWarn("BusinessOffline", "Error loading snapshot decisions", { component: "business.offline.decisions.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -198,7 +199,7 @@ export async function loadBusinessDecisionTasks(
       // This returns cached tasks from snapshot or empty array
       return [];
     } catch (err) {
-      console.warn("[Business Offline] Error with decision tasks, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error with decision tasks, falling back to snapshot", { component: "business.offline.decisionTasks.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -206,7 +207,7 @@ export async function loadBusinessDecisionTasks(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.tasks || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot tasks:", err);
+    logWarn("BusinessOffline", "Error loading snapshot tasks", { component: "business.offline.decisionTasks.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }
@@ -226,7 +227,7 @@ export async function loadLLCInfo(
       const { getLLCInfo } = await import("@/lib/business/queries");
       return await getLLCInfo();
     } catch (err) {
-      console.warn("[Business Offline] Error fetching LLC info, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error fetching LLC info, falling back to snapshot", { component: "business.offline.llcInfo.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -234,7 +235,7 @@ export async function loadLLCInfo(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.llc_info || null;
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot LLC info:", err);
+    logWarn("BusinessOffline", "Error loading snapshot LLC info", { component: "business.offline.llcInfo.snapshot", error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }
@@ -254,7 +255,7 @@ export async function loadLLCInbox(
       const { getLLCInboxItems } = await import("@/lib/business/queries");
       return await getLLCInboxItems();
     } catch (err) {
-      console.warn("[Business Offline] Error fetching LLC inbox, falling back to snapshot:", err);
+      logWarn("BusinessOffline", "Error fetching LLC inbox, falling back to snapshot", { component: "business.offline.llcInbox.fetch", error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -262,7 +263,7 @@ export async function loadLLCInbox(
     const snapshot = await getBusinessOfflineData();
     return snapshot?.llc_inbox || [];
   } catch (err) {
-    console.warn("[Business Offline] Error loading snapshot LLC inbox:", err);
+    logWarn("BusinessOffline", "Error loading snapshot LLC inbox", { component: "business.offline.llcInbox.snapshot", error: err instanceof Error ? err.message : String(err) });
     return [];
   }
 }

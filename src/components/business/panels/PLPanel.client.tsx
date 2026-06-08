@@ -15,6 +15,7 @@ import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 import type { Trade } from "@/lib/treasury/calculations";
 import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
+import { logError } from "@/lib/log";
 interface PLPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -58,7 +59,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
     } catch (err) {
-      console.error("Error loading P&L data:", err);
+      logError("PLPanel", { component: "plpanel", message: "Error loading P&L data", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setCostsLoading(false);
     }
@@ -70,7 +71,7 @@ export default function PLPanel({ offlineData, isReadOnly }: PLPanelProps) {
       await loadCosts();
       toast.success("Costo eliminado");
     } catch (err) {
-      console.error("Error deleting cost:", err);
+      logError("PLPanel", { component: "plpanel", message: "Error deleting cost", error: err instanceof Error ? err.message : String(err) });
       toast.error("No se pudo eliminar el costo");
     } finally {
       setConfirmDeleteId(null);

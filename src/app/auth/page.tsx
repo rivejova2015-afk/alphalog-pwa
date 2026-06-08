@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import { logError, logInfo } from "@/lib/log";
 
 const REMEMBER_ME_STORAGE_KEY = "alphalog.remember_me";
 const REMEMBER_EMAIL_STORAGE_KEY = "alphalog.remember_email";
@@ -194,7 +195,7 @@ export default function AuthPage() {
       const stepup = params.get("stepup") === "1";
       const nextTarget = stepup ? `/auth/stepup?next=${encodeURIComponent(next)}` : next;
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextTarget)}`;
-      console.log("[Auth] Redirecting to Google OAuth with redirectTo:", redirectTo);
+      logInfo("Auth", "Redirecting to Google OAuth", { component: "auth.googleRedirect", redirectTo });
 
       await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -207,7 +208,7 @@ export default function AuthPage() {
         },
       });
     } catch (err) {
-      console.error("[Auth] Google OAuth error:", err);
+      logError("Auth", { component: "auth.googleOAuth.error", message: "Google OAuth error", error: err instanceof Error ? err.message : String(err) });
       setError(err instanceof Error ? err.message : "Error al iniciar sesion");
     } finally {
       setLoading(false);
@@ -279,7 +280,7 @@ export default function AuthPage() {
         setCaptchaToken(null);
       }
     } catch (err) {
-      console.error("[Auth] Email auth error:", err);
+      logError("Auth", { component: "auth.email.error", message: "Email auth error", error: err instanceof Error ? err.message : String(err) });
       setError(err instanceof Error ? err.message : "Error al autenticarse");
     } finally {
       setLoading(false);

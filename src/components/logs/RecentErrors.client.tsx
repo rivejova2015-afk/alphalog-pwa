@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { getUnsentLogs } from '@/lib/alphashield/queue';
 
+import { logError } from "@/lib/log";
 interface LogEntry {
   id: string;
   level: string;
@@ -45,7 +46,7 @@ export function RecentErrors() {
 
       setErrors(errorLogs);
     } catch (error) {
-      console.error('Error loading errors:', error);
+      logError('RecentErrors', { component: 'recenterrors', message: 'Error loading errors', error: error instanceof Error ? error.message : String(error) });
     } finally {
       setLoading(false);
     }

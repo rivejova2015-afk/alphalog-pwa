@@ -24,7 +24,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { safeCompareTokens } from '@/lib/security/timing';
-import { logError } from "@/lib/log";
+import { logError, logInfo } from "@/lib/log";
 
 function getMonthStr(): string {
   const now = new Date();
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     const today = new Date();
     const costDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    console.log(`[Business Recurring Costs] Starting at ${costDate}`);
+    logInfo("CronRecurringCosts", "Starting", { component: "cron.business.recurring-costs.start", costDate });
 
     // 4) Fetch all active templates
     const { data: templates, error: templatesError } = await supabase
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!templates || templates.length === 0) {
-      console.log('No active templates found');
+      logInfo("CronRecurringCosts", "No active templates found", { component: "cron.business.recurring-costs.noTemplates" });
       return NextResponse.json(
         {
           success: true,
@@ -225,7 +225,7 @@ export async function GET(request: NextRequest) {
           cost_id: newCost.id,
         });
 
-        console.log(`Created recurring cost ${newCost.id} from template ${template.id}`);
+        logInfo("CronRecurringCosts", "Created recurring cost", { component: "cron.business.recurring-costs.created", costId: newCost.id, templateId: template.id });
       } catch (error) {
         logError("CronBusinessRecurringCosts", { component: "cron.business.recurring-costs", message: "Unexpected error processing template ${template.id}:", error: error instanceof Error ? error.message : String(error) });
         results.push({
@@ -242,9 +242,7 @@ export async function GET(request: NextRequest) {
     const skipped = results.filter((r) => r.action === 'skipped').length;
     const errors = results.filter((r) => r.action === 'error').length;
 
-    console.log(
-      `[Business Recurring Costs] Completed: ${created} created, ${skipped} skipped, ${errors} errors`
-    );
+    logInfo("CronRecurringCosts", "Completed", { component: "cron.business.recurring-costs.completed", created, skipped, errors });
 
     return NextResponse.json(
       {

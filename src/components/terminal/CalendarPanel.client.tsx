@@ -150,7 +150,7 @@ export default function CalendarPanel() {
       resetForm();
       await fetchEvents();
     } catch (err) {
-      console.error("Error:", err);
+      logError("CalendarPanel", { component: "calendarpanel", message: "Error", error: err instanceof Error ? err.message : String(err) });
       setError("Error al guardar evento");
     }
   };
@@ -174,7 +174,7 @@ export default function CalendarPanel() {
       await fetch(`/api/terminal/events/${eventId}`, { method: "DELETE" });
       await fetchEvents();
     } catch (err) {
-      console.error("Error deleting event:", err);
+      logError("CalendarPanel", { component: "calendarpanel", message: "Error deleting event", error: err instanceof Error ? err.message : String(err) });
     }
   };
 

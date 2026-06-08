@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 
+import { logError } from "@/lib/log";
 interface Attachment {
   id: string;
   filename: string;
@@ -35,7 +36,7 @@ export default function EvidenceAttachments({ reportId }: Props) {
       const data = await response.json();
       setAttachments(data);
     } catch (err) {
-      console.error("Error fetching attachments:", err);
+      logError("EvidenceAttachments", { component: "evidenceattachments", message: "Error fetching attachments", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -90,7 +91,7 @@ export default function EvidenceAttachments({ reportId }: Props) {
       e.currentTarget.value = "";
       await fetchAttachments();
     } catch (err) {
-      console.error("Error:", err);
+      logError("EvidenceAttachments", { component: "evidenceattachments", message: "Error", error: err instanceof Error ? err.message : String(err) });
       setError("Error al cargar archivos");
     } finally {
       setUploading(false);
@@ -109,7 +110,7 @@ export default function EvidenceAttachments({ reportId }: Props) {
       );
       await fetchAttachments();
     } catch (err) {
-      console.error("Error deleting attachment:", err);
+      logError("EvidenceAttachments", { component: "evidenceattachments", message: "Error deleting attachment", error: err instanceof Error ? err.message : String(err) });
     }
   };
 

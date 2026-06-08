@@ -1,7 +1,7 @@
 // src/app/api/terminal/evidence/[id]/attachments/[attachmentId]/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * DELETE /api/terminal/evidence/{id}/attachments/{attachmentId}
@@ -54,7 +54,7 @@ export async function DELETE(
     try {
       await supabase.storage.from("log_attachments").remove([attachment.path]);
     } catch (storageErr) {
-      console.warn("Warning: Failed to delete file from storage:", storageErr);
+      logWarn("TerminalAttachment", "Failed to delete file from storage", { component: "terminal.evidence.attachments.delete.storage", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
     }
 
     return NextResponse.json({ success: true });

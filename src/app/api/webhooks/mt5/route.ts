@@ -8,7 +8,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { retryAsync, isRetryableError } from '@/lib/security/retry';
 import { createServiceClient } from '@/lib/supabase/server';
-import { logError } from '@/lib/log';
+import { logError, logInfo, logWarn } from '@/lib/log';
 
 export const runtime = 'nodejs';
 
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[MT5 Webhook] Received: ${body.symbol} bid=${body.bid} ask=${body.ask}`);
+    logInfo('WebhookMT', 'Received', { component: 'mt5.received', symbol: body.symbol, bid: body.bid, ask: body.ask });
 
     // Call Supabase Edge Function
     const edgeFunctionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/receive-mt5-data`;
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
         maxDelayMs: 2000,
         shouldRetry: isRetryableError,
         onRetry: (error, attempt, delayMs) => {
-          console.warn(`[MT5 Webhook] Retry ${attempt} in ${delayMs}ms:`, error instanceof Error ? error.message : error);
+          logWarn('WebhookMT', 'Retry', { component: 'mt5.retry', attempt, delayMs, error: error instanceof Error ? error.message : String(error) });
         },
       });
 

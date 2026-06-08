@@ -5,7 +5,7 @@
 
 import { createClient } from '@/lib/supabase/browser';
 import type { ErrorDetail, MutationMetadata } from './types';
-import { logError as forwardToSentry } from '@/lib/log';
+import { logError as forwardToSentry, logInfo } from '@/lib/log';
 
 export interface SafeModeState {
   enabled: boolean;
@@ -88,7 +88,7 @@ class SafeModeManager {
     
     if (this.state.errors.length < SAFE_MODE_THRESHOLD) {
       this.state.enabled = false;
-      console.log('[AlphaShield] Safe Mode DISABLED - error window cleared');
+      logInfo('AlphaShield', 'Safe Mode DISABLED - error window cleared', { component: 'alphacore.alphashield.safeMode.disabled' });
     }
   }
 
@@ -161,7 +161,7 @@ export async function logMutationError(options: MutationErrorOptions) {
       });
     } else {
       // Successful persistence — informational only, not an error.
-      console.log('[AlphaShield] Error logged:', options.message);
+      logInfo('AlphaShield', 'Error logged', { component: 'alphacore.alphashield.errorPersisted', message: options.message });
     }
   } catch (err) {
     forwardToSentry('Alphacore', {
@@ -393,7 +393,7 @@ export function getSafeModeBadge(): {
  */
 export function clearSafeModeErrors() {
   safeModeManager.clearErrors();
-  console.log('[AlphaShield] Safe Mode errors cleared by user');
+  logInfo('AlphaShield', 'Safe Mode errors cleared by user', { component: 'alphacore.alphashield.safeMode.clearedByUser' });
 }
 /**
  * Get Top 5 most common errors for dashboard display

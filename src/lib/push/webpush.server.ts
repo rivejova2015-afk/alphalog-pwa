@@ -2,6 +2,7 @@
 // Server-side push notification helper using web-push
 
 import webpush from 'web-push';
+import { logError, logWarn } from '@/lib/log';
 
 // Initialize VAPID keys from environment
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -16,7 +17,7 @@ if (vapidPrivateKey && vapidPublicKey) {
       vapidPrivateKey
     );
   } catch (error) {
-    console.error('Failed to set VAPID details:', error);
+    logError('WebPush', { component: 'push.webpush.vapid', message: 'Failed to set VAPID details', error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -45,9 +46,7 @@ export async function sendPushToSubscription(
   payload: PushNotificationPayload
 ): Promise<void> {
   if (!vapidPrivateKey || !vapidPublicKey) {
-    console.warn(
-      'Push notifications disabled: VAPID keys not configured'
-    );
+    logWarn('WebPush', 'Push notifications disabled: VAPID keys not configured', { component: 'push.webpush.disabled.single' });
     return;
   }
 
@@ -73,7 +72,7 @@ export async function sendPushToSubscription(
         throw new Error('SUBSCRIPTION_NOT_FOUND');
       }
       // Other WebPush errors
-      console.error('WebPush error:', error.statusCode, error.message);
+      logError('WebPush', { component: 'push.webpush.sendError', message: 'WebPush error', status: error.statusCode, error: error.message });
       throw error;
     }
     throw error;
@@ -89,7 +88,7 @@ export async function sendPushToSubscriptions(
   payload: PushNotificationPayload
 ): Promise<{ sent: number; failed: number }> {
   if (!vapidPrivateKey || !vapidPublicKey) {
-    console.warn('Push notifications disabled: VAPID keys not configured');
+    logWarn('WebPush', 'Push notifications disabled: VAPID keys not configured', { component: 'push.webpush.disabled.batch' });
     return { sent: 0, failed: 0 };
   }
 
@@ -105,9 +104,9 @@ export async function sendPushToSubscriptions(
         failed++;
         if (error.message === 'SUBSCRIPTION_EXPIRED') {
           // Log for cleanup (optional: could queue deletion)
-          console.warn('Subscription expired for endpoint');
+          logWarn('WebPush', 'Subscription expired for endpoint', { component: 'push.webpush.subscriptionExpired' });
         } else {
-          console.error('Failed to send push:', error.message);
+          logError('WebPush', { component: 'push.webpush.sendFailed', message: 'Failed to send push', error: error.message });
         }
       })
   );

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { logError } from "@/lib/log";
 
 export type ThreatType = "db_tampering" | "credential_compromise" | "data_breach";
 
@@ -73,8 +74,8 @@ export async function triggerIncidentResponse(threat: ThreatType): Promise<void>
       }).catch(() => {});
     }
 
-    console.error(`[IncidentResponse] ${threat} — steps completed: ${steps.join(", ")}`);
+    logError("IncidentResponse", { component: "security.incidentResponse.completed", message: `${threat} response completed`, payload: { steps } });
   } catch (err) {
-    console.error("[IncidentResponse] Exception during response:", err);
+    logError("IncidentResponse", { component: "security.incidentResponse.exception", message: "Exception during response", error: err instanceof Error ? err.message : String(err) });
   }
 }

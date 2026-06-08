@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getOfflineBridge } from '@/lib/alphacore/offline/offlineBridge';
+import { logError, logInfo } from '@/lib/log';
 
 /**
  * Outbox Status Badge Component
@@ -43,7 +44,7 @@ export default function OutboxStatus() {
           setStats(status);
         }
       } catch (error) {
-        console.error('Failed to get outbox status:', error);
+        logError('OutboxStatus', { component: 'outboxStatus.fetch', message: 'Failed to get outbox status', error: error instanceof Error ? error.message : String(error) });
       }
     };
 
@@ -62,9 +63,9 @@ export default function OutboxStatus() {
       const bridge = getOfflineBridge();
       const result = await bridge.syncNow();
       setLastSyncTime(new Date());
-      console.log('Sync result:', result);
+      logInfo('OutboxStatus', 'Sync result', { component: 'outboxStatus.syncNow.result', payload: result as unknown as Record<string, unknown> });
     } catch (error) {
-      console.error('Sync failed:', error);
+      logError('OutboxStatus', { component: 'outboxStatus.syncNow.failed', message: 'Sync failed', error: error instanceof Error ? error.message : String(error) });
     } finally {
       setIsSyncing(false);
     }
@@ -74,9 +75,9 @@ export default function OutboxStatus() {
     try {
       const bridge = getOfflineBridge();
       const status = await bridge.getOutboxStatus();
-      console.log('Retrying failed entries:', status);
+      logInfo('OutboxStatus', 'Retrying failed entries', { component: 'outboxStatus.retry', payload: status as unknown as Record<string, unknown> });
     } catch (error) {
-      console.error('Retry failed:', error);
+      logError('OutboxStatus', { component: 'outboxStatus.retry.failed', message: 'Retry failed', error: error instanceof Error ? error.message : String(error) });
     }
   };
 

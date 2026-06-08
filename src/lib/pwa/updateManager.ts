@@ -1,5 +1,6 @@
 import { captureException, captureMessage } from "@/lib/sentry";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { logError as logErrorCentral, logInfo as logInfoCentral } from "@/lib/log";
 
 const RELOAD_FLAG_KEY = "__pwa_update_reloaded__";
 const DB_SIGNAL_KEY = "__pwa_update_db_signal__";
@@ -10,15 +11,12 @@ const DB_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const isProd = process.env.NODE_ENV === "production";
 
 const logInfo = (message: string, context?: Record<string, unknown>) => {
+  // Sentry in prod, central logger in dev (which itself routes to console).
   if (isProd) {
     captureMessage(`[PWA] ${message}`, context);
     return;
   }
-  if (context) {
-    console.info(`[PWA] ${message}`, context);
-  } else {
-    console.info(`[PWA] ${message}`);
-  }
+  logInfoCentral("PWA", message, { component: "pwa.updateManager", payload: context });
 };
 
 const logError = (message: string, error?: unknown, context?: Record<string, unknown>) => {
@@ -26,16 +24,12 @@ const logError = (message: string, error?: unknown, context?: Record<string, unk
     captureException(error ?? new Error(message), { message, ...context });
     return;
   }
-  console.error(`[PWA] ${message}`, error, context);
+  logErrorCentral("PWA", { component: "pwa.updateManager", message, error: error instanceof Error ? error.message : String(error), payload: context });
 };
 
 const logDebug = (message: string, context?: Record<string, unknown>) => {
   if (isProd) return;
-  if (context) {
-    console.info(`[PWA] ${message}`, context);
-  } else {
-    console.info(`[PWA] ${message}`);
-  }
+  logInfoCentral("PWA", message, { component: "pwa.updateManager.debug", payload: context });
 };
 
 const hasReloaded = () => {

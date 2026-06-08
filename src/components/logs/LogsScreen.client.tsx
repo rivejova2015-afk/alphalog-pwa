@@ -6,6 +6,7 @@ import FiltersBar from "./FiltersBar.client";
 import LogEditor from "./LogEditor.client";
 import { showErrorToast, getErrorMessage } from "@/lib/toast";
 
+import { logError, logInfo } from "@/lib/log";
 interface Log {
   id: string;
   title: string;
@@ -66,7 +67,7 @@ export default function LogsScreenClient({ userEmail }: LogsScreenClientProps) {
 
           // For other errors, show user-friendly message
           const errorMsg = `Failed to load logs (Error ${statusCode}). Please check your connection and try again.`;
-          console.error(`[LogsScreen] GET /api/logs returned ${statusCode}`);
+          logError("LogsScreen", { component: "logs.logsScreen.fetch", message: "GET /api/logs returned non-200", status: statusCode });
           setError(errorMsg);
           showErrorToast(errorMsg);
           
@@ -85,7 +86,7 @@ export default function LogsScreenClient({ userEmail }: LogsScreenClientProps) {
         setTotalCount(data.totalCount || 0);
       } catch (err) {
         const errorMsg = "Network error: Unable to load logs. Please check your connection.";
-        console.error("[LogsScreen] Error fetching logs:", err);
+        logError("LogsScreen", { component: "logsscreen", message: "[LogsScreen] Error fetching logs", error: err instanceof Error ? err.message : String(err) });
         setError(errorMsg);
         showErrorToast(errorMsg);
         
@@ -148,7 +149,7 @@ export default function LogsScreenClient({ userEmail }: LogsScreenClientProps) {
       }
 
       // Success message
-      console.log("[LogsScreen] Log saved successfully");
+      logInfo("LogsScreen", "Log saved successfully", { component: "logsscreen" });
       
       // Reload logs
       setPage(1);
@@ -176,10 +177,10 @@ export default function LogsScreenClient({ userEmail }: LogsScreenClientProps) {
         throw new Error(errorMsg);
       }
 
-      console.log("[LogsScreen] Log deleted successfully");
+      logInfo("LogsScreen", "Log deleted successfully", { component: "logsscreen" });
       await fetchLogs(page);
     } catch (err) {
-      console.error("Error deleting log:", err);
+      logError("LogsScreen", { component: "logsscreen", message: "Error deleting log", error: err instanceof Error ? err.message : String(err) });
       const errorMsg = getErrorMessage(err) || "Error al eliminar el log";
       setError(errorMsg);
     }
@@ -200,10 +201,10 @@ export default function LogsScreenClient({ userEmail }: LogsScreenClientProps) {
         throw new Error(errorMsg);
       }
 
-      console.log("[LogsScreen] Log restored successfully");
+      logInfo("LogsScreen", "Log restored successfully", { component: "logsscreen" });
       await fetchLogs(page);
     } catch (err) {
-      console.error("Error restoring log:", err);
+      logError("LogsScreen", { component: "logsscreen", message: "Error restoring log", error: err instanceof Error ? err.message : String(err) });
       const errorMsg = getErrorMessage(err) || "Error al restaurar el log";
       setError(errorMsg);
     }

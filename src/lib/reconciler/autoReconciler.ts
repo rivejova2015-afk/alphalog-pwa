@@ -3,6 +3,7 @@
 // con backoff exponencial y registro en timeline interno. No afecta la UI.
 
 import { useEffect, useRef } from "react";
+import { logInfo, logWarn } from "@/lib/log";
 
 export type PendingSyncItem = {
   id: string;
@@ -112,20 +113,14 @@ async function syncItem(item: PendingSyncItem): Promise<boolean> {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.warn(
-        `[AutoReconciler] syncItem failed for ${item.id} (${operation} ${table}):`,
-        response.status,
-        errorData
-      );
+      logWarn("AutoReconciler", "syncItem failed", { component: "reconciler.syncItem.failed", itemId: item.id, operation, table, status: response.status, errorData });
       return false;
     }
 
-    console.log(
-      `[AutoReconciler] syncItem succeeded for ${item.id} (${operation} ${table})`
-    );
+    logInfo("AutoReconciler", "syncItem succeeded", { component: "reconciler.syncItem.success", itemId: item.id, operation, table });
     return true;
   } catch (err) {
-    console.warn(`[AutoReconciler] syncItem error for ${item.id}:`, err);
+    logWarn("AutoReconciler", "syncItem error", { component: "reconciler.syncItem.error", itemId: item.id, error: err instanceof Error ? err.message : String(err) });
     return false;
   }
 }

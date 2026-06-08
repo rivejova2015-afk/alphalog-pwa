@@ -2,7 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * POST /api/accounts/trash/empty
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     logAuditFromRequest(
       { userId, action: "delete", resourceType: "account", changes: { scope: "hard_delete_trash", permanent: true }, status: "success" },
       request,
-    ).catch((e) => console.warn("[audit] empty trash log failed:", e));
+    ).catch((e) => logWarn("Accounts", "empty trash audit log failed", { component: "accounts.trash.empty.audit", error: e instanceof Error ? e.message : String(e) }));
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

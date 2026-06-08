@@ -2,13 +2,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { NextRequest, NextResponse } from "next/server";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value);
   } catch (err) {
-    console.warn("[Terminal] Failed to decrypt evidence:", err);
+    logWarn("TerminalEvidence", "Failed to decrypt evidence", { component: "terminal.evidence.[id].decrypt", error: err instanceof Error ? err.message : String(err) });
     return value ?? "";
   }
 };
@@ -153,7 +153,7 @@ export async function DELETE(
       try {
         await supabase.storage.from("log_attachments").remove(attachmentPaths);
       } catch (storageErr) {
-        console.warn("Warning: Failed to delete attachment files:", storageErr);
+        logWarn("TerminalEvidence", "Failed to delete attachment files", { component: "terminal.evidence.[id].delete.storage", error: storageErr instanceof Error ? storageErr.message : String(storageErr) });
       }
     }
 

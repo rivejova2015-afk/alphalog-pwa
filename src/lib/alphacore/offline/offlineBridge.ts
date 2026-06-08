@@ -21,7 +21,7 @@ import type { EntityOperation } from '../types';
 import type { MutationRequest, MutationResponse } from '../mutations';
 import { createEntity, updateEntity, softDeleteEntity } from '../mutations';
 import { getOutboxManager } from './outbox';
-import { logError } from '@/lib/log';
+import { logError, logInfo } from '@/lib/log';
 
 /**
  * Online/offline detection
@@ -123,7 +123,7 @@ export class OfflineBridge {
         throw new Error(`Unknown operation: ${operation}`);
       }
 
-      console.log(`[OfflineBridge] Online ${operation} completed`, result);
+      logInfo('OfflineBridge', `Online ${operation} completed`, { component: 'alphacore.offlineBridge.online.completed', operation, result: result as unknown as Record<string, unknown> });
       return result;
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -197,7 +197,7 @@ export class OfflineBridge {
         options.onOptimisticApplied(optimisticData as T);
       }
 
-      console.log(`[OfflineBridge] Offline ${operation} enqueued: ${outboxId}`);
+      logInfo('OfflineBridge', `Offline ${operation} enqueued`, { component: 'alphacore.offlineBridge.offline.enqueued', operation, outboxId });
 
       return {
         data: optimisticData as any,
@@ -262,7 +262,7 @@ export class OfflineBridge {
    * Called when offline detected
    */
   private onOfflineDetected(): void {
-    console.log('[OfflineBridge] Offline detected - future mutations will be queued');
+    logInfo('OfflineBridge', 'Offline detected - future mutations will be queued', { component: 'alphacore.offlineBridge.offline.detected' });
     // Could dispatch event for UI to show offline banner
   }
 
@@ -270,7 +270,7 @@ export class OfflineBridge {
    * Called when online detected
    */
   private onOnlineDetected(): void {
-    console.log('[OfflineBridge] Online detected - triggering sync');
+    logInfo('OfflineBridge', 'Online detected - triggering sync', { component: 'alphacore.offlineBridge.online.detected' });
     this.syncNow().catch((err) => {
       logError('Alphacore', {
         component: 'offlineBridge.onOnlineDetected',

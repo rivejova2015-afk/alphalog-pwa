@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import { logWarn } from "@/lib/log";
 import { getPushSubscription, requestNotificationPermission, subscribeToPush, getVapidPublicKey } from "@/lib/push/vapid.client";
 
 export default function PWADiagnosticsPage() {
@@ -24,7 +25,7 @@ export default function PWADiagnosticsPage() {
         const sub = await getPushSubscription();
         setSubscription(sub);
       } catch (err) {
-        console.warn("[PWA Diagnostics] init error", err);
+        logWarn("PWADiagnostics", "init error", { component: "dashboard.logs.pwa.init", error: err instanceof Error ? err.message : String(err) });
       }
     };
     init();

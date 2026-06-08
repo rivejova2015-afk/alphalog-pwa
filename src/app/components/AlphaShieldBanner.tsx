@@ -11,6 +11,7 @@ import {
   clearSafeModeErrors,
   copyDebugBundleToClipboard,
 } from '@/lib/alphacore/alphashield';
+import { logError } from '@/lib/log';
 
 /**
  * AlphaShield Safe Mode Banner Component
@@ -56,7 +57,7 @@ export default function AlphaShieldBanner() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Failed to copy debug bundle:', error);
+      logError('AlphaShieldBanner', { component: 'alphashieldBanner.copyBundle', message: 'Failed to copy debug bundle', error: error instanceof Error ? error.message : String(error) });
     }
   };
 

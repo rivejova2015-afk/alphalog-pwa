@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 
+import { logError } from "@/lib/log";
 interface Tag {
   id: string;
   name: string;
@@ -28,7 +29,7 @@ export default function TagsInput({ value, onChange }: TagsInputProps) {
           setSuggestions(data.items || []);
         }
       } catch (error) {
-        console.error("Error loading tags:", error);
+        logError("TagsInput", { component: "tagsinput", message: "Error loading tags", error: error instanceof Error ? error.message : String(error) });
       }
     };
     loadTags();

@@ -6,6 +6,7 @@ import { BarChart3, TrendingUp, Shield, BookOpen, Zap } from "lucide-react";
 import AccountsPanel from "@/components/tradehub/AccountsPanel.client";
 import NewTradesLog from "@/components/tradehub/NewTradesLog.client";
 import EvidenceVault from "@/components/tradehub/EvidenceVault.client";
+import { logError } from "@/lib/log";
 import Playbook from "@/components/tradehub/Playbook.client";
 import Reports from "@/components/tradehub/Reports.client";
 import { PushNotificationButton } from "@/components/push/PushNotificationButton.client";
@@ -56,7 +57,7 @@ export default function TradeHubPage() {
           setUserId(user.id);
         }
       } catch (err) {
-        console.error("[TradeHub] Error getting user:", err);
+        logError("TradeHub", { component: "dashboard.tradehub.getUser", message: "Error getting user", error: err instanceof Error ? err.message : String(err) });
       }
     };
     getUser();

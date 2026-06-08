@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { decryptText, encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const isMissingTable = (error: any) =>
   error?.code === "42P01" ||
@@ -15,7 +15,7 @@ const safeDecrypt = (value?: string | null) => {
   try {
     return decryptText(value);
   } catch (err) {
-    console.warn("[TradeHub] Failed to decrypt evidence text:", err);
+    logWarn("TradeHubEvidence", "Failed to decrypt evidence text", { component: "tradehub.evidence.decrypt", error: err instanceof Error ? err.message : String(err) });
     return value ?? null;
   }
 };

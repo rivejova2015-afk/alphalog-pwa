@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { getOfflineBridge } from '@/lib/alphacore/offline/offlineBridge';
 
+import { logError, logWarn } from "@/lib/log";
 interface OutboxStats {
   total: number;
   pending: number;
@@ -78,7 +79,7 @@ export function SystemDiagnostics() {
           const bridge = getOfflineBridge();
           outboxStats = await bridge.getOutboxStatus();
         } catch (error) {
-          console.warn('Failed to get outbox stats:', error);
+          logWarn('SystemDiagnostics', 'Failed to get outbox stats', { component: 'systemdiagnostics', error: error instanceof Error ? error.message : String(error) });
         }
 
         setStatus({
@@ -91,7 +92,7 @@ export function SystemDiagnostics() {
           outbox: outboxStats,
         });
       } catch (error) {
-        console.error('Error detecting system status:', error);
+        logError('SystemDiagnostics', { component: 'systemdiagnostics', message: 'Error detecting system status', error: error instanceof Error ? error.message : String(error) });
       } finally {
         setLoading(false);
       }

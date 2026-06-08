@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { captureException, captureMessage } from "@/lib/sentry";
 import { createClient } from "@/lib/supabase/browser";
+import { logError as logErrorCentral, logInfo as logInfoCentral } from "@/lib/log";
 import {
   getPushSubscription,
   getVapidPublicKey,
@@ -63,7 +64,7 @@ export function PushNotificationButton() {
 
   const logClientError = (err: unknown, context: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== "production") {
-      console.error("[PushNotificationButton]", err, context);
+      logErrorCentral("PushNotificationButton", { component: "push.notificationButton.client", message: err instanceof Error ? err.message : String(err), payload: context });
       return;
     }
     captureException(err, context);
@@ -71,7 +72,7 @@ export function PushNotificationButton() {
 
   const logClientMessage = (message: string, context: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== "production") {
-      console.info("[PushNotificationButton]", message, context);
+      logInfoCentral("PushNotificationButton", message, { component: "push.notificationButton.client", payload: context });
       return;
     }
     captureMessage(message, context);

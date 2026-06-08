@@ -8,6 +8,7 @@ import type { BusinessSOP } from "@/lib/business/types";
 import { createClient } from "@/lib/supabase/browser";
 import { createBusinessSOP } from "@/lib/business/queries";
 
+import { logError } from "@/lib/log";
 interface SOPFormProps {
   onClose: () => void;
   onSave: () => void;
@@ -56,7 +57,7 @@ export default function SOPForm({ onClose, onSave }: SOPFormProps) {
 
       onSave();
     } catch (err) {
-      console.error("Error saving SOP:", err);
+      logError("SOPForm", { component: "sopform", message: "Error saving SOP", error: err instanceof Error ? err.message : String(err) });
       setError("Failed to save SOP");
     } finally {
       setSaving(false);

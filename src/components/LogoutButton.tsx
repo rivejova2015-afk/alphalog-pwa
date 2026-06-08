@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 
+import { logError, logInfo } from "@/lib/log";
 export default function LogoutButton() {
   const router = useRouter();
 
@@ -12,16 +13,16 @@ export default function LogoutButton() {
       const { error } = await supabase.auth.signOut();
 
       if (error) {
-        console.error("[LogoutButton] Logout error:", error);
+        logError("LogoutButton", { component: "logoutbutton", message: "[LogoutButton] Logout error", error: error instanceof Error ? error.message : String(error) });
         alert("Error al cerrar sesión: " + error.message);
         return;
       }
 
-      console.log("[LogoutButton] Logged out successfully");
+      logInfo("LogoutButton", "Logged out successfully", { component: "logoutbutton" });
       router.refresh();
       router.push("/auth");
     } catch (err) {
-      console.error("[LogoutButton] Unexpected error:", err);
+      logError("LogoutButton", { component: "logoutbutton", message: "[LogoutButton] Unexpected error", error: err instanceof Error ? err.message : String(err) });
       alert("Error inesperado al cerrar sesión");
     }
   };

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 const hashFingerprint = (value: string) =>
   crypto.createHash("sha256").update(value, "utf8").digest("hex");
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         }
       } catch (rateLimitError) {
         // Fail open on rate limit error
-        console.warn("[Device Verify] Rate limit check failed:", rateLimitError);
+        logWarn("DeviceVerify", "Rate limit check failed", { component: "auth.device.verify.rateLimit", error: rateLimitError instanceof Error ? rateLimitError.message : String(rateLimitError) });
       }
     }
 

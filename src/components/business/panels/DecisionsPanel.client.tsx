@@ -11,6 +11,7 @@ import DecisionForm from "../forms/DecisionForm.client";
 import type { BusinessDecision, BusinessDecisionTask } from "@/lib/business/types";
 import type { BusinessOfflineData } from "@/lib/business/offline-loader";
 
+import { logError } from "@/lib/log";
 interface DecisionsPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -38,7 +39,7 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
       const data = await loadBusinessDecisions(offlineData);
       setDecisions((data || []) as BusinessDecision[]);
     } catch (err) {
-      console.error("Error loading decisions:", err);
+      logError("DecisionsPanel", { component: "decisionspanel", message: "Error loading decisions", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setLoading(false);
     }
@@ -51,7 +52,7 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
       await loadDecisions();
       toast.success("Decision deleted");
     } catch (err) {
-      console.error("Error deleting decision:", err);
+      logError("DecisionsPanel", { component: "decisionspanel", message: "Error deleting decision", error: err instanceof Error ? err.message : String(err) });
       toast.error("Failed to delete decision");
     }
   }
@@ -73,7 +74,7 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
       if (expandedDecision === decisionId) await loadDecisionTasks(decisionId);
       toast.success("Task added");
     } catch (err) {
-      console.error('Error creating decision task:', err);
+      logError('DecisionsPanel', { component: 'decisionspanel', message: 'Error creating decision task', error: err instanceof Error ? err.message : String(err) });
       toast.error("Failed to add task");
     }
   }
@@ -84,7 +85,7 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
       const res = await getBusinessDecisionWithTasks(decisionId);
       if (res) setDecisionTasks(res.tasks || []);
     } catch (err) {
-      console.error('Error loading decision tasks:', err);
+      logError('DecisionsPanel', { component: 'decisionspanel', message: 'Error loading decision tasks', error: err instanceof Error ? err.message : String(err) });
     } finally {
       setTasksLoading(false);
     }
@@ -101,14 +102,14 @@ export default function DecisionsPanel({ offlineData, isReadOnly }: DecisionsPan
         body: JSON.stringify({ done: !currentDone }),
       });
       if (!res.ok) {
-        console.error('Error updating task:', res.status);
+        logError('DecisionsPanel', { component: 'business.decisionsPanel.taskUpdate', message: 'Error updating task', status: res.status });
         toast.error('Failed to update task');
         return;
       }
       await loadDecisionTasks(expandedDecision);
       await loadDecisions();
     } catch (err) {
-      console.error('Error toggling decision task:', err);
+      logError('DecisionsPanel', { component: 'decisionspanel', message: 'Error toggling decision task', error: err instanceof Error ? err.message : String(err) });
     }
   }
 

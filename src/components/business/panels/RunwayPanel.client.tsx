@@ -17,6 +17,7 @@ import type { BusinessCost } from "@/lib/business/types";
 import type { Trade } from "@/lib/treasury/calculations";
 import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
+import { logError } from "@/lib/log";
 interface RunwayPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -58,7 +59,7 @@ export default function RunwayPanel({ offlineData }: RunwayPanelProps) {
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
     } catch (err) {
-      console.error("Error loading runway data:", err);
+      logError("RunwayPanel", { component: "runwaypanel", message: "Error loading runway data", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setCostsLoading(false);
     }

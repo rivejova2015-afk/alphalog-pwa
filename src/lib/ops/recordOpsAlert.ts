@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { logWarn } from "@/lib/log";
 
 export type OpsAlertSeverity = "info" | "warning" | "error" | "critical";
 
@@ -22,12 +23,12 @@ export async function recordOpsAlert(input: OpsAlertInput): Promise<boolean> {
       metadata: input.metadata ?? {},
     });
     if (error) {
-      console.warn("[recordOpsAlert] insert failed:", error.message);
+      logWarn("OpsAlert", "insert failed", { component: "ops.recordOpsAlert.insert", error: error.message });
       return false;
     }
     return true;
   } catch (err) {
-    console.warn("[recordOpsAlert] unexpected:", err);
+    logWarn("OpsAlert", "unexpected", { component: "ops.recordOpsAlert.unexpected", error: err instanceof Error ? err.message : String(err) });
     return false;
   }
 }

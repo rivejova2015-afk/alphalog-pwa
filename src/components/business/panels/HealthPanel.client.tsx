@@ -13,6 +13,7 @@ import type { BusinessCost } from "@/lib/business/types";
 import type { Trade } from "@/lib/treasury/calculations";
 import { usePnlMetrics } from "@/hooks/usePnlMetrics";
 
+import { logError } from "@/lib/log";
 interface HealthPanelProps {
   offlineData?: BusinessOfflineData | null;
   isReadOnly?: boolean;
@@ -49,7 +50,7 @@ export default function HealthPanel({ offlineData }: HealthPanelProps) {
       const costData = (await loadBusinessCosts(offlineData)) as BusinessCost[];
       setCosts(costData || []);
     } catch (err) {
-      console.error("Error loading health data:", err);
+      logError("HealthPanel", { component: "healthpanel", message: "Error loading health data", error: err instanceof Error ? err.message : String(err) });
     } finally {
       setCostsLoading(false);
     }

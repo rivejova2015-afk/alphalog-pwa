@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { captureException } from "@/lib/sentry";
+import { logError, logWarn } from "@/lib/log";
 
 export type CopyGroupSnapshot = {
   nodes: Array<Record<string, unknown>>;
@@ -65,7 +66,7 @@ export const recordCopyGroupEvent = async (
   });
 
   if (error) {
-    console.warn("[CopyGroups] Failed to record event", eventType, error);
+    logWarn("CopyGroups", "Failed to record event", { component: "copygroups.event.record", eventType, error: error instanceof Error ? error.message : String(error) });
   }
 };
 
@@ -176,5 +177,5 @@ export const reportCopyGroupError = (error: unknown, context: Record<string, unk
   if (process.env.NODE_ENV === "production") {
     captureException(error, context);
   }
-  console.error("[CopyGroups]", error, context);
+  logError("CopyGroups", { component: "copygroups", message: error instanceof Error ? error.message : String(error), payload: context });
 };

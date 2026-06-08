@@ -5,7 +5,7 @@ import { encryptText } from "@/lib/security/encryption";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { z } from "zod";
-import { logError } from "@/lib/log";
+import { logError, logWarn } from "@/lib/log";
 
 /**
  * Whitelist of tables allowed for AlphaCore offline sync mutations.
@@ -170,7 +170,7 @@ export async function POST(
         changes: { source: "alphacore_offline", outboxId },
       },
       request
-    ).catch((e) => console.warn("[Audit] Failed to log alphacore create:", e));
+    ).catch((e) => logWarn("Alphacore", "Failed to log alphacore create", { component: "alphacore.create.audit", error: e instanceof Error ? e.message : String(e) }));
 
     // 8. Return the created record
     return NextResponse.json({

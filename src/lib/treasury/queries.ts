@@ -5,23 +5,15 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { logError } from '@/lib/log';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const logTreasuryError = async (message: string, error?: unknown) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const { logger } = await import('@/lib/alphashield/logger');
-      await logger.error('treasury', message, error instanceof Error ? error : undefined);
-      return;
-    } catch {
-      // fallback below
-    }
-  }
-  console.error(message, error);
+const logTreasuryError = (message: string, error?: unknown) => {
+  logError('Treasury', { component: 'treasury.queries', message, error: error instanceof Error ? error.message : String(error) });
 };
 
 import type {

@@ -1,9 +1,21 @@
 // src/components/business/panels/JournalPanel.client.tsx
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BookOpen, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { BookOpen, Plus, Trash2, ChevronDown, ChevronUp, CloudOff } from "lucide-react";
+import {
+  enqueueOfflineMutation,
+  getPendingForTable,
+  isNetworkError,
+} from "@/lib/alphacore/offline/networkFallback";
+import { deleteOutboxEntry } from "@/lib/alphacore/offline/idb";
+import type { IDBOutboxEntry } from "@/lib/alphacore/offline/idb";
+import {
+  isPendingId,
+  outboxIdToPendingId,
+  pendingIdToOutboxId,
+} from "@/lib/alphacore/offline/pendingIds";
 
 type Mood = "excellent" | "good" | "neutral" | "bad" | "terrible";
 
@@ -59,14 +71,51 @@ function formatDate(iso: string) {
   });
 }
 
+function outboxEntryToOptimistic(entry: IDBOutboxEntry): JournalEntry {
+  const p = (entry.payload || {}) as Partial<{
+    text: string;
+    mood: Mood;
+    mood_score: number;
+    tags: string[];
+    lessons_learned: string;
+    action_items: string[];
+    market_conditions: string;
+    is_private: boolean;
+  }>;
+  const createdAtIso = new Date(entry.createdAt).toISOString();
+  return {
+    id: outboxIdToPendingId(entry.id),
+    text: typeof p.text === "string" ? p.text : "",
+    mood: (p.mood as Mood) ?? null,
+    mood_score: typeof p.mood_score === "number" ? p.mood_score : null,
+    tags: Array.isArray(p.tags) ? p.tags : null,
+    lessons_learned: typeof p.lessons_learned === "string" ? p.lessons_learned : null,
+    action_items: Array.isArray(p.action_items) ? p.action_items : null,
+    market_conditions: typeof p.market_conditions === "string" ? p.market_conditions : null,
+    is_private: p.is_private ?? false,
+    created_at: createdAtIso,
+    updated_at: createdAtIso,
+  };
+}
+
 export default function JournalPanel() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [pendingEntries, setPendingEntries] = useState<IDBOutboxEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<EntryForm>(INITIAL_FORM);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const refreshPending = useCallback(async () => {
+    try {
+      const pending = await getPendingForTable("journal_entries");
+      setPendingEntries(pending);
+    } catch {
+      // Reading the outbox is best-effort — never block the UI on it.
+    }
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -80,11 +129,42 @@ export default function JournalPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    void refreshPending();
+  }, [refreshPending]);
 
   useEffect(() => {
     void fetchEntries();
   }, [fetchEntries]);
+
+  // Watch for connection restored — give the outbox a few seconds to drain,
+  // then refresh both server entries and the pending list so the UI flips
+  // optimistic rows back to real ones automatically.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onOnline = () => {
+      window.setTimeout(() => void fetchEntries(), 3500);
+    };
+    window.addEventListener("online", onOnline);
+    // Poll the outbox periodically so successful background syncs flush
+    // the pending badge even without an `online` event (eg. flaky wifi
+    // that stays "online" but recovers a hung request).
+    const intervalId = window.setInterval(() => void refreshPending(), 7000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.clearInterval(intervalId);
+    };
+  }, [fetchEntries, refreshPending]);
+
+  const optimisticEntries = useMemo(
+    () => pendingEntries.map(outboxEntryToOptimistic),
+    [pendingEntries]
+  );
+
+  // Merged view: pending rows on top (most recent intent first), then server.
+  const allEntries = useMemo(
+    () => [...optimisticEntries, ...entries],
+    [optimisticEntries, entries]
+  );
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -92,27 +172,27 @@ export default function JournalPanel() {
       toast.error("El texto del diario es obligatorio");
       return;
     }
+    const payload = {
+      text: form.text.trim(),
+      mood: form.mood || undefined,
+      mood_score: form.mood_score || undefined,
+      tags: form.tags
+        ? form.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : undefined,
+      lessons_learned: form.lessons_learned.trim() || undefined,
+      action_items: form.action_items
+        ? form.action_items
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : undefined,
+      market_conditions: form.market_conditions.trim() || undefined,
+    };
     try {
       setSaving(true);
-      const payload = {
-        text: form.text.trim(),
-        mood: form.mood || undefined,
-        mood_score: form.mood_score || undefined,
-        tags: form.tags
-          ? form.tags
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          : undefined,
-        lessons_learned: form.lessons_learned.trim() || undefined,
-        action_items: form.action_items
-          ? form.action_items
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          : undefined,
-        market_conditions: form.market_conditions.trim() || undefined,
-      };
       const res = await fetch("/api/journal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,13 +207,50 @@ export default function JournalPanel() {
       setShowForm(false);
       await fetchEntries();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al guardar");
+      // Network failure (offline, captive portal, etc.) → enqueue so the
+      // OutboxManager drains it the moment connectivity is back. Anything
+      // that isn't a transport error is a real server-side problem and
+      // re-queueing it would just fail again on sync.
+      if (isNetworkError(err)) {
+        try {
+          await enqueueOfflineMutation({
+            endpoint: "/api/journal",
+            method: "POST",
+            table: "journal_entries",
+            payload: payload as Record<string, unknown>,
+            operation: "create",
+          });
+          await refreshPending();
+          setForm(INITIAL_FORM);
+          setShowForm(false);
+          toast.info("Sin conexión — se guardó offline y se sincronizará al volver.");
+        } catch {
+          toast.error("No hay red y tampoco se pudo guardar offline.");
+        }
+      } else {
+        toast.error(err instanceof Error ? err.message : "Error al guardar");
+      }
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(id: string) {
+    // Pending entries live only in the IDB outbox — there's no server row to
+    // delete yet, so we just cancel the outbox enqueue.
+    if (isPendingId(id)) {
+      const outboxId = pendingIdToOutboxId(id);
+      try {
+        await deleteOutboxEntry(outboxId);
+        setConfirmDeleteId(null);
+        toast.success("Entrada pendiente descartada");
+        await refreshPending();
+      } catch {
+        toast.error("No se pudo descartar la entrada pendiente");
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`/api/journal`, {
         method: "DELETE",
@@ -144,8 +261,27 @@ export default function JournalPanel() {
       setConfirmDeleteId(null);
       toast.success("Entrada eliminada");
       await fetchEntries();
-    } catch {
-      toast.error("No se pudo eliminar la entrada");
+    } catch (err) {
+      if (isNetworkError(err)) {
+        try {
+          await enqueueOfflineMutation({
+            endpoint: "/api/journal",
+            method: "DELETE",
+            table: "journal_entries",
+            payload: { id },
+            operation: "delete",
+          });
+          setConfirmDeleteId(null);
+          // Hide the row immediately so the user sees the delete intent
+          // reflected — it will reconcile when the outbox drains.
+          setEntries((prev) => prev.filter((entry) => entry.id !== id));
+          toast.info("Sin conexión — el borrado se sincronizará al volver.");
+        } catch {
+          toast.error("No hay red y tampoco se pudo encolar el borrado.");
+        }
+      } else {
+        toast.error("No se pudo eliminar la entrada");
+      }
     }
   }
 
@@ -309,7 +445,7 @@ export default function JournalPanel() {
             />
           ))}
         </div>
-      ) : entries.length === 0 ? (
+      ) : allEntries.length === 0 ? (
         <div className="rounded-2xl border border-slate-700/40 bg-slate-900/60 p-8 text-center">
           <BookOpen className="w-10 h-10 text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 text-sm">
@@ -318,13 +454,18 @@ export default function JournalPanel() {
         </div>
       ) : (
         <div className="space-y-3">
-          {entries.map((entry) => {
+          {allEntries.map((entry) => {
             const moodMeta = entry.mood ? MOOD_LABELS[entry.mood] : null;
             const isExpanded = expandedId === entry.id;
+            const isPending = isPendingId(entry.id);
             return (
               <div
                 key={entry.id}
-                className="rounded-2xl border border-slate-700/60 bg-slate-900/70 overflow-hidden"
+                className={`rounded-2xl border overflow-hidden ${
+                  isPending
+                    ? "border-amber-700/50 bg-amber-950/20"
+                    : "border-slate-700/60 bg-slate-900/70"
+                }`}
               >
                 {/* Entry header */}
                 <button
@@ -334,6 +475,15 @@ export default function JournalPanel() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-xs text-slate-500">{formatDate(entry.created_at)}</span>
+                      {isPending && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-300"
+                          title="Esta entrada aún no se sincronizó con el servidor"
+                        >
+                          <CloudOff className="w-3 h-3" />
+                          Sincronizando
+                        </span>
+                      )}
                       {moodMeta && (
                         <span className={`text-xs font-medium ${moodMeta.color}`}>
                           {moodMeta.emoji} {moodMeta.label}
