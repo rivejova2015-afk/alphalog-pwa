@@ -35,8 +35,15 @@ function checkRuntimeEnv(): HealthCheck {
 
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
+    // IMPORTANT: report this as `degraded` (HTTP 200 from caller), NOT `error`
+    // (HTTP 503). Fly's health check polls /api/health every 30s and considers
+    // the machine unhealthy on 503 — after the 5-minute grace window it aborts
+    // the deploy. If a build happened without these secrets in the CI runner
+    // environment, the bundle ships with `undefined` literals; we'd rather
+    // surface that as a degraded badge than block the deploy entirely. The
+    // body still names the missing variable(s) so the operator can fix it.
     return {
-      status: "error",
+      status: "degraded",
       message: "Missing required environment variables",
       details: process.env.NODE_ENV === "production"
         ? `${missing.length} required variable(s) missing`
