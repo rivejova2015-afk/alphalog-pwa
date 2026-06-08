@@ -349,9 +349,23 @@ export async function GET() {
   const ok = status !== "error";
 
   if (isProduction) {
+    // IMPORTANT: always return HTTP 200 for production liveness checks.
+    // Fly's health check polls this endpoint every 30s and treats any 5xx
+    // as machine-unhealthy — after a 5-minute grace window it aborts the
+    // deploy. The endpoint runs *real* Supabase queries (checkSupabaseReadiness,
+    // checkBotRuntime, checkCmeConnections, checkAppLogsWritable); if env vars
+    // are missing or Supabase is briefly unreachable, those checks fail and
+    // would pin the whole response to 503 — blocking ALL future deploys until
+    // the underlying issue is fixed manually.
+    //
+    // Liveness semantics: "is the Next.js server process up and responding?".
+    // Readiness/correctness goes in the body (`ok` + per-check status) and is
+    // surfaced via Sentry tags + the System Diagnostics dashboard. External
+    // monitoring (UptimeRobot etc.) can parse the body if they want to alert
+    // on degraded — Fly only needs 200.
     return NextResponse.json(
       { ok, status },
-      { status: ok ? 200 : 503, headers: NO_STORE_HEADERS }
+      { status: 200, headers: NO_STORE_HEADERS }
     );
   }
 
