@@ -44,9 +44,12 @@ export function useConflictCount(options: UseConflictCountOptions = {}): {
 
   const [count, setCount] = useState(0);
   // Keep the latest disabled value in a ref so the polling loop reads the
-  // current value without re-binding the interval on every render.
+  // current value without re-binding the interval on every render. Sync in
+  // an effect (writing to ref.current during render violates React's rules).
   const disabledRef = useRef(disabled);
-  disabledRef.current = disabled;
+  useEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
 
   const refresh = useCallback(async () => {
     if (disabledRef.current) return;

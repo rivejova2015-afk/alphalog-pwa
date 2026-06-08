@@ -83,7 +83,7 @@ describe('verifyJwt (pure crypto)', () => {
     expect(verifyJwt(token, SIGNING_KEY, 'anything-else', URL)).toBe(true);
   });
 
-  it('rejects a token whose payload is not valid JSON', () => {
+  it('rejects a token whose payload is not valid JSON', async () => {
     // Build a token with garbage in the payload section but a correct HMAC,
     // so the only failure path that fires is the JSON.parse catch.
     const headerB64 = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
@@ -97,7 +97,7 @@ describe('verifyJwt (pure crypto)', () => {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
     const data = `${headerB64}.${garbagePayload}`;
-    const { createHmac } = require('crypto') as typeof import('crypto');
+    const { createHmac } = await import('crypto');
     const signature = createHmac('sha256', SIGNING_KEY)
       .update(data)
       .digest('base64')
