@@ -1,16 +1,28 @@
 /**
  * Update polyarb_agents credentials in Supabase.
- * Set credentials as environment variables, then run:
  *
+ * Requires the service-role key in env (NEVER hardcode — it bypasses RLS):
+ *
+ *   $env:SUPABASE_SERVICE_ROLE_KEY="eyJ..."   # PowerShell
  *   $env:POLY_API_KEY="your-api-key"
  *   $env:POLY_SECRET="your-secret"
  *   $env:POLY_PASSPHRASE="your-passphrase"
  *   node polyarb/scripts/update-credentials.mjs
+ *
+ * Or on bash:
+ *   SUPABASE_SERVICE_ROLE_KEY=eyJ... POLY_API_KEY=... POLY_SECRET=... \
+ *     POLY_PASSPHRASE=... node polyarb/scripts/update-credentials.mjs
  */
 
 const SUPABASE_URL = 'https://jgkvnnlodwdtjsmmzwry.supabase.co';
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY
-  ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impna3ZubmxvZHdkdGpzbW16d3J5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODYwNjc5MCwiZXhwIjoyMDg0MTgyNzkwfQ.m4oQ5yM3SuSVvtmLo3rSwUGynrQhtPsUrOq-s0zUEEg';
+const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SERVICE_ROLE) {
+  console.error('❌ SUPABASE_SERVICE_ROLE_KEY not set.');
+  console.error('   Get it from Supabase Dashboard → Settings → API → service_role');
+  console.error('   Then re-run with the env var set.');
+  process.exit(1);
+}
 
 const AGENT_ID = '2cb0642d-c243-41cf-8908-78b619ea923a';
 // Proxy wallet (stays unchanged)
