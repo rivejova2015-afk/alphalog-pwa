@@ -9,10 +9,36 @@ import bundleAnalyzer from "@next/bundle-analyzer";
 // Outputs reports at .next/analyze/{client.html,server.html}.
 const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === "true" });
 
+// Public Supabase project identifiers. Both values are anon-tier (the URL is
+// public by definition, the anon key is a JWT with role="anon" designed to be
+// embedded in browser bundles). Hardcoding them here is a *fallback* — if
+// process.env.NEXT_PUBLIC_SUPABASE_* are set (eg. from GitHub Actions secrets
+// during a Fly deploy, or from .env.local in dev), those win. This guarantees
+// that a build without the secrets configured still produces a working bundle
+// instead of `undefined` literals that crash @supabase/ssr at runtime.
+//
+// Rotating these requires editing this file (anon keys rotate via Supabase
+// Dashboard → Settings → API → "Generate new JWT secret"). The service-role
+// key is NEVER hardcoded — it bypasses RLS.
+const SUPABASE_URL_FALLBACK = "https://jgkvnnlodwdtjsmmzwry.supabase.co";
+const SUPABASE_ANON_KEY_FALLBACK =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impna3ZubmxvZHdkdGpzbW16d3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2MDY3OTAsImV4cCI6MjA4NDE4Mjc5MH0.Tsovh-fnb8T8Sm5mwdhjlsevhDpIW9JUd5dkWAtM7JI";
+
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   turbopack: {},
+
+  // Inject anon-tier Supabase identifiers at build time. Empty `process.env`
+  // values (which is what `${{ secrets.X }}` resolves to when X doesn't exist
+  // in GitHub Actions) fall through to the hardcoded fallback so the bundle
+  // never ships with `undefined` strings.
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL:
+      process.env.NEXT_PUBLIC_SUPABASE_URL || SUPABASE_URL_FALLBACK,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY:
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || SUPABASE_ANON_KEY_FALLBACK,
+  },
 
   // Standalone output enables minimal Docker images (self-contained server.js + only
   // the production deps actually used). Required for the Fly.io migration; harmless
