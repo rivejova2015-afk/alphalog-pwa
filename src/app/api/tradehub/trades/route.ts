@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText, encryptNumeric, decryptNumeric } from "@/lib/security/encryption";
 import { mirrorTradeOnCreate } from "@/lib/copygroups/mirroring";
-import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { tradeCreateSchema, tradeResponseSchema, validatePayloadSafe, validationErrorResponse } from "@/lib/validation/schemas";
 import { recordBugFromRequest } from "@/lib/security/bugRecorder";
@@ -308,13 +307,6 @@ export async function POST(request: NextRequest) {
       logWarn("TradeHub", "Mirroring failed", { error: String(mirrorError) });
     }
 
-    const progressUpdate = await onTradeClosedSaved(supabase, userData.user.id, {
-      id: data.id,
-      account_id: data.account_id,
-      status: data.status,
-      exit_date: data.exit_date,
-    });
-
     logAuditFromRequest(
       {
         userId: userData.user.id,
@@ -333,7 +325,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ...data,
       notes: decryptText(data.notes),
-      progress_update: progressUpdate,
     });
   } catch (err: unknown) {
     logError("TradeHub", { component: "POST trades", message: "Unexpected error", error: String(err) });
