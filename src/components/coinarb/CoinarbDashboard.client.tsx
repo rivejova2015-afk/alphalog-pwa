@@ -18,10 +18,12 @@ import {
   Wifi,
   WifiOff,
   Zap,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { logError } from "@/lib/log";
+import CoinarbControlPanel from "@/components/intelligence/algorithms/CoinarbControlPanel.client";
 interface Agent {
   id: string;
   name: string;
@@ -194,6 +196,8 @@ export default function CoinarbDashboard() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [cryptoAlgoId, setCryptoAlgoId] = useState<string | null>(null);
+  const [controlPanelOpen, setControlPanelOpen] = useState(false);
 
   const fetchTelemetry = useCallback(async () => {
     try {
@@ -283,8 +287,17 @@ export default function CoinarbDashboard() {
     }
   }, []);
 
-  // Initial load
+  // Initial load — also discovers the crypto algorithm id for CoinarbControlPanel
   useEffect(() => {
+    // Fetch the crypto algo id from the algorithms registry
+    fetch('/api/algorithms/lite', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : [])
+      .then((rows: Array<{ id: string; market_type: string }>) => {
+        const crypto = rows.find((r) => r.market_type === 'crypto');
+        if (crypto) setCryptoAlgoId(crypto.id);
+      })
+      .catch(() => { /* non-fatal — panel shows fallback note */ });
+
     Promise.all([
       fetchTelemetry(),
       fetchPositions(),
@@ -488,6 +501,34 @@ export default function CoinarbDashboard() {
           sub={`win rate ${telemetry?.win_rate != null ? (telemetry.win_rate * 100).toFixed(1) + "%" : "—"}`}
           color={(telemetry?.max_drawdown_pct ?? 0) > 0.15 ? "#ef4444" : "#94a3b8"}
         />
+      </div>
+
+      {/* Algorithm control panel (tunables + telemetry + pause/resume) */}
+      <div className="bg-[#0c1220] border border-[#1f2937] rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setControlPanelOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-4 py-2.5 border-b border-[#1f2937] bg-[#0a0f1a] hover:bg-[#0f1525] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal size={14} className="text-[#22d3ee]" />
+            <span className="text-xs font-bold text-[#e2e8f0] font-mono uppercase tracking-wider">
+              Configuración del algoritmo
+            </span>
+          </div>
+          <span className="text-[10px] text-[#475569] font-mono">{controlPanelOpen ? '▲ colapsar' : '▼ expandir'}</span>
+        </button>
+        {controlPanelOpen && (
+          <div className="p-4">
+            {cryptoAlgoId ? (
+              <CoinarbControlPanel algorithmId={cryptoAlgoId} onSaved={fetchTelemetry} />
+            ) : (
+              <p className="text-xs text-[#475569] font-mono">
+                Algoritmo coinarb no encontrado en el registro de algorithms.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Health row */}
