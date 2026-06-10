@@ -18,6 +18,7 @@ import type { Bar, Timeframe } from "@/types/backtest";
 import { fetchYahooBars, mapToYahooTicker } from "@/lib/backtest/yahoo-fetcher";
 import { fetchFxratesapiBars, mapToFxratesapiPair } from "@/lib/backtest/fxratesapi-fetcher";
 import { fetchOandaBars, mapToOandaInstrument } from "@/lib/backtest/oanda-fetcher";
+import { fetchPolygonBars, mapToPolygonTicker } from "@/lib/backtest/polygon-fetcher";
 import { getApiSourcesForTf, nextStepsForEmpty, type DataSource } from "@/lib/backtest/source-registry";
 import { logInfo, logWarn } from "@/lib/log";
 
@@ -220,6 +221,20 @@ async function tryApiSource(
       const msg = err instanceof Error ? err.message : String(err);
       // Token-missing should soft-fail (not abort the chain) — surfaces as
       // "source disabled" in the diagnostics panel without breaking anything.
+      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
+    }
+  }
+  if (source === "polygon") {
+    if (!mapToPolygonTicker(symbol)) {
+      return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_polygon_mapping" } };
+    }
+    try {
+      const bars = await fetchPolygonBars(symbol, timeframe, from, to);
+      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
+    } catch (err) {
+      // Same pattern as OANDA: missing API key → soft fail → next source in chain.
+      // Rate-limit hits also fall through so the chain can try Yahoo et al.
+      const msg = err instanceof Error ? err.message : String(err);
       return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
     }
   }
