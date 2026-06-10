@@ -30,6 +30,10 @@ const {
   runAdvancedPipelineMock,
   buildKellyInputsMock,
   loadHistoricalBarsMock,
+  runPortfolioMock,
+  buildBiasCacheMock,
+  multiTfBlocksMock,
+  summarizeAlignmentMock,
 } = vi.hoisted(() => ({
   fromMock:                       vi.fn(),
   getUserMock:                    vi.fn(),
@@ -39,6 +43,10 @@ const {
   runAdvancedPipelineMock:        vi.fn(),
   buildKellyInputsMock:           vi.fn(),
   loadHistoricalBarsMock:         vi.fn(),
+  runPortfolioMock:               vi.fn(),
+  buildBiasCacheMock:             vi.fn(),
+  multiTfBlocksMock:              vi.fn(),
+  summarizeAlignmentMock:         vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -58,6 +66,14 @@ vi.mock("@/lib/engine/v1/quality-gates", () => ({
 }));
 vi.mock("@/lib/backtest/orchestrator", () => ({
   runAdvancedPipeline: runAdvancedPipelineMock,
+}));
+vi.mock("@/lib/backtest/portfolio", () => ({
+  runPortfolio: runPortfolioMock,
+}));
+vi.mock("@/lib/backtest/multi-tf-filter", () => ({
+  buildBiasCache:     buildBiasCacheMock,
+  multiTfBlocks:      multiTfBlocksMock,
+  summarizeAlignment: summarizeAlignmentMock,
 }));
 vi.mock("@/lib/backtest/bars-loader", () => ({
   loadHistoricalBars: loadHistoricalBarsMock,
@@ -157,7 +173,8 @@ function setupHappyDefaults(opts: {
   extractMultiTfMock.mockReturnValue({ timeframes: [{ tf: "M15", weight: 1 }] });
   loadHistoricalBarsMock.mockResolvedValue([]);
   runEngineV1FullValidationMock.mockResolvedValue(goodValidationResult);
-  runAdvancedPipelineMock.mockResolvedValue({ advanced: null, warnings: [] });
+  // runAdvancedPipeline is synchronous in the route — return a plain object.
+  runAdvancedPipelineMock.mockReturnValue({ advanced: null, warnings: [] });
   evaluateEngineGatesMock.mockReturnValue({
     eligibleForPaper: gatesEligible,
     results: [],
@@ -219,6 +236,10 @@ describe("/api/algorithms/[id]/engine-backtest — handler", () => {
     runAdvancedPipelineMock.mockReset();
     buildKellyInputsMock.mockReset();
     loadHistoricalBarsMock.mockReset();
+    runPortfolioMock.mockReset();
+    buildBiasCacheMock.mockReset();
+    multiTfBlocksMock.mockReset();
+    summarizeAlignmentMock.mockReset();
   });
 
   it("returns 401 when auth fails", async () => {
@@ -323,5 +344,142 @@ describe("/api/algorithms/[id]/engine-backtest — handler", () => {
     const body = await res.json();
     expect(body.promoted).toBe(false);
     expect(body.algorithm.status).toBe("draft");
+  });
+
+  it("hydrates the multi-TF block to 'completed' when use_multi_tf=true (sync flow)", async () => {
+    setupHappyDefaults();
+    // Baseline with 3 trades so multiTfBlocks counting is observable.
+    runEngineV1FullValidationMock.mockResolvedValue({
+      ...goodValidationResult,
+      baseline: {
+        ...goodValidationResult.baseline,
+        trades: [
+          { side: "long",  entryTs: "2026-01-02T00:00:00Z" },
+          { side: "short", entryTs: "2026-01-03T00:00:00Z" },
+          { side: "long",  entryTs: "2026-01-04T00:00:00Z" },
+        ],
+      },
+    });
+    // Orchestrator surfaces multi-TF intent as 'pending'; the route hydrates it.
+    runAdvancedPipelineMock.mockReturnValue({
+      advanced: {
+        ml: null,
+        multiTf: { used: true, status: "pending", higherTimeframes: ["H4", "D1"] },
+        portfolio: null,
+      },
+      warnings: [],
+    });
+    // Higher-TF bar loads return >= MIN_TF_BARS (50) bars so they're not skipped.
+    loadHistoricalBarsMock.mockResolvedValue(new Array(120).fill({ ts: "2026-01-01T00:00:00Z", open: 1, high: 1, low: 1, close: 1, volume: 1 }));
+    buildBiasCacheMock.mockReturnValue(new Map([["H4", {}], ["D1", {}]]));
+    // First two trades contradict the higher TF, third doesn't.
+    multiTfBlocksMock.mockReturnValueOnce(true).mockReturnValueOnce(true).mockReturnValueOnce(false);
+    summarizeAlignmentMock.mockReturnValue({
+      byTf: { H4: { bull: 10, bear: 5, neutral: 2 }, D1: { bull: 8, bear: 4, neutral: 5 } },
+      totalPrimaryBars: 17,
+    });
+
+    const res = await POST(makeRequest({ use_multi_tf: true }), CTX);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.advanced.multiTf.status).toBe("completed");
+    expect(body.advanced.multiTf.tradesFilteredCount).toBe(2);
+    expect(body.advanced.multiTf.alignment.totalPrimaryBars).toBe(17);
+    expect(buildBiasCacheMock).toHaveBeenCalledOnce();
+    expect(multiTfBlocksMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("hydrates the multi-TF block to 'failed' when no higher-TF bars load", async () => {
+    setupHappyDefaults();
+    runAdvancedPipelineMock.mockReturnValue({
+      advanced: {
+        ml: null,
+        multiTf: { used: true, status: "pending", higherTimeframes: ["H4", "D1"] },
+        portfolio: null,
+      },
+      warnings: [],
+    });
+    // Too few bars → every higher TF skipped → block fails.
+    loadHistoricalBarsMock.mockResolvedValue(new Array(10).fill({ ts: "2026-01-01T00:00:00Z", open: 1, high: 1, low: 1, close: 1, volume: 1 }));
+
+    const res = await POST(makeRequest({ use_multi_tf: true }), CTX);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.advanced.multiTf.status).toBe("failed");
+    expect(body.advanced.multiTf.reason).toContain("no higher-TF bars loaded");
+    expect(buildBiasCacheMock).not.toHaveBeenCalled();
+  });
+
+  it("hydrates the portfolio block to 'completed' when use_portfolio=true with >=2 legs", async () => {
+    setupHappyDefaults();
+    runAdvancedPipelineMock.mockReturnValue({
+      advanced: {
+        ml: null,
+        multiTf: null,
+        portfolio: { used: true, status: "pending", reason: "needs supabase" },
+      },
+      warnings: [],
+    });
+    runPortfolioMock.mockResolvedValue({
+      metrics: {
+        totalPnl: 1200, totalReturnPct: 12, sharpe: 1.4,
+        maxDrawdown: 300, maxDrawdownPct: 3,
+        legCorrelations: [{ a: "leg-a", b: "leg-b", rho: 0.2 }],
+      },
+      portfolioEquity: [
+        { ts: "2026-01-01T00:00:00Z", equity: 10000, drawdown: 0 },
+        { ts: "2026-01-02T00:00:00Z", equity: 11200, drawdown: 0 },
+      ],
+    });
+
+    const res = await POST(makeRequest({
+      use_portfolio: true,
+      legs: [
+        { configId: "leg-a", symbol: "EURUSD", weight: 0.5 },
+        { configId: "leg-b", symbol: "XAUUSD", weight: 0.5 },
+      ],
+    }), CTX);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.advanced.portfolio.status).toBe("completed");
+    expect(body.advanced.portfolio.legCount).toBe(2);
+    expect(body.advanced.portfolio.metrics.sharpe).toBe(1.4);
+    expect(body.advanced.portfolio.equityPreviewLast50).toHaveLength(2);
+    expect(runPortfolioMock).toHaveBeenCalledOnce();
+    // Each leg's cfg should scale initialBalance by its weight (10000 × 0.5).
+    const legsArg = runPortfolioMock.mock.calls[0][1] as Array<{ cfg: { initialBalance: number; symbol: string } }>;
+    expect(legsArg).toHaveLength(2);
+    expect(legsArg[0].cfg.initialBalance).toBe(5000);
+    expect(legsArg[0].cfg.symbol).toBe("EURUSD");
+  });
+
+  it("marks portfolio 'failed' when runPortfolio throws (failure isolated)", async () => {
+    setupHappyDefaults();
+    runAdvancedPipelineMock.mockReturnValue({
+      advanced: {
+        ml: null,
+        multiTf: null,
+        portfolio: { used: true, status: "pending", reason: "needs supabase" },
+      },
+      warnings: [],
+    });
+    runPortfolioMock.mockRejectedValue(new Error("bars unavailable for XAUUSD"));
+
+    const res = await POST(makeRequest({
+      use_portfolio: true,
+      legs: [
+        { configId: "leg-a", symbol: "EURUSD", weight: 0.5 },
+        { configId: "leg-b", symbol: "XAUUSD", weight: 0.5 },
+      ],
+    }), CTX);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.advanced.portfolio.status).toBe("failed");
+    expect(body.advanced.portfolio.reason).toContain("bars unavailable");
+    expect(body.advanced_warnings).toContain("portfolio: bars unavailable for XAUUSD");
   });
 });

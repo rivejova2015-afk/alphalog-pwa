@@ -17,7 +17,10 @@ import { runEngineV1FullValidation } from "@/lib/engine/v1/backtest";
 import { extractMultiTf } from "@/lib/engine/v1/index";
 import { evaluateEngineGates } from "@/lib/engine/v1/quality-gates";
 import { theoreticalOptionPnl } from "@/lib/backtest/options-overlay";
-import { runAdvancedPipeline } from "@/lib/backtest/orchestrator";
+import { runAdvancedPipeline, type AdvancedPipeline } from "@/lib/backtest/orchestrator";
+import { runPortfolio, type PortfolioLeg } from "@/lib/backtest/portfolio";
+import { buildBiasCache, multiTfBlocks, summarizeAlignment } from "@/lib/backtest/multi-tf-filter";
+import { loadHistoricalBars as loadBarsForTf } from "@/lib/backtest/bars-loader";
 import { buildKellyInputs, mergeKellyInputs } from "@/lib/engine/position-sizing/auto-populate";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import type { EngineConfig } from "@/lib/validations/engine-config";
@@ -31,6 +34,21 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const VALID_HIGHER_TFS = ["M15", "M30", "H1", "H4", "D1", "W1", "MN1"] as const;
 
+// ── Anti-timeout guards (sync flow runs in-request, not in a worker) ─────────
+// The async flow (/api/backtest/jobs) can afford unbounded multi-symbol /
+// multi-TF loads because it runs detached. Here we are inside the HTTP request
+// with maxDuration=120s, so we cap the fan-out:
+//   - MAX_PORTFOLIO_LEGS: hard ceiling on legs (each leg = 1 bar load + 1
+//     full baseline sim). 10 legs × ~90d M15 is the worst case we accept.
+//   - MAX_MULTI_TF: at most 3 higher TFs (also enforced by the Zod schema).
+//   - MIN_TF_BARS: a higher TF with fewer than this many bars is too sparse to
+//     yield a meaningful EMA50 bias — we skip it instead of polluting the cache.
+// If a block exceeds its budget or loads nothing usable we surface it as
+// `status: 'failed'` with a clear reason rather than hanging the request.
+const MAX_PORTFOLIO_LEGS = 10;
+const MAX_MULTI_TF = 3;
+const MIN_TF_BARS = 50;
+
 const bodySchema = z.object({
   symbol:                  z.string().min(1).max(20).optional(),
   from:                    z.string().datetime().optional(),
@@ -40,20 +58,27 @@ const bodySchema = z.object({
   tp_atr_mult:             z.number().positive().optional(),
   monte_carlo_iterations:  z.number().int().min(0).max(5000).optional(),
   walk_forward_windows:    z.number().int().min(0).max(12).optional(),
-  // Advanced opt-in pipeline (Plan v2 — Bloque C). Only `use_ml` is honored
-  // by the sync flow. Engine v1 already evaluates the SMC funnel
-  // (D1→H1→M15→M1) so a higher-TF filter would be redundant, and the
-  // portfolio backtest needs the SupabaseClient + per-leg editor that only
-  // live in the async flow (/api/backtest/jobs). `use_multi_tf` and
-  // `use_portfolio` stay in the schema for backwards-compat with older
-  // clients but are ignored at runtime — a warn log fires if they arrive
-  // as true so the regression is observable.
+  // Advanced opt-in pipeline (Plan v2 — Bloque C). All three flags are now
+  // honored by the sync flow:
+  //   - use_ml: trains a logreg signal model over the primary TF bars.
+  //   - use_multi_tf: loads higher-TF bars, builds an EMA50 bias cache and
+  //     reports how many baseline trades contradict the higher TF (would be
+  //     vetoed) + a bull/bear/neutral alignment summary.
+  //   - use_portfolio: runs a multi-symbol portfolio backtest over `legs`,
+  //     cloning the cfg per leg with initialBalance × normalized weight.
+  // Anti-timeout guards apply (see MAX_* constants above) because this path
+  // runs in-request rather than in the async worker.
   use_ml:                  z.boolean().optional(),
   ml_horizon:              z.number().int().min(1).max(50).optional(),
   ml_threshold:            z.number().min(0).max(0.1).optional(),
-  use_multi_tf:            z.boolean().optional(),  // deprecated in sync flow
-  multi_tf_higher:         z.array(z.enum(VALID_HIGHER_TFS)).min(1).max(3).optional(),
-  use_portfolio:           z.boolean().optional(),  // deprecated in sync flow
+  use_multi_tf:            z.boolean().optional(),
+  multi_tf_higher:         z.array(z.enum(VALID_HIGHER_TFS)).min(1).max(MAX_MULTI_TF).optional(),
+  use_portfolio:           z.boolean().optional(),
+  legs:                    z.array(z.object({
+    configId: z.string().min(1).max(40),
+    symbol:   z.string().min(1).max(20),
+    weight:   z.number().positive(),
+  })).min(2).max(MAX_PORTFOLIO_LEGS).optional(),
 });
 
 const VALID_TFS: Timeframe[] = ["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"];
@@ -123,44 +148,41 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       },
     );
 
-    // Advanced opt-in pipeline (Plan v2 — Bloque C). Sync flow honors only
-    // `use_ml`. `use_multi_tf` and `use_portfolio` are accepted for
-    // backwards-compat (older clients may still send them) but ignored at
-    // runtime — a warn fires when they arrive as true so the regression is
-    // observable. The async flow (/api/backtest/jobs) is the only path that
-    // wires multi-TF + portfolio with real bars + Supabase.
-    if (parsed.data.use_multi_tf === true) {
-      logWarn("EngineBacktest", "use_multi_tf ignored in sync flow — Engine v1 already runs SMC funnel multi-TF natively", {
-        component: "POST /api/algorithms/[id]/engine-backtest",
-        meta: { algorithm_id: id },
-      });
-    }
-    if (parsed.data.use_portfolio === true) {
-      logWarn("EngineBacktest", "use_portfolio ignored in sync flow — portfolio backtest requires the async pipeline (/api/backtest/jobs)", {
-        component: "POST /api/algorithms/[id]/engine-backtest",
-        meta: { algorithm_id: id },
-      });
-    }
+    // Advanced opt-in pipeline (Plan v2 — Bloque C). The sync flow now honors
+    // all three flags (use_ml + use_multi_tf + use_portfolio), mirroring the
+    // async worker (src/lib/backtest/run-job.ts). The orchestrator's pure
+    // runAdvancedPipeline still surfaces multi-TF + portfolio as 'pending'
+    // because both need real bars (multi-TF) or a SupabaseClient (portfolio);
+    // we hydrate them below and upgrade the blocks to 'completed'/'failed'.
+    // Anti-timeout guards (MAX_* constants) keep the in-request fan-out bounded.
+    const useMultiTf  = parsed.data.use_multi_tf === true;
+    const usePortfolio = parsed.data.use_portfolio === true;
+    const useAdvanced = parsed.data.use_ml === true || useMultiTf || usePortfolio;
 
-    const useAdvanced = parsed.data.use_ml === true;
+    // Resolve the primary-TF series once — it's the bias-cache target for
+    // multi-TF reporting and the ML training set.
+    const primaryEntry =
+      tfBars.find((e) => e.tf === "M15") ??
+      tfBars.find((e) => e.tf === "H1") ??
+      tfBars[0];
+    const primaryBars = (primaryEntry?.bars ?? []) as Bar[];
 
     let advancedOutput: ReturnType<typeof runAdvancedPipeline> = { advanced: null, warnings: [] };
     if (useAdvanced) {
-      const primaryEntry =
-        tfBars.find((e) => e.tf === "M15") ??
-        tfBars.find((e) => e.tf === "H1") ??
-        tfBars[0];
-      const primaryBars = (primaryEntry?.bars ?? []) as Bar[];
-      if (primaryBars.length < 50) {
+      if (parsed.data.use_ml === true && primaryBars.length < 50) {
         logWarn("EngineBacktest", "Advanced ML skipped — primary bars < 50", {
           component: "POST /api/algorithms/[id]/engine-backtest",
           meta: { primary_tf: primaryEntry?.tf ?? null, bars: primaryBars.length },
         });
       }
+      // Default higher TFs for multi-TF reporting (capped at MAX_MULTI_TF). The
+      // client may override via `multi_tf_higher`; otherwise we pick H4 + D1.
+      const requestedHigherTfs = (parsed.data.multi_tf_higher ?? ["H4", "D1"]).slice(0, MAX_MULTI_TF);
       const advancedCfg: BacktestConfig = {
         // BacktestConfig requires several Engine-v1-irrelevant fields. Only
-        // useMl + mlParams are actually read by runAdvancedPipeline in sync;
-        // the rest are placeholders for the type system.
+        // useMl/mlParams + useMultiTf/multiTfParams + usePortfolio/portfolioLegs
+        // are actually read by runAdvancedPipeline; the rest are placeholders
+        // for the type system.
         symbol,
         timeframe:        (primaryEntry?.tf ?? "M15") as Timeframe,
         from,
@@ -174,17 +196,138 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         direction:        "both",
         parameters:       {},
         rules:            { entry: [], exit: [], sizing: { type: "fixed_lots", lots: 0.01 } } as unknown as BacktestConfig["rules"],
-        useMl:            true,
+        useMl:            parsed.data.use_ml === true,
         mlParams: {
           horizon:   parsed.data.ml_horizon ?? 10,
           threshold: parsed.data.ml_threshold ?? 0.001,
         },
-        // Multi-TF + portfolio are hardcoded off in the sync path — see the
-        // warn logs above.
-        useMultiTf:       false,
-        usePortfolio:     false,
+        useMultiTf:       useMultiTf,
+        multiTfParams:    useMultiTf ? { higherTimeframes: requestedHigherTfs as Timeframe[] } : undefined,
+        usePortfolio:     usePortfolio,
+        portfolioLegs:    usePortfolio ? parsed.data.legs : undefined,
       };
       advancedOutput = runAdvancedPipeline(primaryBars, advancedCfg);
+
+      // ── Multi-TF hydration ───────────────────────────────────────────────
+      // runAdvancedPipeline left the block as { status: 'pending' }. Mirror
+      // run-job.ts: load higher-TF bars in parallel (skip TFs with < MIN_TF_BARS
+      // bars), build an EMA50 bias cache and report how many baseline trades
+      // contradict the higher TF (would be vetoed) + a bull/bear/neutral
+      // alignment summary. Failures stay isolated → 'failed' with a reason.
+      if (advancedOutput.advanced && advancedOutput.advanced.multiTf?.status === "pending") {
+        const higherTimeframes = advancedOutput.advanced.multiTf.higherTimeframes;
+        // Anti-timeout guard: validate every requested TF resolves to a real
+        // Timeframe and that we don't exceed MAX_MULTI_TF (Zod already caps the
+        // override at MAX_MULTI_TF, but the H4/D1 default is also covered).
+        const validHigher = higherTimeframes
+          .map((tf) => asTimeframe(tf))
+          .filter((tf): tf is Timeframe => tf !== null)
+          .slice(0, MAX_MULTI_TF);
+        try {
+          const loaded = await Promise.all(
+            validHigher.map(async (tf) => {
+              const hb = await loadBarsForTf(supabase, symbol, tf, from, to);
+              return [tf, hb] as const;
+            }),
+          );
+          const map = new Map<string, Bar[]>();
+          const skipped: string[] = [];
+          for (const [tf, hb] of loaded) {
+            if (hb.length >= MIN_TF_BARS) map.set(tf, hb as Bar[]);
+            else skipped.push(`${tf}(${hb.length}b)`);
+          }
+          if (map.size === 0) {
+            advancedOutput.advanced.multiTf = {
+              used: true, status: "failed", higherTimeframes,
+              reason: `no higher-TF bars loaded (skipped: ${skipped.join(", ") || "all empty"})`,
+            };
+          } else {
+            // Build the bias cache and tally how many baseline trades would be
+            // vetoed because they contradict any higher TF at entry time.
+            const cache = buildBiasCache(map);
+            const baselineTrades = full.baseline.trades;
+            let tradesFilteredCount = 0;
+            for (const t of baselineTrades) {
+              if (multiTfBlocks(t.side, t.entryTs, cache)) tradesFilteredCount++;
+            }
+            const alignment = summarizeAlignment(primaryBars, cache);
+            advancedOutput.advanced.multiTf = {
+              used: true, status: "completed", higherTimeframes,
+              tradesFilteredCount, alignment,
+            };
+            if (skipped.length > 0) {
+              logWarn("EngineBacktest", `Multi-TF skipped sparse TFs: ${skipped.join(", ")}`, {
+                component: "POST /api/algorithms/[id]/engine-backtest", meta: { algorithm_id: id },
+              });
+            }
+          }
+        } catch (mtfErr) {
+          const msg = mtfErr instanceof Error ? mtfErr.message : String(mtfErr);
+          advancedOutput.advanced.multiTf = {
+            used: true, status: "failed", higherTimeframes, reason: msg.slice(0, 200),
+          };
+          advancedOutput.warnings.push(`multi_tf: ${msg}`);
+          logWarn("EngineBacktest", `Multi-TF bar load failed: ${msg}`, {
+            component: "POST /api/algorithms/[id]/engine-backtest", meta: { algorithm_id: id },
+          });
+        }
+      }
+
+      // ── Portfolio hydration ──────────────────────────────────────────────
+      // runAdvancedPipeline left the block as { status: 'pending' }. Mirror
+      // run-job.ts: clone cfg per leg substituting `symbol` and scaling
+      // `initialBalance` by the leg's weight, then runPortfolio. Anti-timeout
+      // guard: legs are capped at MAX_PORTFOLIO_LEGS (the Zod schema already
+      // enforces 2..MAX_PORTFOLIO_LEGS, but we re-slice defensively). Each leg
+      // is one bar load + one full baseline sim, so the ceiling bounds the
+      // worst-case in-request work.
+      if (advancedOutput.advanced && advancedOutput.advanced.portfolio?.status === "pending") {
+        const legsInput = (parsed.data.legs ?? []).slice(0, MAX_PORTFOLIO_LEGS);
+        if (legsInput.length >= 2) {
+          try {
+            const legs: PortfolioLeg[] = legsInput.map((leg) => ({
+              configId: leg.configId,
+              symbol:   leg.symbol,
+              weight:   leg.weight,
+              cfg: {
+                ...advancedCfg,
+                symbol:         leg.symbol,
+                initialBalance: advancedCfg.initialBalance * leg.weight,
+                // Portfolio legs run the generic engine (runBacktest) per leg —
+                // strip the advanced flags so legs don't recurse into ML/multi-TF.
+                useMl:        false,
+                useMultiTf:   false,
+                usePortfolio: false,
+              },
+            }));
+            const portfolio = await runPortfolio(supabase, legs);
+            advancedOutput.advanced.portfolio = {
+              used: true, status: "completed", legCount: legs.length,
+              metrics: portfolio.metrics,
+              equityPreviewLast50: portfolio.portfolioEquity.slice(-50),
+            };
+            logInfo("EngineBacktest", "portfolio completed (sync)", {
+              component: "POST /api/algorithms/[id]/engine-backtest",
+              meta: { algorithm_id: id, legCount: legs.length, sharpe: portfolio.metrics.sharpe },
+            });
+          } catch (portErr) {
+            const portMsg = portErr instanceof Error ? portErr.message : String(portErr);
+            advancedOutput.advanced.portfolio = {
+              used: true, status: "failed", reason: portMsg.slice(0, 200),
+            };
+            advancedOutput.warnings.push(`portfolio: ${portMsg}`);
+            logWarn("EngineBacktest", "portfolio failed (sync)", {
+              component: "POST /api/algorithms/[id]/engine-backtest",
+              meta: { algorithm_id: id, message: portMsg },
+            });
+          }
+        } else {
+          advancedOutput.advanced.portfolio = {
+            used: true, status: "failed",
+            reason: `legs requires at least 2 entries; got ${legsInput.length}`,
+          };
+        }
+      }
     }
 
     // Options overlay: when the algorithm is market_type='options', augment
@@ -251,9 +394,10 @@ export async function POST(request: NextRequest, { params }: Ctx) {
           monte_carlo_iterations: parsed.data.monte_carlo_iterations ?? 0,
           walk_forward_windows:   parsed.data.walk_forward_windows ?? 0,
           use_ml:                 parsed.data.use_ml === true,
-          // multi_tf + portfolio are recorded as received (raw boolean) but
-          // not honored — see warn logs above. Useful for forensic queries
-          // ("did the client try to enable portfolio in sync?").
+          // multi_tf + portfolio are now honored at runtime (see the advanced
+          // hydration above). We still persist the raw requested booleans for
+          // forensic queries ("did the client enable portfolio in sync, and
+          // did the block complete or fail?" — pair with `advanced` below).
           use_multi_tf_requested:  parsed.data.use_multi_tf === true,
           use_portfolio_requested: parsed.data.use_portfolio === true,
         },

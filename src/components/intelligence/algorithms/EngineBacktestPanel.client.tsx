@@ -25,6 +25,8 @@ interface BacktestMetrics {
 
 interface EquityRow { ts: string; equity: number; drawdown: number }
 
+interface PortfolioLegDraft { configId: string; symbol: string; weight: number }
+
 interface MonteCarloPayload {
   iterations: number;
   finalEquityPercentiles: { p5: number; p25: number; p50: number; p75: number; p95: number };
@@ -201,12 +203,17 @@ export function EngineBacktestPanel({
   const [mcIters, setMcIters]         = useState("0");
   const [wfWindows, setWfWindows]     = useState("0");
   const [useMl, setUseMl]             = useState(false);
-  // Multi-TF and Portfolio toggles are disabled in the sync flow on purpose
-  // (see Gap #4 hardening). Engine v1's SMC funnel already evaluates D1 → H1
-  // → M15 → M1, so an extra higher-TF filter would be redundant; the portfolio
-  // backtest needs SupabaseClient + per-leg legs editor which only live in the
-  // async flow. The toggles stay visible (with a disabled badge + tooltip) so
-  // users can discover the feature, but the wire-up always sends false here.
+  // Multi-TF and Portfolio are now wired in the sync flow (mirrors the async
+  // worker). Multi-TF loads higher-TF bars, builds an EMA50 bias cache and
+  // reports how many baseline trades contradict the higher TF + an alignment
+  // summary. Portfolio runs a multi-symbol backtest over the legs editor below,
+  // cloning the cfg per leg with initialBalance × normalized weight.
+  const [useMultiTf, setUseMultiTf]   = useState(false);
+  const [usePortfolio, setUsePortfolio] = useState(false);
+  const [portfolioLegs, setPortfolioLegs] = useState<PortfolioLegDraft[]>([
+    { configId: "leg-a", symbol: instruments[0] ?? "XAUUSD", weight: 0.5 },
+    { configId: "leg-b", symbol: instruments[1] ?? "EURUSD", weight: 0.5 },
+  ]);
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
@@ -456,6 +463,23 @@ export function EngineBacktestPanel({
       toast.error("La estrategia no tiene instrumentos");
       return;
     }
+    // Portfolio guardrails — match the server-side Zod schema (2..10 legs, each
+    // with a non-empty configId/symbol and weight > 0) so the user gets an
+    // inline error instead of a 400.
+    if (usePortfolio) {
+      if (portfolioLegs.length < 2) {
+        toast.error("Portfolio necesita al menos 2 legs");
+        return;
+      }
+      if (portfolioLegs.length > 10) {
+        toast.error("Portfolio admite como máximo 10 legs");
+        return;
+      }
+      if (portfolioLegs.some((l) => !l.configId.trim() || !l.symbol.trim() || l.weight <= 0)) {
+        toast.error("Cada leg necesita configId, symbol y weight > 0");
+        return;
+      }
+    }
     setLoading(true);
     setError(null);
     try {
@@ -472,8 +496,9 @@ export function EngineBacktestPanel({
           monte_carlo_iterations: Number(mcIters) || 0,
           walk_forward_windows: Number(wfWindows) || 0,
           use_ml: useMl,
-          use_multi_tf: false,
-          use_portfolio: false,
+          use_multi_tf: useMultiTf,
+          use_portfolio: usePortfolio,
+          ...(usePortfolio ? { legs: portfolioLegs } : {}),
         }),
       });
       if (!res.ok) {
@@ -875,10 +900,10 @@ export function EngineBacktestPanel({
       <div className="border border-[#1f2937] rounded-lg p-3 space-y-2" data-testid="advanced-toggles">
         <div className="flex items-center gap-2 mb-1">
           <Brain size={11} className="text-[#a78bfa]" />
-          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado · solo ML disponible en sync</p>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado (opt-in)</p>
         </div>
         <p className="text-[10px] text-[#475569]">
-          Multi-TF y Portfolio viven en el flujo async — abrí <span className="font-mono text-[#06b6d4]">Backtest &amp; Validation</span> para configurarlos.
+          ML, Multi-TF y Portfolio corren in-request. Multi-TF reporta cuántos trades del baseline contradicen los TFs superiores; Portfolio corre multi-símbolo sobre los legs.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
           <label className="flex items-start gap-2 cursor-pointer" title="Logreg sobre features técnicas (RSI, ATR, EMA spread) con label de retorno forward.">
@@ -894,35 +919,92 @@ export function EngineBacktestPanel({
               <span className="block text-[10px] text-[#475569]">Train/valid acc + feature names</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Engine v1 ya evalúa el funnel D1 → H1 → M15 → M1 nativamente. El filtro de TF superior solo aplica al engine genérico del flujo async.">
+          <label className="flex items-start gap-2 cursor-pointer" title="Carga bars de TFs superiores (H4 + D1), construye un bias cache EMA50 y reporta cuántos trades del baseline contradicen el TF superior.">
             <input
               type="checkbox"
-              checked={false}
-              disabled
-              readOnly
+              checked={useMultiTf}
+              onChange={(e) => setUseMultiTf(e.target.checked)}
               className="mt-0.5 accent-[#a78bfa]"
               data-testid="toggle-use-multi-tf"
             />
             <span className="text-[11px] text-[#cbd5e1]">
               <span className="font-medium">Multi-TF</span>
-              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">ya integrado en SMC funnel</span>
+              <span className="block text-[10px] text-[#475569]">Bias H4 + D1 · trades filtrados</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Multi-símbolo necesita editor de legs + SupabaseClient. Disponible en /algorithms/[id] → Backtest & Validation.">
+          <label className="flex items-start gap-2 cursor-pointer" title="Multi-símbolo. Cada leg corre la misma estrategia sobre su symbol con initialBalance × weight normalizado.">
             <input
               type="checkbox"
-              checked={false}
-              disabled
-              readOnly
+              checked={usePortfolio}
+              onChange={(e) => setUsePortfolio(e.target.checked)}
               className="mt-0.5 accent-[#a78bfa]"
               data-testid="toggle-use-portfolio"
             />
             <span className="text-[11px] text-[#cbd5e1]">
               <span className="font-medium">Portfolio</span>
-              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">solo en flujo async</span>
+              <span className="block text-[10px] text-[#475569]">Multi-símbolo · matriz de correlación</span>
             </span>
           </label>
         </div>
+
+        {/* Portfolio legs editor — only when portfolio is ON. Mirrors the async
+            flow's BacktestPanel: 2..10 legs, each with configId/symbol/weight.
+            Weights are normalized server-side. */}
+        {usePortfolio && (
+          <div className="border-t border-[#1f2937] pt-2 space-y-1.5" data-testid="portfolio-legs-editor">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-[#475569] uppercase tracking-wide font-medium">Legs (mínimo 2 · máximo 10)</p>
+              <button
+                type="button"
+                onClick={() => setPortfolioLegs((legs) => [...legs, { configId: `leg-${legs.length + 1}`, symbol: instruments[0] ?? "EURUSD", weight: 0.25 }])}
+                disabled={portfolioLegs.length >= 10}
+                className="text-[10px] px-2 py-0.5 rounded bg-[#a78bfa]/10 text-[#a78bfa] hover:bg-[#a78bfa]/20 disabled:opacity-40"
+                data-testid="portfolio-add-leg"
+              >
+                + leg
+              </button>
+            </div>
+            {portfolioLegs.map((leg, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
+                <input
+                  value={leg.configId}
+                  onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, configId: e.target.value } : l))}
+                  className="col-span-4 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-[10px] px-2 py-1 focus:outline-none font-mono"
+                  placeholder="leg id"
+                  aria-label={`leg ${idx + 1} id`}
+                />
+                <input
+                  value={leg.symbol}
+                  onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, symbol: e.target.value.toUpperCase() } : l))}
+                  className="col-span-4 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-[10px] px-2 py-1 focus:outline-none font-mono"
+                  placeholder="SYMBOL"
+                  aria-label={`leg ${idx + 1} symbol`}
+                />
+                <input
+                  type="number"
+                  step={0.05}
+                  min={0.05}
+                  max={1}
+                  value={leg.weight}
+                  onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, weight: Number(e.target.value) } : l))}
+                  className="col-span-3 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-[10px] px-2 py-1 focus:outline-none font-mono"
+                  placeholder="weight"
+                  aria-label={`leg ${idx + 1} weight`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPortfolioLegs((legs) => legs.filter((_, i) => i !== idx))}
+                  disabled={portfolioLegs.length <= 2}
+                  className="col-span-1 text-[#ef4444] hover:text-[#fca5a5] disabled:opacity-30 text-xs"
+                  aria-label={`remove leg ${idx + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <p className="text-[9px] text-[#475569]">Los weights se normalizan internamente al total. Capital inicial × weight por leg.</p>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -1184,7 +1266,26 @@ export function EngineBacktestPanel({
                   <div className="bg-[#0a0e1a] border border-[#1f2937] rounded p-2 space-y-1">
                     <p className="text-[10px] text-[#475569] uppercase tracking-wider">Multi-TF</p>
                     <p className="text-[11px] text-[#e2e8f0] font-mono">{data.advanced.multiTf.higherTimeframes.join(" · ")}</p>
-                    <p className="text-[9px] text-[#475569]">intent surfaced</p>
+                    {data.advanced.multiTf.status === "completed" ? (
+                      <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
+                        <span className="text-[#475569]">trades filtrados</span>
+                        <span className="text-right text-[#fbbf24]">{data.advanced.multiTf.tradesFilteredCount}</span>
+                        <span className="text-[#475569]">primary bars</span>
+                        <span className="text-right text-[#e2e8f0]">{data.advanced.multiTf.alignment.totalPrimaryBars}</span>
+                        {Object.entries(data.advanced.multiTf.alignment.byTf).map(([tf, a]) => (
+                          <span key={tf} className="col-span-2 text-[9px] text-[#475569]">
+                            {tf}: <span className="text-[#34d399]">{a.bull}↑</span> · <span className="text-[#ef4444]">{a.bear}↓</span> · {a.neutral}–
+                          </span>
+                        ))}
+                      </div>
+                    ) : data.advanced.multiTf.status === "failed" ? (
+                      <>
+                        <p className="text-[10px] text-[#ef4444] font-mono">failed</p>
+                        <p className="text-[9px] text-[#475569]">{data.advanced.multiTf.reason}</p>
+                      </>
+                    ) : (
+                      <p className="text-[9px] text-[#fbbf24]">pending</p>
+                    )}
                   </div>
                 ) : null}
                 {data.advanced.portfolio ? (
