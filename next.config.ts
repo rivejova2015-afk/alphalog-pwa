@@ -23,6 +23,12 @@ const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === "tr
 const SUPABASE_URL_FALLBACK = "https://jgkvnnlodwdtjsmmzwry.supabase.co";
 const SUPABASE_ANON_KEY_FALLBACK =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impna3ZubmxvZHdkdGpzbW16d3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2MDY3OTAsImV4cCI6MjA4NDE4Mjc5MH0.Tsovh-fnb8T8Sm5mwdhjlsevhDpIW9JUd5dkWAtM7JI";
+// hCaptcha site key — public by design (rendered into the auth page HTML so
+// the widget can mount). Required because Supabase has captcha protection
+// enabled on signInWithPassword / signup / resetPasswordForEmail; without a
+// token the server rejects with "captcha protection: request disallowed".
+// The matching secret lives Supabase server-side and must never be hardcoded.
+const HCAPTCHA_SITE_KEY_FALLBACK = "ad3ac77c-d9dc-4842-9938-6fece5586dce";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -38,6 +44,8 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_SUPABASE_URL || SUPABASE_URL_FALLBACK,
     NEXT_PUBLIC_SUPABASE_ANON_KEY:
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || SUPABASE_ANON_KEY_FALLBACK,
+    NEXT_PUBLIC_HCAPTCHA_SITE_KEY:
+      process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || HCAPTCHA_SITE_KEY_FALLBACK,
   },
 
   // Standalone output enables minimal Docker images (self-contained server.js + only
