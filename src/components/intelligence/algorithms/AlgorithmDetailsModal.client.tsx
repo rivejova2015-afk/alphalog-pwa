@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, ExternalLink, AlertCircle, Save, Play, Inbox, Radio, Files } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, AlertCircle, Save, Play, Inbox, Radio, Files } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
@@ -10,6 +10,7 @@ import { AlgorithmShadowInbox } from "./AlgorithmShadowInbox.client";
 import TradovateConnectModal from "./TradovateConnectModal.client";
 import { InfoBanner } from "./InfoBanner.client";
 import CoinarbControlPanel from "./CoinarbControlPanel.client";
+import { ResearchModeBanner } from "./ResearchModeBanner.client";
 
 type ConnectionStatus = "live" | "stale" | "synced" | "pending";
 
@@ -456,6 +457,25 @@ function CmeSection({ data, onRefresh }: { data: NonNullable<ConnectionsResponse
         Plataforma · Futuros (CME)
       </div>
 
+      {/* Research mode banner: a futures algo with no cuenta CME vinculada is
+          in research mode — it can backtest but won't place real orders until
+          a CME/Tradovate account is linked. We reuse the existing CME account
+          wizard flow for the CTA (same /intelligence/algorithms wizard the
+          empty-state below already linked to) — no inline deploy endpoint. */}
+      {!linked && (
+        <ResearchModeBanner
+          title="Modo research — sin cuenta vinculada"
+          description={
+            <>
+              Esta estrategia de futuros está en modo research: podés correr backtests, pero no colocará órdenes
+              reales hasta que vincules una cuenta CME (propfirm o broker real) y conectes Tradovate. Creá o vinculá
+              la cuenta en el wizard de nueva estrategia para que el dispatcher empiece a operar.
+            </>
+          }
+          cta={{ href: "/intelligence/algorithms", label: "Crear cuenta CME en el wizard" }}
+        />
+      )}
+
       {connected ? (
         <InfoBanner tone="emerald">
           Conexión Tradovate activa. El token vence en {data.token_expires_at ? formatRelative(data.token_expires_at) : "—"} y se renueva
@@ -524,15 +544,7 @@ function CmeSection({ data, onRefresh }: { data: NonNullable<ConnectionsResponse
           {connected ? "Re-conectar Tradovate (renovar token)" : "Conectar Tradovate"}
         </button>
       )}
-      {!linked && (
-        <a
-          href="/intelligence/algorithms"
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold transition"
-        >
-          <ExternalLink className="w-4 h-4" />
-          Crear cuenta CME en el wizard
-        </a>
-      )}
+      {/* CTA moved to the ResearchModeBanner above to avoid duplicate links. */}
 
       {showConnectModal && data.cme_account_id && (
         <TradovateConnectModal
@@ -708,6 +720,20 @@ function OptionsSection() {
         <Cloud className="w-3 h-3" />
         Plataforma · Opciones
       </div>
+
+      {/* Options are always in research mode: no real execution path exists yet
+          (IBKR integration pending). Purely informational — no CTA because
+          there's nothing to link to. */}
+      <ResearchModeBanner
+        title="Modo research — ejecución vía IBKR próximamente"
+        description={
+          <>
+            Las estrategias de opciones están en modo research permanente por ahora: el engine evalúa los signals
+            y los registra en el Shadow Inbox, pero no hay ejecución real. La integración con Interactive Brokers
+            (IBKR) está en desarrollo — cuando esté disponible vas a poder vincular una cuenta y operar en vivo.
+          </>
+        }
+      />
 
       <InfoBanner tone="amber">
         La ejecución real para opciones está en desarrollo. Por ahora el engine evalúa los signals y los
