@@ -82,22 +82,22 @@ function NodeInner({ treeNode }: { treeNode: TreeNode }) {
 // reparent across lists lands in Fase 3.
 function ChildrenGroup({
   parentAccountId,
-  children,
+  childNodes,
   depth,
   selectedNodeId,
   onSelectNode,
 }: {
   parentAccountId: string;
-  children: TreeNode[];
+  childNodes: TreeNode[];
   depth: number;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
 }) {
-  if (children.length === 0) return null;
+  if (childNodes.length === 0) return null;
   return (
-    <SortableContext items={children.map((c) => c.node.id)} strategy={verticalListSortingStrategy}>
+    <SortableContext items={childNodes.map((c) => c.node.id)} strategy={verticalListSortingStrategy}>
       <div role="group" className="space-y-2">
-        {children.map((child) => (
+        {childNodes.map((child) => (
           <SortableNodeRow
             key={child.node.id}
             treeNode={child}
@@ -172,7 +172,7 @@ function SortableNodeRow({
 
       <ChildrenGroup
         parentAccountId={treeNode.node.account_id}
-        children={treeNode.children}
+        childNodes={treeNode.children}
         depth={depth + 1}
         selectedNodeId={selectedNodeId}
         onSelectNode={onSelectNode}
@@ -357,7 +357,7 @@ export default function AabTreeView({
               </button>
               <ChildrenGroup
                 parentAccountId={tree.root.node.account_id}
-                children={tree.root.children}
+                childNodes={tree.root.children}
                 depth={1}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={onSelectNode}
