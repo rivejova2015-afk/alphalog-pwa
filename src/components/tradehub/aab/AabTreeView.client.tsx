@@ -7,6 +7,7 @@ import {
   PointerSensor,
   KeyboardSensor,
   closestCenter,
+  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -20,6 +21,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui";
+import { wouldCreateCycle } from "@/lib/copygroups/cycleCheck";
 
 interface AccountSummary {
   id: string;
@@ -56,6 +59,14 @@ interface TreeNode {
   multiplierPath: number;
 }
 
+// Data attached to each draggable/droppable so onDragEnd can tell reorder
+// (same parent) from reparent (drop onto a node in a different parent).
+interface NodeDndData {
+  parentId: string | null;
+  accountId: string;
+  linkId: string | null;
+}
+
 // Shared inner content of a node card (name, role/status, multiplier path).
 function NodeInner({ treeNode }: { treeNode: TreeNode }) {
   const account = treeNode.node.account;
@@ -78,8 +89,8 @@ function NodeInner({ treeNode }: { treeNode: TreeNode }) {
 }
 
 // Children of a node form an independent sortable list (siblings sharing the
-// same parent). Reorder within this list is the only DnD operation in Fase 2;
-// reparent across lists lands in Fase 3.
+// same parent). Reorder within this list + reparent across lists both flow
+// through the root DndContext's onDragEnd.
 function ChildrenGroup({
   parentAccountId,
   childNodes,
@@ -112,7 +123,8 @@ function ChildrenGroup({
   );
 }
 
-// A draggable slave node (has a grip handle). Recurses into its own children.
+// A draggable slave node (has a grip handle) that is also a drop target for
+// reparent. Recurses into its own children.
 function SortableNodeRow({
   treeNode,
   depth,
@@ -126,9 +138,14 @@ function SortableNodeRow({
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const data: NodeDndData = {
+    parentId: parentAccountId,
+    accountId: treeNode.node.account_id,
+    linkId: treeNode.linkFromParent?.id ?? null,
+  };
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: treeNode.node.id,
-    data: { parentId: parentAccountId },
+    data,
   });
   const isSelected = selectedNodeId === treeNode.node.id;
   const hasChildren = treeNode.children.length > 0;
@@ -137,6 +154,14 @@ function SortableNodeRow({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const borderClass = isSelected
+    ? "border-emerald-400 bg-emerald-500/10"
+    : isOver && !isDragging
+      ? "border-emerald-400 bg-emerald-500/5 ring-2 ring-emerald-400/40"
+      : isDragging
+        ? "border-cyan-500 ring-2 ring-cyan-500 bg-slate-900/60"
+        : "border-slate-700 bg-slate-900/60";
 
   return (
     <div
@@ -151,20 +176,14 @@ function SortableNodeRow({
         <button
           {...attributes}
           {...listeners}
-          className="flex items-center px-1 rounded-lg text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing touch-none"
-          aria-label={`Arrastrar para reordenar ${treeNode.node.account?.name || "cuenta"}`}
+          className="flex items-center justify-center min-w-[44px] rounded-lg text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing touch-none"
+          aria-label={`Arrastrar para mover ${treeNode.node.account?.name || "cuenta"}`}
         >
           <GripVertical size={14} />
         </button>
         <button
           onClick={() => onSelectNode(treeNode.node.id)}
-          className={`flex-1 text-left border rounded-xl px-4 py-3 transition ${
-            isSelected
-              ? "border-emerald-400 bg-emerald-500/10"
-              : isDragging
-                ? "border-cyan-500 ring-2 ring-cyan-500 bg-slate-900/60"
-                : "border-slate-700 bg-slate-900/60"
-          }`}
+          className={`flex-1 text-left border rounded-xl px-4 py-3 transition ${borderClass}`}
         >
           <NodeInner treeNode={treeNode} />
         </button>
@@ -179,6 +198,61 @@ function SortableNodeRow({
       />
     </div>
   );
+}
+
+// The master is the immovable root: not draggable, but a valid drop target so
+// a deep slave can be reparented straight up to the master.
+function MasterNodeRow({
+  treeNode,
+  selectedNodeId,
+  onSelectNode,
+}: {
+  treeNode: TreeNode;
+  selectedNodeId: string | null;
+  onSelectNode: (id: string | null) => void;
+}) {
+  const data: NodeDndData = { parentId: null, accountId: treeNode.node.account_id, linkId: null };
+  const { setNodeRef, isOver } = useDroppable({ id: treeNode.node.id, data });
+  const isSelected = selectedNodeId === treeNode.node.id;
+  const hasChildren = treeNode.children.length > 0;
+
+  const borderClass = isSelected
+    ? "border-emerald-400 bg-emerald-500/10"
+    : isOver
+      ? "border-emerald-400 bg-emerald-500/5 ring-2 ring-emerald-400/40"
+      : "border-slate-700 bg-slate-900/60";
+
+  return (
+    <div
+      role="treeitem"
+      aria-selected={isSelected}
+      aria-expanded={hasChildren ? true : undefined}
+      className="space-y-2"
+    >
+      <button
+        ref={setNodeRef}
+        onClick={() => onSelectNode(treeNode.node.id)}
+        className={`w-full text-left border rounded-xl px-4 py-3 transition ${borderClass}`}
+      >
+        <NodeInner treeNode={treeNode} />
+      </button>
+      <ChildrenGroup
+        parentAccountId={treeNode.node.account_id}
+        childNodes={treeNode.children}
+        depth={1}
+        selectedNodeId={selectedNodeId}
+        onSelectNode={onSelectNode}
+      />
+    </div>
+  );
+}
+
+interface PendingReparent {
+  linkId: string;
+  draggedAccountId: string;
+  draggedName: string;
+  newParentAccountId: string;
+  newParentName: string;
 }
 
 export default function AabTreeView({
@@ -200,6 +274,8 @@ export default function AabTreeView({
   // refetches the graph (e.g. after a node/link mutation elsewhere).
   const [localNodes, setLocalNodes] = useState<CopyGroupNode[]>(nodes);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [pendingReparent, setPendingReparent] = useState<PendingReparent | null>(null);
+  const [reparenting, setReparenting] = useState(false);
 
   useEffect(() => {
     setLocalNodes(nodes);
@@ -209,6 +285,9 @@ export default function AabTreeView({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  const accountName = (accountId: string) =>
+    localNodes.find((n) => n.account_id === accountId)?.account?.name || "Cuenta";
 
   const tree = useMemo(() => {
     const nodeMap = new Map(localNodes.map((n) => [n.account_id, n]));
@@ -300,37 +379,81 @@ export default function AabTreeView({
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const activeParent = active.data.current?.parentId as string | undefined;
-    const overParent = over.data.current?.parentId as string | undefined;
-
-    // Fase 2 = reorder dentro del mismo padre. Mover entre padres (reparent)
-    // llega en la Fase 3 con su propio endpoint.
-    if (!activeParent || !overParent) return;
-    if (activeParent !== overParent) {
-      toast.message("Mover un nodo a otro padre llega en una próxima fase");
-      return;
-    }
-
-    const ids = siblingNodeIds(activeParent);
-    const oldIndex = ids.indexOf(active.id as string);
-    const newIndex = ids.indexOf(over.id as string);
+  const reorderSiblings = (parentAccountId: string, activeId: string, overId: string) => {
+    const ids = siblingNodeIds(parentAccountId);
+    const oldIndex = ids.indexOf(activeId);
+    const newIndex = ids.indexOf(overId);
     if (oldIndex < 0 || newIndex < 0) return;
 
     const newOrder = arrayMove(ids, oldIndex, newIndex);
     const previous = localNodes;
     const rank = new Map(newOrder.map((id, i) => [id, i] as const));
-
-    // Optimistic: rewrite sort_index of the affected siblings to match newOrder.
     setLocalNodes((prev) => prev.map((n) => (rank.has(n.id) ? { ...n, sort_index: rank.get(n.id)! } : n)));
     void persistOrder(newOrder, previous);
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const a = active.data.current as NodeDndData | undefined;
+    const o = over.data.current as NodeDndData | undefined;
+    if (!a || !o) return;
+
+    // Same parent → reorder among siblings (Fase 2).
+    if (a.parentId !== null && a.parentId === o.parentId) {
+      reorderSiblings(a.parentId, active.id as string, over.id as string);
+      return;
+    }
+
+    // Different target → reparent: the drop target node becomes the new parent.
+    const newParentAccountId = o.accountId;
+    if (!a.linkId) return; // only nodes with a parent link can be reparented
+    if (newParentAccountId === a.parentId) return; // already its parent — no-op
+
+    if (wouldCreateCycle(links, a.accountId, newParentAccountId)) {
+      toast.error("Ese movimiento crearía un ciclo");
+      return;
+    }
+
+    setPendingReparent({
+      linkId: a.linkId,
+      draggedAccountId: a.accountId,
+      draggedName: accountName(a.accountId),
+      newParentAccountId,
+      newParentName: accountName(newParentAccountId),
+    });
+  };
+
+  const doReparent = async () => {
+    if (!pendingReparent || !copyGroupId) return;
+    setReparenting(true);
+    try {
+      const res = await fetch(
+        `/api/copy-groups/${copyGroupId}/links/${pendingReparent.linkId}/reparent`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ new_parent_account_id: pendingReparent.newParentAccountId }),
+        },
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast.error(json.error ?? "No se pudo mover el nodo");
+        return;
+      }
+      toast.success("Nodo movido");
+      onReorderCommitted?.();
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setReparenting(false);
+      setPendingReparent(null);
+    }
+  };
+
   return (
-    <div className="space-y-4" aria-busy={savingOrder}>
+    <div className="space-y-4" aria-busy={savingOrder || reparenting}>
       {!tree.root && (
         <div className="text-sm text-slate-400">No hay master activo. Agrega un nodo master para iniciar el árbol.</div>
       )}
@@ -338,31 +461,7 @@ export default function AabTreeView({
       {tree.root && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <div role="tree" aria-label="Árbol de cuentas del CopyGroup">
-            {/* Master root: no es arrastrable (es la raíz). */}
-            <div
-              role="treeitem"
-              aria-selected={selectedNodeId === tree.root.node.id}
-              aria-expanded={tree.root.children.length > 0 ? true : undefined}
-              className="space-y-2"
-            >
-              <button
-                onClick={() => onSelectNode(tree.root!.node.id)}
-                className={`w-full text-left border rounded-xl px-4 py-3 transition ${
-                  selectedNodeId === tree.root.node.id
-                    ? "border-emerald-400 bg-emerald-500/10"
-                    : "border-slate-700 bg-slate-900/60"
-                }`}
-              >
-                <NodeInner treeNode={tree.root} />
-              </button>
-              <ChildrenGroup
-                parentAccountId={tree.root.node.account_id}
-                childNodes={tree.root.children}
-                depth={1}
-                selectedNodeId={selectedNodeId}
-                onSelectNode={onSelectNode}
-              />
-            </div>
+            <MasterNodeRow treeNode={tree.root} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} />
           </div>
         </DndContext>
       )}
@@ -388,6 +487,21 @@ export default function AabTreeView({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingReparent !== null}
+        title="Mover nodo"
+        message={
+          pendingReparent
+            ? `¿Mover "${pendingReparent.draggedName}" como hijo de "${pendingReparent.newParentName}"? Esto cambia la topología de mirroring activa.`
+            : ""
+        }
+        variant="warning"
+        confirmLabel="Mover"
+        cancelLabel="Cancelar"
+        onCancel={() => setPendingReparent(null)}
+        onConfirm={doReparent}
+      />
     </div>
   );
 }

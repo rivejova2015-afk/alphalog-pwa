@@ -58,9 +58,9 @@ describe("AabTreeView — Fase 2 reorder", () => {
 
   it("renderiza un drag handle por cada slave, ninguno para el master", () => {
     renderTree();
-    const handles = screen.getAllByLabelText(/Arrastrar para reordenar/);
+    const handles = screen.getAllByLabelText(/Arrastrar para mover/);
     expect(handles).toHaveLength(2);
-    expect(screen.queryByLabelText(/Arrastrar para reordenar Master/)).toBeNull();
+    expect(screen.queryByLabelText(/Arrastrar para mover Master/)).toBeNull();
   });
 
   it("mantiene la semántica ARIA del árbol", () => {
