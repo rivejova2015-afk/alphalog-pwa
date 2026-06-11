@@ -31,6 +31,7 @@ interface CopyGroupNode {
   role: "master" | "slave";
   status: "active" | "paused" | "read_only";
   risk_pct: number;
+  sort_index: number;
   risk_node?: Record<string, unknown> | null;
   account?: Account | null;
 }
@@ -257,6 +258,8 @@ export default function AabPage() {
                 links={graph.links}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={setSelectedNodeId}
+                copyGroupId={selectedGroupId || null}
+                onReorderCommitted={() => selectedGroupId && loadGraph(selectedGroupId)}
               />
             )}
             {!loading && !graph && (
