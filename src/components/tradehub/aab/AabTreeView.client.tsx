@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
-  PointerSensor,
+  DragStartEvent,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
   KeyboardSensor,
   closestCenter,
   useDroppable,
@@ -19,10 +22,10 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { GripVertical, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui";
-import { wouldCreateCycle } from "@/lib/copygroups/cycleCheck";
+import { wouldCreateCycle, classifyDrop, type DropKind, type ActiveDragInfo } from "@/lib/copygroups/cycleCheck";
 
 interface AccountSummary {
   id: string;
@@ -61,10 +64,14 @@ interface TreeNode {
 
 // Data attached to each draggable/droppable so onDragEnd can tell reorder
 // (same parent) from reparent (drop onto a node in a different parent).
-interface NodeDndData {
-  parentId: string | null;
-  accountId: string;
-  linkId: string | null;
+type NodeDndData = ActiveDragInfo;
+
+// Maps a drop classification to the border/highlight applied to the hovered
+// target while a drag is in progress.
+function dropBorderClass(kind: DropKind): string | null {
+  if (kind === "reorder" || kind === "valid") return "border-emerald-400 bg-emerald-500/5 ring-2 ring-emerald-400/50";
+  if (kind === "invalid") return "border-rose-500 bg-rose-500/10 ring-2 ring-rose-500/50";
+  return null;
 }
 
 // Shared inner content of a node card (name, role/status, multiplier path).
@@ -88,21 +95,20 @@ function NodeInner({ treeNode }: { treeNode: TreeNode }) {
   );
 }
 
-// Children of a node form an independent sortable list (siblings sharing the
-// same parent). Reorder within this list + reparent across lists both flow
-// through the root DndContext's onDragEnd.
 function ChildrenGroup({
   parentAccountId,
   childNodes,
   depth,
   selectedNodeId,
   onSelectNode,
+  evaluateDrop,
 }: {
   parentAccountId: string;
   childNodes: TreeNode[];
   depth: number;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
+  evaluateDrop: (active: NodeDndData | null | undefined, targetAccountId: string, targetParentId: string | null) => DropKind;
 }) {
   if (childNodes.length === 0) return null;
   return (
@@ -116,6 +122,7 @@ function ChildrenGroup({
             parentAccountId={parentAccountId}
             selectedNodeId={selectedNodeId}
             onSelectNode={onSelectNode}
+            evaluateDrop={evaluateDrop}
           />
         ))}
       </div>
@@ -123,27 +130,28 @@ function ChildrenGroup({
   );
 }
 
-// A draggable slave node (has a grip handle) that is also a drop target for
-// reparent. Recurses into its own children.
+// A draggable slave node (grip handle) that is also a drop target for reparent.
 function SortableNodeRow({
   treeNode,
   depth,
   parentAccountId,
   selectedNodeId,
   onSelectNode,
+  evaluateDrop,
 }: {
   treeNode: TreeNode;
   depth: number;
   parentAccountId: string;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
+  evaluateDrop: (active: NodeDndData | null | undefined, targetAccountId: string, targetParentId: string | null) => DropKind;
 }) {
   const data: NodeDndData = {
     parentId: parentAccountId,
     accountId: treeNode.node.account_id,
     linkId: treeNode.linkFromParent?.id ?? null,
   };
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver, active } = useSortable({
     id: treeNode.node.id,
     data,
   });
@@ -155,10 +163,12 @@ function SortableNodeRow({
     transition,
   };
 
+  const dropKind = isOver && !isDragging ? evaluateDrop(active?.data?.current as NodeDndData, data.accountId, data.parentId) : null;
+  const hoverBorder = dropBorderClass(dropKind);
   const borderClass = isSelected
     ? "border-emerald-400 bg-emerald-500/10"
-    : isOver && !isDragging
-      ? "border-emerald-400 bg-emerald-500/5 ring-2 ring-emerald-400/40"
+    : hoverBorder
+      ? hoverBorder
       : isDragging
         ? "border-cyan-500 ring-2 ring-cyan-500 bg-slate-900/60"
         : "border-slate-700 bg-slate-900/60";
@@ -172,7 +182,7 @@ function SortableNodeRow({
       aria-expanded={hasChildren ? true : undefined}
       className="space-y-2"
     >
-      <div className={`flex items-stretch gap-1 ${isDragging ? "opacity-40" : ""}`} style={{ marginLeft: depth * 16 }}>
+      <div className={`relative flex items-stretch gap-1 ${isDragging ? "opacity-40" : ""}`} style={{ marginLeft: depth * 16 }}>
         <button
           {...attributes}
           {...listeners}
@@ -187,6 +197,11 @@ function SortableNodeRow({
         >
           <NodeInner treeNode={treeNode} />
         </button>
+        {dropKind === "invalid" && (
+          <span className="absolute top-1 right-1 text-rose-400" aria-hidden="true">
+            <X size={14} />
+          </span>
+        )}
       </div>
 
       <ChildrenGroup
@@ -195,6 +210,7 @@ function SortableNodeRow({
         depth={depth + 1}
         selectedNodeId={selectedNodeId}
         onSelectNode={onSelectNode}
+        evaluateDrop={evaluateDrop}
       />
     </div>
   );
@@ -206,20 +222,24 @@ function MasterNodeRow({
   treeNode,
   selectedNodeId,
   onSelectNode,
+  evaluateDrop,
 }: {
   treeNode: TreeNode;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
+  evaluateDrop: (active: NodeDndData | null | undefined, targetAccountId: string, targetParentId: string | null) => DropKind;
 }) {
   const data: NodeDndData = { parentId: null, accountId: treeNode.node.account_id, linkId: null };
-  const { setNodeRef, isOver } = useDroppable({ id: treeNode.node.id, data });
+  const { setNodeRef, isOver, active } = useDroppable({ id: treeNode.node.id, data });
   const isSelected = selectedNodeId === treeNode.node.id;
   const hasChildren = treeNode.children.length > 0;
 
+  const dropKind = isOver ? evaluateDrop(active?.data?.current as NodeDndData, data.accountId, data.parentId) : null;
+  const hoverBorder = dropBorderClass(dropKind);
   const borderClass = isSelected
     ? "border-emerald-400 bg-emerald-500/10"
-    : isOver
-      ? "border-emerald-400 bg-emerald-500/5 ring-2 ring-emerald-400/40"
+    : hoverBorder
+      ? hoverBorder
       : "border-slate-700 bg-slate-900/60";
 
   return (
@@ -229,19 +249,27 @@ function MasterNodeRow({
       aria-expanded={hasChildren ? true : undefined}
       className="space-y-2"
     >
-      <button
-        ref={setNodeRef}
-        onClick={() => onSelectNode(treeNode.node.id)}
-        className={`w-full text-left border rounded-xl px-4 py-3 transition ${borderClass}`}
-      >
-        <NodeInner treeNode={treeNode} />
-      </button>
+      <div className="relative">
+        <button
+          ref={setNodeRef}
+          onClick={() => onSelectNode(treeNode.node.id)}
+          className={`w-full text-left border rounded-xl px-4 py-3 transition ${borderClass}`}
+        >
+          <NodeInner treeNode={treeNode} />
+        </button>
+        {dropKind === "invalid" && (
+          <span className="absolute top-1 right-1 text-rose-400" aria-hidden="true">
+            <X size={14} />
+          </span>
+        )}
+      </div>
       <ChildrenGroup
         parentAccountId={treeNode.node.account_id}
         childNodes={treeNode.children}
         depth={1}
         selectedNodeId={selectedNodeId}
         onSelectNode={onSelectNode}
+        evaluateDrop={evaluateDrop}
       />
     </div>
   );
@@ -276,18 +304,28 @@ export default function AabTreeView({
   const [savingOrder, setSavingOrder] = useState(false);
   const [pendingReparent, setPendingReparent] = useState<PendingReparent | null>(null);
   const [reparenting, setReparenting] = useState(false);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
     setLocalNodes(nodes);
   }, [nodes]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Mouse: tiny drag threshold so a click still selects. Touch: long-press so
+    // a tap selects but holding 250ms starts the drag (mobile-first).
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const accountName = (accountId: string) =>
     localNodes.find((n) => n.account_id === accountId)?.account?.name || "Cuenta";
+
+  const evaluateDrop = (active: NodeDndData | null | undefined, targetAccountId: string, targetParentId: string | null): DropKind =>
+    classifyDrop(links, active, targetAccountId, targetParentId);
+
+  const activeNode = activeNodeId ? localNodes.find((n) => n.id === activeNodeId) : null;
 
   const tree = useMemo(() => {
     const nodeMap = new Map(localNodes.map((n) => [n.account_id, n]));
@@ -370,6 +408,7 @@ export default function AabTreeView({
         return;
       }
       toast.success("Orden actualizado");
+      setAnnouncement("Orden actualizado");
       onReorderCommitted?.();
     } catch {
       setLocalNodes(previous);
@@ -392,7 +431,12 @@ export default function AabTreeView({
     void persistOrder(newOrder, previous);
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveNodeId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveNodeId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -443,6 +487,7 @@ export default function AabTreeView({
         return;
       }
       toast.success("Nodo movido");
+      setAnnouncement(`${pendingReparent.draggedName} movido como hijo de ${pendingReparent.newParentName}`);
       onReorderCommitted?.();
     } catch {
       toast.error("Error de conexión");
@@ -454,15 +499,36 @@ export default function AabTreeView({
 
   return (
     <div className="space-y-4" aria-busy={savingOrder || reparenting}>
+      <div aria-live="polite" className="sr-only">{announcement}</div>
+
       {!tree.root && (
         <div className="text-sm text-slate-400">No hay master activo. Agrega un nodo master para iniciar el árbol.</div>
       )}
 
       {tree.root && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveNodeId(null)}
+        >
           <div role="tree" aria-label="Árbol de cuentas del CopyGroup">
-            <MasterNodeRow treeNode={tree.root} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} />
+            <MasterNodeRow
+              treeNode={tree.root}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={onSelectNode}
+              evaluateDrop={evaluateDrop}
+            />
           </div>
+          <DragOverlay>
+            {activeNode ? (
+              <div className="border border-cyan-400 ring-2 ring-cyan-400 rounded-xl px-4 py-3 bg-slate-800 shadow-2xl opacity-90">
+                <div className="text-sm font-semibold text-slate-100">{activeNode.account?.name || "Cuenta"}</div>
+                <div className="text-xs text-slate-400">{activeNode.role.toUpperCase()} • {activeNode.status}</div>
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
 
