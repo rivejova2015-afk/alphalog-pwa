@@ -101,9 +101,16 @@ export default function AabTreeView({
     const isSelected = selectedNodeId === treeNode.node.id;
     const link = treeNode.linkFromParent;
     const linkLabel = link ? `${link.link_type === "solid" ? "Solid" : "Shadow"} ×${link.copy_multiplier}` : null;
+    const hasChildren = treeNode.children.length > 0;
 
     return (
-      <div key={treeNode.node.id} className="space-y-2">
+      <div
+        key={treeNode.node.id}
+        role="treeitem"
+        aria-selected={isSelected}
+        aria-expanded={hasChildren ? true : undefined}
+        className="space-y-2"
+      >
         <button
           onClick={() => onSelectNode(treeNode.node.id)}
           className={`w-full text-left border rounded-xl px-4 py-3 transition ${
@@ -125,8 +132,8 @@ export default function AabTreeView({
           </div>
         </button>
 
-        {treeNode.children.length > 0 && (
-          <div className="space-y-2">
+        {hasChildren && (
+          <div role="group" className="space-y-2">
             {treeNode.children.map((child) => renderNode(child, depth + 1))}
           </div>
         )}
@@ -139,7 +146,11 @@ export default function AabTreeView({
       {!tree.root && (
         <div className="text-sm text-slate-400">No hay master activo. Agrega un nodo master para iniciar el árbol.</div>
       )}
-      {tree.root && renderNode(tree.root)}
+      {tree.root && (
+        <div role="tree" aria-label="Árbol de cuentas del CopyGroup">
+          {renderNode(tree.root)}
+        </div>
+      )}
 
       {tree.orphans.length > 0 && (
         <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-3">
