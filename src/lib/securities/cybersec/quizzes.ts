@@ -469,6 +469,30 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Domain fronting sirve para:", o: ["Acelerar el C2", "Esconder el destino real tras un dominio de alta reputación", "Cifrar el disco"], c: 1, e: "Disfraza el tráfico C2." },
     { q: "La detección robusta de evasión se apoya en:", o: ["Telemetría de kernel/ETW (que userland no falsea)", "Solo el hash del archivo", "El color del icono"], c: 0, e: "Comportamiento + ATT&CK." },
   ],
+  79: [
+    { q: "El vulnerability research busca:", o: ["Parchear CVEs viejos", "Bugs desconocidos (0-days)", "Instalar antivirus"], c: 1, e: "Empieza mapeando la superficie de ataque." },
+    { q: "El fuzzing coverage-guided prioriza inputs que:", o: ["Son más cortos", "Alcanzan código nuevo", "Vienen de Internet"], c: 1, e: "AFL++, libFuzzer." },
+    { q: "AddressSanitizer (ASAN) sirve para:", o: ["Cifrar memoria", "Convertir corrupciones silenciosas en crashes detectables", "Acelerar el fuzzer"], c: 1, e: "Fuzzing + sanitizers = la dupla clave." },
+    { q: "El fuzzing híbrido suma un solver concólico para:", o: ["Comprimir el corpus", "Desbloquear checks 'mágicos' que el fuzzer no adivina", "Cifrar inputs"], c: 1, e: "Driller, QSYM." },
+  ],
+  80: [
+    { q: "En CTI, las TTPs son más valiosas que los IoCs porque:", o: ["Son más fáciles de cambiar", "Son más caras de cambiar para el actor (más duraderas)", "Son secretas"], c: 1, e: "Pyramid of Pain." },
+    { q: "El Diamond Model describe una intrusión con:", o: ["Adversario, capacidad, infraestructura, víctima", "5 capas OSI", "3 colores"], c: 0, e: "Se pivota entre vértices." },
+    { q: "La atribución de un ataque:", o: ["Es siempre certera", "Es difícil y se hace con cautela (false flags)", "No importa"], c: 1, e: "Se expresa en niveles de confianza." },
+    { q: "STIX/TAXII son estándares para:", o: ["Cifrar discos", "Representar e intercambiar CTI de forma automatizable", "Escanear puertos"], c: 1, e: "MISP, OpenCTI." },
+  ],
+  81: [
+    { q: "La Coordinated Vulnerability Disclosure implica:", o: ["Publicar todo de inmediato", "Reportar al vendor en privado con un plazo para parchear", "No reportar nunca"], c: 1, e: "Plazo típico de 90 días." },
+    { q: "Un CNA es quien:", o: ["Explota la vuln", "Asigna identificadores CVE", "Paga el bug bounty"], c: 1, e: "Vendors y MITRE." },
+    { q: "CISA KEV cataloga:", o: ["Vulnerabilidades explotadas activamente", "Certificaciones", "Puertos"], c: 0, e: "Prioridad de parcheo." },
+    { q: "Las top conferences académicas de seguridad incluyen:", o: ["IEEE S&P, USENIX Security, CCS", "Solo Black Hat", "Ninguna"], c: 0, e: "Más NDSS; Black Hat/DEF CON son de industria." },
+  ],
+  82: [
+    { q: "Según Dijkstra, el testing puede mostrar:", o: ["La ausencia de bugs", "La presencia de bugs, nunca su ausencia", "El rendimiento"], c: 1, e: "Los métodos formales prueban ausencia." },
+    { q: "El model checking (TLA+/SPIN):", o: ["Explora exhaustivamente los estados de un modelo", "Compila más rápido", "Cifra datos"], c: 0, e: "Sufre explosión de estados." },
+    { q: "seL4 es notable por ser:", o: ["Un antivirus", "Un microkernel formalmente verificado", "Un fuzzer"], c: 1, e: "Prueba de corrección y aislamiento." },
+    { q: "El punto débil de la verificación formal es:", o: ["La spec (si está mal, el bug pasa)", "Que es muy rápida", "Que no usa matemática"], c: 0, e: "La prueba es tan buena como la especificación." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {

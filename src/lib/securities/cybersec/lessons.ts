@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59-78).
+// Cobertura: los 82 módulos del syllabus (M1-M58 + Doctorate Track M59-82).
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -958,6 +958,58 @@ export const LESSONS: Lesson[] = [
       { h: "Evasión de EDR", c: "🥷 Los **EDR** enganchan APIs de Windows en userland (ntdll) para inspeccionar el comportamiento. Los implants intentan evadir:\n→ **Unhooking** — Restaurar la ntdll original desde el disco/una copia limpia\n→ **Syscalls directas/indirectas** — Invocar el syscall sin pasar por la ntdll enganchada (Hell's Gate, SysWhispers)\n→ **AMSI/ETW bypass** — Parchear en memoria AmsiScanBuffer y EtwEventWrite para cegar al defensor\n→ **Process injection** — APC injection, process hollowing, module stomping para correr dentro de un proceso legítimo" },
       { h: "Command & Control", c: "📡 El **C2** es el canal entre el implant y el operador:\n→ **Beaconing** — El implant llama a casa periódicamente (con jitter para no ser regular)\n→ **Malleable profiles** — Disfrazar el tráfico C2 de algo legítimo (un GET a una CDN, tráfico tipo Slack)\n→ **Domain fronting** — Esconder el destino real detrás de un dominio de alta reputación (CDN)\n→ **Covert channels** — DNS tunneling, HTTPS, e incluso servicios legítimos (Telegram, GitHub) como C2\n→ **Redirectors** — Capas intermedias que ocultan el servidor real del operador" },
       { h: "Detección y Caza", c: "🔍 Frente a la evasión, la defensa se mueve a capas que el implant no controla:\n→ **Telemetría de kernel/ETW** — Detectar syscalls anómalas, inyección y unhooking desde un punto que userland no puede falsear\n→ **Detección por comportamiento** — Patrones de beaconing (RITA), relaciones parent-child raras, ejecución en memoria sin archivo\n→ **JA3/JARM** y análisis de TLS para C2 cifrado\n→ **Threat hunting** guiado por ATT&CK + threat intel de los frameworks conocidos\n\nEs un juego del gato y el ratón: cada evasión nueva motiva una detección nueva. Entender la ofensiva a este nivel es justo lo que hace a un buen defensor (y cierra el círculo con el track de Blue Team)." },
+    ],
+  },
+  {
+    id: 79,
+    title: "Vulnerability Research y Fuzzing",
+    sub: "M79",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "La Mentalidad del Vuln Researcher", c: "🔬 El **vulnerability research** busca bugs **desconocidos** (0-days), no parchear CVEs existentes. Empieza por mapear la **superficie de ataque**: qué entradas procesa el target, qué parsers/formatos, qué código es viejo o complejo.\n\nLa selección de target importa: código que parsea datos no confiables (imágenes, fuentes, protocolos), recién escrito o poco auditado, suele rendir más. La pregunta guía: '¿dónde confía el desarrollador en datos que el atacante controla?'" },
+      { h: "Fuzzing Coverage-Guided", c: "🎲 El **fuzzing** bombardea el programa con entradas mutadas buscando crashes. El salto cualitativo fue el **coverage-guided**: el fuzzer prioriza inputs que alcanzan código nuevo.\n→ **AFL++** — Mutation-based con feedback de cobertura por instrumentación\n→ **libFuzzer** — In-process, ideal para fuzzear una función (harness):\nextern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n  parse(data, size);   // la función bajo prueba\n  return 0;\n}\n→ **Sanitizers** — **ASAN** (memoria), **UBSAN**, **MSAN** convierten corrupciones silenciosas en crashes detectables. Fuzzing + sanitizers = la dupla que encuentra la mayoría de los bugs de memoria hoy." },
+      { h: "Fuzzing Avanzado", c: "🚀 Para targets difíciles:\n→ **Structure-aware** — Generar inputs que respetan un formato (protobuf, grammar-based) para pasar los checks iniciales y llegar al código profundo\n→ **Snapshot fuzzing** — Restaurar el estado del proceso/VM para fuzzear rápido componentes con estado (kernels, parsers complejos)\n→ **Hybrid (fuzzing + concólico)** — El solver (angr/QSYM, Driller) desbloquea los checks 'mágicos' que el fuzzer no adivina\n→ **Harnessing** — El arte de aislar y alimentar la función objetivo correctamente (un mal harness no encuentra nada)\n→ Buen **corpus** inicial + dictionaries aceleran todo" },
+      { h: "Triage y el Ciclo del 0-day", c: "🩺 Miles de crashes → hay que **triarlos**:\n→ **Deduplicación** — Agrupar por stack/causa raíz\n→ **Exploitability** — ¿Es un DoS o un bug de corrupción explotable? (write-what-where, control de PC)\n→ Minimizar el caso (reducir el input al mínimo que reproduce)\n\n🔄 **Ciclo del 0-day:** descubrir → analizar → (a) **disclosure responsable** al vendor, (b) bug bounty, o (c) uso ofensivo (mercado gris/gubernamental, con sus dilemas éticos y legales). El researcher ético reporta y coordina el parche." },
+    ],
+  },
+  {
+    id: 80,
+    title: "Threat Intelligence y APT Tracking",
+    sub: "M80",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Fundamentos de CTI", c: "🧭 La **Cyber Threat Intelligence (CTI)** convierte datos de amenazas en conocimiento accionable. Niveles:\n→ **Estratégica** — Para directivos: tendencias, riesgo de negocio, geopolítica\n→ **Operacional** — Campañas y actores que apuntan a tu sector\n→ **Táctica** — IoCs y TTPs para detección inmediata\n\nClave: **IoCs vs TTPs**. Los IoCs (IPs, hashes) son volátiles y baratos de cambiar; las **TTPs** (cómo opera el actor) son caras de cambiar → inteligencia más duradera (la Pyramid of Pain otra vez)." },
+      { h: "Frameworks", c: "🗺️ Modelos para estructurar el análisis:\n→ **Diamond Model** — Cada intrusión se describe por 4 vértices: adversario, capacidad, infraestructura y víctima (pivotás de uno a otro)\n→ **Cyber Kill Chain** — Fases del ataque\n→ **MITRE ATT&CK** — El lenguaje común de TTPs\n\n⚠️ **Attribution** — Atribuir a un actor es difícil y se hace con cautela: los atacantes usan **false flags**, infra alquilada y reutilización de herramientas. La confianza se expresa en niveles, nunca como certeza absoluta." },
+      { h: "APT Tracking", c: "🎯 Rastrear un **APT** (Advanced Persistent Threat) es clustering de actividad en el tiempo:\n→ Agrupar intrusiones por TTPs, malware, infraestructura y objetivos\n→ Nombrar el cluster (de ahí la sopa de nombres: APT29 = Cozy Bear = Nobelium...)\n→ **Infrastructure pivoting** — De un dominio/IP/certificado conocido, descubrir el resto de la infra del actor (passive DNS, Shodan, certificados)\n→ Mapear **campañas** y la evolución del actor\n\nEl objetivo: anticipar y detectar al adversario por cómo opera, no solo por sus IoCs de hoy." },
+      { h: "Operacionalizar la CTI", c: "⚙️ Convertir inteligencia en defensa:\n→ **Feeds** y plataformas (MISP, OpenCTI) para gestionar IoCs/TTPs\n→ **STIX/TAXII** — Estándares para representar e intercambiar CTI de forma automatizable\n→ Integración con **SIEM/EDR** (detecciones) y **threat hunting** (hipótesis basadas en el actor)\n→ **Sharing** — ISACs sectoriales, comunidades; la defensa colectiva es más fuerte\n\nLa CTI mal operacionalizada es solo una lista de IoCs que envejece; bien hecha, dirige proactivamente la defensa." },
+    ],
+  },
+  {
+    id: 81,
+    title: "Metodología de Security Research",
+    sub: "M81",
+    dur: "45m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Hacer Investigación", c: "🎓 La investigación de seguridad rigurosa se parece a la científica:\n→ **Pregunta/hipótesis** clara y un aporte novedoso\n→ **Prior work** — Conocer y citar lo previo (no reinventar)\n→ **Reproducibilidad** — Que otros puedan replicar tus resultados (PoCs, datasets, código)\n→ **Evaluación honesta** — Contra ataques/condiciones adaptativas, reportando limitaciones\n→ **Ética** — Minimizar daño, autorización, considerar el dual-use\n\nLa diferencia entre 'encontré un bug' y 'investigación' es el método, la generalidad del aporte y la honestidad de la evaluación." },
+      { h: "Responsible Disclosure", c: "📢 Al hallar una vulnerabilidad, cómo divulgarla importa tanto como hallarla:\n→ **Coordinated Vulnerability Disclosure (CVD)** — Reportar al vendor en privado, acordar un plazo (típico 90 días) para parchear antes de publicar\n→ **Full disclosure** — Publicar todo de inmediato (presiona al vendor pero expone a los usuarios)\n→ **Bug bounty** — Programas que pagan por reportes responsables (HackerOne, Bugcrowd)\n→ **Embargo** — Período acordado de silencio mientras se prepara el parche\n\nEl debate full vs coordinated es viejo; el consenso moderno favorece la divulgación coordinada con un plazo razonable." },
+      { h: "Ecosistema CVE/CVSS", c: "🏷️ Cómo se cataloga una vulnerabilidad:\n→ **CVE** — Identificador único (CVE-AÑO-NNNN), asignado por un **CNA** (CVE Numbering Authority: vendors, MITRE)\n→ **CVSS** — Score de severidad (ya visto)\n→ **CISA KEV** — Catálogo de vulns explotadas activamente (prioridad de parcheo)\n→ **Advisories** — El vendor publica el aviso + parche; el researcher suele publicar su análisis después\n\nEntender este flujo es parte de divulgar profesionalmente y de priorizar defensivamente." },
+      { h: "Comunicar la Investigación", c: "🗣️ El impacto de la investigación depende de comunicarla:\n→ **Papers académicos** — Las top conferences: **IEEE S&P (Oakland), USENIX Security, ACM CCS, NDSS**\n→ **Conferencias de industria** — **Black Hat, DEF CON, REcon**\n→ **PoCs y writeups** — GitHub, blogs técnicos; reproducibles y claros\n→ **Construir reputación** — Una línea de trabajo coherente, CVEs, charlas\n\nLa carrera de research (académica, industria, bug bounty, red team) se construye sobre aportes públicos verificables, no sobre claims privados." },
+    ],
+  },
+  {
+    id: 82,
+    title: "Formal Methods y Verificación",
+    sub: "M82",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Probar la Ausencia de Bugs", c: "🧮 Dijkstra: 'el testing puede mostrar la presencia de bugs, nunca su ausencia'. Los **métodos formales** usan matemática para **probar** que un sistema cumple una especificación, descartando clases enteras de fallos.\n\nNo es para todo (es caro), pero en componentes críticos —kernels, criptografía, protocolos— donde un bug es catastrófico, la verificación formal aporta garantías que ninguna cantidad de testing puede dar." },
+      { h: "Técnicas", c: "🔧 Dos grandes familias:\n→ **Model checking** — Explorar exhaustivamente todos los estados de un modelo para verificar propiedades (deadlocks, invariantes). Herramientas: **TLA+** (especificar sistemas concurrentes/distribuidos — usado en AWS), **SPIN**\n→ **Theorem proving** — Construir una prueba matemática (asistida por máquina) de que el código cumple su spec. Herramientas: **Coq, Isabelle/HOL, Lean, F***\n→ **Symbolic execution / abstract interpretation** — Análisis estático con garantías\n\nEl model checking es más automático pero sufre explosión de estados; el theorem proving es más potente pero requiere experto y esfuerzo manual." },
+      { h: "Sistemas Verificados", c: "🏆 Hitos reales de software formalmente verificado:\n→ **seL4** — Microkernel con prueba de corrección funcional y de propiedades de seguridad (aislamiento). El primer kernel de uso general verificado\n→ **CompCert** — Un compilador C verificado (el código generado preserva la semántica)\n→ **HACL\\* / Fiat-Crypto** — Implementaciones criptográficas verificadas (usadas en Firefox, Linux, WireGuard)\n→ **miTLS / Project Everest** — Una pila TLS verificada\n→ **AWS** usa TLA+ y razonamiento automatizado para sus servicios core" },
+      { h: "Límites y Práctica", c: "⚠️ La verificación formal no es magia:\n→ **La spec es el punto débil** — Probás que el código cumple la spec, pero si la spec está mal/incompleta, el bug pasa (la prueba es tan buena como la especificación)\n→ **Escalabilidad** — Verificar sistemas grandes es muy costoso en esfuerzo humano\n→ **Fuera de la prueba** — Side-channels, hardware, supuestos del entorno suelen quedar afuera\n→ **Costo/beneficio** — Se justifica en cripto, protocolos, kernels y aviónica; raramente en una app web típica\n\nEl futuro: herramientas más automáticas y razonamiento asistido por IA que acerquen los métodos formales al desarrollo cotidiano. Es la frontera donde matemática y seguridad se encuentran." },
     ],
   },
 ];
