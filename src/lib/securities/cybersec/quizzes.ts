@@ -114,6 +114,60 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Script Block Logging (Event ID 4104) sirve para:", o: ["Acelerar scripts", "Auditar el código PowerShell ejecutado", "Cifrar scripts"], c: 1, e: "Clave para detectar PowerShell ofensivo." },
     { q: "IEX (New-Object Net.WebClient).DownloadString(...) suele indicar:", o: ["Una actualización normal", "Descarga y ejecución en memoria (sospechoso)", "Un backup"], c: 1, e: "Técnica fileless común en ataques." },
   ],
+  20: [
+    { q: "La criptografía simétrica usa:", o: ["Dos claves (pública y privada)", "La misma clave para cifrar y descifrar", "Ninguna clave"], c: 1, e: "Misma clave; rápida pero hay que distribuirla con cuidado." },
+    { q: "¿Por qué ECB es inseguro?", o: ["Es muy lento", "Bloques iguales producen cifrado igual (revela patrones)", "No usa clave"], c: 1, e: "El 'pingüino cifrado' sigue visible." },
+    { q: "¿Qué modo cifra Y autentica (AEAD)?", o: ["ECB", "CBC", "GCM"], c: 2, e: "GCM detecta manipulación además de cifrar." },
+    { q: "Reutilizar un nonce/IV con la misma clave:", o: ["Mejora el rendimiento", "Rompe la seguridad de GCM/CTR", "No tiene efecto"], c: 1, e: "Nunca repitas nonce con la misma clave." },
+  ],
+  21: [
+    { q: "En cifrado asimétrico, cifrás con la clave ___ y descifrás con la ___:", o: ["privada / pública", "pública / privada", "misma / misma"], c: 1, e: "Pública cifra, privada descifra." },
+    { q: "ECC ofrece, frente a RSA:", o: ["Misma seguridad con claves más cortas", "Menos seguridad", "Solo sirve para firmas"], c: 0, e: "ECC 256 ≈ RSA 3072." },
+    { q: "Diffie-Hellman sirve para:", o: ["Hashear passwords", "Acordar una clave compartida sobre canal público", "Firmar binarios"], c: 1, e: "Key exchange; ECDHE da forward secrecy." },
+    { q: "El algoritmo de Shor (cuántico) amenaza a:", o: ["AES-256", "RSA y ECC", "SHA-3"], c: 1, e: "Por eso NIST estandarizó PQC (Kyber/Dilithium)." },
+  ],
+  22: [
+    { q: "Una función hash es:", o: ["Reversible con la clave", "Unidireccional", "Un cifrado simétrico"], c: 1, e: "No se revierte; determinista." },
+    { q: "El salt en password hashing sirve para:", o: ["Acelerar el login", "Frustrar rainbow tables y hashes iguales", "Cifrar la DB"], c: 1, e: "Valor único por usuario." },
+    { q: "¿Cuál es el algoritmo recomendado hoy para passwords?", o: ["MD5", "SHA-256 simple", "Argon2"], c: 2, e: "Argon2 (o bcrypt/scrypt): lentos a propósito." },
+    { q: "En PKI, ¿quién emite y firma certificados?", o: ["El navegador", "La Certificate Authority (CA)", "El servidor DNS"], c: 1, e: "Cadena de confianza CA raíz → intermedia → sitio." },
+  ],
+  23: [
+    { q: "HTTPS es:", o: ["HTTP sobre TLS", "Un firewall", "Un tipo de VPN"], c: 0, e: "TLS cifra la comunicación HTTP." },
+    { q: "TLS 1.3 frente a 1.2:", o: ["Es más lento e inseguro", "Más rápido y exige forward secrecy", "Es idéntico"], c: 1, e: "Eliminó ciphers inseguros, 1-RTT." },
+    { q: "HSTS previene:", o: ["SQL Injection", "SSL stripping (degradar a HTTP)", "Buffer overflow"], c: 1, e: "Fuerza HTTPS en el navegador." },
+    { q: "WireGuard se caracteriza por:", o: ["Ser viejo y pesado", "Código mínimo y criptografía moderna fija", "No cifrar"], c: 1, e: "VPN moderna (ChaCha20, Curve25519)." },
+  ],
+  24: [
+    { q: "HTTP es:", o: ["Stateful por defecto", "Stateless (estado vía cookies/tokens)", "Cifrado por defecto"], c: 1, e: "Cada request es independiente." },
+    { q: "¿Qué header frena principalmente el XSS?", o: ["Content-Security-Policy", "X-Frame-Options", "Referrer-Policy"], c: 0, e: "CSP controla qué scripts/recursos cargan." },
+    { q: "La cookie con flag HttpOnly:", o: ["Solo viaja por HTTP no HTTPS", "No es accesible desde JavaScript", "Expira en 1 hora"], c: 1, e: "Mitiga el robo de cookies vía XSS." },
+    { q: "Same-Origin Policy:", o: ["Permite leer cualquier origen", "Restringe el acceso entre orígenes distintos", "Es un cifrado"], c: 1, e: "CORS la relaja de forma controlada." },
+  ],
+  25: [
+    { q: "El #1 actual de OWASP Top 10 es:", o: ["Injection", "Broken Access Control", "SSRF"], c: 1, e: "A01 — control de acceso roto." },
+    { q: "IDOR es un ejemplo de:", o: ["Broken Access Control", "Cryptographic Failures", "Misconfiguration"], c: 0, e: "Acceder a objetos ajenos cambiando el ID." },
+    { q: "Insecure Design (A04) se corrige:", o: ["Con un parche puntual", "Repensando el diseño / threat modeling", "Reiniciando el servidor"], c: 1, e: "Es una falla de diseño, no de implementación." },
+    { q: "Un bucket S3 público es un caso de:", o: ["Injection", "Security Misconfiguration", "Auth Failure"], c: 1, e: "A05 — mala configuración." },
+  ],
+  26: [
+    { q: "Log4Shell es un ejemplo de:", o: ["SSRF", "Vulnerable and Outdated Components", "CSRF"], c: 1, e: "A06 — componente vulnerable (Log4j)." },
+    { q: "Falta de logs y alertas corresponde a:", o: ["A09 Logging & Monitoring Failures", "A03 Injection", "A01 Access Control"], c: 0, e: "Los ataques pasan desapercibidos." },
+    { q: "Leer http://169.254.169.254 desde el servidor es típico de:", o: ["XSS", "SSRF (A10)", "CSRF"], c: 1, e: "Metadata cloud; caso Capital One." },
+    { q: "Deserialización insegura cae bajo:", o: ["A08 Integrity Failures", "A02 Crypto Failures", "A07 Auth"], c: 0, e: "Confiar en datos sin verificar integridad." },
+  ],
+  27: [
+    { q: "' OR 1=1 -- es un payload de:", o: ["XSS", "SQL Injection", "CSRF"], c: 1, e: "Tautología que evade el WHERE." },
+    { q: "La defensa principal contra SQLi es:", o: ["Un WAF", "Prepared statements / consultas parametrizadas", "Renombrar tablas"], c: 1, e: "Separan datos de código SQL." },
+    { q: "<img src=x onerror=alert(document.cookie)> es:", o: ["SQLi", "Stored XSS", "SSRF"], c: 1, e: "Inyecta JS que roba cookies." },
+    { q: "HttpOnly + CSP + output encoding mitigan:", o: ["SQLi", "XSS", "Buffer overflow"], c: 1, e: "Defensa en capas contra XSS." },
+  ],
+  28: [
+    { q: "CSRF funciona porque el navegador:", o: ["Ejecuta SQL", "Adjunta las cookies automáticamente", "Ignora HTTPS"], c: 1, e: "La sesión de la víctima se reutiliza." },
+    { q: "El flag de cookie que mitiga CSRF es:", o: ["HttpOnly", "SameSite", "Secure"], c: 1, e: "SameSite=Lax/Strict limita envío cross-site." },
+    { q: "IDOR se previene:", o: ["Ocultando el ID en el cliente", "Verificando autorización por objeto en el servidor", "Usando HTTPS"], c: 1, e: "En AlphaLog lo cubre RLS de Supabase." },
+    { q: "Validar uploads por extensión (.jpg) en vez de contenido:", o: ["Es suficiente", "Es bypasseable (shell.php.jpg, magic bytes)", "Mejora el rendimiento"], c: 1, e: "Validá por contenido real, no por nombre." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {

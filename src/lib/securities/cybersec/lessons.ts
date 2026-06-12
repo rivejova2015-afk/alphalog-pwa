@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: M1-M15 + M51, M53, M54, M55.
+// Cobertura: M1-M24 + M51, M53, M54, M55.
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -230,6 +230,114 @@ export const LESSONS: Lesson[] = [
       { h: "Fundamentos", c: "PowerShell es shell + lenguaje con acceso total a .NET y la API de Windows → arma de doble filo (admin y atacante).\n\n**Cmdlets** siguen Verbo-Sustantivo:\nGet-Process, Get-Service, Get-EventLog, Get-LocalUser\n\n**Pipeline con objetos** (no texto):\nGet-Process | Where-Object {$_.CPU -gt 100} | Sort-Object CPU -Descending\n\n**Ejecución:** Get-Help, Get-Member (explora propiedades de un objeto)." },
       { h: "Scripts de Auditoría", c: "**Usuarios admin locales:**\nGet-LocalGroupMember -Group 'Administrators'\n\n**Servicios corriendo como SYSTEM:**\nGet-WmiObject Win32_Service | Where {$_.StartName -eq 'LocalSystem'} | Select Name,PathName\n\n**Archivos modificados en 24h:**\nGet-ChildItem C:\\\\ -Recurse | Where {$_.LastWriteTime -gt (Get-Date).AddDays(-1)}\n\n**Logins fallidos:**\nGet-EventLog Security -InstanceId 4625 -Newest 20" },
       { h: "PowerShell Ofensivo y Defensa", c: "⚔️ **Ofensivo:** los atacantes lo aman por ser nativo (LOLBin) y correr en memoria:\n→ **PowerShell Empire / PowerSploit** — Post-explotación\n→ **AMSI bypass** + ofuscación para evadir Defender\n→ Descargar y ejecutar en memoria: IEX (New-Object Net.WebClient).DownloadString(...)\n\n🛡️ **Defensa:**\n→ **Script Block Logging** (4104) + **Module Logging** + transcription\n→ **Constrained Language Mode**\n→ **AppLocker / WDAC** para restringir ejecución\n→ Alertar sobre EncodedCommand y descargas en memoria" },
+    ],
+  },
+  {
+    id: 20,
+    title: "Criptografía Simétrica",
+    sub: "M16",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Concepto y Algoritmos", c: "🔐 **Simétrica** = la MISMA clave cifra y descifra. Muy rápida, ideal para grandes volúmenes. Problema: ¿cómo compartir la clave de forma segura? (lo resuelve la asimétrica).\n\n→ **AES** (128/192/256 bits) — Estándar actual, seguro, acelerado por hardware (AES-NI)\n→ **ChaCha20** — Alternativa rápida en software (móviles)\n→ **DES** — 56 bits, **roto** (brute force)\n→ **3DES** — Triple DES, lento y deprecado" },
+      { h: "Modos de Operación", c: "El cifrado por bloques necesita un MODO:\n🚫 **ECB** — Cada bloque igual → mismo cifrado. **Inseguro** (el pingüino cifrado sigue viéndose).\n🔗 **CBC** — Encadena bloques con IV. Vulnerable a padding oracle si mal implementado.\n🔢 **CTR** — Convierte el cifrador en stream cipher.\n✅ **GCM** — AEAD: cifra **y** autentica (detecta manipulación). El recomendado hoy.\n\n⚠️ Nunca reutilices un nonce/IV con la misma clave (rompe GCM y CTR)." },
+      { h: "Gestión de Claves", c: "El cifrado es tan fuerte como la protección de la clave:\n🔑 No hardcodear claves en código ni repos\n🔑 **KMS** (AWS/Azure/GCP) o **HSM** para almacenar y rotar\n🔑 Derivación: PBKDF2/Argon2 para derivar claves de passwords\n🔑 Rotación periódica + separación de funciones\n\n💡 En AlphaLog: los campos sensibles usan **AES-256-GCM** server-side con clave en variable de entorno." },
+    ],
+  },
+  {
+    id: 21,
+    title: "Criptografía Asimétrica",
+    sub: "M17",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Par de Claves", c: "🔓 **Asimétrica** = dos claves matemáticamente ligadas: **pública** (compartible) y **privada** (secreta).\n→ Cifrás con la **pública** → solo la **privada** descifra (confidencialidad)\n→ Firmás con la **privada** → la **pública** verifica (autenticidad)\n\n**Algoritmos:**\n→ **RSA** — Basado en factorización de números primos grandes (2048/4096 bits)\n→ **ECC** — Curvas elípticas: misma seguridad con claves mucho más cortas (256 bits ≈ RSA 3072)" },
+      { h: "Diffie-Hellman y Firmas", c: "🤝 **Diffie-Hellman** — Permite a dos partes acordar una clave secreta compartida sobre un canal público sin transmitirla. Base del intercambio de claves en TLS. **ECDHE** agrega forward secrecy.\n\n✍️ **Firma digital:**\n1. Hash del mensaje\n2. Cifrar el hash con la clave privada = firma\n3. El receptor descifra con la pública y compara hashes\n\nProvee integridad + autenticación + **no repudio**." },
+      { h: "Amenaza Cuántica", c: "⚛️ El **algoritmo de Shor** en una computadora cuántica suficientemente grande rompería RSA y ECC (factorización y logaritmo discreto dejan de ser difíciles).\n\n🛡️ **Criptografía post-cuántica (PQC):** NIST estandarizó algoritmos resistentes:\n→ **CRYSTALS-Kyber** (key encapsulation)\n→ **CRYSTALS-Dilithium** (firmas)\n\n**Harvest now, decrypt later:** atacantes guardan tráfico cifrado hoy para descifrarlo cuando haya cuántica → la migración a PQC ya empezó." },
+    ],
+  },
+  {
+    id: 22,
+    title: "Hashing y PKI",
+    sub: "M18",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Funciones Hash", c: "#️⃣ Un **hash** transforma datos en un valor fijo, **unidireccional** (no se revierte). Propiedades: determinista, resistente a colisiones, efecto avalancha.\n\n→ **MD5 / SHA-1** — **Rotos** (colisiones demostradas), no usar para seguridad\n→ **SHA-256 / SHA-3** — Seguros para integridad\n\nUsos: verificar integridad de archivos, IoCs, firmas digitales." },
+      { h: "Password Hashing", c: "❌ NUNCA guardar passwords en texto plano ni con MD5/SHA simple.\n\n🧂 **Salt** — Valor aleatorio único por usuario → evita rainbow tables y que dos passwords iguales tengan el mismo hash.\n🐢 **Key stretching** — Algoritmos LENTOS a propósito para frustrar brute force:\n→ **bcrypt** — Clásico, con cost factor\n→ **scrypt** — Resistente a hardware (memory-hard)\n→ **Argon2** — Ganador del Password Hashing Competition, el recomendado\n\n**Rainbow tables:** tablas precomputadas de hash→password; el salt las anula." },
+      { h: "PKI y Certificados", c: "🏛️ **PKI** (Public Key Infrastructure) gestiona certificados digitales:\n→ **CA** (Certificate Authority) — Emite y firma certificados\n→ **Certificado X.509** — Liga una clave pública a una identidad (dominio)\n→ **Cadena de confianza** — Tu navegador confía en CAs raíz → que firman intermedias → que firman el cert del sitio\n→ **Revocación:** CRL y OCSP\n\n🔍 **Certificate Transparency** — Logs públicos de certificados emitidos (detectar emisiones fraudulentas).\n📌 **Certificate Pinning** — La app solo acepta un cert/CA específico (anti-MITM)." },
+    ],
+  },
+  {
+    id: 23,
+    title: "TLS/SSL y VPN",
+    sub: "M19",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "TLS Handshake", c: "🔒 **TLS** cifra la comunicación (HTTPS = HTTP sobre TLS). SSL está obsoleto.\n\n**TLS 1.3 handshake (simplificado):**\n1. ClientHello (versiones, cipher suites, key share)\n2. ServerHello + certificado + key share\n3. Ambos derivan la clave de sesión (ECDHE)\n4. Comunicación cifrada\n\n**TLS 1.3 vs 1.2:** 1.3 es más rápido (1-RTT, 0-RTT), eliminó cipher suites inseguros (RSA key exchange, CBC, RC4) y exige **forward secrecy**." },
+      { h: "Ataques a TLS", c: "💔 **Heartbleed** (2014, CVE-2014-0160) — Bug en OpenSSL que filtraba memoria del servidor (claves, datos).\n🪤 **SSL Stripping** — MITM degrada HTTPS→HTTP. Lo previene **HSTS** (fuerza HTTPS).\n⬇️ **Downgrade attacks** (POODLE, FREAK) — Forzar versiones/ciphers viejos.\n\n**Defensa:** TLS 1.2+ solamente, HSTS con preload, deshabilitar ciphers débiles, certificados válidos, OCSP stapling." },
+      { h: "VPN", c: "🌐 Una **VPN** crea un túnel cifrado sobre una red insegura.\n→ **IPSec** — Estándar (site-to-site, corporativo), modos transport/tunnel\n→ **WireGuard** — Moderno, rápido, código mínimo, criptografía fija (ChaCha20, Curve25519)\n→ **OpenVPN** — Flexible, sobre TLS\n\n⚠️ Una VPN cifra el tránsito, NO te hace anónimo ni inmune a malware. Un endpoint comprometido sigue comprometido." },
+    ],
+  },
+  {
+    id: 24,
+    title: "Seguridad Web: Fundamentos",
+    sub: "M20",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "HTTP y Arquitectura", c: "🌍 La web es cliente (navegador) ↔ servidor sobre **HTTP**, que es **stateless** (cada request es independiente; el estado se mantiene con cookies/tokens).\n\n**Métodos:** GET (leer), POST (crear), PUT/PATCH (actualizar), DELETE\n**Status:** 2xx ok · 3xx redirect · 4xx error cliente (401 no auth, 403 prohibido, 404) · 5xx error servidor\n\nCada request/response tiene headers — muchos son críticos para seguridad." },
+      { h: "Security Headers", c: "🛡️ Headers de respuesta que mitigan ataques:\n→ **Content-Security-Policy (CSP)** — Controla qué scripts/recursos cargan → frena XSS\n→ **Strict-Transport-Security (HSTS)** — Fuerza HTTPS\n→ **X-Frame-Options / frame-ancestors** — Anti-clickjacking\n→ **X-Content-Type-Options: nosniff** — Evita MIME sniffing\n→ **Referrer-Policy** — Controla fuga de URLs\n\n💡 AlphaLog setea CSP, HSTS y X-Frame-Options en next.config + middleware." },
+      { h: "CORS, SOP y Cookies", c: "🔐 **Same-Origin Policy (SOP)** — Por defecto, un origen no puede leer recursos de otro origen (protocolo+dominio+puerto).\n🔓 **CORS** — Mecanismo para relajar SOP de forma controlada (Access-Control-Allow-Origin). Mal configurado (`*` con credenciales) = fuga de datos.\n\n🍪 **Cookies seguras:**\n→ **HttpOnly** — Inaccesible desde JS (anti-XSS theft)\n→ **Secure** — Solo por HTTPS\n→ **SameSite** (Lax/Strict) — Anti-CSRF" },
+    ],
+  },
+  {
+    id: 25,
+    title: "OWASP Top 10 (Parte 1)",
+    sub: "M21",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "A01-A02", c: "🥇 **A01 — Broken Access Control** (#1 actual). Usuarios acceden a lo que no deberían:\n→ **IDOR** — Cambiar /user/123 por /user/124 y ver datos ajenos\n→ Forzar navegación a rutas admin, escalada vertical/horizontal\n\n🔐 **A02 — Cryptographic Failures** — Datos sensibles mal protegidos: sin cifrar, TLS débil, hashes obsoletos, claves expuestas." },
+      { h: "A03-A04", c: "💉 **A03 — Injection** — Entrada no confiable interpretada como comando: SQLi, NoSQLi, command injection, LDAP injection. La defensa: parametrizar y validar.\n\n🏗️ **A04 — Insecure Design** — Fallas en el diseño, no en la implementación. Falta de threat modeling, ausencia de límites de tasa, lógica de negocio explotable. No se parchea con un fix puntual: requiere repensar." },
+      { h: "A05", c: "⚙️ **A05 — Security Misconfiguration** — La causa de incontables brechas:\n→ Credenciales/cuentas por defecto\n→ Servicios y puertos innecesarios expuestos\n→ Mensajes de error verbosos (stack traces)\n→ Buckets S3 públicos\n→ Headers de seguridad ausentes\n→ Software desactualizado\n\nHardening + revisión de configuración + automatización (IaC scanning) lo previenen." },
+    ],
+  },
+  {
+    id: 26,
+    title: "OWASP Top 10 (Parte 2)",
+    sub: "M22",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "A06-A07", c: "📦 **A06 — Vulnerable and Outdated Components** — Usar librerías con CVEs conocidos. Ejemplo emblemático: **Log4Shell** (CVE-2021-44228) en Log4j permitió RCE masivo. Defensa: SCA (dependency scanning), SBOM, actualizar.\n\n🔑 **A07 — Identification and Authentication Failures** — Passwords débiles, sin MFA, session fixation, credential stuffing, tokens predecibles." },
+      { h: "A08-A09", c: "🧩 **A08 — Software and Data Integrity Failures** — Confiar en código/datos sin verificar integridad: updates sin firmar, deserialización insegura, pipelines CI/CD comprometidos (SolarWinds).\n\n📋 **A09 — Security Logging and Monitoring Failures** — Sin logs ni alertas, los ataques pasan desapercibidos por meses. Loguear eventos de seguridad, centralizar (SIEM), alertar." },
+      { h: "A10 — SSRF", c: "🎯 **A10 — Server-Side Request Forgery** — El servidor es engañado para hacer requests a destinos elegidos por el atacante:\n→ Acceder a servicios internos (no expuestos)\n→ Leer metadata de cloud: http://169.254.169.254/ (credenciales IAM)\n\n💥 El caso **Capital One (2019)** explotó exactamente esto vía un WAF mal configurado para robar datos de 100M+ personas desde AWS.\n\n**Defensa:** allowlist de destinos, bloquear IPs internas/metadata, validar URLs." },
+    ],
+  },
+  {
+    id: 27,
+    title: "SQL Injection y XSS",
+    sub: "M23",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "SQL Injection", c: "💉 SQLi inyecta SQL a través de entrada no sanitizada.\n**Clásico:** ' OR 1=1 --\n**UNION:** ' UNION SELECT username,password FROM users --\n**Blind boolean:** ' AND SUBSTRING(@@version,1,1)='8' --\n**Time-based:** ' AND IF(1=1,SLEEP(5),0) --\n\n🔧 **sqlmap** automatiza detección y explotación.\n✅ **Prevención:** prepared statements / parameterized queries (separan datos de código), ORM, least privilege en el usuario de DB, WAF." },
+      { h: "XSS", c: "📜 XSS inyecta JavaScript que corre en el navegador de la víctima:\n→ **Reflected** — En la URL: ?q=<script>...</script>\n→ **Stored** — Persistido (comentario): <img src=x onerror=alert(document.cookie)>\n→ **DOM-based** — En el JS del cliente, sin tocar el servidor\n\n**Impacto:** robo de cookies/sesión, keylogging, defacement, acciones en nombre del usuario.\n✅ **Prevención:** output encoding contextual, CSP, cookies HttpOnly, sanitización (DOMPurify), frameworks que escapan por defecto." },
+      { h: "WAF y Bypass", c: "🧱 Un **WAF** (Web Application Firewall) filtra requests maliciosos por patrones. Útil como capa, no como única defensa.\n\n**Técnicas de bypass (concepto):**\n→ Encoding (URL, hex, unicode) y case mixing\n→ Comentarios SQL (UN/**/ION)\n→ Payloads políglota\n→ Fragmentación\n\nPor eso el WAF complementa, pero la corrección real es código seguro (parametrización + encoding)." },
+    ],
+  },
+  {
+    id: 28,
+    title: "CSRF, SSRF y File Upload",
+    sub: "M24",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "CSRF", c: "🎭 **CSRF** (Cross-Site Request Forgery) — Engaña al navegador de una víctima autenticada para que ejecute una acción no deseada (transferir dinero, cambiar email) usando su sesión.\n\nFunciona porque el navegador adjunta cookies automáticamente.\n\n✅ **Defensa:**\n→ **Tokens anti-CSRF** únicos por sesión/request (AlphaLog usa cookie al_csrf + header x-csrf-token)\n→ Cookies **SameSite=Lax/Strict**\n→ Verificar Origin/Referer en mutaciones" },
+      { h: "SSRF e IDOR", c: "🎯 **SSRF** — Forzar al servidor a pedir URLs internas o metadata cloud (169.254.169.254). Ya visto en OWASP A10 (Capital One). Defensa: allowlist, bloquear rangos internos.\n\n🔢 **IDOR** (Insecure Direct Object Reference) — Acceder a objetos ajenos cambiando un identificador (/invoice/1001 → /invoice/1002). Defensa: verificar **autorización por objeto** en el servidor (no confiar en el ID del cliente). En AlphaLog, RLS de Supabase lo previene a nivel DB." },
+      { h: "File Upload", c: "📎 Las subidas de archivos mal validadas permiten:\n→ Subir un **webshell** (shell.php) y ejecutarlo → RCE\n→ Bypass por Content-Type falso o doble extensión (shell.php.jpg)\n→ Path traversal en el nombre (../../)\n→ XSS vía SVG/HTML, zip bombs (DoS)\n\n✅ **Defensa:** validar tipo por contenido (magic bytes) no por extensión, renombrar archivos, almacenar fuera del webroot o en storage dedicado, límites de tamaño, escaneo AV." },
     ],
   },
 ];
