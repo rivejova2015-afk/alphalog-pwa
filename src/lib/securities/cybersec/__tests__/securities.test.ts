@@ -4,6 +4,7 @@ import { HW, getHomework, HW_TOTAL_POINTS } from "../homework";
 import { LESSONS, getLesson, lessonsForModule } from "../lessons";
 import { QUIZZES } from "../quizzes";
 import { PRACTICE } from "../practice";
+import { FLASHCARDS, FLASHCARD_CATEGORIES, flashcardsByCategory } from "../flashcards";
 import { tokenizeInline, splitLines } from "../markdown";
 
 // ─── EXAM content ────────────────────────────────────────────────────────────
@@ -170,6 +171,29 @@ describe("PRACTICE integridad", () => {
     for (const ex of PRACTICE) {
       expect(lessonIds.has(ex.lesson), `ejercicio ${ex.id} → lección ${ex.lesson} inexistente`).toBe(true);
     }
+  });
+});
+
+// ─── FLASHCARDS integrity ────────────────────────────────────────────────────
+
+describe("FLASHCARDS integridad", () => {
+  it("cada flashcard tiene id único, front, back y categoría válida", () => {
+    const ids = new Set<number>();
+    for (const c of FLASHCARDS) {
+      expect(c.id).toBeGreaterThan(0);
+      expect(ids.has(c.id)).toBe(false);
+      ids.add(c.id);
+      expect(c.front.length).toBeGreaterThan(0);
+      expect(c.back.length).toBeGreaterThan(0);
+      expect(FLASHCARD_CATEGORIES).toContain(c.cat);
+    }
+  });
+
+  it("flashcardsByCategory filtra por categoría", () => {
+    const cat = FLASHCARD_CATEGORIES[0];
+    const cards = flashcardsByCategory(cat);
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.every((c) => c.cat === cat)).toBe(true);
   });
 });
 
