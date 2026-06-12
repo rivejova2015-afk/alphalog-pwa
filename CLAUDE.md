@@ -1136,6 +1136,15 @@ npm run ops:bot-auto-recovery   # Auto-recovery del bot
 npm run ops:bot-daily-summary   # Resumen diario ops
 npm run ops:bot-daily-verify    # Verificación diaria
 
+# Smoke tests end-to-end (sintéticos contra producción)
+npm run smoke:algo-pipeline     # Pipeline algo trading + RL data flow
+                                # Crea algo temporal en paper, inserta
+                                # algo_signal_log, POST al webhook con
+                                # signalId, verifica linkeo, simula query
+                                # del skill-manager, cleanup completo.
+                                # Requiere: SUPABASE_SERVICE_ROLE_KEY,
+                                # MT5_WEBHOOK_SECRET, BOT_OPS_USER_ID.
+
 # Seguridad / auditoría
 npm run security:check-rls       # Verifica cobertura RLS
 npm run perf:bundle-budget       # Valida presupuesto de bundle
