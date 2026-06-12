@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59-74).
+// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59-78).
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -906,6 +906,58 @@ export const LESSONS: Lesson[] = [
       { h: "TPM y Attestation", c: "🔏 El **TPM** (Trusted Platform Module) es un chip que:\n→ Guarda claves que **nunca salen** en claro\n→ Mantiene los **PCRs** (Platform Configuration Registers) con las mediciones del arranque\n→ **Sealing** — Cifrar datos atados a un estado de PCRs (solo se descifran si el sistema arrancó 'sano'). BitLocker lo usa\n→ **Remote attestation** — Probar a un tercero, de forma firmada, en qué estado arrancó la máquina\n\nEs la base de medir y confiar en la integridad de la plataforma." },
       { h: "TEEs y Confidential Computing", c: "🏰 Un **TEE** (Trusted Execution Environment) ejecuta código en un **enclave** aislado, protegido incluso del SO y del hipervisor:\n→ **Intel SGX** — Enclaves a nivel de proceso; memoria cifrada por hardware\n→ **ARM TrustZone** — Mundo 'seguro' vs 'normal' (móviles, IoT)\n→ **AMD SEV / Intel TDX** — Cifrado de VMs enteras → **confidential computing** en la nube (correr cargas sin que el proveedor vea los datos)\n\nProvee confidencialidad e integridad del cómputo frente a un host comprometido." },
       { h: "Ataques y Límites", c: "⚠️ Un TEE NO es una bala de plata:\n→ **Foreshadow/L1TF** y **SGAxe** — Side-channels microarquitectónicos que extraen secretos de enclaves SGX, incluso las claves de attestation\n→ **Plundervolt** — Fault injection vía voltaje contra SGX\n→ Los side-channels (caché, timing) suelen quedar **fuera del modelo de amenaza** del TEE\n\nLos **HSM** (Hardware Security Modules) certificados (FIPS 140-3) siguen siendo el estándar para custodia de claves de alto valor. Regla: un TEE eleva la barra, pero asumí que un adversario con acceso microarquitectónico/físico puede atacarlo." },
+    ],
+  },
+  {
+    id: 75,
+    title: "Reverse Engineering Avanzado",
+    sub: "M75",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "RE de Targets Difíciles", c: "🔬 El reversing básico (strings, imports, disassembly) no alcanza contra malware moderno o software protegido. El **workflow avanzado** combina:\n→ Triage estático rápido para entender la estructura\n→ Análisis dinámico instrumentado para vencer la protección\n→ Iteración: cada capa de defensa revela la siguiente\n\nEl objetivo: reconstruir la lógica real a pesar de capas de ofuscación diseñadas para frenarte." },
+      { h: "Anti-Análisis y Obfuscación", c: "🛡️ Técnicas que el malware usa para resistir el RE:\n→ **Anti-debug** — IsDebuggerPresent, PEB checks, timing (rdtsc), INT3 scanning\n→ **Anti-VM/sandbox** — Detectar artefactos de VMware/VirtualBox, pocos cores, sin interacción de usuario\n→ **Control-flow flattening** — Convertir el flujo en un gran switch dirigido por una variable de estado → ilegible\n→ **Opaque predicates** — Condiciones siempre verdaderas/falsas que confunden el análisis\n→ **String/API obfuscation** — Cifrar strings y resolver APIs por hash en runtime (anti-IAT)\n→ **Virtualization-based** (VMProtect/Themida) — El código se compila a bytecode de una **VM custom**; reversear requiere reconstruir su intérprete" },
+      { h: "Deobfuscación", c: "🧩 Estrategias para revertir la protección:\n→ **Tracing dinámico** — Ejecutar y registrar las instrucciones realmente ejecutadas (vence el flattening al ver el camino real)\n→ **Taint analysis** — Seguir cómo fluyen los datos del atacante\n→ **Emulación** — Con **Unicorn Engine** ejecutás fragmentos en aislamiento para descifrar strings/desempaquetar sin correr el malware completo\n→ **Symbolic execution** — Despejar predicados opacos\n→ **Anti-anti-debug** — Parchear los checks (ScyllaHide, plugins)" },
+      { h: "Tooling", c: "🧰 El arsenal del reverser avanzado:\n→ **Ghidra / IDA Pro / Binary Ninja** — Disassembler + decompiler, con scripting (Python) y plugins\n→ **Frida** — Instrumentación dinámica: enganchás funciones en runtime e inspeccionás/modificás argumentos en apps vivas (móvil incluido)\n→ **Unicorn / Qiling** — Emulación de CPU/OS para análisis controlado\n→ **x64dbg / WinDbg / TTD** — Debugging, incluido **time-travel** (grabar la ejecución y navegarla hacia atrás)\n→ **angr / Triton** — Análisis simbólico\n\nDominar scripting de Ghidra/Frida es lo que separa al reverser profesional." },
+    ],
+  },
+  {
+    id: 76,
+    title: "Ejecución Simbólica y Concólica",
+    sub: "M76",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Concepto", c: "🧮 La **ejecución simbólica** ejecuta un programa con entradas **simbólicas** (variables, no valores concretos). En cada rama, acumula las **restricciones de camino** (path constraints). Un **SMT solver** (Z3) luego resuelve esas restricciones para hallar entradas concretas que llegan a un punto deseado.\n\nEn vez de probar millones de inputs (fuzzing ciego), razona matemáticamente qué input satisface la condición. Ideal para flags de CTF, validadores y caminos profundos." },
+      { h: "angr", c: "⚙️ **angr** es el framework de referencia (Python) para análisis simbólico de binarios:\nimport angr\nproj = angr.Project('./crackme')\nsimgr = proj.factory.simulation_manager()\n# explorar hasta una dirección 'éxito', evitando 'fallo'\nsimgr.explore(find=0x401337, avoid=0x401300)\nif simgr.found:\n    print(simgr.found[0].posix.dumps(0))  # el input válido\n\nManeja **estados**, memoria simbólica y constraints. Resuelve crackmes y encuentra inputs sin fuerza bruta." },
+      { h: "Concólica (DSE)", c: "🔀 La ejecución puramente simbólica sufre **path explosion**: el número de caminos crece exponencialmente. La **ejecución concólica** (Dynamic Symbolic Execution) combina lo **concreto** + **simbólico**: ejecuta con valores reales por un camino y simboliza selectivamente, podando el árbol.\n\n→ **KLEE** (sobre LLVM) — DSE para generar tests de alta cobertura\n→ Híbridos **fuzzing + simbólico** (Driller, QSYM) — el fuzzer cubre lo fácil/rápido y el solver desbloquea los checks 'mágicos' (ej: if (input == 0xCAFEBABE)) que el fuzzer nunca adivinaría." },
+      { h: "Aplicaciones y Límites", c: "🚀 Usos:\n→ **Descubrimiento de vulnerabilidades** — Hallar inputs que disparan crashes/aserciones\n→ **AEG** (Automatic Exploit Generation) — De un crash a un exploit, automáticamente (investigación)\n→ **Deobfuscación** — Despejar predicados opacos y devirtualizar\n→ **Verificación** — Probar que un camino (in)alcanzable\n\n⚠️ **Límites:** path explosion, memoria/loops simbólicos, llamadas a syscalls/entorno (se modelan o concretizan), y criptografía (un hash fuerte es irresoluble para el SMT — por diseño). No es magia: es una herramienta poderosa con fronteras claras." },
+    ],
+  },
+  {
+    id: 77,
+    title: "Rootkits y Bootkits",
+    sub: "M77",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Ocultar la Presencia", c: "👻 Un **rootkit** es código diseñado para **ocultar** su presencia (y la del atacante) y mantener acceso privilegiado. Cuanto más profundo opera, más difícil de detectar:\n→ **Userland** — Vive en procesos, manipula APIs (más fácil de detectar)\n→ **Kernel** — Vive en ring 0, puede mentirle a TODO el sistema operativo\n→ **Hypervisor / firmware** — Por debajo del SO (lo más sigiloso)\n\nLa premisa: si controlás la capa que reporta el estado, podés falsear lo que ve el defensor." },
+      { h: "Técnicas Userland", c: "🪝 Manipular lo que ven los programas:\n→ **API hooking** — Interceptar funciones (IAT hooking, inline/trampoline) para filtrar resultados: ej. enganchar la enumeración de procesos para ocultar el propio\n→ **DLL injection** — Cargar una DLL maliciosa en otro proceso (CreateRemoteThread, SetWindowsHookEx)\n→ **LD_PRELOAD** (Linux) — Precargar una librería que reemplaza funciones de libc (ocultar archivos a `ls`, conexiones a `netstat`)\n\nDetectables comparando vistas (ej: enumerar procesos por dos métodos distintos y ver discrepancias)." },
+      { h: "Rootkits de Kernel", c: "🧠 En ring 0 el rootkit es mucho más potente:\n→ **SSDT hooking** — Interceptar la tabla de syscalls\n→ **DKOM** (Direct Kernel Object Manipulation) — Desenlazar el EPROCESS del proceso de la lista enlazada del kernel → desaparece de la enumeración sin hook\n→ **BYOVD** (Bring Your Own Vulnerable Driver) — Cargar un driver **legítimo pero vulnerable** y explotarlo para ejecutar en kernel → así se carga código sin firma y se **desactiva el EDR** (técnica muy usada hoy por ransomware)\n\nWindows defiende con **DSE** (driver signing), **PatchGuard** (KPP) y la lista de drivers vulnerables bloqueados." },
+      { h: "Bootkits y Detección", c: "🥾 Los **bootkits** persisten por debajo del SO (MBR/VBR clásicos, **UEFI** como LoJax). Sobreviven a reinstalar el SO porque cargan antes que él.\n\n🔍 **Detección de rootkits/bootkits:**\n→ **Memory forensics** (Volatility) — Comparar vistas, buscar hooks y objetos desenlazados\n→ **Verificación de integridad** del kernel/firmware y cross-view detection\n→ **ELAM** (Early Launch Anti-Malware) y **Measured Boot + attestation** (TPM)\n→ **chipsec** para firmware\n\nUn rootkit bien hecho exige analizar el sistema desde **afuera** (memoria volcada, booteo desde medio confiable), porque desde adentro te miente." },
+    ],
+  },
+  {
+    id: 78,
+    title: "Implants, C2 y Evasión de EDR",
+    sub: "M78",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Implants Modernos", c: "🛰️ Un **implant** (o beacon) es el malware que da acceso persistente y ejecuta órdenes. Los modernos son:\n→ **Modulares** — Un loader pequeño descarga capacidades on-demand\n→ **In-memory / fileless** — Se ejecutan en RAM sin tocar el disco (evaden el AV basado en archivos)\n→ **Staged** — Un stager mínimo trae el payload real\n\nFrameworks (de red team / uso autorizado): Cobalt Strike, Sliver, Mythic, Havoc. El estudio defensivo de cómo operan es clave para detectarlos." },
+      { h: "Evasión de EDR", c: "🥷 Los **EDR** enganchan APIs de Windows en userland (ntdll) para inspeccionar el comportamiento. Los implants intentan evadir:\n→ **Unhooking** — Restaurar la ntdll original desde el disco/una copia limpia\n→ **Syscalls directas/indirectas** — Invocar el syscall sin pasar por la ntdll enganchada (Hell's Gate, SysWhispers)\n→ **AMSI/ETW bypass** — Parchear en memoria AmsiScanBuffer y EtwEventWrite para cegar al defensor\n→ **Process injection** — APC injection, process hollowing, module stomping para correr dentro de un proceso legítimo" },
+      { h: "Command & Control", c: "📡 El **C2** es el canal entre el implant y el operador:\n→ **Beaconing** — El implant llama a casa periódicamente (con jitter para no ser regular)\n→ **Malleable profiles** — Disfrazar el tráfico C2 de algo legítimo (un GET a una CDN, tráfico tipo Slack)\n→ **Domain fronting** — Esconder el destino real detrás de un dominio de alta reputación (CDN)\n→ **Covert channels** — DNS tunneling, HTTPS, e incluso servicios legítimos (Telegram, GitHub) como C2\n→ **Redirectors** — Capas intermedias que ocultan el servidor real del operador" },
+      { h: "Detección y Caza", c: "🔍 Frente a la evasión, la defensa se mueve a capas que el implant no controla:\n→ **Telemetría de kernel/ETW** — Detectar syscalls anómalas, inyección y unhooking desde un punto que userland no puede falsear\n→ **Detección por comportamiento** — Patrones de beaconing (RITA), relaciones parent-child raras, ejecución en memoria sin archivo\n→ **JA3/JARM** y análisis de TLS para C2 cifrado\n→ **Threat hunting** guiado por ATT&CK + threat intel de los frameworks conocidos\n\nEs un juego del gato y el ratón: cada evasión nueva motiva una detección nueva. Entender la ofensiva a este nivel es justo lo que hace a un buen defensor (y cierra el círculo con el track de Blue Team)." },
     ],
   },
 ];

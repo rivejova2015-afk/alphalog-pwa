@@ -445,6 +445,30 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Intel SGX / AMD SEV proveen:", o: ["Enclaves/VMs aislados del SO y el hipervisor", "Un antivirus", "Cifrado de red"], c: 0, e: "Base del confidential computing." },
     { q: "Foreshadow y SGAxe demuestran que un TEE:", o: ["Es invulnerable", "Puede caer ante side-channels microarquitectónicos", "No usa hardware"], c: 1, e: "No es una bala de plata." },
   ],
+  75: [
+    { q: "El control-flow flattening dificulta el RE porque:", o: ["Cifra el disco", "Convierte el flujo en un gran switch dirigido por estado", "Borra los strings"], c: 1, e: "El tracing dinámico ayuda a vencerlo." },
+    { q: "La obfuscación basada en virtualización (VMProtect):", o: ["Comprime el binario", "Compila el código a bytecode de una VM custom", "Cifra la red"], c: 1, e: "Reversear exige reconstruir el intérprete." },
+    { q: "Frida sirve para:", o: ["Instrumentación dinámica (hooks en runtime)", "Compilar exploits", "Escanear puertos"], c: 0, e: "Inspecciona/modifica funciones en apps vivas." },
+    { q: "Unicorn Engine permite:", o: ["Emular fragmentos de código en aislamiento (ej: descifrar strings)", "Cifrar firmware", "Crackear WPA2"], c: 0, e: "Útil para deobfuscación/unpacking." },
+  ],
+  76: [
+    { q: "La ejecución simbólica usa un SMT solver (Z3) para:", o: ["Cifrar datos", "Hallar inputs que satisfacen las restricciones de un camino", "Acelerar la CPU"], c: 1, e: "Razona en vez de probar por fuerza bruta." },
+    { q: "angr se usa típicamente para:", o: ["Resolver crackmes / hallar inputs sin fuerza bruta", "Renderizar gráficos", "Servir webs"], c: 0, e: "explore(find=..., avoid=...)." },
+    { q: "El principal problema de la ejecución simbólica es:", o: ["Path explosion (caminos exponenciales)", "Que es muy rápida", "Que no usa CPU"], c: 0, e: "La concólica/DSE ayuda a podar." },
+    { q: "Un hash criptográfico fuerte para el SMT solver es:", o: ["Trivial de invertir", "Esencialmente irresoluble (por diseño)", "Un opaque predicate"], c: 1, e: "Límite claro de la técnica." },
+  ],
+  77: [
+    { q: "Un rootkit busca principalmente:", o: ["Acelerar el sistema", "Ocultar su presencia y mantener acceso", "Cifrar archivos"], c: 1, e: "Cuanto más profundo, más sigiloso." },
+    { q: "DKOM (Direct Kernel Object Manipulation) oculta un proceso:", o: ["Cifrándolo", "Desenlazándolo de la lista del kernel (sin hook)", "Renombrándolo"], c: 1, e: "Desaparece de la enumeración." },
+    { q: "BYOVD consiste en:", o: ["Cargar un driver legítimo pero vulnerable para ejecutar en kernel", "Traer tu propio antivirus", "Un tipo de phishing"], c: 0, e: "Usado para desactivar el EDR." },
+    { q: "Para detectar un rootkit bien hecho conviene:", o: ["Confiar en lo que reporta el SO", "Analizar desde afuera (memoria volcada, boot confiable)", "Reiniciar"], c: 1, e: "Desde adentro te miente." },
+  ],
+  78: [
+    { q: "Un implant fileless evade el AV porque:", o: ["Se ejecuta en memoria sin tocar el disco", "Es de código abierto", "Usa HTTPS"], c: 0, e: "El AV basado en archivos no lo ve." },
+    { q: "Las syscalls directas/indirectas evaden al EDR porque:", o: ["Cifran el payload", "No pasan por la ntdll enganchada en userland", "Apagan el firewall"], c: 1, e: "Hell's Gate, SysWhispers." },
+    { q: "Domain fronting sirve para:", o: ["Acelerar el C2", "Esconder el destino real tras un dominio de alta reputación", "Cifrar el disco"], c: 1, e: "Disfraza el tráfico C2." },
+    { q: "La detección robusta de evasión se apoya en:", o: ["Telemetría de kernel/ETW (que userland no falsea)", "Solo el hash del archivo", "El color del icono"], c: 0, e: "Comportamiento + ATT&CK." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
