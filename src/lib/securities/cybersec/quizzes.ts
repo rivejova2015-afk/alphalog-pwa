@@ -348,6 +348,31 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Un homograph attack usa:", o: ["Buffer overflows", "Caracteres unicode similares en el dominio", "SQL Injection"], c: 1, e: "аpple.com con 'а' cirílica." },
     { q: "Para detectar una página de phishing conviene revisar:", o: ["El color de fondo", "La URL real, el certificado y a dónde apunta el form", "La velocidad de carga"], c: 1, e: "No te fíes de la apariencia." },
   ],
+  // ── Doctorate Track ──
+  59: [
+    { q: "tcache poisoning consiste en sobrescribir:", o: ["El size del top chunk", "El puntero fd de un chunk en tcache", "La GOT"], c: 1, e: "Dos malloc después devuelven la dirección objetivo." },
+    { q: "Un Use-After-Free se explota reclamando:", o: ["El chunk liberado con datos controlados", "El kernel", "Un socket"], c: 0, e: "Típico: secuestrar una vtable de C++." },
+    { q: "House of Force abusa del:", o: ["fastbin", "size del top chunk", "stack canary"], c: 1, e: "Un size enorme hace que malloc devuelva cualquier dirección." },
+    { q: "Safe-linking (glibc ≥2.32) protege:", o: ["La stack", "Los punteros fd de las listas de chunks (XOR con cookie)", "El registro RIP"], c: 1, e: "Dificulta el tcache/fastbin poisoning." },
+  ],
+  60: [
+    { q: "En Linux, un objetivo clásico de la escalada de kernel es:", o: ["Sobrescribir la struct cred (uid=0)", "Cifrar el disco", "Cerrar puertos"], c: 0, e: "O modprobe_path." },
+    { q: "SMEP impide que el kernel:", o: ["Acceda a memoria de user", "Ejecute páginas de user space", "Use ASLR"], c: 1, e: "Mata ret2usr → se evade con kROP." },
+    { q: "Dirty Pipe (CVE-2022-0847) permite:", o: ["Escanear puertos", "Escribir en archivos de solo lectura", "Crackear WPA2"], c: 1, e: "Primitiva de escritura en el page cache." },
+    { q: "Para vencer KASLR el exploit necesita:", o: ["Más RAM", "Un info leak de una dirección de kernel", "Apagar el firewall"], c: 1, e: "Randomiza la base del kernel." },
+  ],
+  61: [
+    { q: "Un exploit full-chain de navegador suele necesitar:", o: ["Un solo bug", "Un bug en el renderer + un sandbox escape", "Acceso físico"], c: 1, e: "El renderer corre sandboxeado." },
+    { q: "Las primitivas addrof/fakeobj otorgan:", o: ["R/W arbitrario en el renderer", "Acceso al kernel", "Una shell directa"], c: 0, e: "Base de la explotación de JS engines." },
+    { q: "Una type confusion en el JS engine ocurre cuando:", o: ["El engine asume un tipo y recibe otro", "Se agota la RAM", "Falla el TLS"], c: 0, e: "Ej: cambiar el shape/map de un objeto." },
+    { q: "Tras lograr RCE en el renderer, el atacante todavía debe:", o: ["Escapar del sandbox", "Reiniciar el navegador", "Nada más"], c: 0, e: "Vía IPC/broker o un bug del SO." },
+  ],
+  62: [
+    { q: "ROP existe principalmente para evadir:", o: ["ASLR", "DEP/NX (stack no ejecutable)", "Stack canaries"], c: 1, e: "Reutiliza código existente en vez de inyectar." },
+    { q: "Un gadget de ROP termina típicamente en:", o: ["ret", "nop", "hlt"], c: 0, e: "JOP usa jmp/call en su lugar." },
+    { q: "Para construir una cadena ROP con ASLR activo hace falta:", o: ["Un info leak para calcular la base", "Más gadgets", "Apagar DEP"], c: 0, e: "Sin leak no conocés las direcciones." },
+    { q: "El Shadow Stack de Intel CET detecta:", o: ["XSS", "ROP que altera las return addresses", "SQL Injection"], c: 1, e: "IBT (endbr64) ataca además el JOP." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {

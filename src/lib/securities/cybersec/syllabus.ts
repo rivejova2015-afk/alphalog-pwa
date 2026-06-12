@@ -87,6 +87,13 @@ export const SYLLABUS: Module[] = [
   { m: 56, title: "Go para Security Tools", cat: "Programación", wk: "56", levels: { b: "Go basics, goroutines", i: "Network programming en Go", a: "Building security tools en Go" }, topics: ["Fundamentos de Go", "Concurrencia y goroutines", "Network tools en Go", "Herramientas como Chisel/Ligolo"], research: "Investiga por qué Go es popular para herramientas de seguridad modernas. Lista 10 herramientas escritas en Go y qué ventajas tiene sobre Python para tools.", st: "locked" },
   { m: 57, title: "Ruby y Metasploit Development", cat: "Programación", wk: "57", levels: { b: "Ruby basics", i: "Metasploit module structure", a: "Custom Metasploit modules" }, topics: ["Fundamentos de Ruby", "Estructura de módulos MSF", "Escribir exploits custom", "Auxiliares y post-explotación"], research: "Estudia la estructura de un módulo de Metasploit. Escribe un módulo auxiliar simple (ej: scanner) y documenta cada sección del código.", st: "locked" },
   { m: 58, title: "HTML/CSS y Seguridad Frontend", cat: "Programación", wk: "58", levels: { b: "HTML/CSS fundamentals", i: "Forms, inputs, data flow", a: "Phishing page creation y detection" }, topics: ["Estructura HTML", "Formularios y inputs", "Client-side validation (y sus límites)", "Cómo detectar phishing pages"], research: "Analiza 5 técnicas que usan los phishers para crear páginas convincentes: homograph attacks, iframe injection, CSS tricks, etc. ¿Cómo detectar cada una?", st: "locked" },
+
+  // ═══ DOCTORATE / RESEARCH TRACK (M59+) — especializaciones de posgrado ═══
+  // ─── BLOQUE 14: EXPLOIT DEV AVANZADO (59-62) ───
+  { m: 59, title: "Heap Exploitation", cat: "Exploit Dev Avanzado", wk: "59", levels: { b: "glibc malloc/free, estructura de chunks", i: "tcache/fastbin attacks, use-after-free", a: "House of techniques, tcache poisoning → arbitrary write" }, topics: ["glibc heap internals", "tcache y fastbin", "Use-after-free", "House of Force/Einherjar/Orange"], research: "Elige una técnica 'House of' (Force, Spirit, Einherjar, Orange) y documenta paso a paso cómo construye una primitiva de escritura arbitraria, con qué versión de glibc funciona y qué mitigaciones la frenan.", st: "locked" },
+  { m: 60, title: "Kernel Exploitation", cat: "Exploit Dev Avanzado", wk: "60", levels: { b: "espacio kernel vs user, syscalls", i: "UAF/OOB en kernel, ret2usr, cred struct", a: "bypass SMEP/SMAP/KASLR/KPTI, kROP" }, topics: ["Kernel vs user space", "Vulnerabilidades de kernel", "Primitivas (modprobe_path, cred)", "Mitigaciones y bypass"], research: "Investiga un CVE de escalada de privilegios en el kernel de Linux (ej: Dirty Pipe CVE-2022-0847): causa raíz, primitiva que otorga, exploit público y el parche que lo corrige.", st: "locked" },
+  { m: 61, title: "Browser Exploitation", cat: "Exploit Dev Avanzado", wk: "61", levels: { b: "arquitectura multiproceso, JS engine", i: "type confusion en V8, OOB en JIT", a: "addrof/fakeobj, RW arbitrario, sandbox escape" }, topics: ["Arquitectura del navegador", "Vulnerabilidades del JS engine", "Primitivas de explotación", "Sandbox escape y full chain"], research: "Estudia un writeup público de Pwn2Own contra un navegador: qué bug del JS engine usaron, cómo construyeron el RW arbitrario y cómo escaparon del sandbox.", st: "locked" },
+  { m: 62, title: "ROP/JOP Avanzado y Bypass de Mitigaciones", cat: "Exploit Dev Avanzado", wk: "62", levels: { b: "code-reuse, por qué (DEP/NX)", i: "gadgets, cadenas, ASLR bypass vía leak", a: "JOP, automation, bypass de CFI/Intel CET" }, topics: ["Code-reuse attacks", "Construcción de cadenas ROP", "JOP y automatización", "CFI y Intel CET"], research: "Investiga Intel CET (shadow stack + IBT) y Control-Flow Guard de Windows: cómo mitigan ROP/JOP y qué líneas de investigación existen para bypassearlos.", st: "locked" },
 ];
 
 export const SYLLABUS_CATEGORIES = [
@@ -103,6 +110,8 @@ export const SYLLABUS_CATEGORIES = [
   "Cloud",
   "Especializado",
   "Programación",
+  // Doctorate / Research Track
+  "Exploit Dev Avanzado",
 ] as const;
 
 export type SyllabusCategory = (typeof SYLLABUS_CATEGORIES)[number];
