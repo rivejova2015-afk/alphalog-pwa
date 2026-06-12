@@ -72,3 +72,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ sent });
 }
+
+// Vercel Cron puede invocar GET o POST según config — alias para soportar ambos.
+export const GET = POST;
