@@ -3,6 +3,7 @@ import { EXAM, EXAM_PASS_RATIO } from "../exam";
 import { HW, getHomework, HW_TOTAL_POINTS } from "../homework";
 import { LESSONS, getLesson, lessonsForModule } from "../lessons";
 import { QUIZZES } from "../quizzes";
+import { PRACTICE } from "../practice";
 import { tokenizeInline, splitLines } from "../markdown";
 
 // ─── EXAM content ────────────────────────────────────────────────────────────
@@ -38,8 +39,8 @@ describe("EXAM data", () => {
 // ─── HOMEWORK ────────────────────────────────────────────────────────────────
 
 describe("HOMEWORK data + getHomework", () => {
-  it("contiene 10 assignments", () => {
-    expect(HW).toHaveLength(10);
+  it("contiene 18 assignments", () => {
+    expect(HW).toHaveLength(18);
   });
 
   it("cada homework tiene id único + campos obligatorios", () => {
@@ -147,6 +148,27 @@ describe("QUIZZES integridad", () => {
     const lessonIds = new Set(LESSONS.map((l) => l.id));
     for (const key of Object.keys(QUIZZES)) {
       expect(lessonIds.has(Number(key))).toBe(true);
+    }
+  });
+});
+
+// ─── PRACTICE integrity ──────────────────────────────────────────────────────
+
+describe("PRACTICE integridad", () => {
+  it("cada item tiene su respuesta dentro de opts", () => {
+    for (const ex of PRACTICE) {
+      expect(ex.items.length).toBeGreaterThan(0);
+      expect(ex.opts.length).toBeGreaterThan(0);
+      for (const it of ex.items) {
+        expect(ex.opts, `ejercicio ${ex.id}: respuesta '${it.a}' no está en opts`).toContain(it.a);
+      }
+    }
+  });
+
+  it("cada ejercicio referencia una lección existente", () => {
+    const lessonIds = new Set(LESSONS.map((l) => l.id));
+    for (const ex of PRACTICE) {
+      expect(lessonIds.has(ex.lesson), `ejercicio ${ex.id} → lección ${ex.lesson} inexistente`).toBe(true);
     }
   });
 });
