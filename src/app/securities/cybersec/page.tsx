@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Layers } from "lucide-react";
+import { Layers, LineChart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { SyllabusPanel } from "@/components/securities/cybersec/SyllabusPanel.client";
 
@@ -17,12 +17,20 @@ export default async function CyberSecPage() {
         <p className="text-sm text-[#94a3b8]">
           82 módulos · 82 lecciones · 82 quizzes · 15 prácticas · 18 homework · 45 flashcards · 1 examen final · Doctorate Track completo
         </p>
-        <Link
-          href="/securities/cybersec/flashcards"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#22d3ee]/10 border border-[#22d3ee]/40 text-[#22d3ee] hover:bg-[#22d3ee]/20"
-        >
-          <Layers size={14} /> Repasar con flashcards
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/securities/cybersec/progress"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#a78bfa]/10 border border-[#a78bfa]/40 text-[#a78bfa] hover:bg-[#a78bfa]/20"
+          >
+            <LineChart size={14} /> Mi progreso
+          </Link>
+          <Link
+            href="/securities/cybersec/flashcards"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#22d3ee]/10 border border-[#22d3ee]/40 text-[#22d3ee] hover:bg-[#22d3ee]/20"
+          >
+            <Layers size={14} /> Repasar con flashcards
+          </Link>
+        </div>
       </header>
       <SyllabusPanel />
     </div>
