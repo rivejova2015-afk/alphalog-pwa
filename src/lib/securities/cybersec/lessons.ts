@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: M1-M33 + M51, M53, M54, M55.
+// Cobertura: M1-M41 + M51, M53, M54, M55.
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -446,6 +446,102 @@ export const LESSONS: Lesson[] = [
       { h: "Concepto", c: "🔀 Tras comprometer un host, lo usás como **trampolín** para alcanzar redes a las que no tenías acceso directo (ej: pasar de la DMZ a la red interna).\n\n→ **Pivoting** — Enrutar tráfico a través del host comprometido\n→ **Lateral movement** — Moverte entre hosts dentro de la red" },
       { h: "Túneles y Forwarding", c: "🚇 Técnicas de tunneling:\n→ **SSH** — -L (local forward), -R (remote), -D (SOCKS proxy dinámico)\n→ **proxychains** — Encadena tu tráfico por el proxy SOCKS\n→ **chisel** — Túneles sobre HTTP/WebSocket (bypassa firewalls)\n→ **ligolo-ng** — Pivoting moderno con interfaz TUN\n→ **sshuttle** — VPN ad-hoc sobre SSH\n→ Meterpreter: portfwd + route + autoroute" },
       { h: "Movimiento Lateral", c: "🏃 Una vez con credenciales/hashes, te movés a otros hosts:\n→ **PsExec / smbexec** — Ejecución remota vía SMB\n→ **WMI / wmiexec** — Ejecución vía WMI\n→ **WinRM / evil-winrm** — Shell remota (5985/5986)\n→ **Pass-the-Hash** — Autenticar con el hash NTLM sin la password\n→ **RDP** (3389)\n\n🛡️ **Defensa:** segmentación de red, deshabilitar SMBv1, monitoreo de 4624/4648, LAPS, tiering de admins, desactivar NTLM donde se pueda." },
+    ],
+  },
+  {
+    id: 38,
+    title: "Ingeniería Social",
+    sub: "M34",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "El Eslabón Humano", c: "🎭 La **ingeniería social** manipula a las personas para que revelen información o ejecuten acciones. Es el vector #1 de brechas porque explota psicología, no tecnología.\n\nNo importa cuán fuerte sea tu firewall si un empleado entrega su password por teléfono." },
+      { h: "Principios de Cialdini", c: "🧠 Los 6 principios de persuasión que explotan los atacantes:\n→ **Reciprocidad** — \"Te ayudé, ahora ayudame\"\n→ **Compromiso/Consistencia** — Pequeños sí llevan a grandes sí\n→ **Prueba social** — \"Todos lo hacen\"\n→ **Autoridad** — Hacerse pasar por jefe/IT/policía\n→ **Simpatía (liking)** — Generar afinidad\n→ **Escasez/Urgencia** — \"¡Actuá ya o perdés acceso!\"\n\nEl phishing combina varios (autoridad + urgencia es letal)." },
+      { h: "Vectores y Defensa", c: "🎯 **Técnicas:**\n→ **Phishing / Vishing / Smishing** — Email / voz / SMS\n→ **Pretexting** — Inventar un escenario creíble\n→ **Baiting** — USB infectado \"perdido\"\n→ **Tailgating** — Colarse físicamente detrás de alguien\n→ **Dumpster diving / shoulder surfing**\n\n🔧 **SET** (Social-Engineer Toolkit) automatiza campañas (uso autorizado).\n🛡️ **Defensa:** capacitación y simulacros, verificación out-of-band, políticas claras, cultura de \"reportar sin miedo\"." },
+    ],
+  },
+  {
+    id: 39,
+    title: "Phishing Avanzado",
+    sub: "M35",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Anatomía y Tipos", c: "🎣 Un phishing efectivo tiene: remitente creíble, urgencia, marca/logo legítimos, link malicioso o adjunto, y un pretexto.\n\n**Tipos por objetivo:**\n→ **Phishing** — Masivo, genérico\n→ **Spear phishing** — Dirigido a una persona específica (usa OSINT)\n→ **Whaling** — Apunta a ejecutivos (C-level)\n→ **BEC** (Business Email Compromise) — Suplantar a un directivo para ordenar transferencias" },
+      { h: "Técnicas de Engaño", c: "🪤 **Dominios lookalike** — paypa1.com, micros0ft.com, homoglyph attacks (caracteres unicode similares)\n📨 **Spoofing de remitente** — Si falta SPF/DKIM/DMARC\n🔗 **URL ofuscadas** — Acortadores, redirecciones, subdominios engañosos (login.banco.evil.com)\n📎 **Adjuntos** — Macros de Office, HTML smuggling, ISO/LNK\n🛠️ **GoPhish** — Framework para simulaciones de phishing autorizadas" },
+      { h: "BEC y Defensa", c: "💸 **BEC** causa pérdidas multimillonarias. Caso **Toyota Boshoku (2019): $37M** transferidos tras un email fraudulento de un supuesto socio.\n\n🛡️ **Defensa:**\n→ **SPF + DKIM + DMARC** — Autenticación de email (anti-spoofing)\n→ **MFA** — Aunque roben la password\n→ Verificación out-of-band para pagos (llamar al solicitante)\n→ Banners de \"correo externo\"\n→ Filtros + sandboxing de adjuntos\n→ Capacitación y simulacros continuos" },
+    ],
+  },
+  {
+    id: 40,
+    title: "Malware Analysis: Fundamentos",
+    sub: "M36",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Objetivo del Análisis", c: "🦠 Analizar malware busca responder: ¿qué hace?, ¿cómo persiste?, ¿con quién se comunica (C2)?, ¿qué **IoCs** deja? Esto alimenta detección y respuesta.\n\nDos enfoques complementarios:\n→ **Estático** — Examinar sin ejecutar\n→ **Dinámico** — Ejecutar en entorno controlado y observar" },
+      { h: "Laboratorio Seguro", c: "🧪 **NUNCA** analices malware en tu máquina real ni en red de producción. Setup:\n→ **VM aislada** (snapshots) sin acceso a tu red\n→ Red simulada (INetSim, FakeNet) para capturar callbacks\n→ Herramientas de monitoreo instaladas\n\n☁️ **Sandboxes online:** ANY.RUN, Joe Sandbox, Hybrid Analysis, Cuckoo — ejecutan la muestra y reportan comportamiento automáticamente.\n📦 Fuentes de muestras: MalwareBazaar, VirusShare (¡con cuidado!)." },
+      { h: "IoCs y YARA", c: "📌 **IoCs** (Indicators of Compromise): hashes, IPs/dominios C2, mutexes, claves de registro, nombres de archivo.\n\n🔎 **YARA** — Reglas para identificar malware por patrones:\nrule Ejemplo {\n  strings:\n    $a = \"evil_string\"\n    $b = { 6A 40 68 00 30 }\n  condition:\n    $a or $b\n}\n\n🗺️ Mapear el comportamiento a **MITRE ATT&CK** estandariza el reporte (TTPs)." },
+    ],
+  },
+  {
+    id: 41,
+    title: "Malware: Análisis Estático",
+    sub: "M37",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Triage Estático", c: "🔬 **Estático** = examinar el binario sin ejecutarlo. Primeros pasos:\n→ **Hash** (sha256) → buscar en **VirusTotal**\n→ **strings** — Texto legible: URLs, IPs, comandos, mensajes\n→ **file / TrID** — Identificar tipo real\n→ Detectar packing (entropía alta → empaquetado/cifrado)" },
+      { h: "PE y Imports", c: "🪟 Los binarios Windows son **PE** (Portable Executable). Analizás:\n→ **Headers** — Compilación, secciones, entry point (PEStudio, pefile)\n→ **Imports (IAT)** — Las APIs que usa revelan capacidades:\n   • CreateRemoteThread, VirtualAllocEx → inyección\n   • InternetOpen, connect → red/C2\n   • CryptEncrypt → ransomware\n   • RegSetValue → persistencia\n→ **Resources** — Payloads embebidos" },
+      { h: "Disassembly y Unpacking", c: "🧩 Para entender la lógica:\n→ **Ghidra** (NSA, gratis) / **IDA** — Disassembler + decompiler\n→ Analizar el flujo, funciones, llamadas a API\n\n📦 **Packers** (UPX, Themida) comprimen/cifran el código para evadir análisis. **Unpacking:**\n→ UPX: upx -d\n→ Packers custom: dump desde memoria tras ejecución controlada\n\nEl análisis estático tiene límite: código ofuscado o que se descifra en runtime requiere análisis dinámico." },
+    ],
+  },
+  {
+    id: 42,
+    title: "Malware: Análisis Dinámico",
+    sub: "M38",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Ejecución Observada", c: "🎬 **Dinámico** = ejecutar la muestra en sandbox y observar su comportamiento real. Revela lo que el análisis estático no puede (código ofuscado, descifrado en runtime).\n\nAntes de ejecutar: snapshot de la VM, monitoreo activo, red simulada." },
+      { h: "Herramientas", c: "🛠️ Monitoreo de comportamiento (Windows):\n→ **Process Monitor (ProcMon)** — Actividad de archivos, registro, procesos\n→ **Process Hacker / Explorer** — Procesos hijos, inyección\n→ **Regshot** — Diff del registro antes/después\n→ **API Monitor** — Llamadas a la API de Windows\n→ **Wireshark / FakeNet / INetSim** — Tráfico y callbacks C2\n\nBuscás: archivos creados, persistencia, mutexes, conexiones salientes, procesos inyectados." },
+      { h: "Anti-Análisis", c: "🥷 El malware moderno detecta el entorno de análisis y se comporta benigno:\n→ **VM detection** — Busca artefactos de VMware/VirtualBox\n→ **Sandbox evasion** — Sleep largo, requiere interacción del usuario, chequea cantidad de RAM/CPUs\n→ **Anti-debugging** — IsDebuggerPresent, timing\n\n🧠 **Memory forensics** (Volatility) complementa: capturás la RAM y analizás el malware ya descifrado en memoria, evadiendo el packing." },
+    ],
+  },
+  {
+    id: 43,
+    title: "Forense Digital: Fundamentos",
+    sub: "M39",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Principios", c: "🔍 El **forense digital** recolecta, preserva y analiza evidencia digital de forma que sea **admisible legalmente**. La regla de oro: no alterar la evidencia original; trabajar siempre sobre copias.\n\nDocumentar cada paso es tan importante como el análisis." },
+      { h: "Cadena de Custodia", c: "📜 **Cadena de custodia** — Registro de quién tocó la evidencia, cuándo, dónde y por qué. Si se rompe, la evidencia se invalida en la corte.\n\n⏳ **Orden de volatilidad** — Capturar de lo más volátil a lo más persistente:\n1. Registros de CPU, caché\n2. **RAM** (procesos, claves, malware en memoria)\n3. Conexiones de red, tablas ARP\n4. Disco\n5. Logs remotos, backups\n\nSi apagás antes de capturar RAM, perdés evidencia clave." },
+      { h: "Adquisición", c: "💽 **Imaging** — Copia bit a bit del medio:\n→ **dd / dcfldd** (Linux), **FTK Imager**, **Guymager**\n→ Usar **write blockers** (hardware/software) para no modificar el original\n\n🔐 **Hashing de integridad** — sha256 del original y de la imagen; deben coincidir y mantenerse iguales durante toda la investigación (prueba de que no se alteró).\n\n⚖️ Consideraciones legales: orden judicial, jurisdicción, privacidad." },
+    ],
+  },
+  {
+    id: 44,
+    title: "Forense: Disco y Memoria",
+    sub: "M40",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Forense de Disco", c: "🗄️ Analizás la imagen del disco buscando artefactos:\n→ **Autopsy / FTK / The Sleuth Kit** — Suites forenses\n→ **File carving** — Recuperar archivos borrados por su firma (foremost, scalpel)\n→ **Timeline** — Reconstruir la secuencia de eventos (MAC times, $MFT, $LogFile en NTFS)\n→ Artefactos Windows: prefetch (ejecución), shellbags, jump lists, registro (USB, recientes)\n→ Artefactos de navegador: historial, cache, cookies" },
+      { h: "Forense de Memoria", c: "🧠 La RAM contiene oro: procesos vivos, malware descifrado, claves, conexiones, comandos.\n\n📸 **Adquisición:** WinPmem, DumpIt, LiME (Linux)\n🔬 **Volatility 3** — El framework de referencia:\n→ windows.pslist / pstree — Procesos\n→ windows.netscan — Conexiones de red\n→ windows.malfind — Código inyectado\n→ windows.cmdline — Argumentos\n→ windows.dlllist, handles, hashdump" },
+      { h: "Correlación", c: "🧩 La investigación une todas las fuentes:\n→ Timeline de disco + memoria + logs → reconstruir el incidente\n→ Identificar paciente cero, movimiento lateral, exfiltración\n→ Extraer IoCs para buscar en otros sistemas (threat hunting)\n\n📝 El **reporte forense** debe ser claro, reproducible y defendible: metodología, hallazgos, evidencia y conclusiones." },
+    ],
+  },
+  {
+    id: 45,
+    title: "Forense de Red",
+    sub: "M41",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Análisis de PCAP", c: "🌐 El **forense de red** analiza tráfico capturado (PCAP) para reconstruir lo que pasó por el cable.\n→ **Wireshark / tshark** — Inspección profunda, seguir streams (Follow TCP Stream), exportar objetos\n→ **NetworkMiner** — Extrae archivos, credenciales, hosts del PCAP automáticamente\n→ **Zeek (Bro)** — Genera logs estructurados de conexiones, DNS, HTTP, archivos" },
+      { h: "Detección de C2", c: "📡 Detectar **Command & Control** en el tráfico:\n→ **Beaconing** — Conexiones periódicas y regulares a un mismo destino (RITA detecta el patrón)\n→ **DNS tunneling** — Subdominios largos/aleatorios, alto volumen de TXT\n→ **JA3/JA3S** — Fingerprint de handshakes TLS (identifica clientes maliciosos aunque cifren)\n→ Dominios DGA (generados algorítmicamente), user-agents raros, puertos no estándar" },
+      { h: "Correlación de Red", c: "🔗 Combinás flujos, logs de firewall, DNS y proxy para:\n→ Trazar la línea de tiempo del ataque\n→ Identificar hosts comprometidos y datos exfiltrados\n→ Confirmar IoCs de red (IPs/dominios C2)\n\n🛡️ Visibilidad de red (NDR, full packet capture, NetFlow) es clave: muchos ataques solo se ven en el tráfico, no en el endpoint." },
     ],
   },
 ];

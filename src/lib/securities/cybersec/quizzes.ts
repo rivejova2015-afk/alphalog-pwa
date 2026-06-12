@@ -222,6 +222,54 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Pass-the-Hash permite:", o: ["Autenticar con el hash NTLM sin la password", "Crackear AES", "Saltar el firewall físico"], c: 0, e: "Movimiento lateral en redes Windows." },
     { q: "chisel y ligolo-ng sirven para:", o: ["Escanear webs", "Crear túneles/pivoting (a veces sobre HTTP)", "Hashear passwords"], c: 1, e: "Tunneling para bypassear firewalls." },
   ],
+  38: [
+    { q: "La ingeniería social explota principalmente:", o: ["Bugs de software", "La psicología de las personas", "Puertos abiertos"], c: 1, e: "El humano es el eslabón más débil." },
+    { q: "Hacerse pasar por el CEO usa el principio de:", o: ["Escasez", "Autoridad", "Reciprocidad"], c: 1, e: "Cialdini: autoridad." },
+    { q: "Dejar un USB infectado para que alguien lo conecte es:", o: ["Tailgating", "Baiting", "Vishing"], c: 1, e: "Cebo que explota la curiosidad." },
+    { q: "La mejor defensa contra ingeniería social es:", o: ["Un firewall más caro", "Capacitación y verificación out-of-band", "Cifrar el disco"], c: 1, e: "La cultura y la conciencia." },
+  ],
+  39: [
+    { q: "Spear phishing se diferencia del phishing en que es:", o: ["Masivo y genérico", "Dirigido a una persona específica (con OSINT)", "Solo por SMS"], c: 1, e: "Personalizado, más creíble." },
+    { q: "BEC significa:", o: ["Basic Email Cipher", "Business Email Compromise", "Backend Encryption Control"], c: 1, e: "Suplantar a un directivo para ordenar pagos." },
+    { q: "micros0ft.com es un ejemplo de:", o: ["Dominio lookalike (typosquatting)", "Un subdominio legítimo", "Un certificado válido"], c: 0, e: "Engaña por similitud visual." },
+    { q: "SPF, DKIM y DMARC sirven para:", o: ["Cifrar el disco", "Autenticar el email y frenar spoofing", "Escanear adjuntos"], c: 1, e: "Anti-suplantación de remitente." },
+  ],
+  40: [
+    { q: "¿Dónde se debe analizar malware?", o: ["En tu máquina de trabajo", "En una VM aislada / sandbox", "En el servidor de producción"], c: 1, e: "Aislado, con snapshots y red simulada." },
+    { q: "Un IoC es:", o: ["Un tipo de cifrado", "Un indicador de compromiso (hash, IP C2, etc.)", "Un puerto"], c: 1, e: "Alimenta detección y respuesta." },
+    { q: "YARA sirve para:", o: ["Cifrar malware", "Identificar malware por patrones (reglas)", "Acelerar la VM"], c: 1, e: "Reglas con strings y condiciones." },
+    { q: "ANY.RUN y Cuckoo son:", o: ["Disassemblers", "Sandboxes de análisis de comportamiento", "Packers"], c: 1, e: "Ejecutan la muestra y reportan." },
+  ],
+  41: [
+    { q: "El análisis estático examina el binario:", o: ["Ejecutándolo", "Sin ejecutarlo", "Solo en memoria"], c: 1, e: "Strings, hashes, PE headers, disassembly." },
+    { q: "Las APIs importadas (IAT) revelan:", o: ["El color del icono", "Las capacidades del malware", "El precio"], c: 1, e: "VirtualAllocEx → inyección, etc." },
+    { q: "Ghidra es:", o: ["Un antivirus", "Un disassembler/decompiler gratuito (NSA)", "Un packer"], c: 1, e: "Para entender la lógica del binario." },
+    { q: "Un packer (UPX, Themida):", o: ["Comprime/cifra el código para evadir análisis", "Es un IoC", "Acelera el malware"], c: 0, e: "Hay que hacer unpacking." },
+  ],
+  42: [
+    { q: "El análisis dinámico observa el malware:", o: ["Sin ejecutarlo", "Ejecutándolo en un entorno controlado", "Solo su hash"], c: 1, e: "Revela comportamiento que el estático no ve." },
+    { q: "Process Monitor (ProcMon) registra:", o: ["Solo la RAM", "Actividad de archivos, registro y procesos", "El tráfico cifrado"], c: 1, e: "Comportamiento en Windows." },
+    { q: "Que el malware detecte VMware y no se ejecute es:", o: ["Un falso positivo", "Sandbox/VM evasion (anti-análisis)", "Un IoC de red"], c: 1, e: "Malware consciente del entorno." },
+    { q: "Para evadir el packing, el forense de memoria captura el malware:", o: ["Comprimido", "Ya descifrado en RAM", "En el disco"], c: 1, e: "Volatility analiza la memoria." },
+  ],
+  43: [
+    { q: "La regla de oro del forense es:", o: ["Apagar todo de inmediato", "No alterar la evidencia original (trabajar sobre copias)", "Borrar logs viejos"], c: 1, e: "Admisibilidad legal." },
+    { q: "Romper la cadena de custodia:", o: ["No importa", "Invalida la evidencia en la corte", "Acelera el análisis"], c: 1, e: "Registro de quién/cuándo/dónde." },
+    { q: "Según el orden de volatilidad, primero capturás:", o: ["El disco", "La RAM", "Los backups"], c: 1, e: "Lo más volátil primero." },
+    { q: "Un write blocker sirve para:", o: ["Cifrar la imagen", "Evitar modificar el medio original", "Acelerar la copia"], c: 1, e: "Adquisición forense sin alterar." },
+  ],
+  44: [
+    { q: "File carving recupera:", o: ["Contraseñas", "Archivos borrados por su firma", "Tráfico de red"], c: 1, e: "foremost, scalpel." },
+    { q: "Volatility se usa para:", o: ["Forense de disco", "Forense de memoria (RAM)", "Análisis de PCAP"], c: 1, e: "pslist, malfind, netscan." },
+    { q: "El plugin windows.malfind de Volatility detecta:", o: ["Usuarios creados", "Código inyectado en procesos", "Puertos abiertos"], c: 1, e: "Inyección en memoria." },
+    { q: "El prefetch de Windows evidencia:", o: ["Ejecución de programas", "Cookies del navegador", "Reglas de firewall"], c: 0, e: "Artefacto de ejecución." },
+  ],
+  45: [
+    { q: "Un archivo PCAP contiene:", o: ["Hashes", "Tráfico de red capturado", "Logs del registro"], c: 1, e: "Se analiza con Wireshark/tshark." },
+    { q: "NetworkMiner sirve para:", o: ["Escanear puertos", "Extraer archivos/credenciales/hosts de un PCAP", "Cifrar tráfico"], c: 1, e: "Forense de red automatizado." },
+    { q: "El beaconing es un indicio de:", o: ["Backup normal", "Comunicación C2 (conexiones periódicas)", "Un escaneo de puertos"], c: 1, e: "Patrón regular hacia un destino." },
+    { q: "JA3 es:", o: ["Un cifrado", "Un fingerprint de handshakes TLS", "Un puerto"], c: 1, e: "Identifica clientes aunque cifren." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
