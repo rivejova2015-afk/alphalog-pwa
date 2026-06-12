@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59+).
+// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59-66).
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -750,6 +750,58 @@ export const LESSONS: Lesson[] = [
       { h: "Construcción de Cadenas", c: "🔗 Una cadena ROP real debe vencer **ASLR**:\n1. **Info leak** — Filtrar una dirección de libc (ej: vía un format string o un puntero en la GOT) para calcular la base\n2. **Stack pivoting** — Si el control de stack es limitado, pivotear rsp a un buffer controlado (xchg rsp, rax; ret)\n3. Construir la cadena: setear argumentos (pop gadgets) → llamar la función objetivo\n\n🛠️ Herramientas: **ROPgadget**, **ropper** (buscar gadgets), **pwntools** (automatizar el exploit), **angrop** (generación automática de cadenas)." },
       { h: "JOP y Automatización", c: "🦘 Cuando los gadgets `ret` escasean o hay mitigaciones de stack, se usa **JOP** (Jump-Oriented Programming): gadgets que terminan en `jmp`/`call` a un registro, encadenados por un 'dispatcher gadget'.\n\nVariantes: **COOP** (Counterfeit Object-Oriented Programming) abusa de vtables de C++. La automatización (angrop, símbolic execution) busca cadenas en binarios grandes donde a mano sería inviable." },
       { h: "CFI e Intel CET", c: "🛡️ Las mitigaciones modernas atacan el code-reuse en su raíz:\n→ **CFI** (Control-Flow Integrity) — Valida que los saltos indirectos vayan a destinos legítimos (LLVM CFI, Windows **CFG**)\n→ **Intel CET** — Dos partes en hardware:\n   • **Shadow Stack** — Copia protegida de las return addresses; un ROP que altera la stack se detecta al `ret`\n   • **IBT** (Indirect Branch Tracking) — Los destinos indirectos deben empezar con `endbr64` → mata JOP/COOP genérico\n\n🔬 La investigación de frontera busca bypasses: gadgets que empiezan con endbr64, ataques a la shadow stack, data-only attacks (corromper datos sin desviar control). Es el estado del arte de la explotación binaria." },
+    ],
+  },
+  {
+    id: 63,
+    title: "Criptoanálisis",
+    sub: "M63",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Modelos de Ataque", c: "🔓 El **criptoanálisis** busca romper un esquema sin la clave. Se asume el **principio de Kerckhoffs**: el sistema es público, solo la clave es secreta.\n\nModelos por capacidad del atacante:\n→ **Ciphertext-only** — Solo ve textos cifrados\n→ **Known-plaintext** — Conoce pares (plano, cifrado)\n→ **Chosen-plaintext (CPA)** — Elige los planos a cifrar\n→ **Chosen-ciphertext (CCA)** — Puede pedir descifrados\n\nUn cifrado moderno debe resistir CCA (IND-CCA2). La fuerza bruta marca la cota superior; el criptoanálisis busca atajos mejores que ella." },
+      { h: "Diferencial y Lineal", c: "📐 Dos pilares del criptoanálisis de cifradores de bloque:\n→ **Diferencial** (Biham–Shamir) — Estudia cómo una diferencia (XOR) en la entrada se propaga a la salida a través de las rondas. Se buscan diferenciales de alta probabilidad para recuperar bits de clave.\n→ **Lineal** (Matsui) — Aproxima el cifrador con ecuaciones lineales (XOR de bits de plano, cifrado y clave) que se cumplen con probabilidad ≠ 1/2.\n\nDES fue el campo de pruebas: el diferencial necesita ~2^47 planos elegidos; el lineal ~2^43 planos conocidos. El diseño moderno (AES) elige S-boxes y difusión para minimizar estos sesgos." },
+      { h: "Side-Channel Attacks", c: "📡 No atacan el algoritmo sino su **implementación**: filtran información por canales físicos.\n→ **Timing** — El tiempo de ejecución depende de datos secretos (ej: comparación de MAC byte a byte → usar comparación en tiempo constante)\n→ **Power analysis** — SPA/DPA: el consumo eléctrico revela operaciones/bits de clave\n→ **Cache attacks** — FLUSH+RELOAD, PRIME+PROBE: el acceso a tablas (T-tables de AES) deja huella en caché\n→ **Fault attacks (DFA)** — Inducir un fallo (glitch) durante el cifrado y comparar salidas correcta/errónea para despejar la clave (devastador contra RSA-CRT)\n\nDefensa: tiempo constante, masking, blinding, hardware resistente." },
+      { h: "Ataques a Protocolos", c: "🎯 Errores de implementación/protocolo más explotados:\n→ **Padding oracle** — Un servidor que revela si el padding es válido permite descifrar CBC byte a byte (POODLE, Lucky13)\n→ **Bleichenbacher** — Padding oracle sobre RSA PKCS#1 v1.5; recupera la clave de sesión consulta a consulta (reaparece como ROBOT, 2017)\n→ **Nonce reuse** — Repetir un nonce en GCM/ChaCha20-Poly1305 (forbidden attack) o en ECDSA (recupera la clave privada — caso PS3)\n→ **Birthday/collision** — Sweet32 contra cifradores de bloque de 64 bits\n\nLa lección: la mayoría de las brechas criptográficas no rompen el algoritmo, rompen su uso." },
+    ],
+  },
+  {
+    id: 64,
+    title: "Criptografía Post-Cuántica",
+    sub: "M64",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "La Amenaza Cuántica", c: "⚛️ Dos algoritmos cuánticos cambian las reglas:\n→ **Shor** — Factoriza enteros y resuelve el logaritmo discreto en tiempo polinómico → rompe **RSA, Diffie-Hellman y ECC** por completo.\n→ **Grover** — Acelera la búsqueda no estructurada (√N) → **reduce a la mitad** la seguridad simétrica (AES-256 ≈ 128 bits efectivos). Manejable subiendo el tamaño de clave.\n\n⏳ **Harvest now, decrypt later:** adversarios capturan tráfico cifrado HOY para descifrarlo cuando exista una cuántica criptográficamente relevante (CRQC). Por eso la migración ya empezó aunque la cuántica no esté lista." },
+      { h: "Familias PQC", c: "🧬 La criptografía post-cuántica se basa en problemas que se creen difíciles incluso para cuánticas:\n→ **Lattices (retículos)** — LWE / Ring-LWE / Module-LWE. La familia más versátil y eficiente (KEM y firmas)\n→ **Hash-based** — Firmas basadas solo en hashes (SPHINCS+); seguridad muy conservadora, firmas grandes\n→ **Code-based** — McEliece (códigos correctores); claves públicas enormes pero KEM muy estudiado\n→ **Multivariate** y **isogenias** (SIKE) — más nuevas; **SIKE fue roto en 2022** con matemática clásica (lección de cautela)" },
+      { h: "Estándares NIST", c: "🏛️ Tras un proceso de años, NIST estandarizó (2024):\n→ **ML-KEM (Kyber)** — Key Encapsulation (intercambio de clave). El reemplazo de ECDH\n→ **ML-DSA (Dilithium)** — Firmas digitales de propósito general\n→ **Falcon** — Firmas compactas (lattices NTRU)\n→ **SLH-DSA (SPHINCS+)** — Firmas hash-based como respaldo conservador\n\nKyber y Dilithium se basan en Module-LWE: la seguridad descansa en lo difícil que es hallar vectores cortos en un retículo." },
+      { h: "Migración e Híbridos", c: "🔀 Migrar es un desafío de ingeniería:\n→ **Esquemas híbridos** — Combinar clásico + PQC (ej: X25519 + ML-KEM) para no perder seguridad si uno falla. Ya en TLS de Chrome/Cloudflare\n→ **Cripto-agilidad** — Diseñar sistemas que cambien de algoritmo sin reescribirse\n→ **Costos** — Claves y firmas más grandes (impacto en certificados, handshakes, IoT)\n\nEl mayor riesgo de la transición no es la cuántica: es romper compatibilidad o introducir bugs en implementaciones nuevas y poco probadas." },
+    ],
+  },
+  {
+    id: 65,
+    title: "Zero-Knowledge Proofs y MPC",
+    sub: "M65",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Pruebas de Conocimiento Cero", c: "🕵️ Una **prueba de conocimiento cero (ZKP)** permite a un probador convencer a un verificador de que conoce un secreto **sin revelarlo**. Tres propiedades:\n→ **Completitud** — Si es verdad, el probador honesto convence\n→ **Solidez (soundness)** — Si es falso, no puede convencer (salvo probabilidad ínfima)\n→ **Zero-knowledge** — El verificador no aprende nada salvo la validez\n\nEjemplo clásico: el protocolo de **Schnorr** prueba conocer un logaritmo discreto x (con g^x público) sin revelar x. Con **Fiat–Shamir** se vuelve no interactivo (reemplaza el desafío del verificador por un hash)." },
+      { h: "zk-SNARKs y zk-STARKs", c: "📜 Las ZKP modernas son **sucintas**: la prueba es chica y se verifica rápido, aunque la afirmación sea enorme.\n→ **zk-SNARK** — Succinct Non-interactive ARgument of Knowledge. Pruebas diminutas, pero requieren un **trusted setup** (si el 'toxic waste' se filtra, se pueden falsificar pruebas)\n→ **zk-STARK** — Transparente (sin trusted setup) y **post-cuántico** (solo hashes), pero pruebas más grandes\n\nSe usan masivamente en blockchain: **rollups** (escalar Ethereum verificando miles de transacciones con una prueba) y privacidad (Zcash)." },
+      { h: "Secure Multi-Party Computation", c: "🤝 **MPC** permite que varias partes computen una función sobre sus entradas privadas sin revelarlas entre sí. El ejemplo canónico: dos millonarios calculan quién tiene más sin decir cuánto tienen.\n\nTécnicas:\n→ **Garbled circuits** (Yao) — Para dos partes; uno 'cifra' un circuito booleano\n→ **Secret sharing** (Shamir, GMW, BGW) — Reparte cada secreto en shares; se computa sobre los shares\n→ **Oblivious Transfer** — Primitiva base\n\nGarantiza privacidad incluso con participantes semi-honestos o maliciosos según el protocolo." },
+      { h: "Aplicaciones", c: "🚀 ZK + MPC habilitan privacidad por diseño:\n→ **Firmas de umbral** — Una clave repartida; firmar requiere t de n (custodia de cripto, sin un único punto de fallo)\n→ **Autenticación que preserva privacidad** — Probar 'soy mayor de edad' sin mostrar la fecha de nacimiento\n→ **Analítica privada** — Estadísticas conjuntas sin compartir los datos crudos (entre hospitales, bancos)\n→ **Private ML** — Entrenar/inferir sobre datos repartidos\n\nSon de los campos más activos de la investigación criptográfica aplicada." },
+    ],
+  },
+  {
+    id: 66,
+    title: "Cifrado Homomórfico",
+    sub: "M66",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Computar sobre Datos Cifrados", c: "🔐 El **cifrado homomórfico** permite operar sobre datos **sin descifrarlos**: el resultado, al descifrarlo, coincide con haber operado en claro.\nEnc(a) ⊕ Enc(b) = Enc(a + b)\n\n→ **PHE (parcial)** — Soporta UNA operación ilimitadamente: RSA es multiplicativo, **Paillier** es aditivo\n→ **SHE (somewhat)** — Soporta sumas y productos pero un número limitado\n→ **FHE (fully)** — Cualquier circuito, sin límite. El santo grial, resuelto teóricamente por **Gentry (2009)**." },
+      { h: "Esquemas FHE", c: "🧱 La clave de FHE es el **bootstrapping**: cada operación agrega 'ruido' al ciphertext; al acumularse impide descifrar. Bootstrapping 'refresca' el ruido descifrando homomórficamente — costoso pero permite circuitos arbitrarios.\n\nEsquemas principales:\n→ **BGV / BFV** — Aritmética exacta sobre enteros\n→ **CKKS** — Aritmética **aproximada** sobre reales/complejos → ideal para ML\n→ **TFHE** — Operaciones booleanas con bootstrapping muy rápido\n\nLibrerías: Microsoft **SEAL**, **OpenFHE**, **HElib**, **TFHE-rs**." },
+      { h: "Desafíos", c: "🐢 FHE es real pero caro:\n→ **Crecimiento del ruido** — Limita la profundidad del circuito sin bootstrapping\n→ **Overhead** — Operar cifrado puede ser miles–millones de veces más lento que en claro\n→ **Tamaño** — Los ciphertexts son mucho más grandes\n→ **Selección de parámetros** — Equilibrar seguridad, ruido y performance es delicado\n\nLa investigación (y hardware acelerador) viene cerrando la brecha año a año, pero el costo sigue siendo la barrera de adopción." },
+      { h: "Aplicaciones y Límites", c: "☁️ Casos donde el overhead vale la pena:\n→ **Cómputo privado en la nube** — Subir datos cifrados y que el proveedor compute sin verlos\n→ **Inferencia de ML privada** — Un modelo evalúa datos del usuario sin acceder a ellos (salud, finanzas)\n→ **Bases de datos cifradas** y consultas privadas (PIR)\n\n⚠️ Cuándo NO usar FHE: si una solución más simple (MPC, enclaves/TEE, o simplemente TLS + control de acceso) cumple el requisito de amenaza con mucho menos costo. La criptografía avanzada es una herramienta, no una bala de plata." },
     ],
   },
 ];

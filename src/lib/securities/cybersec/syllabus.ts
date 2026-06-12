@@ -94,6 +94,12 @@ export const SYLLABUS: Module[] = [
   { m: 60, title: "Kernel Exploitation", cat: "Exploit Dev Avanzado", wk: "60", levels: { b: "espacio kernel vs user, syscalls", i: "UAF/OOB en kernel, ret2usr, cred struct", a: "bypass SMEP/SMAP/KASLR/KPTI, kROP" }, topics: ["Kernel vs user space", "Vulnerabilidades de kernel", "Primitivas (modprobe_path, cred)", "Mitigaciones y bypass"], research: "Investiga un CVE de escalada de privilegios en el kernel de Linux (ej: Dirty Pipe CVE-2022-0847): causa raíz, primitiva que otorga, exploit público y el parche que lo corrige.", st: "locked" },
   { m: 61, title: "Browser Exploitation", cat: "Exploit Dev Avanzado", wk: "61", levels: { b: "arquitectura multiproceso, JS engine", i: "type confusion en V8, OOB en JIT", a: "addrof/fakeobj, RW arbitrario, sandbox escape" }, topics: ["Arquitectura del navegador", "Vulnerabilidades del JS engine", "Primitivas de explotación", "Sandbox escape y full chain"], research: "Estudia un writeup público de Pwn2Own contra un navegador: qué bug del JS engine usaron, cómo construyeron el RW arbitrario y cómo escaparon del sandbox.", st: "locked" },
   { m: 62, title: "ROP/JOP Avanzado y Bypass de Mitigaciones", cat: "Exploit Dev Avanzado", wk: "62", levels: { b: "code-reuse, por qué (DEP/NX)", i: "gadgets, cadenas, ASLR bypass vía leak", a: "JOP, automation, bypass de CFI/Intel CET" }, topics: ["Code-reuse attacks", "Construcción de cadenas ROP", "JOP y automatización", "CFI y Intel CET"], research: "Investiga Intel CET (shadow stack + IBT) y Control-Flow Guard de Windows: cómo mitigan ROP/JOP y qué líneas de investigación existen para bypassearlos.", st: "locked" },
+
+  // ─── BLOQUE 15: CRIPTOGRAFÍA AVANZADA (63-66) ───
+  { m: 63, title: "Criptoanálisis", cat: "Cripto Avanzada", wk: "63", levels: { b: "modelos de ataque, Kerckhoffs", i: "criptoanálisis diferencial y lineal", a: "side-channels (DPA, cache), padding/nonce oracle, DFA" }, topics: ["Modelos de ataque", "Diferencial y lineal", "Side-channel attacks", "Ataques a implementaciones"], research: "Estudia el ataque de Bleichenbacher contra RSA PKCS#1 v1.5 (padding oracle): cómo recupera el texto plano consulta a consulta y por qué reaparece periódicamente (ROBOT 2017).", st: "locked" },
+  { m: 64, title: "Criptografía Post-Cuántica", cat: "Cripto Avanzada", wk: "64", levels: { b: "amenaza cuántica (Shor, Grover)", i: "familias PQC (lattices, hash, code)", a: "internals de Kyber/Dilithium, migración híbrida" }, topics: ["Amenaza cuántica", "Familias PQC", "Estándares NIST", "Migración y cripto-agilidad"], research: "Investiga por qué SIKE (isogenias) fue roto en 2022 pese a ser finalista de NIST. ¿Qué lección deja sobre confiar en supuestos matemáticos nuevos?", st: "locked" },
+  { m: 65, title: "Zero-Knowledge Proofs y MPC", cat: "Cripto Avanzada", wk: "65", levels: { b: "propiedades ZK, protocolo de Schnorr", i: "zk-SNARKs vs zk-STARKs, Fiat-Shamir", a: "MPC (garbled circuits, secret sharing), aplicaciones" }, topics: ["Pruebas de conocimiento cero", "zk-SNARKs/STARKs", "Secure Multi-Party Computation", "Aplicaciones"], research: "Compara zk-SNARKs vs zk-STARKs: trusted setup, tamaño de prueba, resistencia cuántica y casos de uso (rollups, privacidad). ¿Cuándo elegirías cada uno?", st: "locked" },
+  { m: 66, title: "Cifrado Homomórfico", cat: "Cripto Avanzada", wk: "66", levels: { b: "computar sobre datos cifrados, PHE", i: "FHE: bootstrapping, BGV/BFV/CKKS/TFHE", a: "ruido, performance, ML privado" }, topics: ["Homomorphic encryption", "Esquemas FHE", "Desafíos de performance", "Aplicaciones y límites"], research: "Investiga un caso real de Fully Homomorphic Encryption en producción (ej: inferencia de ML sobre datos cifrados): qué esquema usa, qué overhead tiene y qué problema de privacidad resuelve.", st: "locked" },
 ];
 
 export const SYLLABUS_CATEGORIES = [
@@ -112,6 +118,7 @@ export const SYLLABUS_CATEGORIES = [
   "Programación",
   // Doctorate / Research Track
   "Exploit Dev Avanzado",
+  "Cripto Avanzada",
 ] as const;
 
 export type SyllabusCategory = (typeof SYLLABUS_CATEGORIES)[number];

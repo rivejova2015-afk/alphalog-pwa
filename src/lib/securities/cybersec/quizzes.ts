@@ -373,6 +373,30 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Para construir una cadena ROP con ASLR activo hace falta:", o: ["Un info leak para calcular la base", "Más gadgets", "Apagar DEP"], c: 0, e: "Sin leak no conocés las direcciones." },
     { q: "El Shadow Stack de Intel CET detecta:", o: ["XSS", "ROP que altera las return addresses", "SQL Injection"], c: 1, e: "IBT (endbr64) ataca además el JOP." },
   ],
+  63: [
+    { q: "El principio de Kerckhoffs dice que es secreta:", o: ["Solo la clave (el sistema es público)", "Todo el algoritmo", "La longitud del mensaje"], c: 0, e: "La seguridad no debe depender del secreto del diseño." },
+    { q: "El criptoanálisis diferencial estudia:", o: ["El consumo eléctrico", "Cómo se propaga una diferencia (XOR) por las rondas", "El tiempo de red"], c: 1, e: "Biham–Shamir, aplicado a DES." },
+    { q: "FLUSH+RELOAD es un ataque de:", o: ["Padding", "Caché (side-channel)", "Fuerza bruta"], c: 1, e: "Filtra accesos a tablas como las T-tables de AES." },
+    { q: "El ataque de Bleichenbacher explota:", o: ["Un padding oracle sobre RSA PKCS#1", "Nonce reuse en AES", "Colisiones de SHA-256"], c: 0, e: "Recupera la clave de sesión consulta a consulta (ROBOT)." },
+  ],
+  64: [
+    { q: "El algoritmo de Shor rompe:", o: ["AES y SHA-3", "RSA, Diffie-Hellman y ECC", "Argon2"], c: 1, e: "Factorización y logaritmo discreto en tiempo polinómico." },
+    { q: "Grover afecta a la criptografía simétrica:", o: ["La rompe por completo", "Reduce su seguridad a la mitad", "No la afecta"], c: 1, e: "Manejable subiendo el tamaño de clave." },
+    { q: "La familia PQC más versátil y eficiente se basa en:", o: ["Isogenias", "Lattices (retículos)", "Curvas elípticas"], c: 1, e: "Kyber y Dilithium son Module-LWE." },
+    { q: "'Harvest now, decrypt later' significa:", o: ["Capturar tráfico cifrado hoy para descifrarlo con cuántica futura", "Minar criptomonedas", "Borrar claves viejas"], c: 0, e: "Motiva migrar a PQC ya." },
+  ],
+  65: [
+    { q: "La propiedad 'zero-knowledge' garantiza que el verificador:", o: ["Aprende el secreto", "No aprende nada salvo la validez", "Obtiene la clave privada"], c: 1, e: "Completitud + soundness + ZK." },
+    { q: "A diferencia de los zk-SNARKs, los zk-STARKs:", o: ["Requieren trusted setup", "Son transparentes y post-cuánticos (solo hashes)", "No son sucintos"], c: 1, e: "A cambio de pruebas más grandes." },
+    { q: "MPC permite:", o: ["Computar una función sobre entradas privadas sin revelarlas", "Cifrar discos", "Escanear puertos"], c: 0, e: "Garbled circuits, secret sharing." },
+    { q: "Una firma de umbral (t de n) sirve para:", o: ["Acelerar el hashing", "Repartir una clave sin un único punto de fallo", "Comprimir datos"], c: 1, e: "Custodia distribuida de claves." },
+  ],
+  66: [
+    { q: "El cifrado homomórfico permite:", o: ["Operar sobre datos sin descifrarlos", "Cifrar más rápido", "Romper RSA"], c: 0, e: "Enc(a)⊕Enc(b)=Enc(a+b)." },
+    { q: "Paillier es homomórfico:", o: ["Multiplicativo", "Aditivo", "Totalmente (FHE)"], c: 1, e: "RSA es el multiplicativo; ambos son PHE." },
+    { q: "El bootstrapping en FHE sirve para:", o: ["Acelerar la red", "Reducir el ruido acumulado para seguir operando", "Generar claves"], c: 1, e: "Lo resolvió Gentry (2009); es costoso." },
+    { q: "El esquema CKKS es ideal para:", o: ["Aritmética aproximada sobre reales (ML)", "Booleanos", "Hashing"], c: 0, e: "BFV/BGV son exactos sobre enteros." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
