@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { EXAM, EXAM_PASS_RATIO } from "../exam";
 import { HW, getHomework, HW_TOTAL_POINTS } from "../homework";
 import { LESSONS, getLesson, lessonsForModule } from "../lessons";
+import { QUIZZES } from "../quizzes";
 import { tokenizeInline, splitLines } from "../markdown";
 
 // ─── EXAM content ────────────────────────────────────────────────────────────
@@ -121,6 +122,32 @@ describe("LESSONS data + helpers", () => {
 
   it("lessonsForModule con módulo inexistente retorna []", () => {
     expect(lessonsForModule(999)).toEqual([]);
+  });
+});
+
+// ─── QUIZZES ↔ LESSONS integrity ─────────────────────────────────────────────
+
+describe("QUIZZES integridad", () => {
+  it("cada lección tiene un quiz con preguntas válidas", () => {
+    for (const lesson of LESSONS) {
+      const quiz = QUIZZES[lesson.id];
+      expect(quiz, `lección ${lesson.id} (${lesson.sub}) sin quiz`).toBeDefined();
+      expect(quiz.length).toBeGreaterThan(0);
+      for (const q of quiz) {
+        expect(q.q.length).toBeGreaterThan(0);
+        expect(q.o.length).toBeGreaterThan(1);
+        expect(q.c).toBeGreaterThanOrEqual(0);
+        expect(q.c).toBeLessThan(q.o.length);
+        expect(q.e.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("cada key de QUIZZES corresponde a una lección existente", () => {
+    const lessonIds = new Set(LESSONS.map((l) => l.id));
+    for (const key of Object.keys(QUIZZES)) {
+      expect(lessonIds.has(Number(key))).toBe(true);
+    }
   });
 });
 

@@ -1,7 +1,8 @@
 import type { Lesson } from "./types";
 
-// 12 lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
+// Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
+// Cobertura: M1-M15 + M51, M53, M54, M55.
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -145,6 +146,90 @@ export const LESSONS: Lesson[] = [
       { h: "¿Por qué C para Seguridad?", c: "C/C++ son esenciales para:\n→ **Reverse engineering** — Entender binarios compilados\n→ **Exploit development** — Buffer overflows, shellcode\n→ **Malware analysis** — La mayoría de malware es C/C++\n→ **Kernel/OS internals** — Linux y Windows son C\n→ **Entender vulnerabilidades de memoria** — Las más críticas\n\nNo necesitas ser experto, pero sí entender: punteros, memoria, stack/heap." },
       { h: "Memoria y Vulnerabilidades", c: "**Stack layout:**\n[buffer local][saved EBP][return address][parámetros]\n\n**Buffer Overflow:**\nchar buffer[64];\ngets(buffer); // ¡NO valida longitud!\n// Si escribes 80 bytes, sobrescribes return address\n\n**Tipos de vulnerabilidades:**\n→ Stack buffer overflow\n→ Heap overflow\n→ Use-after-free\n→ Format string\n→ Integer overflow\n→ Double free\n\n**Protecciones modernas:** ASLR, DEP/NX, Stack Canaries, PIE" },
       { h: "Contramedidas", c: "**ASLR** — Randomiza direcciones de memoria\n**DEP/NX** — No ejecutar datos en stack\n**Stack Canaries** — Detectar overflow antes de return\n**PIE** — Position Independent Executable\n**RELRO** — Protect GOT table\n\n**Bypass techniques (avanzado):**\n→ ROP chains (Return Oriented Programming)\n→ ret2libc\n→ Information leaks para bypassear ASLR\n→ Heap spraying" },
+    ],
+  },
+  {
+    id: 13,
+    title: "Seguridad WiFi",
+    sub: "M9",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Estándares de Seguridad", c: "📡 **WEP** (1999) — RC4 + IV de 24 bits. **Roto**: se crackea en minutos (IVs repetidos).\n🔐 **WPA** (2003) — TKIP, parche temporal sobre hardware WEP. Deprecado.\n🛡️ **WPA2** (2004) — AES-CCMP. Estándar por años. Vulnerable a KRACK y captura de handshake.\n🚀 **WPA3** (2018) — SAE (Dragonfly handshake), forward secrecy, protección offline brute-force, cifrado individualizado en redes abiertas (OWE).\n\nRegla: usá WPA3 si podés, WPA2-AES como mínimo. Nunca WEP/WPA/TKIP." },
+      { h: "Ataques Comunes", c: "👿 **Evil Twin** — AP falso con el mismo SSID para capturar credenciales.\n📴 **Deauth** — Frames 802.11 de desautenticación (no cifrados) para tirar clientes → forzar reconexión.\n🤝 **Handshake capture** — Capturás el 4-way handshake (aircrack-ng) y crackeás offline con diccionario.\n🔑 **PMKID attack** — Captura sin cliente conectado (hcxdumptool + hashcat).\n📌 **WPS PIN** — Brute force del PIN de 8 dígitos con Reaver (por eso: desactivá WPS)." },
+      { h: "KRACK y Protección", c: "💥 **KRACK** (2017) — Key Reinstallation Attack: reinstala una clave ya usada en el handshake de WPA2, permitiendo descifrar/inyectar. WPA3 lo soluciona; parcheá clientes igual.\n\n**Defensa empresarial:**\n→ **WPA3-Enterprise / 802.1X** con RADIUS (cada usuario su credencial, no PSK compartida)\n→ **WIDS/WIPS** — Detección de rogue APs y deauth\n→ **Client isolation** — Clientes no se ven entre sí\n→ SSIDs ocultos NO son seguridad (se descubren fácil)" },
+    ],
+  },
+  {
+    id: 14,
+    title: "Linux: Fundamentos",
+    sub: "M10",
+    dur: "35m",
+    diff: "Básico",
+    sections: [
+      { h: "Por qué Linux en Seguridad", c: "La mayoría de servidores, herramientas de pentesting y la infraestructura cloud corren Linux. Dominarlo es no-negociable.\n\n🐧 **Distros para seguridad:**\n→ **Kali Linux** — 600+ tools preinstaladas (pentesting)\n→ **Parrot OS** — Alternativa liviana a Kali\n→ **Ubuntu/Debian** — Servidores\n→ **Tails** — Anonimato (todo por Tor)" },
+      { h: "Sistema de Archivos (FHS)", c: "Todo es un archivo. Jerarquía estándar:\n📁 **/** raíz · **/etc** config · **/var** logs y datos variables\n📁 **/home** usuarios · **/root** home del admin · **/tmp** temporal\n📁 **/bin /usr/bin** binarios · **/proc** procesos (virtual)\n📁 **/dev** dispositivos · **/mnt /media** montajes\n\n🔍 Archivos clave para seguridad: /etc/passwd, /etc/shadow (hashes), /var/log/auth.log (logins), /etc/sudoers." },
+      { h: "Comandos Esenciales", c: "**Navegación:** ls -la, cd, pwd, find / -name '*.conf', locate\n**Archivos:** cat, less, grep, head, tail -f (logs en vivo)\n**Permisos:** chmod, chown, ls -l\n**Procesos:** ps aux, top, htop, kill, netstat -tulpn / ss -tulpn\n**Red:** ip a, ping, curl, wget, nc (netcat)\n**Usuarios:** whoami, id, sudo, su\n\n💡 Pipe + redirección: cat /var/log/auth.log | grep 'Failed password' | wc -l" },
+    ],
+  },
+  {
+    id: 15,
+    title: "Bash Scripting",
+    sub: "M11",
+    dur: "40m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Fundamentos", c: "El shebang define el intérprete:\n#!/bin/bash\n\n**Variables:**\ntarget='10.0.0.1'\nports=(22 80 443)\n\n**Condicionales:**\nif [ -f /etc/passwd ]; then echo 'existe'; fi\n\n**Loops:**\nfor ip in 10.0.0.{1..254}; do ping -c1 -W1 $ip; done\nwhile read line; do echo $line; done < hosts.txt\n\n**Argumentos:** $1 $2 ... $@ (todos), $# (cantidad)" },
+      { h: "grep, awk, sed", c: "🔎 **grep** — Buscar patrones: grep -rin 'password' /etc/\n✂️ **awk** — Procesar columnas: awk -F: '{print $1}' /etc/passwd (usuarios)\n🔧 **sed** — Editar streams: sed 's/foo/bar/g' file\n\n**Combo real — IPs que más fallaron login:**\ngrep 'Failed password' /var/log/auth.log | awk '{print $11}' | sort | uniq -c | sort -rn | head" },
+      { h: "Scripts de Seguridad", c: "**Ping sweep:**\nfor i in $(seq 1 254); do\n  ping -c1 -W1 10.0.0.$i &> /dev/null && echo 10.0.0.$i UP\ndone\n\n**Port scanner (con /dev/tcp):**\nfor p in 22 80 443 3389; do\n  (echo > /dev/tcp/$1/$p) 2>/dev/null && echo Port $p OPEN\ndone\n\n**Monitor de logins fallidos:**\ntail -f /var/log/auth.log | grep --line-buffered 'Failed password'" },
+    ],
+  },
+  {
+    id: 16,
+    title: "Linux: Permisos y Hardening",
+    sub: "M12",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Permisos rwx", c: "Cada archivo: dueño / grupo / otros, con r(4) w(2) x(1).\n\n**chmod numérico:** 755 = rwxr-xr-x · 644 = rw-r--r-- · 600 = solo dueño\n**chmod simbólico:** chmod u+x script.sh\n**chown:** chown user:group archivo\n\nls -l muestra: -rwxr-xr-x. El primer char: - archivo, d directorio, l symlink." },
+      { h: "SUID, SGID y sudo", c: "⚠️ **SUID** (chmod 4755) — El binario corre con permisos del DUEÑO, no de quien lo ejecuta. Si es root y es explotable → escalada de privilegios.\n🔍 Encontrar SUID: find / -perm -4000 -type f 2>/dev/null\n📚 GTFOBins documenta binarios SUID abusables (vim, find, nmap viejo...).\n\n**sudo** — Permisos elevados puntuales. /etc/sudoers define quién puede qué. sudo -l lista lo permitido.\n**PAM** — Pluggable Authentication Modules: política de auth (longitud de password, lockout, MFA)." },
+      { h: "Hardening Esencial", c: "✅ Deshabilitar root SSH (PermitRootLogin no) + usar claves, no passwords\n✅ Firewall (ufw/iptables) con default deny\n✅ Actualizar: apt update && apt upgrade\n✅ Eliminar servicios y paquetes innecesarios\n✅ fail2ban contra brute force\n✅ Auditd para logging de syscalls\n✅ **SELinux** (RHEL) / **AppArmor** (Debian/Ubuntu) — MAC: confinan procesos aunque sean comprometidos\n✅ **CIS Benchmarks** — checklist de hardening por OS, medible con herramientas (Lynis)" },
+    ],
+  },
+  {
+    id: 17,
+    title: "Windows: Seguridad",
+    sub: "M13",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Arquitectura y Registro", c: "🪟 Windows domina el endpoint corporativo → blanco principal.\n\n**Registro (regedit):** base de datos jerárquica de config. Hives clave:\n→ HKLM\\\\SYSTEM, HKLM\\\\SOFTWARE — sistema\n→ HKCU — usuario actual\n→ Persistencia de malware: ...\\\\Run, ...\\\\RunOnce\n\n**Servicios:** services.msc. Muchos corren como SYSTEM (máximo privilegio) → objetivo de explotación." },
+      { h: "Event Viewer y Logs", c: "Los logs de Windows (Event Viewer / wevtutil) son la fuente para detección. **Event IDs críticos:**\n🔑 **4624** — Logon exitoso\n❌ **4625** — Logon fallido (brute force)\n🎫 **4648** — Logon con credenciales explícitas (lateral movement)\n👑 **4672** — Privilegios especiales asignados (admin logon)\n➕ **4720** — Cuenta de usuario creada (persistencia)\n⚙️ **7045** — Servicio nuevo instalado (PsExec, malware)\n\nCanales: Security, System, Application, PowerShell/Operational." },
+      { h: "Defensas Nativas", c: "🛡️ **Windows Defender** — AV/EDR integrado\n🔬 **AMSI** (Antimalware Scan Interface) — Inspecciona scripts (PowerShell, JS, VBA) en memoria antes de ejecutar → los atacantes intentan bypassearlo\n📊 **ETW** (Event Tracing for Windows) — Telemetría profunda usada por EDRs\n📋 **GPO** (Group Policy) — Política centralizada en dominio: longitud de password, AppLocker, restricciones\n🔒 **Credential Guard, LSA Protection** — Protegen credenciales en memoria contra Mimikatz" },
+    ],
+  },
+  {
+    id: 18,
+    title: "Active Directory",
+    sub: "M14",
+    dur: "45m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Fundamentos de AD", c: "Active Directory es el directorio que gestiona identidad y acceso en redes Windows corporativas. Comprometer el AD = comprometer la organización.\n\n🏛️ **Domain Controller (DC)** — Servidor que aloja AD\n🌳 **Forest > Domain > OU** — Jerarquía\n👤 **Objetos:** usuarios, grupos, computadoras\n📜 **GPO** — Políticas aplicadas por OU\n🔎 **LDAP** (389/636) — Protocolo de consulta del directorio" },
+      { h: "Kerberos", c: "Protocolo de autenticación de AD (no manda passwords por la red):\n1️⃣ Cliente pide **TGT** al KDC (AS-REQ), cifrado con hash del usuario\n2️⃣ KDC devuelve TGT (cifrado con la clave de krbtgt)\n3️⃣ Cliente usa TGT para pedir un **TGS** (service ticket) para un servicio\n4️⃣ Presenta el TGS al servicio\n\nEl ticket prueba identidad sin reenviar la clave. Pero el diseño abre varios ataques..." },
+      { h: "Ataques a AD", c: "🔥 **Kerberoasting** — Pedís TGS de cuentas de servicio (SPN) y crackeás su hash offline (password débil → game over)\n🎯 **AS-REP Roasting** — Cuentas sin preauth Kerberos → hash crackeable\n🪙 **Pass-the-Hash** — Reutilizás el hash NTLM sin conocer la password\n🩸 **DCSync** — Simulás ser un DC y pedís replicar hashes (Mimikatz)\n👑 **Golden Ticket** — Con el hash de krbtgt forjás TGTs válidos para cualquier usuario (persistencia total)\n\n**Defensa:** passwords largas en cuentas de servicio, gMSA, tiering, monitoreo de 4769, LAPS, ATA/Defender for Identity." },
+    ],
+  },
+  {
+    id: 19,
+    title: "PowerShell para Seguridad",
+    sub: "M15",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Fundamentos", c: "PowerShell es shell + lenguaje con acceso total a .NET y la API de Windows → arma de doble filo (admin y atacante).\n\n**Cmdlets** siguen Verbo-Sustantivo:\nGet-Process, Get-Service, Get-EventLog, Get-LocalUser\n\n**Pipeline con objetos** (no texto):\nGet-Process | Where-Object {$_.CPU -gt 100} | Sort-Object CPU -Descending\n\n**Ejecución:** Get-Help, Get-Member (explora propiedades de un objeto)." },
+      { h: "Scripts de Auditoría", c: "**Usuarios admin locales:**\nGet-LocalGroupMember -Group 'Administrators'\n\n**Servicios corriendo como SYSTEM:**\nGet-WmiObject Win32_Service | Where {$_.StartName -eq 'LocalSystem'} | Select Name,PathName\n\n**Archivos modificados en 24h:**\nGet-ChildItem C:\\\\ -Recurse | Where {$_.LastWriteTime -gt (Get-Date).AddDays(-1)}\n\n**Logins fallidos:**\nGet-EventLog Security -InstanceId 4625 -Newest 20" },
+      { h: "PowerShell Ofensivo y Defensa", c: "⚔️ **Ofensivo:** los atacantes lo aman por ser nativo (LOLBin) y correr en memoria:\n→ **PowerShell Empire / PowerSploit** — Post-explotación\n→ **AMSI bypass** + ofuscación para evadir Defender\n→ Descargar y ejecutar en memoria: IEX (New-Object Net.WebClient).DownloadString(...)\n\n🛡️ **Defensa:**\n→ **Script Block Logging** (4104) + **Module Logging** + transcription\n→ **Constrained Language Mode**\n→ **AppLocker / WDAC** para restringir ejecución\n→ Alertar sobre EncodedCommand y descargas en memoria" },
     ],
   },
 ];

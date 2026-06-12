@@ -72,6 +72,48 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "ASLR protege contra:", o: ["XSS", "Predicción de direcciones de memoria", "SQL Injection"], c: 1, e: "Randomiza layout de memoria." },
     { q: "La mayoría de malware está escrito en:", o: ["Python", "JavaScript", "C/C++"], c: 2, e: "C/C++ = bajo nivel, acceso a memoria." },
   ],
+  13: [
+    { q: "¿Qué estándar WiFi usa SAE (Dragonfly)?", o: ["WEP", "WPA2", "WPA3"], c: 2, e: "WPA3 reemplaza el PSK handshake por SAE." },
+    { q: "Un ataque de deauth sirve para:", o: ["Crackear el password directo", "Tirar clientes y forzar reconexión", "Clonar la MAC del router"], c: 1, e: "Los frames de deauth no están cifrados en WPA2." },
+    { q: "Evil Twin es:", o: ["Un AP falso con el mismo SSID", "Un virus de router", "Un tipo de cifrado"], c: 0, e: "Suplanta la red legítima para capturar credenciales." },
+    { q: "KRACK (2017) atacó:", o: ["WEP", "El 4-way handshake de WPA2", "WPS"], c: 1, e: "Key Reinstallation Attack reinstala una clave usada." },
+  ],
+  14: [
+    { q: "¿Dónde están los hashes de contraseñas en Linux?", o: ["/etc/passwd", "/etc/shadow", "/var/log/auth.log"], c: 1, e: "/etc/shadow (solo root) guarda los hashes." },
+    { q: "tail -f se usa para:", o: ["Borrar logs", "Ver logs en tiempo real", "Cifrar archivos"], c: 1, e: "Sigue el archivo a medida que crece." },
+    { q: "¿Qué distro trae 600+ herramientas de pentesting?", o: ["Ubuntu Server", "Kali Linux", "Tails"], c: 1, e: "Kali está orientada a seguridad ofensiva." },
+    { q: "ss -tulpn o netstat -tulpn muestra:", o: ["Usuarios logueados", "Puertos y conexiones de red", "Permisos de archivos"], c: 1, e: "Sockets/puertos en escucha y conexiones." },
+  ],
+  15: [
+    { q: "El shebang #!/bin/bash indica:", o: ["Un comentario", "El intérprete del script", "Una variable"], c: 1, e: "Define qué programa ejecuta el script." },
+    { q: "Para extraer la primera columna de /etc/passwd (separada por :) usás:", o: ["grep", "awk -F:", "sed"], c: 1, e: "awk con field separator ':'." },
+    { q: "Para contar logins fallidos: grep 'Failed password' auth.log | ___", o: ["wc -l", "rm -f", "chmod 777"], c: 0, e: "wc -l cuenta las líneas coincidentes." },
+    { q: "for i in $(seq 1 254) sirve típicamente para:", o: ["Un ping sweep", "Cifrar un disco", "Crear usuarios"], c: 0, e: "Itera la última octeto para barrer una /24." },
+  ],
+  16: [
+    { q: "chmod 600 da permisos:", o: ["rwxr-xr-x", "rw------- (solo dueño)", "rwxrwxrwx"], c: 1, e: "6=rw para dueño, 0 para grupo y otros." },
+    { q: "El bit SUID hace que el binario corra como:", o: ["El usuario que lo ejecuta", "El dueño del archivo", "root siempre"], c: 1, e: "Con permisos del dueño → riesgo de escalada si es root." },
+    { q: "Para encontrar binarios SUID:", o: ["find / -perm -4000 -type f", "ls -la /etc", "chmod -R 777 /"], c: 0, e: "Busca el bit SUID (4000)." },
+    { q: "SELinux y AppArmor implementan:", o: ["Cifrado de disco", "Control de acceso obligatorio (MAC)", "Un firewall"], c: 1, e: "Confinan procesos aunque sean comprometidos." },
+  ],
+  17: [
+    { q: "El Event ID 4625 en Windows registra:", o: ["Logon exitoso", "Logon fallido", "Servicio nuevo"], c: 1, e: "4625 = fallo de autenticación (brute force)." },
+    { q: "El Event ID 7045 suele indicar:", o: ["Cambio de password", "Instalación de un servicio nuevo", "Apagado del sistema"], c: 1, e: "Usado por PsExec y malware para persistencia." },
+    { q: "AMSI sirve para:", o: ["Cifrar el disco", "Inspeccionar scripts en memoria antes de ejecutar", "Gestionar usuarios"], c: 1, e: "Antimalware Scan Interface; los atacantes intentan bypassearlo." },
+    { q: "Las claves de registro Run/RunOnce se usan comúnmente para:", o: ["Persistencia de malware", "Cifrado", "Backups"], c: 0, e: "Ejecutan programas al inicio de sesión." },
+  ],
+  18: [
+    { q: "El servidor que aloja Active Directory se llama:", o: ["Domain Controller", "Proxy", "Bastion"], c: 0, e: "DC = Domain Controller." },
+    { q: "Kerberoasting explota:", o: ["Cuentas de servicio con SPN", "Puertos abiertos", "Contraseñas en texto plano"], c: 0, e: "Pedís el TGS y crackeás el hash offline." },
+    { q: "Un Golden Ticket se forja con el hash de:", o: ["Administrator", "krbtgt", "El usuario víctima"], c: 1, e: "Con krbtgt forjás TGTs válidos para cualquiera." },
+    { q: "DCSync abusa de:", o: ["La replicación entre Domain Controllers", "Un buffer overflow", "DNS"], c: 0, e: "Simula ser un DC para pedir hashes." },
+  ],
+  19: [
+    { q: "Los cmdlets de PowerShell siguen el patrón:", o: ["Sustantivo-Verbo", "Verbo-Sustantivo", "solo-minúsculas"], c: 1, e: "Get-Process, Set-Item, etc." },
+    { q: "El pipeline de PowerShell pasa:", o: ["Texto plano", "Objetos", "Bytes"], c: 1, e: "A diferencia de bash, pasa objetos .NET." },
+    { q: "Script Block Logging (Event ID 4104) sirve para:", o: ["Acelerar scripts", "Auditar el código PowerShell ejecutado", "Cifrar scripts"], c: 1, e: "Clave para detectar PowerShell ofensivo." },
+    { q: "IEX (New-Object Net.WebClient).DownloadString(...) suele indicar:", o: ["Una actualización normal", "Descarga y ejecución en memoria (sospechoso)", "Un backup"], c: 1, e: "Técnica fileless común en ataques." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
