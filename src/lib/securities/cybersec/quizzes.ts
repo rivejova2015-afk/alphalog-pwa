@@ -397,6 +397,30 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "El bootstrapping en FHE sirve para:", o: ["Acelerar la red", "Reducir el ruido acumulado para seguir operando", "Generar claves"], c: 1, e: "Lo resolvió Gentry (2009); es costoso." },
     { q: "El esquema CKKS es ideal para:", o: ["Aritmética aproximada sobre reales (ML)", "Booleanos", "Hashing"], c: 0, e: "BFV/BGV son exactos sobre enteros." },
   ],
+  67: [
+    { q: "Un ejemplo adversarial es:", o: ["Un bug del framework", "Una entrada con perturbación mínima que engaña al modelo", "Un dato faltante"], c: 1, e: "Imperceptible para un humano." },
+    { q: "FGSM y PGD son ataques de:", o: ["Entrenamiento (poisoning)", "Inferencia (evasión)", "Red"], c: 1, e: "Usan el gradiente de la pérdida." },
+    { q: "Un backdoor (BadNets) hace que el modelo:", o: ["Falle siempre", "Funcione normal salvo ante un trigger específico", "No entrene"], c: 1, e: "Ataque en tiempo de entrenamiento." },
+    { q: "La defensa más efectiva contra adversariales es:", o: ["Adversarial training", "Más capas", "Bajar el learning rate"], c: 0, e: "Costosa y reduce precisión limpia." },
+  ],
+  68: [
+    { q: "El model extraction consiste en:", o: ["Cifrar el modelo", "Clonar un modelo consultando su API", "Borrar el dataset"], c: 1, e: "Roba IP y habilita evasión black-box." },
+    { q: "El membership inference determina:", o: ["Si un registro estuvo en el entrenamiento", "El learning rate", "La arquitectura"], c: 0, e: "Se apoya en el overfitting." },
+    { q: "Los LLMs pueden sufrir:", o: ["Training data extraction (regurgitar PII)", "Sólo DDoS", "Nada de privacidad"], c: 0, e: "Memorizan parte del corpus." },
+    { q: "DP-SGD protege la privacidad agregando:", o: ["Más datos", "Clipping de gradientes + ruido calibrado", "Capas extra"], c: 1, e: "Provee un presupuesto ε." },
+  ],
+  69: [
+    { q: "El problema de fondo de los LLMs es que:", o: ["Son lentos", "No distinguen instrucciones de datos (todo es texto)", "No tienen API"], c: 1, e: "Base de la prompt injection." },
+    { q: "La prompt injection indirecta llega vía:", o: ["El system prompt", "Datos externos que el LLM procesa (web, email, PDF)", "El teclado físico"], c: 1, e: "La más peligrosa en agentes." },
+    { q: "La salida de un LLM debe tratarse como:", o: ["Confiable", "Entrada NO confiable (puede causar XSS/SQLi/RCE)", "Cifrada"], c: 1, e: "Insecure output handling." },
+    { q: "Excessive agency se mitiga con:", o: ["Más herramientas", "Least privilege + human-in-the-loop", "Más tokens"], c: 1, e: "Limitar permisos del agente." },
+  ],
+  70: [
+    { q: "Cargar un modelo en formato pickle puede:", o: ["Ejecutar código arbitrario (RCE)", "Acelerar la inferencia", "Cifrar el modelo"], c: 0, e: "Por eso existe safetensors." },
+    { q: "safetensors es más seguro porque:", o: ["Comprime mejor", "Solo guarda tensores, sin código ejecutable", "Usa GPU"], c: 1, e: "Evita la deserialización peligrosa." },
+    { q: "Un MLBOM / SBOM de ML inventaria:", o: ["Solo el código", "Datasets, modelos base y dependencias", "Los usuarios"], c: 1, e: "Clave para provenance e integridad." },
+    { q: "El monitoreo en producción de un modelo busca:", o: ["Drift, evasión y abuso por queries", "Subir la precisión sola", "Nada, ya está desplegado"], c: 0, e: "La seguridad no termina al desplegar." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {

@@ -100,6 +100,12 @@ export const SYLLABUS: Module[] = [
   { m: 64, title: "Criptografía Post-Cuántica", cat: "Cripto Avanzada", wk: "64", levels: { b: "amenaza cuántica (Shor, Grover)", i: "familias PQC (lattices, hash, code)", a: "internals de Kyber/Dilithium, migración híbrida" }, topics: ["Amenaza cuántica", "Familias PQC", "Estándares NIST", "Migración y cripto-agilidad"], research: "Investiga por qué SIKE (isogenias) fue roto en 2022 pese a ser finalista de NIST. ¿Qué lección deja sobre confiar en supuestos matemáticos nuevos?", st: "locked" },
   { m: 65, title: "Zero-Knowledge Proofs y MPC", cat: "Cripto Avanzada", wk: "65", levels: { b: "propiedades ZK, protocolo de Schnorr", i: "zk-SNARKs vs zk-STARKs, Fiat-Shamir", a: "MPC (garbled circuits, secret sharing), aplicaciones" }, topics: ["Pruebas de conocimiento cero", "zk-SNARKs/STARKs", "Secure Multi-Party Computation", "Aplicaciones"], research: "Compara zk-SNARKs vs zk-STARKs: trusted setup, tamaño de prueba, resistencia cuántica y casos de uso (rollups, privacidad). ¿Cuándo elegirías cada uno?", st: "locked" },
   { m: 66, title: "Cifrado Homomórfico", cat: "Cripto Avanzada", wk: "66", levels: { b: "computar sobre datos cifrados, PHE", i: "FHE: bootstrapping, BGV/BFV/CKKS/TFHE", a: "ruido, performance, ML privado" }, topics: ["Homomorphic encryption", "Esquemas FHE", "Desafíos de performance", "Aplicaciones y límites"], research: "Investiga un caso real de Fully Homomorphic Encryption en producción (ej: inferencia de ML sobre datos cifrados): qué esquema usa, qué overhead tiene y qué problema de privacidad resuelve.", st: "locked" },
+
+  // ─── BLOQUE 16: AI/ML SECURITY (67-70) ───
+  { m: 67, title: "Adversarial Machine Learning", cat: "AI/ML Security", wk: "67", levels: { b: "ejemplos adversariales, fragilidad", i: "evasion (FGSM/PGD/C&W), transferibilidad", a: "poisoning, backdoors, defensas certificadas" }, topics: ["Adversarial examples", "Ataques de evasión", "Poisoning y backdoors", "Defensas y robustez"], research: "Reproduce un ataque FGSM contra un clasificador de imágenes simple: muestra cómo una perturbación imperceptible cambia la predicción y cómo el adversarial training mejora la robustez.", st: "locked" },
+  { m: 68, title: "Privacy Attacks on ML", cat: "AI/ML Security", wk: "68", levels: { b: "fugas de privacidad en modelos", i: "model extraction, membership inference", a: "model inversion, differential privacy (DP-SGD)" }, topics: ["Model extraction", "Membership inference", "Model inversion", "Differential privacy"], research: "Investiga un ataque de membership inference: cómo determina si un registro estuvo en el set de entrenamiento y qué defensas (DP-SGD, regularización) lo mitigan.", st: "locked" },
+  { m: 69, title: "LLM Security", cat: "AI/ML Security", wk: "69", levels: { b: "OWASP Top 10 for LLM", i: "prompt injection directa/indirecta, jailbreaks", a: "RAG poisoning, agentes, excessive agency" }, topics: ["OWASP LLM Top 10", "Prompt injection y jailbreaks", "Fuga de datos y output handling", "RAG y agentes"], research: "Analiza un caso real de prompt injection indirecta (ej: datos envenenados en una página que un agente LLM procesa). ¿Cómo se ejecuta y qué guardrails lo previenen?", st: "locked" },
+  { m: 70, title: "MLSecOps y ML Supply Chain", cat: "AI/ML Security", wk: "70", levels: { b: "la cadena de suministro de ML", i: "riesgos de serialización (pickle RCE), provenance", a: "firmar modelos, SBOM de ML, seguridad del pipeline" }, topics: ["ML supply chain", "Serialización insegura", "Provenance e integridad", "Seguridad del pipeline"], research: "Investiga cómo un modelo en formato pickle puede ejecutar código arbitrario al cargarse y por qué safetensors lo mitiga. ¿Qué controles aplicarías al descargar modelos de un hub público?", st: "locked" },
 ];
 
 export const SYLLABUS_CATEGORIES = [
@@ -119,6 +125,7 @@ export const SYLLABUS_CATEGORIES = [
   // Doctorate / Research Track
   "Exploit Dev Avanzado",
   "Cripto Avanzada",
+  "AI/ML Security",
 ] as const;
 
 export type SyllabusCategory = (typeof SYLLABUS_CATEGORIES)[number];
