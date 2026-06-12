@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59-70).
+// Cobertura: los 58 módulos del syllabus (M1-M58) + Doctorate Track (M59-74).
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -854,6 +854,58 @@ export const LESSONS: Lesson[] = [
       { h: "Serialización Insegura", c: "💣 El riesgo más concreto: **deserialización**. El formato **pickle** de Python (usado por PyTorch y muchos modelos) ejecuta código arbitrario al cargarse:\nimport torch\nmodel = torch.load('modelo.pt')   # puede correr código del atacante\n\nUn modelo malicioso ejecuta un payload en cuanto lo cargás → **RCE**. Por eso surgió **safetensors**: un formato que solo almacena tensores (datos), sin código ejecutable. Preferí safetensors y escaneá los pickles (picklescan) antes de cargarlos." },
       { h: "Provenance e Integridad", c: "📋 Garantizar de dónde viene y que no fue alterado:\n→ **Model cards** — Documentar datos, limitaciones, licencia y uso previsto\n→ **Firma y hashing** — Verificar el hash/firma del modelo (Sigstore para ML)\n→ **SBOM de ML / MLBOM** — Inventario de datasets, modelos base y dependencias\n→ **Provenance del entrenamiento** — Trazar qué datos y código produjeron el modelo (clave ante poisoning)" },
       { h: "Seguridad del Pipeline", c: "🛡️ **MLSecOps** lleva las prácticas DevSecOps al ciclo de ML:\n→ Control de acceso al **model registry** y a los datos de entrenamiento\n→ Escaneo de dependencias y de modelos (picklescan, ModelScan)\n→ Aislar el entrenamiento (un pipeline comprometido entrena un backdoor)\n→ **Monitoreo en producción** — Detectar drift, ataques de evasión, abuso de la API y exfiltración por queries\n→ Versionado y reproducibilidad (poder volver a un modelo limpio)\n\nLa seguridad del modelo no termina al desplegarlo: el monitoreo continuo es parte del ciclo." },
+    ],
+  },
+  {
+    id: 71,
+    title: "Side-Channels Microarquitectónicos",
+    sub: "M71",
+    dur: "55m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Ejecución Especulativa", c: "⚙️ Los CPUs modernos ejecutan instrucciones **especulativamente** (antes de saber si harán falta) y **fuera de orden** para ir rápido. Si la especulación falla, el resultado arquitectónico se descarta... pero deja **trazas microarquitectónicas** (en la caché) que NO se revierten.\n\nEsa es la grieta: datos que el programa nunca debería ver se cargan transitoriamente en caché, y un side-channel los recupera. Es un fallo de **diseño de toda una generación de CPUs**, no un bug de software." },
+      { h: "Spectre y Meltdown", c: "💥 Los dos ataques que abrieron el campo (2018):\n→ **Meltdown** (CVE-2017-5754) — Aprovecha la ejecución **out-of-order** para leer memoria de **kernel** desde user space antes de que el chequeo de permisos aborte. Se mitiga con **KPTI** (separar page tables de kernel/user).\n→ **Spectre** (v1 bounds-check bypass, v2 branch target injection) — Entrena el **predictor de saltos** para que el CPU especule por un camino que filtra datos cruzando límites (incluso de otro proceso/sandbox). Más difícil de mitigar; KPTI NO lo cubre.\n\nAmbos extraen el secreto especulado vía un cache side-channel." },
+      { h: "Cache Side-Channels", c: "📡 El canal de salida típico es la **caché**:\n→ **FLUSH+RELOAD** — Desalojás una línea (clflush), dejás que la víctima ejecute, y medís el tiempo de recarga: si es rápida, la víctima la tocó → filtra qué dato/índice usó\n→ **PRIME+PROBE** — Llenás un set de caché y medís evicciones\n\nEl código de Spectre/Meltdown usa el byte secreto como **índice** de un acceso a un array; luego FLUSH+RELOAD revela qué entrada quedó en caché → reconstruye el byte. Mide tiempos, no lee memoria directamente." },
+      { h: "Variantes y Mitigaciones", c: "🌊 La familia creció: **Foreshadow/L1TF**, **MDS/Zombieload/RIDL** (fugas de buffers internos), **Retbleed**, **Downfall** (Gather), **Inception**. **Rowhammer** es pariente hardware: martillar filas de DRAM voltea bits adyacentes.\n\n🛡️ Mitigaciones (con costo de rendimiento):\n→ KPTI, **retpoline** (anti-BTI), microcode updates, flush de buffers en cambios de contexto, IBRS/STIBP\n→ Deshabilitar hyper-threading en cargas sensibles\n→ Aislamiento por proceso\n\nLa lección: el aislamiento de software (procesos, VMs, enclaves) puede romperse por debajo, en el silicio." },
+    ],
+  },
+  {
+    id: 72,
+    title: "Fault Injection y Hardware Attacks",
+    sub: "M72",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Fault Injection", c: "⚡ El **fault injection** perturba físicamente el chip durante la ejecución para inducir un comportamiento erróneo y explotable:\n→ **Voltage glitching** — Una caída breve de voltaje hace que el CPU 'saltee' o corrompa una instrucción\n→ **Clock glitching** — Un pulso de reloj fuera de spec\n→ **EM fault injection** — Un pulso electromagnético localizado\n→ **Laser** — Precisión a nivel de transistor (caro, potente)\n\nObjetivo típico: bypassear una comparación (skip de la verificación de PIN/firma), o corromper un cálculo criptográfico para un **DFA** (Differential Fault Analysis) que despeja la clave." },
+      { h: "Power y EM Analysis", c: "🔋 Los ataques de canal lateral por consumo (**SCA**) leen secretos observando el chip mientras opera:\n→ **SPA** (Simple Power Analysis) — Distinguir operaciones por su firma de consumo (ej: el square-and-multiply de RSA revela los bits del exponente)\n→ **DPA / CPA** (Differential / Correlation) — Estadística sobre muchas trazas para correlacionar el consumo con valores intermedios y recuperar la clave byte a byte\n→ **EM analysis** — Igual pero capturando emanaciones electromagnéticas (no requiere contacto)\n\nDevastadores contra smartcards, IoT y secure elements sin contramedidas." },
+      { h: "Implantes y Tampering", c: "🔧 Ataques con acceso físico al hardware:\n→ **Interfaces de debug** — JTAG/SWD/UART abiertas dan acceso a memoria y consola\n→ **Chip-off / flash dumping** — Desoldar y leer la memoria flash externa (firmware, claves)\n→ **Implantes de supply chain** — Modificar el hardware en fabricación/tránsito (el caso teórico del 'chip espía')\n→ **Cold boot** — Congelar la RAM para leer claves residuales tras apagar\n\nEl modelo de amenaza con acceso físico es mucho más amplio que el remoto." },
+      { h: "Contramedidas", c: "🛡️ Defensa en hardware seguro:\n→ **Redundancia y checks** — Ejecutar dos veces y comparar, detectar saltos imposibles (anti-glitch)\n→ **Sensores de tamper** — Detectar voltaje/temperatura/luz anómalos y borrar las claves (zeroization)\n→ **Masking y operaciones en tiempo constante** — Romper la correlación de DPA\n→ **Secure elements / mallas anti-tamper** — Recubrimientos que se destruyen al abrir\n→ **Deshabilitar interfaces de debug** en producción (fuses)\n\nLa certificación (Common Criteria, FIPS 140-3) evalúa justo esta resistencia física." },
+    ],
+  },
+  {
+    id: 73,
+    title: "Firmware, UEFI y Secure Boot",
+    sub: "M73",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "La Cadena de Arranque", c: "🔌 Antes de que cargue el SO, corre el **firmware** (UEFI/BIOS). La cadena: hardware → firmware UEFI → bootloader → kernel → SO. El firmware es un blanco de oro porque vive **por debajo del SO**: un implante ahí persiste aunque reinstales Windows/Linux o cambies el disco.\n\nAdemás corre con privilegios máximos y antes que cualquier defensa (AV/EDR). Comprometerlo es la persistencia definitiva." },
+      { h: "Seguridad UEFI", c: "🔐 Defensas del arranque:\n→ **Secure Boot** — El firmware solo ejecuta bootloaders/drivers firmados por claves de confianza (db/dbx, KEK, PK). Bloquea bootkits no firmados\n→ **Measured Boot** — Cada etapa mide (hashea) la siguiente y extiende los **PCRs** del TPM → permite **attestation** remota del estado de arranque\n→ **SMM** (System Management Mode) — Un modo ultra-privilegiado (ring -2); bugs en el SMM dan control casi indetectable\n→ **Intel Boot Guard / AMD** — Root of trust en hardware que verifica el firmware inicial" },
+      { h: "Ataques de Firmware", c: "☠️ → **Bootkits** — **LoJax** (2018, APT28) fue el primer UEFI rootkit in-the-wild: se implanta en el **SPI flash** y sobrevive a reinstalar el SO y cambiar el disco\n→ **Implantes en ME/PSP** — El Intel Management Engine (y AMD PSP) son sub-sistemas privilegiados; vulns ahí son críticas\n→ **Evil maid** — Acceso físico breve para flashear firmware malicioso\n→ **Downgrade** — Forzar firmware viejo y vulnerable\n→ **Bugs de SMM** y de parsers UEFI (BootHole en GRUB)" },
+      { h: "Defensas y Herramientas", c: "🛡️ → Activar **Secure Boot + Measured Boot** con un TPM y attestation\n→ **Boot Guard** y firmware con protección de escritura del SPI flash\n→ **Actualizar el firmware** (muchos lo ignoran) y mantener un **SBOM de firmware**\n→ Monitorear integridad del firmware en flota\n\n🔧 **chipsec** (Intel) audita la configuración de seguridad del firmware: protección del SPI flash, Secure Boot, SMM, BIOS write enable. Es la herramienta de referencia para forense y hardening de firmware." },
+    ],
+  },
+  {
+    id: 74,
+    title: "Trusted Execution y Roots of Trust",
+    sub: "M74",
+    dur: "50m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Root of Trust", c: "⚓ Toda la seguridad necesita un punto de partida confiable: un **root of trust**, anclado en **hardware** (no se puede modificar por software). Desde ahí se construye una cadena: cada componente verifica al siguiente antes de cederle control.\n\nSi el ancla es de software, un atacante con suficiente privilegio lo subvierte. Por eso los secretos y la verificación de arranque se mueven al silicio (TPM, secure elements, fuses)." },
+      { h: "TPM y Attestation", c: "🔏 El **TPM** (Trusted Platform Module) es un chip que:\n→ Guarda claves que **nunca salen** en claro\n→ Mantiene los **PCRs** (Platform Configuration Registers) con las mediciones del arranque\n→ **Sealing** — Cifrar datos atados a un estado de PCRs (solo se descifran si el sistema arrancó 'sano'). BitLocker lo usa\n→ **Remote attestation** — Probar a un tercero, de forma firmada, en qué estado arrancó la máquina\n\nEs la base de medir y confiar en la integridad de la plataforma." },
+      { h: "TEEs y Confidential Computing", c: "🏰 Un **TEE** (Trusted Execution Environment) ejecuta código en un **enclave** aislado, protegido incluso del SO y del hipervisor:\n→ **Intel SGX** — Enclaves a nivel de proceso; memoria cifrada por hardware\n→ **ARM TrustZone** — Mundo 'seguro' vs 'normal' (móviles, IoT)\n→ **AMD SEV / Intel TDX** — Cifrado de VMs enteras → **confidential computing** en la nube (correr cargas sin que el proveedor vea los datos)\n\nProvee confidencialidad e integridad del cómputo frente a un host comprometido." },
+      { h: "Ataques y Límites", c: "⚠️ Un TEE NO es una bala de plata:\n→ **Foreshadow/L1TF** y **SGAxe** — Side-channels microarquitectónicos que extraen secretos de enclaves SGX, incluso las claves de attestation\n→ **Plundervolt** — Fault injection vía voltaje contra SGX\n→ Los side-channels (caché, timing) suelen quedar **fuera del modelo de amenaza** del TEE\n\nLos **HSM** (Hardware Security Modules) certificados (FIPS 140-3) siguen siendo el estándar para custodia de claves de alto valor. Regla: un TEE eleva la barra, pero asumí que un adversario con acceso microarquitectónico/físico puede atacarlo." },
     ],
   },
 ];

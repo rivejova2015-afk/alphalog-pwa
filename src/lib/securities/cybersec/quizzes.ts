@@ -421,6 +421,30 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Un MLBOM / SBOM de ML inventaria:", o: ["Solo el código", "Datasets, modelos base y dependencias", "Los usuarios"], c: 1, e: "Clave para provenance e integridad." },
     { q: "El monitoreo en producción de un modelo busca:", o: ["Drift, evasión y abuso por queries", "Subir la precisión sola", "Nada, ya está desplegado"], c: 0, e: "La seguridad no termina al desplegar." },
   ],
+  71: [
+    { q: "Spectre y Meltdown explotan:", o: ["Un bug de software puntual", "La ejecución especulativa/out-of-order del CPU", "WiFi"], c: 1, e: "Dejan trazas microarquitectónicas en caché." },
+    { q: "KPTI mitiga Meltdown pero no Spectre porque:", o: ["Spectre cruza el predictor de saltos, no solo kernel/user", "Spectre es más viejo", "KPTI desactiva el CPU"], c: 0, e: "Separar page tables no cubre el branch prediction." },
+    { q: "FLUSH+RELOAD recupera el secreto midiendo:", o: ["El voltaje", "El tiempo de recarga de líneas de caché", "El tráfico de red"], c: 1, e: "El byte secreto se usa como índice de un array." },
+    { q: "Estos ataques demuestran que:", o: ["El software es siempre seguro", "El aislamiento puede romperse por debajo, en el silicio", "La caché no importa"], c: 1, e: "Procesos/VMs/enclaves afectados." },
+  ],
+  72: [
+    { q: "El voltage glitching busca:", o: ["Cifrar datos", "Inducir un fallo (saltear una instrucción/corromper un cálculo)", "Acelerar el chip"], c: 1, e: "Ej: bypassear una verificación de firma." },
+    { q: "DPA/CPA recuperan una clave correlacionando:", o: ["El consumo eléctrico con valores intermedios", "El hash con la clave", "El tiempo de red"], c: 0, e: "Estadística sobre muchas trazas." },
+    { q: "Una interfaz JTAG/UART abierta en producción:", o: ["Es inofensiva", "Da acceso a memoria y consola del dispositivo", "Cifra el firmware"], c: 1, e: "Hay que deshabilitarla (fuses)." },
+    { q: "Un sensor anti-tamper típicamente:", o: ["Acelera el boot", "Borra las claves (zeroization) ante manipulación", "Sube el voltaje"], c: 1, e: "Detecta voltaje/temperatura/luz anómalos." },
+  ],
+  73: [
+    { q: "El firmware es un blanco de oro porque:", o: ["Es lento", "Persiste por debajo del SO (sobrevive a reinstalarlo)", "No tiene privilegios"], c: 1, e: "Corre antes que cualquier AV/EDR." },
+    { q: "Secure Boot garantiza que el firmware:", o: ["Cifra el disco", "Solo ejecuta bootloaders firmados por claves de confianza", "Acelera el arranque"], c: 1, e: "Bloquea bootkits no firmados." },
+    { q: "LoJax (APT28) fue notable por:", o: ["Ser un ransomware", "Ser un UEFI rootkit que persiste en el SPI flash", "Atacar WiFi"], c: 1, e: "Sobrevive a reinstalar el SO." },
+    { q: "chipsec se usa para:", o: ["Crackear WPA2", "Auditar la configuración de seguridad del firmware", "Generar payloads"], c: 1, e: "SPI protection, Secure Boot, SMM." },
+  ],
+  74: [
+    { q: "Un root of trust debe estar anclado en:", o: ["Software", "Hardware (no modificable por software)", "La red"], c: 1, e: "Si el ancla es software, se subvierte." },
+    { q: "Los PCRs de un TPM almacenan:", o: ["Las claves en claro", "Las mediciones (hashes) del arranque", "Los logs de red"], c: 1, e: "Habilitan sealing y attestation." },
+    { q: "Intel SGX / AMD SEV proveen:", o: ["Enclaves/VMs aislados del SO y el hipervisor", "Un antivirus", "Cifrado de red"], c: 0, e: "Base del confidential computing." },
+    { q: "Foreshadow y SGAxe demuestran que un TEE:", o: ["Es invulnerable", "Puede caer ante side-channels microarquitectónicos", "No usa hardware"], c: 1, e: "No es una bala de plata." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
