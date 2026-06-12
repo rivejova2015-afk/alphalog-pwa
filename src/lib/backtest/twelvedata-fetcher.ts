@@ -22,20 +22,86 @@ export interface TwelveDataSymbol {
 
 // Twelve Data uses slash notation for forex/crypto (`EUR/USD`, `BTC/USD`)
 // and plain ticker for equities. Metals spot are exposed as forex pairs.
+//
+// Coverage in three categories. To add more symbols at a later date, the
+// only requirement is that Twelve Data actually serves them — check by
+// hitting /symbol_search?symbol=XYZ on their REST API.
+
 const FOREX_PAIRS = new Set<string>([
+  // ── G10 majors
   "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
-  "EURJPY", "GBPJPY", "EURGBP", "EURAUD", "EURCHF", "AUDJPY", "CADJPY", "CHFJPY",
-  "XAUUSD", "XAGUSD",
+  // ── EUR crosses
+  "EURJPY", "EURGBP", "EURAUD", "EURCHF", "EURCAD", "EURNZD",
+  "EURNOK", "EURSEK", "EURPLN", "EURHUF", "EURCZK",
+  // ── GBP crosses
+  "GBPJPY", "GBPAUD", "GBPCAD", "GBPCHF", "GBPNZD",
+  // ── AUD crosses
+  "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
+  // ── Other major crosses
+  "CADJPY", "CHFJPY", "NZDJPY", "NZDCAD", "NZDCHF", "CADCHF",
+  // ── USD against emerging / commodity-block currencies
+  "USDMXN", "USDZAR", "USDTRY", "USDSEK", "USDNOK", "USDDKK",
+  "USDPLN", "USDHUF", "USDCZK", "USDSGD", "USDHKD", "USDCNH",
+  "USDTHB", "USDKRW", "USDINR", "USDILS", "USDBRL",
+  // ── Spot metals (Twelve Data exposes via forex pair format)
+  "XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD",
+  "XAUEUR", "XAUGBP", "XAUJPY", "XAUAUD",
 ]);
 
 const CRYPTO_PAIRS = new Set<string>([
-  "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD",
+  // ── Top 10 by market cap
+  "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD",
+  "ADAUSD", "DOGEUSD", "AVAXUSD", "DOTUSD", "LINKUSD",
+  // ── Layer-1 / smart-contract platforms
+  "MATICUSD", "ATOMUSD", "NEARUSD", "ALGOUSD", "FTMUSD",
+  "ICPUSD", "APTUSD", "SUIUSD", "INJUSD",
+  // ── DeFi blue chips
+  "UNIUSD", "AAVEUSD", "MKRUSD", "CRVUSD", "COMPUSD", "GRTUSD", "LDOUSD",
+  // ── L2 / scaling
+  "ARBUSD", "OPUSD", "STRKUSD", "IMXUSD",
+  // ── Established alts
+  "LTCUSD", "BCHUSD", "XLMUSD", "ETCUSD", "EOSUSD", "XMRUSD", "TRXUSD",
+  // ── Meme / community
+  "SHIBUSD", "PEPEUSD", "FLOKIUSD",
+  // ── Gaming / metaverse
+  "SANDUSD", "MANAUSD", "AXSUSD", "GALAUSD",
+  // ── Storage / infra
+  "FILUSD", "ARUSD", "RNDRUSD",
 ]);
 
 const STOCK_TICKERS = new Set<string>([
-  "SPY", "QQQ", "IWM", "DIA",
-  "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL", "META", "NFLX",
-  "AMD", "INTC", "BABA", "DIS",
+  // ── Broad index ETFs
+  "SPY", "QQQ", "IWM", "DIA", "VOO", "VTI", "VXUS", "VEA", "VWO", "EEM", "EFA",
+  // ── Sector SPDR ETFs
+  "XLK", "XLF", "XLE", "XLV", "XLP", "XLY", "XLI", "XLU", "XLB", "XLRE", "XLC",
+  // ── Commodity / volatility ETFs (proxies for assets Twelve Data doesn't
+  //    serve as futures contracts — useful for backtesting commodity strategies
+  //    without going to Yahoo's =F continuation series).
+  "GLD", "SLV", "USO", "UNG", "DBA", "DBC", "PDBC", "GDX", "GDXJ",
+  // ── Volatility / leveraged
+  "UVXY", "VIXY", "VXX", "SQQQ", "TQQQ", "SOXL", "SOXS", "TZA", "TNA",
+  // ── Tech megacap
+  "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA",
+  "AMD", "INTC", "ORCL", "CRM", "ADBE", "NFLX", "AVGO", "CSCO", "IBM",
+  "QCOM", "TXN", "MU", "ASML", "TSM",
+  // ── Finance
+  "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP",
+  "V", "MA", "PYPL", "SQ",
+  // ── Healthcare
+  "JNJ", "PFE", "UNH", "MRK", "LLY", "ABBV", "TMO", "ABT", "BMY", "AMGN",
+  // ── Consumer / retail
+  "WMT", "KO", "PEP", "MCD", "NKE", "SBUX", "COST",
+  "HD", "LOW", "DIS", "BABA", "TGT", "EL",
+  // ── Energy
+  "XOM", "CVX", "COP", "SLB", "OXY", "MPC", "PSX",
+  // ── Industrials
+  "BA", "CAT", "DE", "GE", "HON", "UPS", "FDX", "LMT", "RTX",
+  // ── Communication
+  "T", "VZ", "CMCSA", "TMUS",
+  // ── Auto / EV
+  "F", "GM", "RIVN", "LCID",
+  // ── Crypto-related equities
+  "COIN", "MSTR", "RIOT", "MARA", "HOOD",
 ]);
 
 // Twelve Data uses different interval strings than other providers — `1day`

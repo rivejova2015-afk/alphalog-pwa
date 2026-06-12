@@ -23,20 +23,62 @@ export interface PolygonTicker {
 
 // Polygon prefix convention: C:EURUSD for forex, X:BTCUSD for crypto, plain
 // for equities. Metals spot is exposed by Polygon as forex pairs (C:XAUUSD).
+// Coverage matches the Twelve Data fetcher 1:1 so both sources share the same
+// "bars-loader chain" semantics — if a symbol is mapped in one it should be
+// mapped in the other (or be filtered out in the source-registry).
+
 const FOREX_PAIRS = new Set<string>([
+  // ── G10 majors
   "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
-  "EURJPY", "GBPJPY", "EURGBP", "EURAUD", "EURCHF", "AUDJPY", "CADJPY", "CHFJPY",
-  "XAUUSD", "XAGUSD",
+  // ── EUR crosses
+  "EURJPY", "EURGBP", "EURAUD", "EURCHF", "EURCAD", "EURNZD",
+  "EURNOK", "EURSEK", "EURPLN", "EURHUF", "EURCZK",
+  // ── GBP crosses
+  "GBPJPY", "GBPAUD", "GBPCAD", "GBPCHF", "GBPNZD",
+  // ── AUD crosses
+  "AUDJPY", "AUDCAD", "AUDCHF", "AUDNZD",
+  // ── Other major crosses
+  "CADJPY", "CHFJPY", "NZDJPY", "NZDCAD", "NZDCHF", "CADCHF",
+  // ── USD against emerging / commodity-block currencies
+  "USDMXN", "USDZAR", "USDTRY", "USDSEK", "USDNOK", "USDDKK",
+  "USDPLN", "USDHUF", "USDCZK", "USDSGD", "USDHKD", "USDCNH",
+  "USDTHB", "USDKRW", "USDINR", "USDILS", "USDBRL",
+  // ── Spot metals
+  "XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD",
+  "XAUEUR", "XAUGBP", "XAUJPY", "XAUAUD",
 ]);
 
 const CRYPTO_PAIRS = new Set<string>([
-  "BTCUSD", "ETHUSD", "SOLUSD", "XRPUSD",
+  "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD",
+  "ADAUSD", "DOGEUSD", "AVAXUSD", "DOTUSD", "LINKUSD",
+  "MATICUSD", "ATOMUSD", "NEARUSD", "ALGOUSD", "FTMUSD",
+  "ICPUSD", "APTUSD", "SUIUSD", "INJUSD",
+  "UNIUSD", "AAVEUSD", "MKRUSD", "CRVUSD", "COMPUSD", "GRTUSD", "LDOUSD",
+  "ARBUSD", "OPUSD", "STRKUSD", "IMXUSD",
+  "LTCUSD", "BCHUSD", "XLMUSD", "ETCUSD", "EOSUSD", "XMRUSD", "TRXUSD",
+  "SHIBUSD", "PEPEUSD", "FLOKIUSD",
+  "SANDUSD", "MANAUSD", "AXSUSD", "GALAUSD",
+  "FILUSD", "ARUSD", "RNDRUSD",
 ]);
 
 const STOCK_TICKERS = new Set<string>([
-  "SPY", "QQQ", "IWM", "DIA",
-  "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOGL", "META", "NFLX",
-  "AMD", "INTC", "BABA", "DIS",
+  "SPY", "QQQ", "IWM", "DIA", "VOO", "VTI", "VXUS", "VEA", "VWO", "EEM", "EFA",
+  "XLK", "XLF", "XLE", "XLV", "XLP", "XLY", "XLI", "XLU", "XLB", "XLRE", "XLC",
+  "GLD", "SLV", "USO", "UNG", "DBA", "DBC", "PDBC", "GDX", "GDXJ",
+  "UVXY", "VIXY", "VXX", "SQQQ", "TQQQ", "SOXL", "SOXS", "TZA", "TNA",
+  "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA",
+  "AMD", "INTC", "ORCL", "CRM", "ADBE", "NFLX", "AVGO", "CSCO", "IBM",
+  "QCOM", "TXN", "MU", "ASML", "TSM",
+  "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP",
+  "V", "MA", "PYPL", "SQ",
+  "JNJ", "PFE", "UNH", "MRK", "LLY", "ABBV", "TMO", "ABT", "BMY", "AMGN",
+  "WMT", "KO", "PEP", "MCD", "NKE", "SBUX", "COST",
+  "HD", "LOW", "DIS", "BABA", "TGT", "EL",
+  "XOM", "CVX", "COP", "SLB", "OXY", "MPC", "PSX",
+  "BA", "CAT", "DE", "GE", "HON", "UPS", "FDX", "LMT", "RTX",
+  "T", "VZ", "CMCSA", "TMUS",
+  "F", "GM", "RIVN", "LCID",
+  "COIN", "MSTR", "RIOT", "MARA", "HOOD",
 ]);
 
 const GRANULARITY_MAP: Record<Timeframe, { multiplier: number; timespan: string }> = {
