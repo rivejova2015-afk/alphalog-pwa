@@ -18,7 +18,7 @@ export async function checkOrderRisk(p: {
 
   const supabase = createServiceClient();
 
-  const [riskRes, accountRes, positionsRes, connectionRes] = await Promise.all([
+  const [riskRes, accountRes, positionsRes, connectionRes, equityRes] = await Promise.all([
     supabase
       .from('cme_risk_configs')
       .select('enabled, paused_reason, circuit_breaker_pct, max_positions')
@@ -27,7 +27,7 @@ export async function checkOrderRisk(p: {
       .maybeSingle(),
     supabase
       .from('algo_cme_accounts')
-      .select('max_daily_loss')
+      .select('max_daily_loss, max_trailing_dd, funded_amount')
       .eq('id', p.cmeAccountId)
       .maybeSingle(),
     supabase
@@ -41,12 +41,22 @@ export async function checkOrderRisk(p: {
       .eq('user_id', p.userId)
       .eq('cme_account_id', p.cmeAccountId)
       .maybeSingle(),
+    // Para max_trailing_dd: snapshots de equity (peak histórico vs equity actual).
+    supabase
+      .from('cme_equity_snapshots')
+      .select('equity_usd, snapshot_at')
+      .eq('user_id', p.userId)
+      .eq('cme_account_id', p.cmeAccountId)
+      .gte('snapshot_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString())
+      .order('snapshot_at', { ascending: false })
+      .limit(500),
   ]);
 
   const risk = riskRes.data;
   const account = accountRes.data;
   const positions = positionsRes.data ?? [];
   const connection = connectionRes.data;
+  const equitySnaps = (equityRes.data ?? []) as { equity_usd: number; snapshot_at: string }[];
 
   if (!risk || !risk.enabled) {
     return {
@@ -75,6 +85,22 @@ export async function checkOrderRisk(p: {
   if (risk.max_positions !== null && risk.max_positions !== undefined) {
     if (positions.length >= risk.max_positions) {
       return { allowed: false, reason: 'max_positions_reached' };
+    }
+  }
+
+  // Trailing drawdown check — propfirms (Apex/MyFundedFutures/etc) bloquean
+  // la cuenta cuando equity actual cae bajo (peak_equity - max_trailing_dd).
+  // El propfirm más estricto usa "trailing del máximo histórico" (NUNCA baja);
+  // simplificamos a "peak de últimos 90 días" que es seguro para empezar.
+  if (account?.max_trailing_dd && equitySnaps.length > 0) {
+    const peakEquity = Math.max(
+      Number(account.funded_amount ?? 0),
+      ...equitySnaps.map((s) => Number(s.equity_usd)),
+    );
+    const currentEquity = Number(equitySnaps[0].equity_usd); // más reciente (DESC)
+    const drawdownFromPeak = peakEquity - currentEquity;
+    if (drawdownFromPeak >= Number(account.max_trailing_dd)) {
+      return { allowed: false, reason: 'max_trailing_dd_breached' };
     }
   }
 

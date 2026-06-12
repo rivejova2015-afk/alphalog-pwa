@@ -132,7 +132,40 @@ export async function placeMarketOrder(params: {
   qty: number;
   slTicks: number;
   tpTicks: number;
+  /** Algunos propfirms (Apex, MyFundedFutures) exigen precios absolutos en
+   *  el bracket. Cuando se setea junto con tickSize+referencePrice, los
+   *  brackets se computan como precios absolutos en lugar de offsets. */
+  useAbsolutePrices?: boolean;
+  tickSize?: number;
+  referencePrice?: number;
 }): Promise<TradovateOrderResult> {
+  const isBuy = params.action === 'Buy';
+  const bracketAction = isBuy ? 'Sell' : 'Buy';
+
+  // Default: bracket por ticks relativos al fill (lo que Tradovate ofrece OOB).
+  let bracket1: Record<string, unknown> = {
+    action: bracketAction,
+    orderType: 'Stop',
+    stopPriceTicks: params.slTicks,
+  };
+  let bracket2: Record<string, unknown> = {
+    action: bracketAction,
+    orderType: 'Limit',
+    limitPriceTicks: params.tpTicks,
+  };
+
+  // Modo absoluto — para propfirms estrictos. Requiere reference price del
+  // mercado actual (mid o último tick). El bracket usa stopPrice/limitPrice
+  // calculados desde reference, no offsets.
+  if (params.useAbsolutePrices && params.tickSize && params.referencePrice) {
+    const slOffset = params.slTicks * params.tickSize;
+    const tpOffset = params.tpTicks * params.tickSize;
+    const stopPrice = isBuy ? params.referencePrice - slOffset : params.referencePrice + slOffset;
+    const limitPrice = isBuy ? params.referencePrice + tpOffset : params.referencePrice - tpOffset;
+    bracket1 = { action: bracketAction, orderType: 'Stop', stopPrice };
+    bracket2 = { action: bracketAction, orderType: 'Limit', price: limitPrice };
+  }
+
   const body = {
     accountSpec: params.accountSpec,
     accountId: params.accountId,
@@ -141,18 +174,8 @@ export async function placeMarketOrder(params: {
     orderQty: params.qty,
     orderType: 'Market',
     isAutomated: true,
-    bracket1: {
-      action: params.action === 'Buy' ? 'Sell' : 'Buy',
-      orderType: 'Stop',
-      stopPrice: undefined as number | undefined,
-      trailStopPct: undefined as number | undefined,
-      stopPriceTicks: params.slTicks,
-    },
-    bracket2: {
-      action: params.action === 'Buy' ? 'Sell' : 'Buy',
-      orderType: 'Limit',
-      limitPriceTicks: params.tpTicks,
-    },
+    bracket1,
+    bracket2,
   };
 
   const res = await fetch(`${BASE(params.isPaper)}/order/placeorder`, {

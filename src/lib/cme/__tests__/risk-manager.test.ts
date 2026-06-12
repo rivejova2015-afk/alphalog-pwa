@@ -12,9 +12,10 @@ const mockIsMarketHours = vi.fn(() => true);
 
 type TableData = {
   cme_risk_configs?: { enabled: boolean; paused_reason?: string | null; circuit_breaker_pct: number; max_positions?: number | null } | null;
-  algo_cme_accounts?: { max_daily_loss: number } | null;
+  algo_cme_accounts?: { max_daily_loss?: number | null; max_trailing_dd?: number | null; funded_amount?: number | null } | null;
   cme_positions?: Array<{ id: string; is_manual: boolean }>;
   cme_connections?: { daily_pnl_usd: number; status: string } | null;
+  cme_equity_snapshots?: Array<{ equity_usd: number; snapshot_at: string }>;
 };
 
 let tableData: TableData = {};
@@ -25,6 +26,9 @@ const mockSupabase = {
     const chain = {
       select: () => chain,
       eq: () => chain,
+      gte: () => chain,
+      order: () => chain,
+      limit: () => chain,
       maybeSingle: async () => ({ data: data ?? null }),
       // When the call ends without .maybeSingle() (e.g. cme_positions), the awaited result is the array
       then: (resolve: (v: unknown) => unknown) => resolve({ data: Array.isArray(data) ? data : (data ? [data] : []) }),
@@ -47,9 +51,10 @@ describe("risk-manager", () => {
     mockIsMarketHours.mockReturnValue(true);
     tableData = {
       cme_risk_configs: { enabled: true, paused_reason: null, circuit_breaker_pct: 80, max_positions: 5 },
-      algo_cme_accounts: { max_daily_loss: 1000 },
+      algo_cme_accounts: { max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000 },
       cme_positions: [],
       cme_connections: { daily_pnl_usd: 0, status: "connected" },
+      cme_equity_snapshots: [],
     };
   });
 
@@ -124,6 +129,51 @@ describe("risk-manager", () => {
       tableData.cme_positions = Array.from({ length: 100 }, (_, i) => ({ id: `p${i}`, is_manual: false }));
       const r = await checkOrderRisk(PARAMS);
       expect(r.allowed).toBe(true);
+    });
+
+    // Trailing drawdown — propfirm protection.
+    it("rechaza cuando trailing DD desde el peak supera max_trailing_dd", async () => {
+      tableData.algo_cme_accounts = { max_daily_loss: 1000, max_trailing_dd: 2000, funded_amount: 50000 };
+      tableData.cme_equity_snapshots = [
+        { equity_usd: 47000, snapshot_at: "2026-06-10T00:00:00Z" }, // actual (DESC)
+        { equity_usd: 52000, snapshot_at: "2026-06-05T00:00:00Z" }, // peak
+        { equity_usd: 50000, snapshot_at: "2026-06-01T00:00:00Z" },
+      ];
+      // peak=52000, current=47000 → DD=5000 ≥ 2000 → bloqueado.
+      const r = await checkOrderRisk(PARAMS);
+      expect(r.allowed).toBe(false);
+      expect(r.reason).toBe("max_trailing_dd_breached");
+    });
+
+    it("permite cuando trailing DD está bajo el umbral", async () => {
+      tableData.algo_cme_accounts = { max_daily_loss: 1000, max_trailing_dd: 2000, funded_amount: 50000 };
+      tableData.cme_equity_snapshots = [
+        { equity_usd: 51500, snapshot_at: "2026-06-10T00:00:00Z" }, // actual
+        { equity_usd: 52000, snapshot_at: "2026-06-05T00:00:00Z" }, // peak
+      ];
+      // peak=52000, current=51500 → DD=500 < 2000 → permite.
+      const r = await checkOrderRisk(PARAMS);
+      expect(r.allowed).toBe(true);
+    });
+
+    it("ignora trailing DD cuando max_trailing_dd es null", async () => {
+      tableData.algo_cme_accounts = { max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000 };
+      tableData.cme_equity_snapshots = [
+        { equity_usd: 10000, snapshot_at: "2026-06-10T00:00:00Z" }, // dramatic loss, ignorado
+        { equity_usd: 52000, snapshot_at: "2026-06-05T00:00:00Z" },
+      ];
+      const r = await checkOrderRisk(PARAMS);
+      expect(r.allowed).toBe(true);
+    });
+
+    it("usa funded_amount como peak inicial cuando no hay snapshots por encima", async () => {
+      tableData.algo_cme_accounts = { max_daily_loss: 1000, max_trailing_dd: 1500, funded_amount: 50000 };
+      tableData.cme_equity_snapshots = [
+        { equity_usd: 48000, snapshot_at: "2026-06-10T00:00:00Z" }, // peak=funded=50000, DD=2000 ≥ 1500
+      ];
+      const r = await checkOrderRisk(PARAMS);
+      expect(r.allowed).toBe(false);
+      expect(r.reason).toBe("max_trailing_dd_breached");
     });
   });
 });
