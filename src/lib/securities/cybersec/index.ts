@@ -4,6 +4,7 @@ export * from "./lessons";
 export * from "./quizzes";
 export * from "./practice";
 export * from "./homework";
+export * from "./rubrics";
 export * from "./exam";
 export * from "./examSession";
 export * from "./flashcards";
