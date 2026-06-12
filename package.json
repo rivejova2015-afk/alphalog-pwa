@@ -15,6 +15,7 @@
     "audit:tables": "node scripts/audit-db-tables.mjs",
     "audit:tables:offline": "node scripts/audit-db-tables.mjs --offline",
     "smoke:algo-pipeline": "node scripts/smoke/algo-pipeline.js",
+    "smoke:tradovate-pipeline": "node scripts/smoke/tradovate-pipeline.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

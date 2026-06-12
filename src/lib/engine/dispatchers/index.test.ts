@@ -38,6 +38,13 @@ vi.mock("@/lib/backtest/bars-loader", () => ({
   loadHistoricalBars: (...args: unknown[]) => loadHistoricalBarsMock(...args),
 }));
 
+// Mock the risk manager — default allows orders; tests for the kill-switch
+// override this via checkOrderRiskMock.mockResolvedValueOnce.
+const checkOrderRiskMock = vi.fn();
+vi.mock("@/lib/cme/risk-manager", () => ({
+  checkOrderRisk: (...args: unknown[]) => checkOrderRiskMock(...args),
+}));
+
 // Mock the logger so tests don't pollute output.
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(),
@@ -117,6 +124,7 @@ beforeEach(() => {
     unrealizedPnL: 0,
   });
   loadHistoricalBarsMock.mockReset().mockResolvedValue([]);
+  checkOrderRiskMock.mockReset().mockResolvedValue({ allowed: true });
   updateCalls.length = 0;
   delete behavior.insertReturn;
   delete behavior.updateError;
@@ -360,6 +368,75 @@ describe("dispatchSignal — Tradovate", () => {
       },
     }), svc);
     expect(executeSignalMock.mock.calls[0][0].quantity).toBe(1);
+  });
+
+  // ── Kill-switch (checkOrderRisk integration) ─────────────────────────────
+  describe("kill-switch in live mode", () => {
+    beforeEach(() => {
+      process.env.DISPATCH_MODE = "live";
+    });
+
+    it("circuit_breaker_threshold denies → signal status=rejected, executor never called", async () => {
+      checkOrderRiskMock.mockResolvedValue({ allowed: false, reason: "circuit_breaker_threshold" });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("circuit_breaker_threshold");
+      expect(executeSignalMock).not.toHaveBeenCalled();
+      const rejectUpdate = updateCalls.find((u) => u.payload.status === "rejected");
+      expect(rejectUpdate?.payload.reject_reason).toBe("circuit_breaker_threshold");
+    });
+
+    it("max_positions_reached denies → signal status=rejected, executor never called", async () => {
+      checkOrderRiskMock.mockResolvedValue({ allowed: false, reason: "max_positions_reached" });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("max_positions_reached");
+      expect(executeSignalMock).not.toHaveBeenCalled();
+    });
+
+    it("outside_market_hours denies → signal status=rejected", async () => {
+      checkOrderRiskMock.mockResolvedValue({ allowed: false, reason: "outside_market_hours" });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.reason).toBe("outside_market_hours");
+      expect(executeSignalMock).not.toHaveBeenCalled();
+    });
+
+    it("manual_position_active denies → executor never called", async () => {
+      checkOrderRiskMock.mockResolvedValue({ allowed: false, reason: "manual_position_active" });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.reason).toBe("manual_position_active");
+      expect(executeSignalMock).not.toHaveBeenCalled();
+    });
+
+    it("risk allowed → executor IS called", async () => {
+      checkOrderRiskMock.mockResolvedValue({ allowed: true });
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 42 });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.ok).toBe(true);
+      expect(res.action).toBe("placed");
+      expect(executeSignalMock).toHaveBeenCalledOnce();
+    });
+
+    it("risk denied without explicit reason falls back to 'risk_denied'", async () => {
+      checkOrderRiskMock.mockResolvedValue({ allowed: false });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.reason).toBe("risk_denied");
+    });
+
+    it("shadow mode SKIPS the risk check (kill-switch only matters live)", async () => {
+      process.env.DISPATCH_MODE = "shadow";
+      checkOrderRiskMock.mockResolvedValue({ allowed: false, reason: "circuit_breaker_threshold" });
+      const svc = makeSupabaseMock();
+      const res = await dispatchSignal(tradovateInput(), svc);
+      expect(res.action).toBe("shadow_logged");
+      expect(checkOrderRiskMock).not.toHaveBeenCalled();
+    });
   });
 });
 

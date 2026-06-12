@@ -1145,6 +1145,15 @@ npm run smoke:algo-pipeline     # Pipeline algo trading + RL data flow
                                 # Requiere: SUPABASE_SERVICE_ROLE_KEY,
                                 # MT5_WEBHOOK_SECRET, BOT_OPS_USER_ID.
 
+npm run smoke:tradovate-pipeline  # Pipeline Tradovate (dispatcher → cme_signals)
+                                  # Crea algo_cme_accounts + cme_connections +
+                                  # cme_risk_configs + algoritmo Tradovate +
+                                  # signals (1 pending, 1 rejected via
+                                  # kill-switch simulation), verifica tally,
+                                  # cleanup. NO toca Tradovate real.
+                                  # Requiere: SUPABASE_SERVICE_ROLE_KEY,
+                                  # BOT_OPS_USER_ID.
+
 # Seguridad / auditoría
 npm run security:check-rls       # Verifica cobertura RLS
 npm run perf:bundle-budget       # Valida presupuesto de bundle

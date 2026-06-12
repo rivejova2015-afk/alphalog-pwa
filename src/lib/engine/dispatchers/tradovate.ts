@@ -11,6 +11,11 @@
 //     fall back to static defaults + log a warn — failure-open so the
 //     dispatcher keeps producing audit rows.
 //
+// Sprint A scope (kill-switch):
+//   Live mode runs checkOrderRisk (circuit breaker + max_positions + manual
+//   position + market hours + propfirm rules) right before handing off to
+//   executeSignal() — blocks the order instead of just producing an audit row.
+//
 // All failure paths return a structured DispatchResult — never throw. The
 // cron caller depends on this to keep processing other algos after one fails.
 
@@ -23,6 +28,7 @@ import { tickValueFor } from "@/lib/cme/tick-values";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { computeAtrFromBars } from "./atr";
 import { computeKellyContracts } from "../position-sizing/kelly";
+import { checkOrderRisk } from "@/lib/cme/risk-manager";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import { getDispatchMode, type DispatchInput, type DispatchResult } from "./types";
 
@@ -404,7 +410,36 @@ export async function dispatchTradovate(
     };
   }
 
-  // Live mode — hand off to the existing executor.
+  // Live mode — antes de delegar al executor, corremos checkOrderRisk para
+  // que el kill-switch (circuit_breaker, max_positions, manual_position,
+  // market_hours, propfirm rules, account_not_connected) bloquee la orden
+  // ANTES de tocar Tradovate. Sin esto, una caída del PnL diario debajo del
+  // umbral seguiría colocando órdenes.
+  const risk = await checkOrderRisk({
+    userId: algo.user_id,
+    cmeAccountId,
+    direction: signal.action,
+    quantity,
+  });
+  if (!risk.allowed) {
+    const reason = risk.reason ?? "risk_denied";
+    await svc
+      .from("cme_signals")
+      .update({ status: "rejected", reject_reason: reason })
+      .eq("id", cmeSignalId);
+    logInfo("DispatchTradovate", `risk denied ${signal.action} ${contract} x${quantity} reason=${reason} (algo=${algo.id})`);
+    return {
+      ok: false, action: "failed",
+      cmeSignalId,
+      reason,
+    };
+  }
+
+  // Live mode — hand off to the existing executor. It owns:
+  //   - token renewal (tradovateRenew when near expiry)
+  //   - placeMarketOrder with bracket SL/TP
+  //   - persist to cme_trades_propfirm
+  //   - flip cme_signals.status to 'executed'
   const cmeSignal: CmeSignal = {
     id:                cmeSignalId,
     userId:            algo.user_id,
