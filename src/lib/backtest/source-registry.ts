@@ -62,6 +62,33 @@ const DEFAULTS: Record<AssetClass, { apiSources: DataSource[]; csvSources: DataS
 // ─── Explicit per-symbol registry ─────────────────────────────────────────────
 // Override the defaults for special cases. Keep entries to symbols the wizard
 // actually exposes; unknown symbols fall back to assetClass=unknown chain.
+//
+// Coverage philosophy: list every symbol that any source (Twelve Data, Polygon,
+// OANDA, Yahoo) can serve so resolveSymbol() never lands on the 'unknown' chain
+// for a real ticker. Adding a symbol here without API support is fine — it'll
+// just walk all sources and return [] with actionable next-steps.
+
+// Helper to declare bulk symbols with a uniform shape — keeps the explicit
+// registry below readable when we list 100+ tickers in one asset class.
+function bulk(
+  symbols: string[],
+  assetClass: AssetClass,
+  apiSources: DataSource[],
+  csvSources: DataSource[],
+): Record<string, SymbolEntry> {
+  const out: Record<string, SymbolEntry> = {};
+  for (const s of symbols) out[s] = { assetClass, apiSources, csvSources };
+  return out;
+}
+
+const FOREX_TWELVE_POLYGON: DataSource[] = ["oanda", "twelvedata", "polygon", "yahoo"];
+const METALS_TWELVE_POLYGON: DataSource[] = ["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"];
+const CRYPTO_TWELVE_POLYGON: DataSource[] = ["twelvedata", "polygon", "yahoo"];
+const STOCK_TWELVE_POLYGON:  DataSource[] = ["twelvedata", "polygon", "yahoo"];
+
+const FOREX_CSV  = ["mt5", "mt4", "dukascopy", "histdata"] as DataSource[];
+const CRYPTO_CSV = ["mt5", "mt4", "dukascopy"] as DataSource[];
+const STOCK_CSV  = [] as DataSource[];
 
 const REGISTRY: Record<string, SymbolEntry> = {
   // ── Metals spot — Yahoo XAUUSD=X et al están muertos. Como proxy se usa el
@@ -176,6 +203,60 @@ const REGISTRY: Record<string, SymbolEntry> = {
   INTC: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
   BABA: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
   DIS:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+
+  // ── Bulk-registered symbols (added 2026 expansion) ─────────────────────────
+  // Same chains as the explicit entries above; declared via bulk() to keep
+  // the registry readable when we add 100+ tickers.
+
+  // Forex (extended majors + crosses + EM)
+  ...bulk(
+    ["EURCAD","EURNZD","EURNOK","EURSEK","EURPLN","EURHUF","EURCZK",
+     "GBPAUD","GBPCAD","GBPCHF","GBPNZD",
+     "AUDCAD","AUDCHF","AUDNZD",
+     "NZDJPY","NZDCAD","NZDCHF","CADCHF",
+     "USDMXN","USDZAR","USDTRY","USDSEK","USDNOK","USDDKK","USDPLN","USDHUF",
+     "USDCZK","USDSGD","USDHKD","USDCNH","USDTHB","USDKRW","USDINR","USDILS","USDBRL"],
+    "forex", FOREX_TWELVE_POLYGON, FOREX_CSV
+  ),
+
+  // Spot metals (extra non-USD quotes)
+  ...bulk(
+    ["XPTUSD","XPDUSD","XAUEUR","XAUGBP","XAUJPY","XAUAUD"],
+    "metals-spot", METALS_TWELVE_POLYGON, ["mt5","mt4","dukascopy"] as DataSource[]
+  ),
+
+  // Crypto (top 40+)
+  ...bulk(
+    ["BNBUSD","ADAUSD","DOGEUSD","AVAXUSD","DOTUSD","LINKUSD",
+     "MATICUSD","ATOMUSD","NEARUSD","ALGOUSD","FTMUSD",
+     "ICPUSD","APTUSD","SUIUSD","INJUSD",
+     "UNIUSD","AAVEUSD","MKRUSD","CRVUSD","COMPUSD","GRTUSD","LDOUSD",
+     "ARBUSD","OPUSD","STRKUSD","IMXUSD",
+     "LTCUSD","BCHUSD","XLMUSD","ETCUSD","EOSUSD","XMRUSD","TRXUSD",
+     "SHIBUSD","PEPEUSD","FLOKIUSD",
+     "SANDUSD","MANAUSD","AXSUSD","GALAUSD",
+     "FILUSD","ARUSD","RNDRUSD"],
+    "crypto", CRYPTO_TWELVE_POLYGON, CRYPTO_CSV
+  ),
+
+  // Stocks / ETFs — broad index, sector, commodity, volatility, megacaps
+  ...bulk(
+    ["VOO","VTI","VXUS","VEA","VWO","EEM","EFA",
+     "XLK","XLF","XLE","XLV","XLP","XLY","XLI","XLU","XLB","XLRE","XLC",
+     "GLD","SLV","USO","UNG","DBA","DBC","PDBC","GDX","GDXJ",
+     "UVXY","VIXY","VXX","SQQQ","TQQQ","SOXL","SOXS","TZA","TNA",
+     "GOOG","ORCL","CRM","ADBE","AVGO","CSCO","IBM","QCOM","TXN","MU","ASML","TSM",
+     "JPM","BAC","WFC","GS","MS","C","BLK","SCHW","AXP",
+     "V","MA","PYPL","SQ",
+     "JNJ","PFE","UNH","MRK","LLY","ABBV","TMO","ABT","BMY","AMGN",
+     "WMT","KO","PEP","MCD","NKE","SBUX","COST","HD","LOW","TGT","EL",
+     "XOM","CVX","COP","SLB","OXY","MPC","PSX",
+     "BA","CAT","DE","GE","HON","UPS","FDX","LMT","RTX",
+     "T","VZ","CMCSA","TMUS",
+     "F","GM","RIVN","LCID",
+     "COIN","MSTR","RIOT","MARA","HOOD"],
+    "stock-equity", STOCK_TWELVE_POLYGON, STOCK_CSV
+  ),
 };
 
 // ─── Capability matrix ────────────────────────────────────────────────────────
