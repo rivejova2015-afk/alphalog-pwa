@@ -14,7 +14,7 @@ describe("resolveSymbol", () => {
     expect(xau.assetClass).toBe("metals-spot");
     // Metals chain: OANDA real-spot first (when token), Yahoo GC=F proxy,
     // fxratesapi as D1 fallback. CSV alternatives remain for broker fidelity.
-    expect(xau.apiSources).toEqual(["oanda", "polygon", "yahoo", "fxratesapi"]);
+    expect(xau.apiSources).toEqual(["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"]);
     expect(xau.notes).toContain("GC=F");
   });
 
@@ -44,17 +44,17 @@ describe("resolveSymbol", () => {
 });
 
 describe("getApiSourcesForTf", () => {
-  it("XAUUSD M1 returns [oanda, polygon, yahoo] (fxratesapi D1-only is filtered out)", () => {
-    expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual(["oanda", "polygon", "yahoo"]);
+  it("XAUUSD M1 returns [oanda, twelvedata, polygon, yahoo] (fxratesapi D1-only is filtered out)", () => {
+    expect(getApiSourcesForTf("XAUUSD", "M1")).toEqual(["oanda", "twelvedata", "polygon", "yahoo"]);
   });
 
-  it("XAUUSD D1 returns full chain [oanda, polygon, yahoo, fxratesapi]", () => {
-    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["oanda", "polygon", "yahoo", "fxratesapi"]);
+  it("XAUUSD D1 returns full chain [oanda, twelvedata, polygon, yahoo, fxratesapi]", () => {
+    expect(getApiSourcesForTf("XAUUSD", "D1")).toEqual(["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"]);
   });
 
-  it("EURUSD returns [oanda, polygon, yahoo] — Oanda preferred when token is set, Polygon mid-tier, Yahoo as fallback", () => {
-    expect(getApiSourcesForTf("EURUSD", "M1")).toEqual(["oanda", "polygon", "yahoo"]);
-    expect(getApiSourcesForTf("EURUSD", "D1")).toEqual(["oanda", "polygon", "yahoo"]);
+  it("EURUSD returns [oanda, twelvedata, polygon, yahoo] — Oanda preferred when token is set, Twelve Data + Polygon mid-tier, Yahoo last", () => {
+    expect(getApiSourcesForTf("EURUSD", "M1")).toEqual(["oanda", "twelvedata", "polygon", "yahoo"]);
+    expect(getApiSourcesForTf("EURUSD", "D1")).toEqual(["oanda", "twelvedata", "polygon", "yahoo"]);
   });
 
   it("ES (futures) returns yahoo", () => {

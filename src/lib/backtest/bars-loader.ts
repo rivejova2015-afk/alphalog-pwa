@@ -19,6 +19,7 @@ import { fetchYahooBars, mapToYahooTicker } from "@/lib/backtest/yahoo-fetcher";
 import { fetchFxratesapiBars, mapToFxratesapiPair } from "@/lib/backtest/fxratesapi-fetcher";
 import { fetchOandaBars, mapToOandaInstrument } from "@/lib/backtest/oanda-fetcher";
 import { fetchPolygonBars, mapToPolygonTicker } from "@/lib/backtest/polygon-fetcher";
+import { fetchTwelveDataBars, mapToTwelveDataSymbol } from "@/lib/backtest/twelvedata-fetcher";
 import { getApiSourcesForTf, nextStepsForEmpty, type DataSource } from "@/lib/backtest/source-registry";
 import { logInfo, logWarn } from "@/lib/log";
 
@@ -234,6 +235,20 @@ async function tryApiSource(
     } catch (err) {
       // Same pattern as OANDA: missing API key → soft fail → next source in chain.
       // Rate-limit hits also fall through so the chain can try Yahoo et al.
+      const msg = err instanceof Error ? err.message : String(err);
+      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
+    }
+  }
+  if (source === "twelvedata") {
+    if (!mapToTwelveDataSymbol(symbol)) {
+      return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_twelvedata_mapping" } };
+    }
+    try {
+      const bars = await fetchTwelveDataBars(symbol, timeframe, from, to);
+      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
+    } catch (err) {
+      // Missing API key or daily-credit exhaustion → soft fail → walk to
+      // Polygon → Yahoo → CSV. The diagnostics panel surfaces the message.
       const msg = err instanceof Error ? err.message : String(err);
       return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
     }
