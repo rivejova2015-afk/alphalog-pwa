@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { ArrowLeft, Clock, BarChart, Play } from "lucide-react";
 import type { Lesson, LessonSection } from "@/lib/securities/cybersec";
-import { splitLines, tokenizeInline } from "@/lib/securities/cybersec";
+import { parseContent, tokenizeInline } from "@/lib/securities/cybersec";
 
 interface Props {
   lesson: Lesson;
@@ -46,16 +46,29 @@ export function LessonViewer({ lesson, hasQuiz }: Props) {
 }
 
 function Section({ section }: { section: LessonSection }) {
-  const lines = splitLines(section.c);
+  const blocks = parseContent(section.c);
   return (
     <section className="space-y-3">
       <h2 className="text-base font-bold text-[#22d3ee] font-mono">{section.h}</h2>
-      <div className="space-y-1.5 text-sm text-[#e2e8f0] leading-relaxed">
-        {lines.map((line, i) => (
-          <Fragment key={i}>
-            <p>{renderInline(line)}</p>
-          </Fragment>
-        ))}
+      <div className="space-y-2 text-sm text-[#e2e8f0] leading-relaxed">
+        {blocks.map((block, bi) =>
+          block.type === "code" ? (
+            <pre
+              key={bi}
+              className="overflow-x-auto rounded-lg border border-[#1f2937] bg-[#05080f] px-3 py-2.5 text-[13px] font-mono text-[#7dd3fc] whitespace-pre-wrap"
+            >
+              <code>{block.lines.join("\n")}</code>
+            </pre>
+          ) : (
+            <div key={bi} className="space-y-1.5">
+              {block.lines.map((line, i) => (
+                <Fragment key={i}>
+                  <p>{renderInline(line)}</p>
+                </Fragment>
+              ))}
+            </div>
+          ),
+        )}
       </div>
     </section>
   );
