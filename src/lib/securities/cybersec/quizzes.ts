@@ -270,6 +270,48 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "El beaconing es un indicio de:", o: ["Backup normal", "Comunicación C2 (conexiones periódicas)", "Un escaneo de puertos"], c: 1, e: "Patrón regular hacia un destino." },
     { q: "JA3 es:", o: ["Un cifrado", "Un fingerprint de handshakes TLS", "Un puerto"], c: 1, e: "Identifica clientes aunque cifren." },
   ],
+  46: [
+    { q: "Un SIEM sirve para:", o: ["Cifrar discos", "Centralizar y correlacionar logs + alertar", "Escanear puertos"], c: 1, e: "Corazón del SOC." },
+    { q: "Detectar N fallos de login seguidos de un éxito es una regla de:", o: ["Backup", "Correlación (brute force)", "Cifrado"], c: 1, e: "SPL/KQL en el SIEM." },
+    { q: "SOAR aporta:", o: ["Más falsos positivos", "Automatización de la respuesta (aislar host, bloquear IP)", "Cifrado de logs"], c: 1, e: "Reduce el MTTR." },
+    { q: "La fatiga de alertas ocurre cuando:", o: ["Hay pocos logs", "Demasiados falsos positivos hacen ignorar los reales", "El SIEM está apagado"], c: 1, e: "Por eso se afinan las reglas." },
+  ],
+  47: [
+    { q: "El ciclo de IR de NIST 800-61 empieza con:", o: ["Recuperación", "Preparación", "Erradicación"], c: 1, e: "Plan, equipo, playbooks antes del incidente." },
+    { q: "Contención significa:", o: ["Borrar la evidencia", "Limitar el daño (aislar, bloquear)", "Pagar el rescate"], c: 1, e: "Corto y largo plazo." },
+    { q: "Si no se erradica la causa raíz:", o: ["No pasa nada", "El atacante puede volver", "Se acelera la recuperación"], c: 1, e: "Backdoors/cuentas deben eliminarse." },
+    { q: "GDPR exige notificar una brecha en:", o: ["72 horas", "30 días", "1 año"], c: 0, e: "Comunicación es parte del IR." },
+  ],
+  48: [
+    { q: "El threat hunting es:", o: ["Esperar alertas", "Buscar proactivamente al atacante (hypothesis-driven)", "Un antivirus"], c: 1, e: "Asume que el atacante ya está dentro." },
+    { q: "En la Pyramid of Pain, lo más difícil de cambiar para el atacante son:", o: ["Los hashes", "Las TTPs (comportamiento)", "Las IPs"], c: 1, e: "Cazar por comportamiento es más robusto." },
+    { q: "Las hipótesis de hunting suelen basarse en:", o: ["MITRE ATT&CK", "El horóscopo", "El uptime del servidor"], c: 0, e: "Técnicas conocidas → buscás su evidencia." },
+    { q: "PowerShell con EncodedCommand desde %TEMP% es:", o: ["Normal", "Una anomalía a investigar", "Un backup"], c: 1, e: "Patrón común de actividad maliciosa." },
+  ],
+  49: [
+    { q: "El modelo de responsabilidad compartida dice que el cliente asegura:", o: ["El hardware de AWS", "IAM, datos y configuración (EN la nube)", "El hipervisor"], c: 1, e: "AWS asegura la nube; vos, en la nube." },
+    { q: "La causa #1 de brechas cloud suele ser:", o: ["Fallas de AWS", "Misconfiguración del cliente (ej: S3 público)", "Ataques cuánticos"], c: 1, e: "Bloqueá public access, mínimo privilegio." },
+    { q: "CloudTrail provee:", o: ["Detección de malware", "Auditoría de las llamadas a la API (forense)", "Cifrado de S3"], c: 1, e: "Registro de actividad." },
+    { q: "Un Security Group con 0.0.0.0/0 en el puerto 22 es:", o: ["Buena práctica", "Una mala configuración (SSH abierto a Internet)", "Obligatorio"], c: 1, e: "Restringí el acceso administrativo." },
+  ],
+  50: [
+    { q: "Microsoft Entra ID (ex Azure AD) gestiona:", o: ["Bases de datos", "Identidad y acceso", "Redes físicas"], c: 1, e: "RBAC, Conditional Access, PIM." },
+    { q: "En GCP, las service accounts sobre-privilegiadas son:", o: ["Recomendadas", "Un riesgo común", "Imposibles"], c: 1, e: "Aplicá mínimo privilegio." },
+    { q: "El equivalente a AWS GuardDuty en Azure es:", o: ["CloudTrail", "Defender for Cloud", "S3"], c: 1, e: "En GCP es Security Command Center." },
+    { q: "CSPM sirve para:", o: ["Cifrar discos", "Detectar misconfigs en multi-cloud de forma continua", "Escanear puertos"], c: 1, e: "Wiz, Prisma, Scout Suite." },
+  ],
+  51: [
+    { q: "Los contenedores comparten con el host:", o: ["El kernel", "La RAM física exclusiva", "El disco completo"], c: 0, e: "Por eso un escape es crítico." },
+    { q: "Una buena práctica en el Dockerfile es:", o: ["Correr como root", "Definir un USER no-root", "Hardcodear secretos"], c: 1, e: "Mínimo privilegio." },
+    { q: "Trivy se usa para:", o: ["Orquestar pods", "Escanear imágenes por vulns/secrets", "Balancear carga"], c: 1, e: "Integrado en el pipeline." },
+    { q: "En Kubernetes, las Network Policies sirven para:", o: ["Cifrar el disco", "Segmentar el tráfico entre pods (default deny)", "Escalar nodos"], c: 1, e: "Limitan el blast radius." },
+  ],
+  52: [
+    { q: "Shift-left significa:", o: ["Probar seguridad solo en producción", "Detectar problemas lo más temprano posible", "Mover el servidor"], c: 1, e: "Más barato arreglar temprano." },
+    { q: "SAST analiza:", o: ["La app corriendo", "El código fuente", "El tráfico de red"], c: 1, e: "DAST ataca la app en ejecución." },
+    { q: "gitleaks/trufflehog detectan:", o: ["Puertos abiertos", "Secretos commiteados en el repo", "Malware"], c: 1, e: "Secrets scanning en CI." },
+    { q: "Un SBOM es:", o: ["Un firewall", "Un inventario de componentes del software", "Un tipo de cifrado"], c: 1, e: "Clave para supply chain security." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {

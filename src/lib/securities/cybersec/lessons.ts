@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: M1-M41 + M51, M53, M54, M55.
+// Cobertura: M1-M48 + M51, M53, M54, M55.
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -542,6 +542,90 @@ export const LESSONS: Lesson[] = [
       { h: "Análisis de PCAP", c: "🌐 El **forense de red** analiza tráfico capturado (PCAP) para reconstruir lo que pasó por el cable.\n→ **Wireshark / tshark** — Inspección profunda, seguir streams (Follow TCP Stream), exportar objetos\n→ **NetworkMiner** — Extrae archivos, credenciales, hosts del PCAP automáticamente\n→ **Zeek (Bro)** — Genera logs estructurados de conexiones, DNS, HTTP, archivos" },
       { h: "Detección de C2", c: "📡 Detectar **Command & Control** en el tráfico:\n→ **Beaconing** — Conexiones periódicas y regulares a un mismo destino (RITA detecta el patrón)\n→ **DNS tunneling** — Subdominios largos/aleatorios, alto volumen de TXT\n→ **JA3/JA3S** — Fingerprint de handshakes TLS (identifica clientes maliciosos aunque cifren)\n→ Dominios DGA (generados algorítmicamente), user-agents raros, puertos no estándar" },
       { h: "Correlación de Red", c: "🔗 Combinás flujos, logs de firewall, DNS y proxy para:\n→ Trazar la línea de tiempo del ataque\n→ Identificar hosts comprometidos y datos exfiltrados\n→ Confirmar IoCs de red (IPs/dominios C2)\n\n🛡️ Visibilidad de red (NDR, full packet capture, NetFlow) es clave: muchos ataques solo se ven en el tráfico, no en el endpoint." },
+    ],
+  },
+  {
+    id: 46,
+    title: "SIEM y Monitoreo",
+    sub: "M42",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Qué es un SIEM", c: "📊 Un **SIEM** (Security Information and Event Management) centraliza, correlaciona y alerta sobre logs de toda la infraestructura. Es el corazón de un **SOC** (Security Operations Center).\n\n→ **Splunk** — Potente, comercial\n→ **ELK / Elastic Security** — Open source\n→ **Microsoft Sentinel** — Cloud-native\n→ **QRadar, Wazuh, Graylog**\n\nFuentes: firewalls, endpoints (EDR), AD, servidores, apps, cloud." },
+      { h: "Reglas de Correlación", c: "🔗 El valor del SIEM está en **correlacionar** eventos dispersos en una detección:\n→ **Brute force** — N fallos de login (4625) seguidos de un éxito (4624)\n→ **Lateral movement** — Logons tipo 3 a múltiples hosts desde una cuenta\n→ **Exfiltración** — Volumen anómalo de datos saliente\n→ **Privilege escalation** — Cuenta agregada a Administrators\n→ **Malware C2** — Conexiones a IPs/dominios maliciosos\n\nSe escriben en SPL (Splunk) o KQL (Sentinel)." },
+      { h: "SOC y SOAR", c: "🏢 El **SOC** monitorea 24/7. Niveles: L1 (triage), L2 (investigación), L3 (hunting/IR).\n\n🤖 **SOAR** (Security Orchestration, Automation and Response) automatiza respuestas: aislar un host, bloquear una IP, abrir un ticket — sin intervención manual, reduciendo el tiempo de respuesta (MTTR).\n\n📈 Dashboards y alertas afinadas evitan la **fatiga de alertas** (demasiados falsos positivos hacen que se ignoren los reales)." },
+    ],
+  },
+  {
+    id: 47,
+    title: "Incident Response",
+    sub: "M43",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Ciclo NIST 800-61", c: "🚨 La **respuesta a incidentes (IR)** sigue un ciclo (NIST SP 800-61):\n1️⃣ **Preparación** — Plan, equipo (CSIRT), herramientas, playbooks\n2️⃣ **Detección y Análisis** — Identificar y triar el incidente\n3️⃣ **Contención, Erradicación y Recuperación**\n4️⃣ **Post-incidente** — Lecciones aprendidas\n\nEl ciclo es iterativo, no lineal." },
+      { h: "Contención y Recuperación", c: "🛑 **Contención** — Limitar el daño: aislar hosts, deshabilitar cuentas, bloquear IPs. Corto plazo vs largo plazo.\n🧹 **Erradicación** — Eliminar la causa raíz: malware, backdoors, cuentas creadas por el atacante. Si quedó algo, el atacante vuelve.\n♻️ **Recuperación** — Restaurar desde backups limpios, validar, monitorear de cerca por reincidencia.\n\n⚠️ No te apures a recuperar antes de entender el alcance total." },
+      { h: "Playbooks y Comunicación", c: "📕 Un **playbook** define pasos concretos por tipo de incidente (ransomware, phishing, brecha de datos). Ejemplo ransomware: aislar → identificar variante → preservar evidencia → no pagar (recomendado) → restaurar → notificar.\n\n📢 **Comunicación** — Legal, ejecutivos, clientes, reguladores (GDPR exige notificar en 72h). \n🎲 **Tabletop exercises** — Simulacros en mesa para entrenar al equipo antes del incidente real." },
+    ],
+  },
+  {
+    id: 48,
+    title: "Threat Hunting",
+    sub: "M44",
+    dur: "35m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Caza Proactiva", c: "🏹 El **threat hunting** asume que el atacante YA está dentro y lo busca proactivamente, sin esperar una alerta. Complementa la detección automática.\n\nEs **hypothesis-driven**: partís de una hipótesis (\"si hay un atacante, usaría X técnica\") y buscás evidencia en los datos." },
+      { h: "ATT&CK y la Pirámide del Dolor", c: "🗺️ **MITRE ATT&CK** guía las hipótesis: elegís una técnica (ej: T1053 Scheduled Task) y buscás su evidencia.\n\n😖 **Pyramid of Pain** — Cuanto más \"arriba\" detectás, más le duele al atacante cambiar:\nHashes (fácil cambiar) → IPs → Dominios → Artefactos de host/red → Herramientas → **TTPs** (lo más difícil de cambiar).\n\nCazar por comportamiento (TTPs) es más robusto que por IoCs simples." },
+      { h: "Ejecución", c: "🔎 El loop de hunting:\n1. Hipótesis (basada en ATT&CK / threat intel)\n2. Datos (EDR, logs, SIEM) — KQL/SPL queries\n3. Investigar anomalías\n4. Si hay hallazgo → IR; si no → afinar detección\n\nEjemplos de queries: procesos hijos raros de Office (macros), PowerShell con EncodedCommand, ejecución desde %TEMP%, conexiones a dominios DGA.\n\n🎯 Resultado: nuevas detecciones automatizadas + IoCs para el SOC." },
+    ],
+  },
+  {
+    id: 49,
+    title: "Cloud Security: AWS",
+    sub: "M45",
+    dur: "40m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Responsabilidad Compartida", c: "☁️ En cloud, la seguridad es **responsabilidad compartida**:\n→ **AWS** asegura la nube (hardware, infra, hipervisor)\n→ **Vos** asegurás EN la nube (IAM, datos, configuración, parches del SO)\n\nLa mayoría de las brechas cloud son por **misconfiguración del cliente**, no fallas de AWS." },
+      { h: "IAM y S3", c: "🔑 **IAM** (Identity and Access Management) es el núcleo:\n→ Users, Groups, **Roles** (preferí roles sobre claves estáticas)\n→ **Policies** (JSON) — least privilege, evitar `*:*`\n→ MFA obligatorio, rotar claves, evitar la cuenta root para el día a día\n\n🪣 **S3** — Causa #1 de brechas cloud:\n→ Buckets públicos por error → datos expuestos\n→ Block Public Access, bucket policies, cifrado, versioning" },
+      { h: "Visibilidad y Misconfigs", c: "👁️ Servicios de seguridad nativos:\n→ **CloudTrail** — Auditoría de todas las llamadas a la API (forense)\n→ **GuardDuty** — Detección de amenazas\n→ **Config** — Cumplimiento de configuración\n→ **Security Hub** — Vista centralizada\n\n⚠️ **Top misconfigs:** S3 público, IAM demasiado permisivo, Security Groups con 0.0.0.0/0 en SSH/RDP, claves en repos, CloudTrail desactivado, sin MFA en root." },
+    ],
+  },
+  {
+    id: 50,
+    title: "Cloud Security: Azure y GCP",
+    sub: "M46",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Azure", c: "🔷 **Microsoft Entra ID** (ex Azure AD) gestiona identidad en Azure y Microsoft 365.\n→ **RBAC** — Roles por scope (subscription, resource group, recurso)\n→ **Conditional Access** — Políticas basadas en riesgo/ubicación/dispositivo\n→ **PIM** (Privileged Identity Management) — Acceso just-in-time a roles privilegiados\n→ Atacar Entra ID es hoy un objetivo central (token theft, consent phishing)." },
+      { h: "GCP", c: "🔶 **GCP IAM** liga identidades (usuarios, service accounts) a roles sobre recursos, organizados en jerarquía Organization → Folder → Project.\n→ Cuidado con **service accounts** sobre-privilegiadas y claves exportadas\n→ **VPC Service Controls** — Perímetros para frenar exfiltración\n→ Logging con Cloud Audit Logs" },
+      { h: "Multi-Cloud y CSPM", c: "🔁 Las herramientas de seguridad nativas tienen equivalentes entre nubes:\n→ Detección: **GuardDuty** (AWS) ≈ **Defender for Cloud** (Azure) ≈ **Security Command Center** (GCP)\n→ Auditoría: CloudTrail ≈ Activity Log ≈ Cloud Audit Logs\n\n🛡️ **CSPM** (Cloud Security Posture Management) — Herramientas (Wiz, Prisma, Scout Suite) que detectan misconfigs across multi-cloud de forma continua." },
+    ],
+  },
+  {
+    id: 51,
+    title: "Container Security",
+    sub: "M47",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Docker Security", c: "🐳 Los contenedores comparten el kernel del host → un escape es crítico. Buenas prácticas:\n→ Imágenes mínimas y oficiales (distroless, alpine), pinneadas por digest\n→ **No correr como root** (USER en el Dockerfile)\n→ No hardcodear secretos en la imagen ni en ENV\n→ Read-only filesystem, drop capabilities, no `--privileged`\n→ No montar `/var/run/docker.sock` dentro del contenedor" },
+      { h: "Image Scanning", c: "🔬 Escanear imágenes por vulnerabilidades y secretos:\n→ **Trivy** — El más popular (vulns + misconfigs + secrets)\n→ **Grype, Clair, Snyk**\n\nIntegralo en el pipeline: si la imagen tiene CVEs críticos, falla el build. **Distroless** reduce drásticamente la superficie (sin shell, sin package manager)." },
+      { h: "Kubernetes", c: "☸️ En **Kubernetes** la superficie crece:\n→ **RBAC** — Mínimo privilegio en cuentas de servicio\n→ **Network Policies** — Segmentación entre pods (default deny)\n→ **Pod Security Standards / admission controllers** (OPA/Kyverno) — Bloquear pods privilegiados\n→ **Secrets** — Cifrados at rest, idealmente external (Vault)\n→ Asegurar el **API server** y **etcd**\n\nHerramientas: kube-bench (CIS), kube-hunter, Falco (runtime detection)." },
+    ],
+  },
+  {
+    id: 52,
+    title: "DevSecOps y CI/CD",
+    sub: "M48",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Shift-Left", c: "🔄 **DevSecOps** integra la seguridad en todo el ciclo de desarrollo, no al final. **Shift-left** = detectar problemas lo más temprano posible (es más barato arreglar un bug en el commit que en producción).\n\nLa seguridad se automatiza dentro del pipeline CI/CD, no es una compuerta manual." },
+      { h: "Controles en el Pipeline", c: "🛠️ Capas de testing automatizado:\n→ **SAST** — Analiza el código fuente (Semgrep, SonarQube, CodeQL)\n→ **DAST** — Ataca la app corriendo (OWASP ZAP)\n→ **SCA** — Escanea dependencias por CVEs (Dependabot, Snyk)\n→ **Secrets scanning** — Detecta claves commiteadas (gitleaks, trufflehog)\n→ **IaC scanning** — Terraform/K8s (Checkov, tfsec, KICS)\n→ **Container scanning** (Trivy)\n\nUn hallazgo crítico **falla el build** (quality gate)." },
+      { h: "Supply Chain", c: "🔗 La **seguridad de la cadena de suministro** ganó protagonismo tras SolarWinds y Log4Shell:\n→ **SBOM** (Software Bill of Materials) — Inventario de componentes\n→ **Firma de artefactos** (Sigstore/cosign) y verificación\n→ **Provenance / SLSA** — Garantizar de dónde vino el build\n→ Proteger los secretos y permisos del CI/CD (un pipeline comprometido = RCE en prod)\n\n💡 En AlphaLog: el quality-gate de GitHub Actions corre lint + build en cada PR antes de mergear." },
     ],
   },
 ];
