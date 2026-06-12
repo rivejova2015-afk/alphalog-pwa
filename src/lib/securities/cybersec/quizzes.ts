@@ -168,6 +168,60 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "IDOR se previene:", o: ["Ocultando el ID en el cliente", "Verificando autorización por objeto en el servidor", "Usando HTTPS"], c: 1, e: "En AlphaLog lo cubre RLS de Supabase." },
     { q: "Validar uploads por extensión (.jpg) en vez de contenido:", o: ["Es suficiente", "Es bypasseable (shell.php.jpg, magic bytes)", "Mejora el rendimiento"], c: 1, e: "Validá por contenido real, no por nombre." },
   ],
+  29: [
+    { q: "El reconocimiento pasivo se caracteriza por:", o: ["Escanear puertos del objetivo", "No tocar al objetivo (solo fuentes públicas)", "Explotar vulnerabilidades"], c: 1, e: "OSINT; es indetectable." },
+    { q: "Shodan es:", o: ["Un antivirus", "Un buscador de dispositivos/servicios expuestos en Internet", "Un cifrador"], c: 1, e: "Mapea la superficie expuesta." },
+    { q: "site:ejemplo.com filetype:pdf es un ejemplo de:", o: ["SQL Injection", "Google Dorking", "Un payload XSS"], c: 1, e: "Operadores de búsqueda para recon." },
+    { q: "theHarvester sirve para obtener:", o: ["Hashes de passwords", "Emails, subdominios y hosts", "Exploits"], c: 1, e: "Recolección OSINT." },
+  ],
+  30: [
+    { q: "nmap -sn realiza:", o: ["UDP scan", "Ping sweep (qué hosts están vivos)", "OS detection"], c: 1, e: "Descubrimiento de hosts." },
+    { q: "Para detectar la versión de los servicios usás:", o: ["-sV", "-sn", "-f"], c: 0, e: "Clave para luego buscar CVEs." },
+    { q: "El SYN scan (-sS) es:", o: ["El más ruidoso", "Sigiloso (half-open), requiere root", "Solo para UDP"], c: 1, e: "No completa el handshake." },
+    { q: "-D RND:10 en Nmap agrega:", o: ["10 puertos", "Decoys (IPs señuelo) para evadir IDS", "10 segundos de delay"], c: 1, e: "Técnica de evasión." },
+  ],
+  31: [
+    { q: "snmpwalk con community 'public' suele:", o: ["Estar siempre bloqueado", "Exponer mucha información del dispositivo", "Cifrar el tráfico"], c: 1, e: "SNMP mal configurado filtra datos." },
+    { q: "dig axfr intenta:", o: ["Un ping", "Una transferencia de zona DNS", "Un brute force"], c: 1, e: "Zone transfer revela registros DNS internos." },
+    { q: "enum4linux se usa para enumerar:", o: ["Servidores web", "SMB/Windows (usuarios, shares)", "Bases de datos SQL"], c: 1, e: "Enumeración de Samba/Windows." },
+    { q: "El dicho del pentester sobre enumeración es:", o: ["'menos es más'", "'enumeration is key'", "'shoot first'"], c: 1, e: "Cuanto más enumerás, más vectores hallás." },
+  ],
+  32: [
+    { q: "Un vulnerability scanner como Nessus:", o: ["Explota automáticamente todo", "Correlaciona servicios/versiones con CVEs", "Cifra la red"], c: 1, e: "Detecta, no necesariamente explota." },
+    { q: "CVSS mide:", o: ["El precio de un exploit", "La severidad de una vulnerabilidad (0-10)", "La velocidad de la red"], c: 1, e: "Score base con AV/AC/PR/UI/S/CIA." },
+    { q: "Para priorizar parches conviene mirar si el CVE está en:", o: ["Wikipedia", "CISA KEV (explotado activamente)", "Reddit"], c: 1, e: "Explotabilidad real + exposición." },
+    { q: "Antes de reportar un hallazgo de scanner conviene:", o: ["Confiar ciegamente", "Validarlo manualmente (falsos positivos)", "Ignorarlo"], c: 1, e: "El scanner es un punto de partida." },
+  ],
+  33: [
+    { q: "En Metasploit, el 'payload' es:", o: ["La vulnerabilidad", "Lo que se ejecuta tras explotar (ej: shell)", "El escáner"], c: 1, e: "Exploit abre la puerta, payload actúa." },
+    { q: "Meterpreter corre principalmente:", o: ["En disco", "En memoria", "En la BIOS"], c: 1, e: "Payload avanzado en memoria." },
+    { q: "msfvenom sirve para:", o: ["Escanear puertos", "Generar payloads standalone", "Crackear hashes"], c: 1, e: "Genera payloads fuera de msfconsole." },
+    { q: "¿Dónde se practica Metasploit legalmente?", o: ["Cualquier IP de Internet", "Metasploitable / HackTheBox / labs propios", "El router del vecino"], c: 1, e: "Solo con autorización." },
+  ],
+  34: [
+    { q: "Burp Suite se sitúa:", o: ["En el servidor", "Como proxy entre tu navegador y el servidor", "En el router"], c: 1, e: "Intercepta y modifica el tráfico web." },
+    { q: "Para reenviar y modificar un request manualmente usás:", o: ["Intruder", "Repeater", "Sequencer"], c: 1, e: "Ideal para probar SQLi/IDOR." },
+    { q: "Intruder se usa para:", o: ["Cifrar tráfico", "Automatizar fuzzing/brute force", "Ver el sitemap"], c: 1, e: "Payloads en posiciones definidas." },
+    { q: "Para ver tráfico HTTPS en Burp necesitás:", o: ["Nada extra", "Instalar su certificado CA", "Desactivar el firewall"], c: 1, e: "Si no, el navegador alerta por el MITM." },
+  ],
+  35: [
+    { q: "LinPEAS sirve para:", o: ["Cifrar archivos", "Automatizar la búsqueda de vectores de privesc", "Escanear puertos"], c: 1, e: "Enumeración local en Linux." },
+    { q: "sudo -l muestra:", o: ["Los usuarios del sistema", "Qué comandos podés ejecutar como root", "Los puertos abiertos"], c: 1, e: "Binarios sudo abusables → shell." },
+    { q: "GTFOBins documenta:", o: ["CVEs de Windows", "Binarios Unix abusables para escapar restricciones", "Reglas de firewall"], c: 1, e: "SUID/sudo/capabilities explotables." },
+    { q: "Un kernel viejo (uname -a) puede permitir:", o: ["Mejor rendimiento", "Kernel exploits (Dirty COW/Pipe)", "Cifrado más fuerte"], c: 1, e: "Riesgoso pero efectivo si está sin parchear." },
+  ],
+  36: [
+    { q: "En Windows el objetivo de la escalada es llegar a:", o: ["guest", "SYSTEM/Administrator", "anonymous"], c: 1, e: "Máximo privilegio." },
+    { q: "La familia 'Potato' (JuicyPotato, PrintSpoofer) abusa de:", o: ["SeImpersonatePrivilege / COM-NTLM", "DNS", "TLS"], c: 0, e: "Escala de servicio a SYSTEM." },
+    { q: "Un 'unquoted service path' se explota cuando:", o: ["El servicio usa HTTPS", "La ruta tiene espacios sin comillas", "El servicio está detenido"], c: 1, e: "Windows busca binarios en rutas intermedias." },
+    { q: "Mimikatz se usa para:", o: ["Escanear puertos", "Dumpear credenciales de memoria", "Compilar exploits"], c: 1, e: "sekurlsa::logonpasswords." },
+  ],
+  37: [
+    { q: "El pivoting consiste en:", o: ["Borrar logs", "Usar un host comprometido como trampolín a otras redes", "Cifrar el disco"], c: 1, e: "Acceder a redes no alcanzables directamente." },
+    { q: "ssh -D crea:", o: ["Un local forward", "Un proxy SOCKS dinámico", "Un backup"], c: 1, e: "Combinado con proxychains." },
+    { q: "Pass-the-Hash permite:", o: ["Autenticar con el hash NTLM sin la password", "Crackear AES", "Saltar el firewall físico"], c: 0, e: "Movimiento lateral en redes Windows." },
+    { q: "chisel y ligolo-ng sirven para:", o: ["Escanear webs", "Crear túneles/pivoting (a veces sobre HTTP)", "Hashear passwords"], c: 1, e: "Tunneling para bypassear firewalls." },
+  ],
 };
 
 export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
