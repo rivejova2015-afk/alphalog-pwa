@@ -69,4 +69,24 @@ describe("AabTreeView — Fase 2 reorder", () => {
     // master + 2 slaves = 3 treeitems
     expect(screen.getAllByRole("treeitem")).toHaveLength(3);
   });
+
+  it("renderiza los huérfanos como arrastrables para conectar (Operación C)", () => {
+    // Nodo huérfano: existe pero ningún link lo conecta al master.
+    const withOrphan = [
+      ...nodes,
+      { id: "node-o", account_id: "o", role: "slave" as const, status: "active" as const, risk_pct: 0, sort_index: 0, account: acc("o", "Huérfano") },
+    ];
+    render(
+      <AabTreeView
+        nodes={withOrphan}
+        links={links}
+        selectedNodeId={null}
+        onSelectNode={vi.fn()}
+        copyGroupId="g1"
+        onReorderCommitted={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Nodos sin conexión")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Arrastrar para conectar Huérfano/)).toBeInTheDocument();
+  });
 });

@@ -80,4 +80,16 @@ describe("classifyDrop", () => {
   it("returns null when there is no active drag", () => {
     expect(classifyDrop(tree, null, "A", "M")).toBeNull();
   });
+
+  it("classifies an orphan connect as valid", () => {
+    expect(classifyDrop(tree, { accountId: "X", parentId: null, linkId: null, isOrphan: true }, "M", null)).toBe("valid");
+  });
+
+  it("classifies an orphan connect that would cycle as invalid", () => {
+    // Orphan X has its own disconnected child Y; connecting X under Y → cycle.
+    const withOrphanSub = [...tree, { parent_account_id: "X", child_account_id: "Y" }];
+    expect(
+      classifyDrop(withOrphanSub, { accountId: "X", parentId: null, linkId: null, isOrphan: true }, "Y", "X"),
+    ).toBe("invalid");
+  });
 });

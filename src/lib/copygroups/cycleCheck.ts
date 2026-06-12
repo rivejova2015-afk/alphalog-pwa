@@ -44,13 +44,14 @@ export interface ActiveDragInfo {
   accountId: string;
   parentId: string | null;
   linkId: string | null;
+  isOrphan?: boolean;
 }
 
 /**
  * Classifies what would happen if the active (dragged) node were dropped onto a
  * target node, for live hover feedback in the tree:
  *   - "reorder": same parent → reorder among siblings (valid, green)
- *   - "valid":   reparent onto a different node (valid, green)
+ *   - "valid":   reparent onto a different node, or connect an orphan (green)
  *   - "invalid": self-parent, already-parent, orphan with no link, or cycle (red)
  *   - null:      hovering over itself / nothing actionable
  */
@@ -62,10 +63,17 @@ export function classifyDrop(
 ): DropKind {
   if (!active) return null;
   if (active.accountId === targetAccountId) return null; // over itself
+
+  // Orphan connect (Operación C): a disconnected node joins the tree under the
+  // target. Constructive — valid unless it would close a cycle.
+  if (active.isOrphan) {
+    return wouldCreateCycle(links, active.accountId, targetAccountId) ? "invalid" : "valid";
+  }
+
   if (active.parentId !== null && active.parentId === targetParentId) return "reorder";
 
   // Reparent path.
-  if (!active.linkId) return "invalid"; // orphan: no parent link to move
+  if (!active.linkId) return "invalid"; // no parent link to move
   if (targetAccountId === active.parentId) return "invalid"; // already its parent
   if (wouldCreateCycle(links, active.accountId, targetAccountId)) return "invalid";
   return "valid";

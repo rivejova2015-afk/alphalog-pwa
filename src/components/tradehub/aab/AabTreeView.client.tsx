@@ -10,6 +10,7 @@ import {
   TouchSensor,
   KeyboardSensor,
   closestCenter,
+  useDraggable,
   useDroppable,
   useSensor,
   useSensors,
@@ -275,6 +276,45 @@ function MasterNodeRow({
   );
 }
 
+// An orphan (disconnected) node, draggable onto any tree node to connect it
+// (Operación C). Orphans are drag sources only — not drop targets.
+function DraggableOrphanRow({
+  node,
+  selectedNodeId,
+  onSelectNode,
+}: {
+  node: CopyGroupNode;
+  selectedNodeId: string | null;
+  onSelectNode: (id: string | null) => void;
+}) {
+  const data: NodeDndData = { accountId: node.account_id, parentId: null, linkId: null, isOrphan: true };
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: node.id, data });
+  const style = { transform: CSS.Translate.toString(transform) };
+  const isSelected = selectedNodeId === node.id;
+
+  return (
+    <div ref={setNodeRef} style={style} className={`flex items-stretch gap-1 ${isDragging ? "opacity-40" : ""}`}>
+      <button
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-center min-w-[44px] rounded-lg text-slate-500 hover:text-slate-300 cursor-grab active:cursor-grabbing touch-none"
+        aria-label={`Arrastrar para conectar ${node.account?.name || "cuenta"} al árbol`}
+      >
+        <GripVertical size={14} />
+      </button>
+      <button
+        onClick={() => onSelectNode(node.id)}
+        className={`flex-1 text-left border rounded-lg px-3 py-2 transition ${
+          isSelected ? "border-emerald-400 bg-emerald-500/10" : "border-slate-700 bg-slate-900/60"
+        }`}
+      >
+        <div className="text-sm text-slate-100">{node.account?.name || "Cuenta"}</div>
+        <div className="text-xs text-slate-400">{node.role.toUpperCase()} • {node.status}</div>
+      </button>
+    </div>
+  );
+}
+
 interface PendingReparent {
   linkId: string;
   draggedAccountId: string;
@@ -444,6 +484,18 @@ export default function AabTreeView({
     const o = over.data.current as NodeDndData | undefined;
     if (!a || !o) return;
 
+    // Orphan connect (Operación C): a disconnected node dropped onto a tree node
+    // joins the tree under it. Constructive — no confirmation needed.
+    if (a.isOrphan) {
+      if (o.accountId === a.accountId) return;
+      if (wouldCreateCycle(links, a.accountId, o.accountId)) {
+        toast.error("Ese movimiento crearía un ciclo");
+        return;
+      }
+      void doConnect(a.accountId, o.accountId);
+      return;
+    }
+
     // Same parent → reorder among siblings (Fase 2).
     if (a.parentId !== null && a.parentId === o.parentId) {
       reorderSiblings(a.parentId, active.id as string, over.id as string);
@@ -467,6 +519,30 @@ export default function AabTreeView({
       newParentAccountId,
       newParentName: accountName(newParentAccountId),
     });
+  };
+
+  const doConnect = async (childAccountId: string, parentAccountId: string) => {
+    if (!copyGroupId) return;
+    setReparenting(true);
+    try {
+      const res = await fetch(`/api/copy-groups/${copyGroupId}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parent_account_id: parentAccountId, child_account_id: childAccountId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        toast.error(json.error ?? "No se pudo conectar el nodo");
+        return;
+      }
+      toast.success("Nodo conectado al árbol");
+      setAnnouncement(`${accountName(childAccountId)} conectado como hijo de ${accountName(parentAccountId)}`);
+      onReorderCommitted?.();
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setReparenting(false);
+    }
   };
 
   const doReparent = async () => {
@@ -501,18 +577,18 @@ export default function AabTreeView({
     <div className="space-y-4" aria-busy={savingOrder || reparenting}>
       <div aria-live="polite" className="sr-only">{announcement}</div>
 
-      {!tree.root && (
-        <div className="text-sm text-slate-400">No hay master activo. Agrega un nodo master para iniciar el árbol.</div>
-      )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveNodeId(null)}
+      >
+        {!tree.root && (
+          <div className="text-sm text-slate-400">No hay master activo. Agrega un nodo master para iniciar el árbol.</div>
+        )}
 
-      {tree.root && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={() => setActiveNodeId(null)}
-        >
+        {tree.root && (
           <div role="tree" aria-label="Árbol de cuentas del CopyGroup">
             <MasterNodeRow
               treeNode={tree.root}
@@ -521,38 +597,38 @@ export default function AabTreeView({
               evaluateDrop={evaluateDrop}
             />
           </div>
-          <DragOverlay>
-            {activeNode ? (
-              <div className="border border-cyan-400 ring-2 ring-cyan-400 rounded-xl px-4 py-3 bg-slate-800 shadow-2xl opacity-90">
-                <div className="text-sm font-semibold text-slate-100">{activeNode.account?.name || "Cuenta"}</div>
-                <div className="text-xs text-slate-400">{activeNode.role.toUpperCase()} • {activeNode.status}</div>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
+        )}
 
-      {savingOrder && <p className="text-[11px] text-slate-500 italic">Guardando orden…</p>}
+        {savingOrder && <p className="text-[11px] text-slate-500 italic">Guardando orden…</p>}
 
-      {tree.orphans.length > 0 && (
-        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-          <div className="text-xs uppercase text-slate-400 mb-2">Nodos sin conexión</div>
-          <div className="space-y-2">
-            {tree.orphans.map((node) => (
-              <button
-                key={node.id}
-                onClick={() => onSelectNode(node.id)}
-                className={`w-full text-left border rounded-lg px-3 py-2 transition ${
-                  selectedNodeId === node.id ? "border-emerald-400 bg-emerald-500/10" : "border-slate-700 bg-slate-900/60"
-                }`}
-              >
-                <div className="text-sm text-slate-100">{node.account?.name || "Cuenta"}</div>
-                <div className="text-xs text-slate-400">{node.role.toUpperCase()} • {node.status}</div>
-              </button>
-            ))}
+        {tree.orphans.length > 0 && (
+          <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+            <div className="text-xs uppercase text-slate-400 mb-2">Nodos sin conexión</div>
+            {tree.root && (
+              <p className="text-[11px] text-slate-500 mb-2">Arrastrá un nodo sobre el árbol para conectarlo.</p>
+            )}
+            <div className="space-y-2">
+              {tree.orphans.map((node) => (
+                <DraggableOrphanRow
+                  key={node.id}
+                  node={node}
+                  selectedNodeId={selectedNodeId}
+                  onSelectNode={onSelectNode}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        <DragOverlay>
+          {activeNode ? (
+            <div className="border border-cyan-400 ring-2 ring-cyan-400 rounded-xl px-4 py-3 bg-slate-800 shadow-2xl opacity-90">
+              <div className="text-sm font-semibold text-slate-100">{activeNode.account?.name || "Cuenta"}</div>
+              <div className="text-xs text-slate-400">{activeNode.role.toUpperCase()} • {activeNode.status}</div>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <ConfirmDialog
         open={pendingReparent !== null}

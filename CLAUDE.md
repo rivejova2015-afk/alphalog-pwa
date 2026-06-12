@@ -794,7 +794,8 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 ### 🔴 Pendiente / No implementado
 - Suscripción multi-usuario real (actualmente 1 usuario).
 <!-- (resolved sprint 6) Coinarb segunda capa cubierta: analysis/ (smc-detector, mtf-analyzer, liquidity-map, candle-builder), validators/ (volume-delta, volume-profile, fear-greed, liquidation-heatmap) y risk/phase-manager.ts ahora tienen 79 tests en coinarb/tests/. -->
-- AAB drag/drop nodos: 20% madurez en `AabTreeView.client.tsx`. Bloqueado por spec UX.
+<!-- (resolved 2026-06) AAB drag/drop nodos: completo end-to-end. Spec en docs/research/aab-dragdrop-ux-spec.md; 4 fases implementadas en AabTreeView.client.tsx — reorder de hermanos (@dnd-kit), reparent entre niveles (endpoint PATCH /api/copy-groups/[id]/links/[linkId]/reparent + anti-ciclos vía copy_group_would_create_cycle), connect de huérfanos (Operación C, POST .../links), DragOverlay, coloreo hover verde/rojo aware-de-ciclo (classifyDrop), sensores touch (long-press) + aria-live. cycleCheck.ts puro + tests. -->
+- _(sin pendientes de drag/drop en AAB; ver nota resuelta)_
 <!-- (resolved 2026-06) TerminalReportsBot QStash scheduling: el módulo está completo end-to-end (verify + schedule + run-scheduled + UI). Cobertura con 26 unit tests nuevos. Ver entrada en ✅ Reciente. -->
 <!-- (resolved 2026-06) alphacore-offline E2E: spec del full cycle (offline submit → online drain → entry persiste) en alphacore-offline.spec.ts. -->
 <!-- (resolved 2026-06) console.log → logError sweep cerrado: de 335 ocurrencias en 120 archivos → 60 en 10. Todo lo migrable está hecho (API routes 100%, server libs 100%, UI components, error boundaries, dashboard pages). Lo que queda es intencional: src/lib/log.ts (el logger), src/lib/toast.ts, src/lib/alphashield/* (sistema de logging client-side propio que tiene que usar console como sink final), src/lib/alphacore/testing.ts (harness), JSDoc examples, y contenido educativo XSS demo. Ver entrada en ✅ Reciente. -->
