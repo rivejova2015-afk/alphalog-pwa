@@ -20,6 +20,7 @@ import { fetchFxratesapiBars, mapToFxratesapiPair } from "@/lib/backtest/fxrates
 import { fetchOandaBars, mapToOandaInstrument } from "@/lib/backtest/oanda-fetcher";
 import { fetchPolygonBars, mapToPolygonTicker } from "@/lib/backtest/polygon-fetcher";
 import { fetchTwelveDataBars, mapToTwelveDataSymbol } from "@/lib/backtest/twelvedata-fetcher";
+import { fetchPolygonFuturesBars, mapToPolygonFuturesTicker } from "@/lib/backtest/polygon-futures-fetcher";
 import { getApiSourcesForTf, nextStepsForEmpty, type DataSource } from "@/lib/backtest/source-registry";
 import { logInfo, logWarn } from "@/lib/log";
 
@@ -249,6 +250,21 @@ async function tryApiSource(
     } catch (err) {
       // Missing API key or daily-credit exhaustion → soft fail → walk to
       // Polygon → Yahoo → CSV. The diagnostics panel surfaces the message.
+      const msg = err instanceof Error ? err.message : String(err);
+      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
+    }
+  }
+  if (source === "polygon-futures") {
+    if (!mapToPolygonFuturesTicker(symbol, to)) {
+      return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_polygon_futures_mapping" } };
+    }
+    try {
+      const bars = await fetchPolygonFuturesBars(symbol, timeframe, from, to);
+      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
+    } catch (err) {
+      // Missing API key, subscription tier, or rate-limit → soft fail →
+      // walk to Yahoo (=F continuation) + CSV (tradovate/cme). The
+      // front-month-only limitation is documented in the fetcher comments.
       const msg = err instanceof Error ? err.message : String(err);
       return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
     }
