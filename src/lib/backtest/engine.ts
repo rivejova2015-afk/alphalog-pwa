@@ -121,7 +121,39 @@ function calcLots(rules: AlgorithmRules, balance: number, slPoints: number | nul
   return 0.01;
 }
 
-export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<BacktestResult> {
+/**
+ * Optional streaming hook for the core backtest loop. When passed, the engine
+ * invokes `onProgress` every `progressEveryNBars` bars (default 50) with only
+ * the *delta* of equity/trades produced since the previous call. Callers reuse
+ * the snapshot to push SSE/Realtime updates to the UI so the equity curve
+ * grows in real time instead of appearing at the end.
+ *
+ * When `onProgress` is undefined, the engine runs exactly as before — zero
+ * overhead. The final BacktestResult shape is identical either way.
+ *
+ * The callback is awaited so back-pressure from a slow consumer (eg. SSE
+ * client buffering) naturally throttles the engine.
+ */
+export interface RunBacktestOptions {
+  onProgress?: (snapshot: BacktestProgressSnapshot) => void | Promise<void>;
+  /** Default 50. Higher = less overhead, lower = smoother UI. Min 1. */
+  progressEveryNBars?: number;
+}
+
+export interface BacktestProgressSnapshot {
+  processedBars: number;
+  totalBars: number;
+  /** Equity points pushed since the previous callback (UI appends). */
+  newEquity: EquityPoint[];
+  /** Trades closed since the previous callback (UI appends). */
+  newTrades: SimulatedTrade[];
+}
+
+export async function runBacktest(
+  bars: Bar[],
+  cfg: BacktestConfig,
+  opts?: RunBacktestOptions,
+): Promise<BacktestResult> {
   const start = Date.now();
   const bundle = buildBundle(bars);
   const rules = cfg.rules;
@@ -151,6 +183,15 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
   const open: OpenPosition[] = [];
   const maxConc = rules.maxConcurrent ?? 1;
   let tradeId = 0;
+
+  // Streaming progress accounting. When `opts.onProgress` is undefined these
+  // variables are still assigned but the conditional branch below skips any
+  // work. The default `progressEveryNBars=50` is high enough that even a
+  // 100k-bar backtest only invokes the callback ~2000 times — overhead
+  // dominated by the `await` (~µs) when the consumer is synchronous.
+  const progressEveryNBars = Math.max(1, opts?.progressEveryNBars ?? 50);
+  let lastReportedEquityIdx = 0;
+  let lastReportedTradesIdx = 0;
 
   const closePosition = (pos: OpenPosition, idx: number, exitPx: number, reason: SimulatedTrade['exitReason']) => {
     const pxDiff = pos.side === 'long' ? exitPx - pos.entryPrice : pos.entryPrice - exitPx;
@@ -235,6 +276,22 @@ export async function runBacktest(bars: Bar[], cfg: BacktestConfig): Promise<Bac
     const dd = peakEquity > 0 ? (peakEquity - equityNow) / peakEquity : 0;
     if (i % 20 === 0 || i === bars.length - 1) {
       equity.push({ ts: bar.ts, equity: +equityNow.toFixed(2), drawdown: +dd.toFixed(6) });
+    }
+
+    // Streaming snapshot — only emitted when caller opted in. Sends deltas so
+    // the consumer (SSE encoder, Realtime writer) doesn't re-serialize the
+    // whole equity/trades arrays on every tick.
+    if (opts?.onProgress && i % progressEveryNBars === 0) {
+      const newEquity = equity.slice(lastReportedEquityIdx);
+      const newTrades = trades.slice(lastReportedTradesIdx);
+      lastReportedEquityIdx = equity.length;
+      lastReportedTradesIdx = trades.length;
+      await opts.onProgress({
+        processedBars: i,
+        totalBars: bars.length,
+        newEquity,
+        newTrades,
+      });
     }
   }
 

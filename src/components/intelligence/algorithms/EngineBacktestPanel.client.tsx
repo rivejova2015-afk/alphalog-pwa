@@ -3,6 +3,28 @@
 import { useEffect, useState } from "react";
 import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database, Trash2, Info } from "lucide-react";
 import { toast } from "sonner";
+import { useBacktestStream, type BacktestPhaseEvent } from "@/hooks/useBacktestStream";
+
+/**
+ * Render the SSE phase event as a short Spanish label for the inline status
+ * line. Kept here (not in the hook) because the copy is product-facing.
+ */
+function formatPhaseLabel(ev: BacktestPhaseEvent): string {
+  switch (ev.phase) {
+    case "baseline":
+      return ev.step === "start" ? "Corriendo baseline…" : "Baseline listo";
+    case "monte_carlo":
+      if (ev.step === "start") return `Monte Carlo (${ev.total ?? "?"} iters)…`;
+      if (ev.step === "progress" && ev.current && ev.total) return `Monte Carlo ${ev.current}/${ev.total}`;
+      return "Monte Carlo listo";
+    case "walk_forward":
+      if (ev.step === "start") return `Walk-forward (${ev.total ?? "?"} ventanas)…`;
+      if (ev.step === "progress" && ev.current && ev.total) return `Walk-forward ventana ${ev.current}/${ev.total}`;
+      return "Walk-forward listo";
+    case "done":
+      return "Persistiendo resultados…";
+  }
+}
 import { EquityCurve } from "./EquityCurve";
 import { Mt5BarsImport } from "./Mt5BarsImport.client";
 
@@ -210,6 +232,11 @@ export function EngineBacktestPanel({
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
+  // SSE streaming hook — drives the live "Running baseline..." / "Walk-forward
+  // 3/5" text under the Run button while the backtest is in flight. Falls
+  // back to the JSON path when the user disables streaming or when SSE fails
+  // mid-flight (see runJsonFallback below).
+  const stream = useBacktestStream<BacktestResponse>();
   const [history, setHistory]         = useState<HistoryRow[]>([]);
   const [trainingMl, setTrainingMl]   = useState(false);
   const [mlStatus, setMlStatus]       = useState<string | null>(null);
@@ -451,52 +478,57 @@ export function EngineBacktestPanel({
     }
   }
 
-  async function run() {
+  function run() {
     if (instruments.length === 0) {
       toast.error("La estrategia no tiene instrumentos");
       return;
     }
-    setLoading(true);
     setError(null);
-    try {
-      const res = await fetch(`/api/algorithms/${algorithmId}/engine-backtest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbol,
-          from: new Date(from).toISOString(),
-          to:   new Date(to).toISOString(),
-          starting_equity: Number(startingEquity) || 10000,
-          sl_atr_mult: Number(slAtrMult) || 1.5,
-          tp_atr_mult: Number(tpAtrMult) || 3.0,
-          monte_carlo_iterations: Number(mcIters) || 0,
-          walk_forward_windows: Number(wfWindows) || 0,
-          use_ml: useMl,
-          use_multi_tf: false,
-          use_portfolio: false,
-        }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        setError(j.error || `HTTP ${res.status}`);
-        toast.error(j.error || "Backtest falló");
-        return;
-      }
-      const json = (await res.json()) as BacktestResponse;
-      setData(json);
-      toast.success(`Backtest completado en ${json.result.durationMs}ms`);
-      if (json.promoted) {
+    setData(null);
+    stream.start(
+      `/api/algorithms/${algorithmId}/engine-backtest?stream=true`,
+      {
+        symbol,
+        from: new Date(from).toISOString(),
+        to:   new Date(to).toISOString(),
+        starting_equity: Number(startingEquity) || 10000,
+        sl_atr_mult: Number(slAtrMult) || 1.5,
+        tp_atr_mult: Number(tpAtrMult) || 3.0,
+        monte_carlo_iterations: Number(mcIters) || 0,
+        walk_forward_windows: Number(wfWindows) || 0,
+        use_ml: useMl,
+        use_multi_tf: false,
+        use_portfolio: false,
+      },
+    );
+  }
+
+  // Bridge the streaming hook into the existing setData/setError/toast UX.
+  // Keeping these as effects (instead of plumbing the hook directly into the
+  // render) lets the rest of the component stay unchanged: the chart and
+  // tables still read from `data`, error banner from `error`, etc.
+  useEffect(() => {
+    setLoading(stream.isStreaming);
+  }, [stream.isStreaming]);
+
+  useEffect(() => {
+    if (stream.error) {
+      setError(stream.error);
+      toast.error(stream.error);
+    }
+  }, [stream.error]);
+
+  useEffect(() => {
+    if (stream.result) {
+      setData(stream.result);
+      toast.success(`Backtest completado en ${stream.result.result.durationMs}ms`);
+      if (stream.result.promoted) {
         toast.success("Estrategia promovida a Paper — pasó todos los quality gates");
       }
       refreshHistory();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error de conexión";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.result]);
 
   const metrics = data?.result.metrics;
   const equityPoints = data?.result.equityCurve.map((p) => ({
@@ -960,6 +992,16 @@ export function EngineBacktestPanel({
         )}
         {mlStatus && (
           <span className="text-[10px] font-mono text-[#475569]">{mlStatus}</span>
+        )}
+        {/* Live phase progress from the SSE stream. Replaces the silent wait
+            that previously made the backtest "feel hung" — the user now sees
+            which phase is running, and Monte Carlo / Walk-Forward also show
+            current/total iterations. */}
+        {stream.isStreaming && stream.phase && (
+          <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#a78bfa]" aria-live="polite">
+            <Loader2 size={10} className="animate-spin" />
+            {formatPhaseLabel(stream.phase)}
+          </span>
         )}
         {data && (
           <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
