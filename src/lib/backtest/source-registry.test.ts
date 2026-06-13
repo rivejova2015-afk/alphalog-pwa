@@ -57,8 +57,9 @@ describe("getApiSourcesForTf", () => {
     expect(getApiSourcesForTf("EURUSD", "D1")).toEqual(["oanda", "twelvedata", "polygon", "yahoo"]);
   });
 
-  it("ES (futures) returns yahoo", () => {
-    expect(getApiSourcesForTf("ES", "M15")).toEqual(["yahoo"]);
+  it("ES (futures) returns [polygon-futures, yahoo] when futures key available, yahoo as fallback", () => {
+    expect(getApiSourcesForTf("ES", "M15")).toEqual(["polygon-futures", "yahoo"]);
+    expect(getApiSourcesForTf("ES", "D1")).toEqual(["polygon-futures", "yahoo"]);
   });
 
   it("unknown symbol returns [] (no auto-fetch)", () => {

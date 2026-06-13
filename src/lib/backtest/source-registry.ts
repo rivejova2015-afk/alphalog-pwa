@@ -21,7 +21,7 @@
 
 import type { Timeframe } from "@/types/backtest";
 
-export type DataSource = "yahoo" | "dukascopy" | "histdata" | "mt5" | "mt4" | "tradovate" | "cme" | "oanda" | "fxratesapi" | "polygon" | "twelvedata";
+export type DataSource = "yahoo" | "dukascopy" | "histdata" | "mt5" | "mt4" | "tradovate" | "cme" | "oanda" | "fxratesapi" | "polygon" | "twelvedata" | "polygon-futures";
 
 export type AssetClass =
   | "forex"           // EURUSD, GBPUSD, ...
@@ -54,7 +54,7 @@ const DEFAULTS: Record<AssetClass, { apiSources: DataSource[]; csvSources: DataS
   "index-cfd":     { apiSources: ["yahoo"],                          csvSources: ["mt5", "mt4"] },
   "energy-spot":   { apiSources: ["yahoo"],                          csvSources: ["mt5", "mt4"] },
   "crypto":        { apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy"] },
-  "futures-cme":   { apiSources: ["yahoo"],                          csvSources: ["tradovate", "cme"] },
+  "futures-cme":   { apiSources: ["polygon-futures", "yahoo"],      csvSources: ["tradovate", "cme"] },
   "stock-equity":  { apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
   "unknown":       { apiSources: [],                                 csvSources: ["mt5", "mt4"] },
 };
@@ -163,28 +163,28 @@ const REGISTRY: Record<string, SymbolEntry> = {
   XRPUSD: { assetClass: "crypto", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4"] },
 
   // ── Futures CME (Tradovate live, Yahoo =F fallback) ───────────────────────
-  ES:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  NQ:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  YM:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  RTY: { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  GC:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"], notes: "Si necesitás gold spot usá XAUUSD; este es el contrato GC=F." },
-  SI:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  HG:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  PL:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  CL:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  NG:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  BZ:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  HO:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  RB:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZB:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZN:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZF:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZT:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZC:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZS:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZW:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZL:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZM:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
+  ES:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  NQ:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  YM:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  RTY: { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  GC:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"], notes: "Si necesitás gold spot usá XAUUSD; este es el contrato GC=F (front-month vía Polygon Futures cuando hay key)." },
+  SI:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  HG:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  PL:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  CL:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  NG:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  BZ:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  HO:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  RB:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZB:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZN:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZF:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZT:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZC:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZS:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZW:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZL:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZM:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
 
   // ── Stock equities / ETFs (options underlyings) ───────────────────────────
   SPY:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
@@ -275,6 +275,7 @@ const SOURCE_TF_SUPPORT: Record<DataSource, Set<Timeframe>> = {
   fxratesapi: new Set<Timeframe>(["D1"]),  // metales spot, single-point per day → degenerate OHLC
   polygon:    new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
   twelvedata: new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
+  "polygon-futures": new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
