@@ -341,6 +341,7 @@ export async function runEngineV1WalkForward(
   barsByTf: { tf: string; bars: Bar[] }[],
   windows = 4,
   opts: { startingEquity?: number; slAtrMult?: number; tpAtrMult?: number } = {},
+  onWindowDone?: (current: number, total: number) => void | Promise<void>,
 ): Promise<EngineV1WalkForward> {
   const mtf = extractMultiTf(algorithm.parameters);
   const driverTf = pickDriverTf(barsByTf, mtf);
@@ -363,6 +364,7 @@ export async function runEngineV1WalkForward(
       bars: sliceWindow(e.bars, fromMs, toMs),
     }));
     const sim = await simulateEngineV1FromBars(algorithm, symbol, windowBars, opts);
+    if (onWindowDone) await onWindowDone(w + 1, windows);
     results.push({
       window: w + 1,
       from: new Date(fromMs).toISOString(),
@@ -397,6 +399,30 @@ export interface EngineV1FullResult {
   walkForward: EngineV1WalkForward | null;
 }
 
+/**
+ * Phase-level streaming hook for the sync backtest pipeline. Used by the
+ * /api/algorithms/[id]/engine-backtest route when `?stream=true` so the UI
+ * can render progress text ("Running baseline...", "Walk-forward window 3/5")
+ * instead of waiting silently for the entire validation to complete.
+ *
+ * `current` and `total` are only meaningful for `monte_carlo` (iterations) and
+ * `walk_forward` (windows). For one-shot phases (`baseline`) they're 0/0 and
+ * the consumer just shows the phase label.
+ */
+export type EngineV1Phase =
+  | "baseline"
+  | "monte_carlo"
+  | "walk_forward"
+  | "done";
+
+export interface EngineV1ProgressEvent {
+  phase: EngineV1Phase;
+  /** "start" before the phase begins, "progress" mid-phase, "done" at end. */
+  step: "start" | "progress" | "done";
+  current?: number;
+  total?: number;
+}
+
 export async function runEngineV1FullValidation(
   algorithm: EvaluatorAlgorithm,
   symbol: string,
@@ -407,21 +433,37 @@ export async function runEngineV1FullValidation(
     tpAtrMult?: number;
     monteCarloIterations?: number;
     walkForwardWindows?: number;
+    onPhaseProgress?: (ev: EngineV1ProgressEvent) => void | Promise<void>;
   } = {},
 ): Promise<EngineV1FullResult> {
+  const emit = opts.onPhaseProgress;
+
+  if (emit) await emit({ phase: "baseline", step: "start" });
   const baseline = await simulateEngineV1FromBars(algorithm, symbol, barsByTf, opts);
+  if (emit) await emit({ phase: "baseline", step: "done" });
 
   let monteCarlo: MonteCarloResult | null = null;
   if ((opts.monteCarloIterations ?? 0) > 0 && baseline.trades.length >= 10) {
     const initialBalance = opts.startingEquity ?? 10_000;
+    if (emit) await emit({ phase: "monte_carlo", step: "start", total: opts.monteCarloIterations });
     monteCarlo = runMonteCarlo(baseline.trades, initialBalance, opts.monteCarloIterations);
+    if (emit) await emit({ phase: "monte_carlo", step: "done", current: opts.monteCarloIterations, total: opts.monteCarloIterations });
   }
 
   let walkForward: EngineV1WalkForward | null = null;
   if ((opts.walkForwardWindows ?? 0) > 0) {
-    walkForward = await runEngineV1WalkForward(algorithm, symbol, barsByTf, opts.walkForwardWindows, opts);
+    const totalWindows = opts.walkForwardWindows ?? 0;
+    if (emit) await emit({ phase: "walk_forward", step: "start", total: totalWindows });
+    walkForward = await runEngineV1WalkForward(
+      algorithm, symbol, barsByTf, totalWindows, opts,
+      async (current, total) => {
+        if (emit) await emit({ phase: "walk_forward", step: "progress", current, total });
+      },
+    );
+    if (emit) await emit({ phase: "walk_forward", step: "done", current: totalWindows, total: totalWindows });
   }
 
+  if (emit) await emit({ phase: "done", step: "done" });
   return { baseline, monteCarlo, walkForward };
 }
 
