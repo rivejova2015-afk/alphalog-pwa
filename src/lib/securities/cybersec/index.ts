@@ -10,4 +10,6 @@ export * from "./examSession";
 export * from "./flashcards";
 export * from "./progressStats";
 export * from "./xp";
+export * from "./habit";
+export * from "./achievements";
 export * from "./markdown";

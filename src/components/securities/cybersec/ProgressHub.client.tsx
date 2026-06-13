@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, ArrowRight, Map } from "lucide-react";
+import { ArrowLeft, Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, ArrowRight, Map, Target, Award, Minus, Plus } from "lucide-react";
 import {
   LESSONS, SYLLABUS, HW, getLesson, computeProgress, computeXp,
+  streakWithFreeze, xpEarnedToday, activityDays, computeAchievements, DEFAULT_DAILY_GOAL,
   type ProgressData, type ProgressStats, type XpData,
 } from "@/lib/securities/cybersec";
+
+const GOAL_KEY = "cybersec.dailyGoal";
 
 const CONTENT = {
   lessons: LESSONS.map((l) => ({ id: l.id, sub: l.sub })),
@@ -44,11 +47,32 @@ export function ProgressHub() {
     return () => { cancelled = true; };
   }, []);
 
+  const [goal, setGoal] = useState(DEFAULT_DAILY_GOAL);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(GOAL_KEY);
+      if (raw) setGoal(Math.max(10, parseInt(raw, 10) || DEFAULT_DAILY_GOAL));
+    } catch { /* ignore */ }
+  }, []);
+  const changeGoal = (delta: number) => {
+    setGoal((g) => {
+      const next = Math.max(10, Math.min(500, g + delta));
+      try { localStorage.setItem(GOAL_KEY, String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   const stats: ProgressStats | null = useMemo(
     () => (data ? computeProgress(CONTENT, data) : null),
     [data],
   );
   const xp = useMemo(() => (data ? computeXp(CONTENT, data) : null), [data]);
+  const streak = useMemo(() => (data ? streakWithFreeze(activityDays(data)) : null), [data]);
+  const xpToday = useMemo(() => (data ? xpEarnedToday(data) : 0), [data]);
+  const achievements = useMemo(
+    () => (data && xp && stats && streak ? computeAchievements(CONTENT, data, xp, stats, streak.streak) : []),
+    [data, xp, stats, streak],
+  );
 
   return (
     <div className="space-y-6">
@@ -87,6 +111,24 @@ export function ProgressHub() {
             </Link>
           )}
 
+          {/* Daily goal */}
+          <div className="rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#e2e8f0]">
+                <Target size={14} className="text-[#22d3ee]" /> Meta diaria
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => changeGoal(-10)} aria-label="Bajar meta" className="w-6 h-6 rounded bg-[#1f2937] hover:bg-[#151b28] text-[#94a3b8] inline-flex items-center justify-center"><Minus size={12} /></button>
+                <span className="text-xs text-[#94a3b8] font-mono w-16 text-center">{xpToday}/{goal} XP</span>
+                <button onClick={() => changeGoal(10)} aria-label="Subir meta" className="w-6 h-6 rounded bg-[#1f2937] hover:bg-[#151b28] text-[#94a3b8] inline-flex items-center justify-center"><Plus size={12} /></button>
+              </div>
+            </div>
+            <div className="h-2 w-full rounded bg-[#1f2937] overflow-hidden">
+              <div className={`h-full transition-all ${xpToday >= goal ? "bg-[#34d399]" : "bg-[#22d3ee]"}`} style={{ width: `${Math.min(100, Math.round((xpToday / goal) * 100))}%` }} />
+            </div>
+            {xpToday >= goal && <p className="text-[11px] text-[#34d399] mt-1">¡Meta de hoy cumplida! 🎯</p>}
+          </div>
+
           {/* Next step */}
           {stats.nextLessonId != null && (
             <Link
@@ -107,7 +149,7 @@ export function ProgressHub() {
             <Tile icon={<GraduationCap size={16} />} label="Promedio quiz" value={`${stats.quizAvgPct}%`} sub={`${stats.quizzesTaken} tomados`} />
             <Tile icon={<ClipboardCheck size={16} />} label="Homework" value={`${stats.homeworkGraded}/${stats.homeworkTotal}`} sub={`${stats.homeworkPointsEarned}/${stats.homeworkPointsMax} pts`} />
             <Tile icon={<Trophy size={16} />} label="Examen" value={stats.examBestPct != null ? `${stats.examBestPct}%` : "—"} sub={stats.examPassed ? "aprobado" : stats.examBestPct != null ? "sin aprobar" : "sin intentos"} accent={stats.examPassed} />
-            <Tile icon={<Flame size={16} />} label="Racha" value={`${stats.streakDays}d`} sub={`${stats.activeDays} días activos`} />
+            <Tile icon={<Flame size={16} />} label="Racha" value={`${streak?.streak ?? 0}d`} sub={streak && streak.frozenUsed > 0 ? `🛡 ${streak.frozenUsed} congelado(s)` : `${stats.activeDays} días activos`} />
           </div>
 
           {/* By category */}
@@ -128,6 +170,34 @@ export function ProgressHub() {
                   </div>
                 );
               })}
+            </div>
+          </section>
+
+          {/* Achievements */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-wider text-[#94a3b8] font-bold">Logros</p>
+              <span className="text-[11px] text-[#475569]">{achievements.filter((a) => a.earned).length}/{achievements.length}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {achievements.map((a) => (
+                <div
+                  key={a.id}
+                  className={`rounded-lg border p-2.5 ${a.earned ? "border-[#eab308]/40 bg-[#eab308]/5" : "border-[#1f2937] bg-[#0a0e1a]"}`}
+                  title={a.desc}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Award size={14} className={a.earned ? "text-[#eab308]" : "text-[#475569]"} />
+                    <span className={`text-xs font-bold ${a.earned ? "text-[#e2e8f0]" : "text-[#94a3b8]"}`}>{a.name}</span>
+                  </div>
+                  <p className="text-[10px] text-[#475569] mt-0.5 leading-tight">{a.desc}</p>
+                  {!a.earned && a.progress && a.progress.target > 1 && (
+                    <div className="mt-1 h-1 w-full rounded bg-[#1f2937] overflow-hidden">
+                      <div className="h-full bg-[#22d3ee]/60" style={{ width: `${Math.round((a.progress.cur / a.progress.target) * 100)}%` }} />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </section>
         </>
