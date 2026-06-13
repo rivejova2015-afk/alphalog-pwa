@@ -9,4 +9,5 @@ export * from "./exam";
 export * from "./examSession";
 export * from "./flashcards";
 export * from "./progressStats";
+export * from "./xp";
 export * from "./markdown";

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Layers, LineChart } from "lucide-react";
+import { Layers, LineChart, Map } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { SyllabusPanel } from "@/components/securities/cybersec/SyllabusPanel.client";
 
@@ -18,6 +18,12 @@ export default async function CyberSecPage() {
           82 módulos · 82 lecciones · 82 quizzes · 15 prácticas · 18 homework · 45 flashcards · 1 examen final · Doctorate Track completo
         </p>
         <div className="flex flex-wrap gap-2">
+          <Link
+            href="/securities/cybersec/path"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#eab308]/10 border border-[#eab308]/40 text-[#eab308] hover:bg-[#eab308]/20"
+          >
+            <Map size={14} /> Mi camino
+          </Link>
           <Link
             href="/securities/cybersec/progress"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#a78bfa]/10 border border-[#a78bfa]/40 text-[#a78bfa] hover:bg-[#a78bfa]/20"

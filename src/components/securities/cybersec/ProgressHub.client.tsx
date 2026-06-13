@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, ArrowRight } from "lucide-react";
+import { ArrowLeft, Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, ArrowRight, Map } from "lucide-react";
 import {
-  LESSONS, SYLLABUS, HW, getLesson, computeProgress,
-  type ProgressData, type ProgressStats,
+  LESSONS, SYLLABUS, HW, getLesson, computeProgress, computeXp,
+  type ProgressData, type ProgressStats, type XpData,
 } from "@/lib/securities/cybersec";
 
 const CONTENT = {
@@ -25,19 +25,20 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
 }
 
 export function ProgressHub() {
-  const [data, setData] = useState<ProgressData | null>(null);
+  const [data, setData] = useState<XpData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [quiz, exam, hw] = await Promise.all([
+      const [quiz, exam, hw, prog] = await Promise.all([
         fetchJson<{ results: ProgressData["quizResults"] }>("/api/securities/cybersec/quiz-results", { results: [] }),
         fetchJson<{ results: ProgressData["examResults"] }>("/api/securities/cybersec/exam-results", { results: [] }),
         fetchJson<ProgressData["homework"]>("/api/securities/cybersec/homework-submissions", {}),
+        fetchJson<NonNullable<XpData["progress"]>>("/api/securities/cybersec/progress", {}),
       ]);
       if (cancelled) return;
-      setData({ quizResults: quiz.results ?? [], examResults: exam.results ?? [], homework: hw ?? {} });
+      setData({ quizResults: quiz.results ?? [], examResults: exam.results ?? [], homework: hw ?? {}, progress: prog ?? {} });
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -47,6 +48,7 @@ export function ProgressHub() {
     () => (data ? computeProgress(CONTENT, data) : null),
     [data],
   );
+  const xp = useMemo(() => (data ? computeXp(CONTENT, data) : null), [data]);
 
   return (
     <div className="space-y-6">
@@ -66,6 +68,25 @@ export function ProgressHub() {
         </div>
       ) : (
         <>
+          {/* Level + XP */}
+          {xp && (
+            <Link href="/securities/cybersec/path" className="block rounded-lg border border-[#a78bfa]/40 bg-[#a78bfa]/5 p-4 hover:bg-[#a78bfa]/10">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#a78bfa] text-[#0a0e1a] font-bold text-sm">{xp.level.level}</span>
+                  <div>
+                    <p className="text-sm font-bold text-[#e2e8f0]">Nivel {xp.level.level}</p>
+                    <p className="text-[11px] text-[#94a3b8]">{xp.totalXp} XP · ver mi camino</p>
+                  </div>
+                </div>
+                <Map size={16} className="text-[#a78bfa]" />
+              </div>
+              <div className="h-2 w-full rounded bg-[#1f2937] overflow-hidden">
+                <div className="h-full bg-[#a78bfa]" style={{ width: `${xp.level.pct}%` }} />
+              </div>
+            </Link>
+          )}
+
           {/* Next step */}
           {stats.nextLessonId != null && (
             <Link
