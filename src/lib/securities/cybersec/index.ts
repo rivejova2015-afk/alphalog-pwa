@@ -12,4 +12,5 @@ export * from "./progressStats";
 export * from "./xp";
 export * from "./habit";
 export * from "./achievements";
+export * from "./milestones";
 export * from "./markdown";

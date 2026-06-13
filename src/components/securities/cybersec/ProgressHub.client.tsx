@@ -6,8 +6,10 @@ import { ArrowLeft, Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, Arro
 import {
   LESSONS, SYLLABUS, HW, getLesson, computeProgress, computeXp,
   streakWithFreeze, xpEarnedToday, activityDays, computeAchievements, DEFAULT_DAILY_GOAL,
+  snapshotFromData,
   type ProgressData, type ProgressStats, type XpData,
 } from "@/lib/securities/cybersec";
+import { CelebrationOverlay, useMilestones } from "./CelebrationOverlay.client";
 
 const GOAL_KEY = "cybersec.dailyGoal";
 
@@ -73,9 +75,12 @@ export function ProgressHub() {
     () => (data && xp && stats && streak ? computeAchievements(CONTENT, data, xp, stats, streak.streak) : []),
     [data, xp, stats, streak],
   );
+  const snap = useMemo(() => (data ? snapshotFromData(CONTENT, data) : null), [data]);
+  const { current: celebration, dismiss: dismissCelebration } = useMilestones(snap?.snapshot ?? null, snap?.names ?? {});
 
   return (
     <div className="space-y-6">
+      <CelebrationOverlay milestone={celebration} onDismiss={dismissCelebration} />
       <Link href="/securities/cybersec" className="inline-flex items-center gap-1.5 text-sm text-[#94a3b8] hover:text-[#22d3ee]">
         <ArrowLeft size={14} /> Volver al syllabus
       </Link>
@@ -177,7 +182,9 @@ export function ProgressHub() {
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-wider text-[#94a3b8] font-bold">Logros</p>
-              <span className="text-[11px] text-[#475569]">{achievements.filter((a) => a.earned).length}/{achievements.length}</span>
+              <Link href="/securities/cybersec/achievements" className="text-[11px] text-[#22d3ee] hover:underline">
+                {achievements.filter((a) => a.earned).length}/{achievements.length} · ver todos
+              </Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {achievements.map((a) => (

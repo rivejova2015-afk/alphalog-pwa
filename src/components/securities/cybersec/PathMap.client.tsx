@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Crown, Lock, Star, Sparkles } from "lucide-react";
 import {
-  SYLLABUS, LESSONS, HW, computeXp, MASTERY_MAX,
+  SYLLABUS, LESSONS, HW, computeXp, MASTERY_MAX, snapshotFromData,
   type XpData, type XpResult,
 } from "@/lib/securities/cybersec";
+import { CelebrationOverlay, useMilestones } from "./CelebrationOverlay.client";
 
 const CONTENT = {
   lessons: LESSONS.map((l) => ({ id: l.id, sub: l.sub })),
@@ -64,6 +65,8 @@ export function PathMap() {
   }, []);
 
   const xp: XpResult | null = useMemo(() => (data ? computeXp(CONTENT, data) : null), [data]);
+  const snap = useMemo(() => (data ? snapshotFromData(CONTENT, data) : null), [data]);
+  const { current: celebration, dismiss: dismissCelebration } = useMilestones(snap?.snapshot ?? null, snap?.names ?? {});
 
   // First module not yet started = the "current" node.
   const currentM = useMemo(() => {
@@ -74,6 +77,7 @@ export function PathMap() {
 
   return (
     <div className="space-y-6">
+      <CelebrationOverlay milestone={celebration} onDismiss={dismissCelebration} />
       <Link href="/securities/cybersec" className="inline-flex items-center gap-1.5 text-sm text-[#94a3b8] hover:text-[#22d3ee]">
         <ArrowLeft size={14} /> Volver al syllabus
       </Link>
