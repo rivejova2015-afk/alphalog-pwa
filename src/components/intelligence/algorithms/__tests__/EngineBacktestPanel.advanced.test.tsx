@@ -94,6 +94,8 @@ describe("EngineBacktestPanel — advanced toggles (Gap #1)", () => {
     expect(body.use_ml).toBe(false);
     expect(body.use_multi_tf).toBe(false);
     expect(body.use_portfolio).toBe(false);
+    // Walk-forward auto: default opt-out es 4 ventanas (Mejora #3).
+    expect(body.walk_forward_windows).toBe(4);
   });
 
   it("ML toggle activates use_ml but multi-TF and portfolio stay disabled (hardening Gap #4)", async () => {
@@ -132,5 +134,30 @@ describe("EngineBacktestPanel — advanced toggles (Gap #1)", () => {
       expect(screen.queryByTestId("advanced-results")).not.toBeNull();
     });
     expect(screen.getByText(/ML Signal/)).toBeDefined();
+  });
+
+  it("shows insufficient-data warning when walk-forward returns empty windows (Mejora #3)", async () => {
+    // Server returned a walk_forward block but windows=[] because bars < 200*N.
+    // Engine v1's silent fallback used to leave the user without explanation;
+    // the UI now surfaces a warning naming the exact bar requirement.
+    const payload = {
+      ...BACKTEST_PAYLOAD,
+      walk_forward: { windows: [], avgSharpe: 0, sharpeStdDev: 0, consistency: 0, profitableWindows: 0 },
+    };
+    globalThis.fetch = vi.fn(async (url: string) => {
+      if (url.includes("/history")) return { ok: true, json: async () => ({ runs: [] }) } as Response;
+      if (url.includes("/symbol-status")) return { ok: true, json: async () => ({}) } as Response;
+      if (url.includes("/engine-backtest")) return sseResponse(payload);
+      return { ok: true, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+
+    render(<EngineBacktestPanel algorithmId="algo-1" instruments={["XAUUSD"]} />);
+    fireEvent.click(screen.getByText(/Validar Engine/));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("walk-forward-insufficient")).not.toBeNull();
+    });
+    // Default es 4 ventanas → 200*4 = 800 bars requeridos.
+    expect(screen.getByText(/Walk-forward requiere ≥800 bars/)).toBeDefined();
   });
 });

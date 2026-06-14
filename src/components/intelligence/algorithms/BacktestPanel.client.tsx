@@ -119,7 +119,8 @@ export function BacktestPanel({
   const [to, setTo] = useState(today.toISOString().slice(0, 10));
   const [initialBalance, setInitialBalance] = useState(initialBalanceDefault);
   const [mcIterations, setMcIterations] = useState(1000);
-  const [wfWindows, setWfWindows] = useState(5);
+  // Walk-forward default unificado en 4 ventanas con el sync panel. 0 desactiva.
+  const [wfWindows, setWfWindows] = useState(4);
   const [stress, setStress] = useState(true);
   const [useMl, setUseMl] = useState(false);
   const [useMultiTf, setUseMultiTf] = useState(false);

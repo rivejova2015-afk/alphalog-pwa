@@ -221,7 +221,11 @@ export function EngineBacktestPanel({
   const [slAtrMult, setSl]            = useState("1.5");
   const [tpAtrMult, setTp]            = useState("3.0");
   const [mcIters, setMcIters]         = useState("0");
-  const [wfWindows, setWfWindows]     = useState("0");
+  // Walk-forward defaults to 4 windows (opt-out): every backtest validates
+  // consistency across 4 time slices to catch overfit. 0 disables it. The
+  // engine v1 silently returns {windows:[],...} when bars < 200*windows so
+  // the UI surfaces a warning in that case (see below near results render).
+  const [wfWindows, setWfWindows]     = useState("4");
   const [useMl, setUseMl]             = useState(false);
   // Multi-TF and Portfolio toggles are disabled in the sync flow on purpose
   // (see Gap #4 hardening). Engine v1's SMC funnel already evaluates D1 → H1
@@ -898,7 +902,7 @@ export function EngineBacktestPanel({
             className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
         </div>
         <div>
-          <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1" title="0 = saltar. 4 ventanas recomendado.">Walk-Fwd ventanas</label>
+          <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1" title="Valida consistencia partiendo el rango en N ventanas independientes. 4 por default; 0 desactiva. Requiere ≥200 bars × N.">Walk-forward (auto)</label>
           <input type="number" value={wfWindows} onChange={(e) => setWfWindows(e.target.value)} step="1" min="0" max="12"
             className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
         </div>
@@ -1197,6 +1201,19 @@ export function EngineBacktestPanel({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Walk-forward skipped because of insufficient bars. Engine v1
+              returns {windows:[],...} when bars < 200*requestedWindows. Make
+              that case loud so the user understands WHY there's no WF table
+              and can act (shorter range, fewer windows). */}
+          {data.walk_forward && data.walk_forward.windows.length === 0 && Number(wfWindows) > 0 && (
+            <div className="bg-[#1f1408] border border-[#f59e0b]/40 rounded-lg p-3 flex items-start gap-2" data-testid="walk-forward-insufficient">
+              <AlertCircle size={12} className="text-[#f59e0b] mt-0.5 shrink-0" />
+              <div className="text-[10px] text-[#f59e0b]">
+                Walk-forward requiere ≥{200 * Number(wfWindows)} bars para {wfWindows} ventanas. Subí el rango histórico o reducí el número de ventanas.
               </div>
             </div>
           )}
