@@ -62,3 +62,7 @@
 10   0    1  *  *   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/business/recurring-costs
 25   0    *  *  *   curl --fail --max-time 60  -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/business/alerts
 35   0    *  *  *   curl --fail --max-time 60  -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/treasury/withdrawal-reminders
+
+# CyberSec Academy — recordatorio de racha/meta diaria (push). Tarde UTC para
+# llegar a la noche del usuario. Dedup diario vía securities_user_state.last_notified_on.
+0    22   *  *  *   curl --fail --max-time 60  -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/streak-reminder

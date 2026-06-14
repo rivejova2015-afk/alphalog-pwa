@@ -15,4 +15,5 @@ export * from "./achievements";
 export * from "./milestones";
 export * from "./srs";
 export * from "./search";
+export * from "./notify";
 export * from "./markdown";

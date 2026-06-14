@@ -12,6 +12,7 @@ export interface CybersecSummary {
   streak: StreakResult;
   xpToday: number;
   dailyGoal: number;
+  notifyStreak: boolean;
   milestones: Milestone[];
   mastery: Record<number, number>;
 }
@@ -51,5 +52,18 @@ export function useCybersecSummary() {
     }
   }, []);
 
-  return { summary, loading, updateGoal };
+  const updateNotify = useCallback(async (on: boolean) => {
+    setSummary((s) => (s ? { ...s, notifyStreak: on } : s)); // optimistic
+    try {
+      await fetch("/api/securities/cybersec/user-state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notify_streak: on }),
+      });
+    } catch {
+      // optimistic only
+    }
+  }, []);
+
+  return { summary, loading, updateGoal, updateNotify };
 }

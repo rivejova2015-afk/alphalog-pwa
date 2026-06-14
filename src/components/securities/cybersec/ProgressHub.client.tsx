@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, ArrowRight, Map, Target, Award, Minus, Plus } from "lucide-react";
+import { Flame, Trophy, BookOpen, ClipboardCheck, GraduationCap, ArrowRight, Map, Target, Award, Minus, Plus, Bell, BellOff } from "lucide-react";
 import { getLesson } from "@/lib/securities/cybersec";
 import { CelebrationOverlay } from "./CelebrationOverlay.client";
 import { useCybersecSummary } from "./useCybersecSummary";
 
 export function ProgressHub() {
-  const { summary, loading, updateGoal } = useCybersecSummary();
+  const { summary, loading, updateGoal, updateNotify } = useCybersecSummary();
 
   const changeGoal = (delta: number) => {
     if (!summary) return;
@@ -70,6 +70,14 @@ export function ProgressHub() {
                   <div className={`h-full transition-all ${xpToday >= dailyGoal ? "bg-[#34d399]" : "bg-[#22d3ee]"}`} style={{ width: `${Math.min(100, Math.round((xpToday / dailyGoal) * 100))}%` }} />
                 </div>
                 {xpToday >= dailyGoal && <p className="text-[11px] text-[#34d399] mt-1">¡Meta de hoy cumplida! 🎯</p>}
+                <button
+                  onClick={() => void updateNotify(!summary.notifyStreak)}
+                  aria-pressed={summary.notifyStreak}
+                  className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-[#94a3b8] hover:text-[#e2e8f0]"
+                >
+                  {summary.notifyStreak ? <Bell size={12} className="text-[#22d3ee]" /> : <BellOff size={12} />}
+                  Recordatorios de racha: <span className={summary.notifyStreak ? "text-[#22d3ee] font-bold" : "font-bold"}>{summary.notifyStreak ? "ON" : "OFF"}</span>
+                </button>
               </div>
 
               {/* Next step */}
