@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Layers, LineChart, Map } from "lucide-react";
+import { Layers, LineChart, Map, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { SyllabusPanel } from "@/components/securities/cybersec/SyllabusPanel.client";
 
@@ -31,10 +31,16 @@ export default async function CyberSecPage() {
             <LineChart size={14} /> Mi progreso
           </Link>
           <Link
+            href="/securities/cybersec/review"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#34d399]/10 border border-[#34d399]/40 text-[#34d399] hover:bg-[#34d399]/20"
+          >
+            <Zap size={14} /> Repaso diario
+          </Link>
+          <Link
             href="/securities/cybersec/flashcards"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#22d3ee]/10 border border-[#22d3ee]/40 text-[#22d3ee] hover:bg-[#22d3ee]/20"
           >
-            <Layers size={14} /> Repasar con flashcards
+            <Layers size={14} /> Explorar flashcards
           </Link>
         </div>
       </header>
