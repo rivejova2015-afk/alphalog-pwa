@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Layers, LineChart, Map, Zap, Search } from "lucide-react";
+import { Layers, LineChart, Map, Zap, Search, Compass } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { SyllabusPanel } from "@/components/securities/cybersec/SyllabusPanel.client";
 
@@ -29,6 +29,12 @@ export default async function CyberSecPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#a78bfa]/10 border border-[#a78bfa]/40 text-[#a78bfa] hover:bg-[#a78bfa]/20"
           >
             <LineChart size={14} /> Mi progreso
+          </Link>
+          <Link
+            href="/securities/cybersec/placement"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#a78bfa]/10 border border-[#a78bfa]/40 text-[#a78bfa] hover:bg-[#a78bfa]/20"
+          >
+            <Compass size={14} /> Nivelación
           </Link>
           <Link
             href="/securities/cybersec/search"

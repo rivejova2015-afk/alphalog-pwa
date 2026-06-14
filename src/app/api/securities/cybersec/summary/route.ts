@@ -33,7 +33,7 @@ export async function GET() {
       supabase.from("securities_exam_results").select("score, total, passed, taken_at, section").eq("user_id", user.id),
       supabase.from("securities_homework_submissions").select("homework_id, status, points, submitted_at, graded_at").eq("user_id", user.id),
       supabase.from("securities_progress").select("module_id, completed_levels, research_done").eq("user_id", user.id),
-      supabase.from("securities_user_state").select("daily_goal, milestone_snapshot, notify_streak").eq("user_id", user.id).maybeSingle(),
+      supabase.from("securities_user_state").select("daily_goal, milestone_snapshot, notify_streak, placement_done").eq("user_id", user.id).maybeSingle(),
     ]);
 
     const homework: XpData["homework"] = {};
@@ -70,6 +70,7 @@ export async function GET() {
     const xpToday = xpEarnedToday(data);
     const dailyGoal = stateQ.data?.daily_goal ?? 50;
     const notifyStreak = stateQ.data?.notify_streak ?? false;
+    const placementDone = stateQ.data?.placement_done ?? false;
 
     // Milestone detection server-side, persisting the snapshot so each milestone
     // celebrates exactly once and across devices.
@@ -82,7 +83,7 @@ export async function GET() {
     if (upsertErr) logError("Securities", { component: "GET summary", message: `snapshot upsert: ${upsertErr.message}` });
 
     return NextResponse.json(
-      { xp, stats, achievements, streak, xpToday, dailyGoal, notifyStreak, sectionExams, milestones, mastery: xp.mastery },
+      { xp, stats, achievements, streak, xpToday, dailyGoal, notifyStreak, placementDone, sectionExams, milestones, mastery: xp.mastery },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (err) {

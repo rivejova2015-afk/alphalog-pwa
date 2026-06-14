@@ -8,6 +8,7 @@ export * from "./rubrics";
 export * from "./exam";
 export * from "./examSession";
 export * from "./sectionExam";
+export * from "./placement";
 export * from "./flashcards";
 export * from "./progressStats";
 export * from "./xp";

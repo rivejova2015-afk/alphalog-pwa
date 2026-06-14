@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 const putSchema = z.object({
   daily_goal: z.number().int().min(10).max(500).optional(),
   notify_streak: z.boolean().optional(),
-}).refine((d) => d.daily_goal !== undefined || d.notify_streak !== undefined, {
+  placement_done: z.boolean().optional(),
+}).refine((d) => d.daily_goal !== undefined || d.notify_streak !== undefined || d.placement_done !== undefined, {
   message: "Nada para actualizar",
 });
 
@@ -31,6 +32,7 @@ export async function PUT(request: NextRequest) {
     const patch: Record<string, unknown> = { user_id: user.id, updated_at: new Date().toISOString() };
     if (parsed.data.daily_goal !== undefined) patch.daily_goal = parsed.data.daily_goal;
     if (parsed.data.notify_streak !== undefined) patch.notify_streak = parsed.data.notify_streak;
+    if (parsed.data.placement_done !== undefined) patch.placement_done = parsed.data.placement_done;
 
     const { error } = await supabase
       .from("securities_user_state")
