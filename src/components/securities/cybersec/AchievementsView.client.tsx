@@ -1,57 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Award, Lock } from "lucide-react";
-import {
-  LESSONS, SYLLABUS, HW, computeProgress, computeXp, streakWithFreeze, activityDays, computeAchievements,
-  type XpData, type Achievement,
-} from "@/lib/securities/cybersec";
-
-const CONTENT = {
-  lessons: LESSONS.map((l) => ({ id: l.id, sub: l.sub })),
-  modules: SYLLABUS.map((m) => ({ m: m.m, cat: m.cat })),
-  homework: HW.map((h) => ({ id: h.id, l: h.l, pts: h.pts })),
-};
-
-async function fetchJson<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return fallback;
-    return (await res.json()) as T;
-  } catch {
-    return fallback;
-  }
-}
+import type { Achievement } from "@/lib/securities/cybersec";
+import { useCybersecSummary } from "./useCybersecSummary";
 
 export function AchievementsView() {
-  const [data, setData] = useState<XpData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const [quiz, exam, hw, prog] = await Promise.all([
-        fetchJson<{ results: XpData["quizResults"] }>("/api/securities/cybersec/quiz-results", { results: [] }),
-        fetchJson<{ results: XpData["examResults"] }>("/api/securities/cybersec/exam-results", { results: [] }),
-        fetchJson<XpData["homework"]>("/api/securities/cybersec/homework-submissions", {}),
-        fetchJson<NonNullable<XpData["progress"]>>("/api/securities/cybersec/progress", {}),
-      ]);
-      if (cancelled) return;
-      setData({ quizResults: quiz.results ?? [], examResults: exam.results ?? [], homework: hw ?? {}, progress: prog ?? {} });
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const achievements: Achievement[] = useMemo(() => {
-    if (!data) return [];
-    const xp = computeXp(CONTENT, data);
-    const stats = computeProgress(CONTENT, data);
-    const streak = streakWithFreeze(activityDays(data)).streak;
-    return computeAchievements(CONTENT, data, xp, stats, streak);
-  }, [data]);
-
+  const { summary, loading } = useCybersecSummary();
+  const achievements: Achievement[] = summary?.achievements ?? [];
   const earned = achievements.filter((a) => a.earned);
   const locked = achievements.filter((a) => !a.earned);
 

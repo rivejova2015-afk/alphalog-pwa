@@ -2,29 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Crown, Award, Sparkles, GraduationCap } from "lucide-react";
-import { detectMilestones, type Milestone, type MilestoneSnapshot } from "@/lib/securities/cybersec";
+import type { Milestone } from "@/lib/securities/cybersec";
 
-const SNAP_KEY = "cybersec.milestoneSnapshot";
 const COLORS = ["#22d3ee", "#a78bfa", "#34d399", "#eab308", "#ef4444"];
-
-// Detects newly-reached milestones vs the persisted snapshot and returns a queue.
-// Always persists the latest snapshot so each milestone celebrates only once.
-export function useMilestones(snapshot: MilestoneSnapshot | null, names: Record<string, string>) {
-  const [queue, setQueue] = useState<Milestone[]>([]);
-
-  useEffect(() => {
-    if (!snapshot) return;
-    try {
-      const raw = localStorage.getItem(SNAP_KEY);
-      const prev = raw ? (JSON.parse(raw) as MilestoneSnapshot) : null;
-      const ms = detectMilestones(prev, snapshot, names);
-      localStorage.setItem(SNAP_KEY, JSON.stringify(snapshot));
-      if (ms.length) setQueue(ms);
-    } catch { /* ignore */ }
-  }, [snapshot, names]);
-
-  return { current: queue[0] ?? null, dismiss: () => setQueue((q) => q.slice(1)) };
-}
 
 const ICON = {
   level: Sparkles,
@@ -40,8 +20,23 @@ const ACCENT = {
   exam: "#34d399",
 } as const;
 
-export function CelebrationOverlay({ milestone, onDismiss }: { milestone: Milestone | null; onDismiss: () => void }) {
+// Celebrates server-detected milestones one at a time. Seeds its queue once from
+// the first non-empty `milestones` array (the summary endpoint already persisted
+// the snapshot, so each milestone is delivered exactly once).
+export function CelebrationOverlay({ milestones }: { milestones: Milestone[] }) {
+  const [queue, setQueue] = useState<Milestone[]>([]);
+  const [seeded, setSeeded] = useState(false);
+
+  useEffect(() => {
+    if (!seeded && milestones.length > 0) {
+      setQueue(milestones);
+      setSeeded(true);
+    }
+  }, [milestones, seeded]);
+
+  const milestone = queue[0] ?? null;
   if (!milestone) return null;
+  const onDismiss = () => setQueue((q) => q.slice(1));
   const Icon = ICON[milestone.kind];
   const accent = ACCENT[milestone.kind];
 

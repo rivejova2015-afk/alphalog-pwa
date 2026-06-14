@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Crown, Lock, Star, Sparkles } from "lucide-react";
-import {
-  SYLLABUS, LESSONS, HW, computeXp, MASTERY_MAX, snapshotFromData,
-  type XpData, type XpResult,
-} from "@/lib/securities/cybersec";
-import { CelebrationOverlay, useMilestones } from "./CelebrationOverlay.client";
-
-const CONTENT = {
-  lessons: LESSONS.map((l) => ({ id: l.id, sub: l.sub })),
-  modules: SYLLABUS.map((m) => ({ m: m.m, cat: m.cat })),
-  homework: HW.map((h) => ({ id: h.id, l: h.l, pts: h.pts })),
-};
+import { SYLLABUS, MASTERY_MAX } from "@/lib/securities/cybersec";
+import { CelebrationOverlay } from "./CelebrationOverlay.client";
+import { useCybersecSummary } from "./useCybersecSummary";
 
 const ITEMS = SYLLABUS.map((m) => ({ m: m.m, title: m.title, cat: m.cat }));
 
-// Gentle serpentine: horizontal offset per node, cycling. Kept modest so the
-// path doesn't overflow on narrow (mobile) viewports.
-const OFFSET = [0, 30, 48, 30, 0, -30, -48, -30];
+// Gentle serpentine: horizontal offset per node, cycling.
+const OFFSET = [0, 44, 70, 44, 0, -44, -70, -44];
 
 // Precompute static layout (section headers + offsets) once at module load so
 // the render never mutates `let` variables (React Compiler safe).
@@ -35,99 +26,69 @@ const ROWS = (() => {
   });
 })();
 
-async function fetchJson<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return fallback;
-    return (await res.json()) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export function PathMap() {
-  const [data, setData] = useState<XpData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const [quiz, exam, hw, prog] = await Promise.all([
-        fetchJson<{ results: XpData["quizResults"] }>("/api/securities/cybersec/quiz-results", { results: [] }),
-        fetchJson<{ results: XpData["examResults"] }>("/api/securities/cybersec/exam-results", { results: [] }),
-        fetchJson<XpData["homework"]>("/api/securities/cybersec/homework-submissions", {}),
-        fetchJson<NonNullable<XpData["progress"]>>("/api/securities/cybersec/progress", {}),
-      ]);
-      if (cancelled) return;
-      setData({ quizResults: quiz.results ?? [], examResults: exam.results ?? [], homework: hw ?? {}, progress: prog ?? {} });
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const xp: XpResult | null = useMemo(() => (data ? computeXp(CONTENT, data) : null), [data]);
-  const snap = useMemo(() => (data ? snapshotFromData(CONTENT, data) : null), [data]);
-  const { current: celebration, dismiss: dismissCelebration } = useMilestones(snap?.snapshot ?? null, snap?.names ?? {});
+  const { summary, loading } = useCybersecSummary();
+  const mastery = summary?.mastery ?? {};
 
   // First module not yet started = the "current" node.
   const currentM = useMemo(() => {
-    if (!xp) return null;
-    const item = ITEMS.find((it) => (xp.mastery[it.m] ?? 0) === 0);
+    if (!summary) return null;
+    const item = ITEMS.find((it) => (mastery[it.m] ?? 0) === 0);
     return item?.m ?? null;
-  }, [xp]);
+  }, [summary, mastery]);
 
   return (
     <div className="space-y-6">
-      <CelebrationOverlay milestone={celebration} onDismiss={dismissCelebration} />
+      <CelebrationOverlay milestones={summary?.milestones ?? []} />
       <Link href="/securities/cybersec" className="inline-flex items-center gap-1.5 text-sm text-[#94a3b8] hover:text-[#22d3ee]">
         <ArrowLeft size={14} /> Volver al syllabus
       </Link>
 
       {/* Level + XP header */}
-      {xp && (
+      {summary && (
         <div className="rounded-xl border border-[#a78bfa]/40 bg-[#a78bfa]/5 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#a78bfa] text-[#0a0e1a] font-bold text-sm">{xp.level.level}</span>
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#a78bfa] text-[#0a0e1a] font-bold text-sm">{summary.xp.level.level}</span>
               <div>
-                <p className="text-sm font-bold text-[#e2e8f0]">Nivel {xp.level.level}</p>
-                <p className="text-[11px] text-[#94a3b8]">{xp.totalXp} XP totales</p>
+                <p className="text-sm font-bold text-[#e2e8f0]">Nivel {summary.xp.level.level}</p>
+                <p className="text-[11px] text-[#94a3b8]">{summary.xp.totalXp} XP totales</p>
               </div>
             </div>
-            <span className="text-xs text-[#a78bfa] font-mono">{xp.level.xpIntoLevel}/{xp.level.xpForNext} XP</span>
+            <span className="text-xs text-[#a78bfa] font-mono">{summary.xp.level.xpIntoLevel}/{summary.xp.level.xpForNext} XP</span>
           </div>
           <div className="h-2 w-full rounded bg-[#1f2937] overflow-hidden">
-            <div className="h-full bg-[#a78bfa] transition-all" style={{ width: `${xp.level.pct}%` }} />
+            <div className="h-full bg-[#a78bfa] transition-all" style={{ width: `${summary.xp.level.pct}%` }} />
           </div>
         </div>
       )}
 
-      {loading || !xp ? (
+      {loading || !summary ? (
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-14 w-14 mx-auto rounded-full border border-[#1f2937] bg-[#0a0e1a] animate-pulse" />
           ))}
         </div>
       ) : (
-        <Path xp={xp} currentM={currentM} />
+        <Path mastery={mastery} currentM={currentM} />
       )}
     </div>
   );
 }
 
-function Path({ xp, currentM }: { xp: XpResult; currentM: number | null }) {
+function Path({ mastery, currentM }: { mastery: Record<number, number>; currentM: number | null }) {
   return (
     <div className="space-y-3 overflow-x-hidden" role="tree" aria-label="Camino de módulos">
       {ROWS.map((row) => {
-        const mastery = xp.mastery[row.m] ?? 0;
+        const m = mastery[row.m] ?? 0;
         const isCurrent = row.m === currentM;
         // "ahead" = un módulo posterior al actual y sin empezar (bloqueo suave visual).
-        const ahead = !isCurrent && mastery === 0 && currentM != null && row.m > currentM;
+        const ahead = !isCurrent && m === 0 && currentM != null && row.m > currentM;
         return (
           <div key={row.m}>
             {row.header && <SectionHeader cat={row.header} />}
             <div className="flex justify-center" style={{ transform: `translateX(${row.offset}px)` }}>
-              <PathNode m={row.m} title={row.title} mastery={mastery} isCurrent={isCurrent} ahead={ahead} />
+              <PathNode m={row.m} title={row.title} mastery={m} isCurrent={isCurrent} ahead={ahead} />
             </div>
           </div>
         );
@@ -170,7 +131,6 @@ function PathNode({ m, title, mastery, isCurrent, ahead }: { m: number; title: s
       <div className={`flex items-center justify-center w-14 h-14 rounded-full border-2 transition ${ring} group-hover:scale-105`}>
         {Icon ? <Icon size={20} /> : <span className="text-sm font-bold">{m}</span>}
       </div>
-      {/* crowns */}
       <div className="flex gap-0.5">
         {Array.from({ length: MASTERY_MAX }).map((_, i) => (
           <span key={i} className={`w-1.5 h-1.5 rounded-full ${i < mastery ? (legendary ? "bg-[#eab308]" : "bg-[#34d399]") : "bg-[#1f2937]"}`} />
