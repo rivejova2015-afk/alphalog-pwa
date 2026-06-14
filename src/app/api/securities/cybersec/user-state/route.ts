@@ -13,9 +13,11 @@ const putSchema = z.object({
   daily_goal: z.number().int().min(10).max(500).optional(),
   notify_streak: z.boolean().optional(),
   placement_done: z.boolean().optional(),
-}).refine((d) => d.daily_goal !== undefined || d.notify_streak !== undefined || d.placement_done !== undefined, {
-  message: "Nada para actualizar",
-});
+  gating: z.enum(["soft", "strict", "block"]).optional(),
+}).refine(
+  (d) => d.daily_goal !== undefined || d.notify_streak !== undefined || d.placement_done !== undefined || d.gating !== undefined,
+  { message: "Nada para actualizar" },
+);
 
 export async function PUT(request: NextRequest) {
   try {
@@ -33,6 +35,7 @@ export async function PUT(request: NextRequest) {
     if (parsed.data.daily_goal !== undefined) patch.daily_goal = parsed.data.daily_goal;
     if (parsed.data.notify_streak !== undefined) patch.notify_streak = parsed.data.notify_streak;
     if (parsed.data.placement_done !== undefined) patch.placement_done = parsed.data.placement_done;
+    if (parsed.data.gating !== undefined) patch.gating = parsed.data.gating;
 
     const { error } = await supabase
       .from("securities_user_state")
