@@ -10,22 +10,26 @@ const createSchema = z.object({
   score: z.number().int().min(0),
   total: z.number().int().min(1),
   answers: z.array(z.number().int()).optional(),
+  section: z.string().max(64).optional(), // ausente = examen final global
 });
 
-// GET /api/securities/cybersec/exam-results
-// Returns historical attempts (most recent first, max 20).
-export async function GET() {
+// GET /api/securities/cybersec/exam-results[?section=Cat]
+// Returns historical attempts (most recent first, max 20). With ?section, only
+// that section's attempts; without it, only the global exam (section IS NULL).
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { data, error } = await supabase
+    const section = request.nextUrl.searchParams.get("section");
+    let q = supabase
       .from("securities_exam_results")
-      .select("id, attempt_no, score, total, passed, taken_at")
-      .eq("user_id", user.id)
-      .order("taken_at", { ascending: false })
-      .limit(20);
+      .select("id, attempt_no, score, total, passed, taken_at, section")
+      .eq("user_id", user.id);
+    q = section ? q.eq("section", section) : q.is("section", null);
+
+    const { data, error } = await q.order("taken_at", { ascending: false }).limit(20);
 
     if (error) {
       logError("Securities", { component: "GET /api/securities/cybersec/exam-results", message: error.message });
@@ -55,13 +59,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "score exceeds total" }, { status: 400 });
     }
 
-    const { data: priorAttempt } = await supabase
+    const section = parsed.data.section ?? null;
+    let priorQ = supabase
       .from("securities_exam_results")
       .select("attempt_no")
-      .eq("user_id", user.id)
-      .order("attempt_no", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq("user_id", user.id);
+    priorQ = section ? priorQ.eq("section", section) : priorQ.is("section", null);
+    const { data: priorAttempt } = await priorQ.order("attempt_no", { ascending: false }).limit(1).maybeSingle();
     const nextAttempt = (priorAttempt?.attempt_no ?? 0) + 1;
 
     const { data, error } = await supabase
@@ -72,6 +76,7 @@ export async function POST(request: NextRequest) {
         score: parsed.data.score,
         total: parsed.data.total,
         answers: parsed.data.answers ?? [],
+        section,
       })
       .select()
       .single();

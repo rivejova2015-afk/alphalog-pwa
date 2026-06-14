@@ -16,6 +16,8 @@ import {
 interface Props {
   questions: ExamQuestion[]; // the full bank
   passRatio: number;
+  section?: string; // ausente = examen final global; presente = examen de esa categoría
+  count?: number;   // cantidad de preguntas a samplear (default = examen final)
 }
 
 interface PriorAttempt {
@@ -28,7 +30,10 @@ interface PriorAttempt {
 
 type Phase = "intro" | "running" | "done";
 
-export function ExamRunner({ questions, passRatio }: Props) {
+export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTION_COUNT }: Props) {
+  const historyUrl = section
+    ? `/api/securities/cybersec/exam-results?section=${encodeURIComponent(section)}`
+    : "/api/securities/cybersec/exam-results";
   const [phase, setPhase] = useState<Phase>("intro");
   const [exam, setExam] = useState<PreparedQuestion[]>([]);
   const [index, setIndex] = useState(0);
@@ -42,7 +47,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/securities/cybersec/exam-results");
+        const res = await fetch(historyUrl);
         if (!res.ok) return;
         const data = (await res.json()) as { results: PriorAttempt[] };
         if (!cancelled) setHistory(data.results ?? []);
@@ -51,7 +56,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [historyUrl]);
 
   const total = exam.length;
   const minToPass = Math.ceil(total * passRatio);
@@ -73,6 +78,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
           score: finalScore,
           total: exam.length,
           answers: exam.map((_, i) => answers[i] ?? -1),
+          ...(section ? { section } : {}),
         }),
       });
       if (!res.ok) toast.error("No se pudo guardar el resultado");
@@ -85,7 +91,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [exam, answers, passRatio]);
+  }, [exam, answers, passRatio, section]);
 
   // Wall-clock countdown: recompute remaining time from a fixed end timestamp so
   // it stays accurate even if the tab is backgrounded (setTimeout throttling).
@@ -105,7 +111,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
   }, [phase, endsAt, submit]);
 
   const start = () => {
-    const prepared = prepareExam(questions, EXAM_QUESTION_COUNT);
+    const prepared = prepareExam(questions, count);
     setExam(prepared);
     setAnswers({});
     setIndex(0);
@@ -116,13 +122,13 @@ export function ExamRunner({ questions, passRatio }: Props) {
 
   // ── Intro ────────────────────────────────────────────────────────────────
   if (phase === "intro") {
-    const sampled = Math.min(EXAM_QUESTION_COUNT, questions.length);
+    const sampled = Math.min(count, questions.length);
     return (
       <div className="space-y-6">
         <Back />
         <header className="space-y-1">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-[#a78bfa]">Examen final</p>
-          <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono">CyberSec Academy</h1>
+          <p className="text-[10px] font-mono uppercase tracking-wider text-[#a78bfa]">{section ? "Examen de sección" : "Examen final"}</p>
+          <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono">{section ?? "CyberSec Academy"}</h1>
         </header>
 
         <div className="rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-5 space-y-3">

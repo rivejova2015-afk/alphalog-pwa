@@ -13,6 +13,7 @@ export interface CybersecSummary {
   xpToday: number;
   dailyGoal: number;
   notifyStreak: boolean;
+  sectionExams: Record<string, { bestPct: number; passed: boolean }>;
   milestones: Milestone[];
   mastery: Record<number, number>;
 }

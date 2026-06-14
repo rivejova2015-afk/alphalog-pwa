@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Crown, Lock, Star, Sparkles } from "lucide-react";
-import { SYLLABUS, MASTERY_MAX } from "@/lib/securities/cybersec";
+import { ArrowLeft, Crown, Lock, Star, Sparkles, ClipboardCheck, Check } from "lucide-react";
+import { SYLLABUS, MASTERY_MAX, categoryIndex } from "@/lib/securities/cybersec";
 import { CelebrationOverlay } from "./CelebrationOverlay.client";
 import { useCybersecSummary } from "./useCybersecSummary";
 
@@ -70,13 +70,13 @@ export function PathMap() {
           ))}
         </div>
       ) : (
-        <Path mastery={mastery} currentM={currentM} />
+        <Path mastery={mastery} currentM={currentM} sectionExams={summary.sectionExams ?? {}} />
       )}
     </div>
   );
 }
 
-function Path({ mastery, currentM }: { mastery: Record<number, number>; currentM: number | null }) {
+function Path({ mastery, currentM, sectionExams }: { mastery: Record<number, number>; currentM: number | null; sectionExams: Record<string, { bestPct: number; passed: boolean }> }) {
   return (
     <div className="space-y-3 overflow-x-hidden" role="tree" aria-label="Camino de módulos">
       {ROWS.map((row) => {
@@ -86,7 +86,7 @@ function Path({ mastery, currentM }: { mastery: Record<number, number>; currentM
         const ahead = !isCurrent && m === 0 && currentM != null && row.m > currentM;
         return (
           <div key={row.m}>
-            {row.header && <SectionHeader cat={row.header} />}
+            {row.header && <SectionHeader cat={row.header} exam={sectionExams[row.header]} />}
             <div className="flex justify-center" style={{ transform: `translateX(${row.offset}px)` }}>
               <PathNode m={row.m} title={row.title} mastery={m} isCurrent={isCurrent} ahead={ahead} />
             </div>
@@ -97,12 +97,28 @@ function Path({ mastery, currentM }: { mastery: Record<number, number>; currentM
   );
 }
 
-function SectionHeader({ cat }: { cat: string }) {
+function SectionHeader({ cat, exam }: { cat: string; exam?: { bestPct: number; passed: boolean } }) {
+  const idx = categoryIndex(cat);
   return (
-    <div className="flex items-center gap-3 my-4">
-      <div className="flex-1 h-px bg-[#1f2937]" />
-      <span className="text-[10px] uppercase tracking-[0.2em] text-[#a78bfa] font-bold">{cat}</span>
-      <div className="flex-1 h-px bg-[#1f2937]" />
+    <div className="my-4 space-y-1.5">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-[#1f2937]" />
+        <span className="text-[10px] uppercase tracking-[0.2em] text-[#a78bfa] font-bold">{cat}</span>
+        <div className="flex-1 h-px bg-[#1f2937]" />
+      </div>
+      <div className="flex justify-center">
+        <Link
+          href={`/securities/cybersec/section-exam/${idx}`}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] border ${
+            exam?.passed
+              ? "border-[#34d399]/40 bg-[#34d399]/10 text-[#34d399]"
+              : "border-[#1f2937] bg-[#0a0e1a] text-[#94a3b8] hover:text-[#22d3ee]"
+          }`}
+        >
+          {exam?.passed ? <Check size={11} /> : <ClipboardCheck size={11} />}
+          Examen de sección{exam ? ` · ${exam.bestPct}%` : ""}
+        </Link>
+      </div>
     </div>
   );
 }
