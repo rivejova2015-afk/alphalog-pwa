@@ -10,6 +10,7 @@ export * from "./examSession";
 export * from "./sectionExam";
 export * from "./placement";
 export * from "./gating";
+export * from "./quizDedup";
 export * from "./flashcards";
 export * from "./progressStats";
 export * from "./xp";

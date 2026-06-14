@@ -66,3 +66,8 @@
 # CyberSec Academy — recordatorio de racha/meta diaria (push). Tarde UTC para
 # llegar a la noche del usuario. Dedup diario vía securities_user_state.last_notified_on.
 0    22   *  *  *   curl --fail --max-time 60  -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/streak-reminder
+
+# CyberSec Academy — higiene de securities_quiz_results (Fase H). Colapsa intentos
+# redundantes conservando mejor-por-lección + ≥1 por día con actividad (maestría/XP
+# y racha quedan idénticas). Semanal (domingo 03:30 UTC), el crecimiento es lento.
+30   3    *  *  0   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/quiz-dedup
