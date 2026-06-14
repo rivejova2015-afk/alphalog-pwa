@@ -34,6 +34,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [endsAt, setEndsAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<PriorAttempt[]>([]);
 
@@ -86,17 +87,22 @@ export function ExamRunner({ questions, passRatio }: Props) {
     }
   }, [exam, answers, passRatio]);
 
-  // Countdown while running; auto-submit at 0.
+  // Wall-clock countdown: recompute remaining time from a fixed end timestamp so
+  // it stays accurate even if the tab is backgrounded (setTimeout throttling).
   useEffect(() => {
-    if (phase !== "running") return;
-    if (secondsLeft <= 0) {
-      toast.message("⏱ Tiempo agotado — examen enviado");
-      void submit();
-      return;
-    }
-    const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, secondsLeft, submit]);
+    if (phase !== "running" || endsAt == null) return;
+    const tick = () => {
+      const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left <= 0) {
+        toast.message("⏱ Tiempo agotado — examen enviado");
+        void submit();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [phase, endsAt, submit]);
 
   const start = () => {
     const prepared = prepareExam(questions, EXAM_QUESTION_COUNT);
@@ -104,6 +110,7 @@ export function ExamRunner({ questions, passRatio }: Props) {
     setAnswers({});
     setIndex(0);
     setSecondsLeft(prepared.length * EXAM_SECONDS_PER_QUESTION);
+    setEndsAt(Date.now() + prepared.length * EXAM_SECONDS_PER_QUESTION * 1000);
     setPhase("running");
   };
 

@@ -17,8 +17,9 @@ const CONTENT = {
 
 const ITEMS = SYLLABUS.map((m) => ({ m: m.m, title: m.title, cat: m.cat }));
 
-// Gentle serpentine: horizontal offset per node, cycling.
-const OFFSET = [0, 44, 70, 44, 0, -44, -70, -44];
+// Gentle serpentine: horizontal offset per node, cycling. Kept modest so the
+// path doesn't overflow on narrow (mobile) viewports.
+const OFFSET = [0, 30, 48, 30, 0, -30, -48, -30];
 
 // Precompute static layout (section headers + offsets) once at module load so
 // the render never mutates `let` variables (React Compiler safe).
@@ -116,7 +117,7 @@ export function PathMap() {
 
 function Path({ xp, currentM }: { xp: XpResult; currentM: number | null }) {
   return (
-    <div className="space-y-3" role="tree" aria-label="Camino de módulos">
+    <div className="space-y-3 overflow-x-hidden" role="tree" aria-label="Camino de módulos">
       {ROWS.map((row) => {
         const mastery = xp.mastery[row.m] ?? 0;
         const isCurrent = row.m === currentM;

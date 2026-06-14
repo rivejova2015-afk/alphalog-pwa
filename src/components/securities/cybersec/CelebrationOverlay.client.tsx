@@ -47,13 +47,14 @@ export function CelebrationOverlay({ milestone, onDismiss }: { milestone: Milest
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label={milestone.title}>
-      <style>{"@keyframes cyb-fall{0%{transform:translateY(-20vh) rotate(0deg);opacity:1}100%{transform:translateY(85vh) rotate(540deg);opacity:0}}@keyframes cyb-pop{0%{transform:scale(0.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}"}</style>
+      <style>{"@keyframes cyb-fall{0%{transform:translateY(-20vh) rotate(0deg);opacity:1}100%{transform:translateY(85vh) rotate(540deg);opacity:0}}@keyframes cyb-pop{0%{transform:scale(0.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}.cyb-confetti{animation:cyb-fall var(--dur) linear var(--delay) infinite}.cyb-pop{animation:cyb-pop .35s ease-out}@media (prefers-reduced-motion: reduce){.cyb-confetti{display:none}.cyb-pop{animation:none}}"}</style>
 
-      {/* Confetti */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {/* Confetti (oculto con prefers-reduced-motion) */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         {Array.from({ length: 16 }).map((_, i) => (
           <span
             key={i}
+            className="cyb-confetti"
             style={{
               position: "absolute",
               left: `${(i * 6.25 + (i % 3) * 4) % 100}%`,
@@ -62,15 +63,16 @@ export function CelebrationOverlay({ milestone, onDismiss }: { milestone: Milest
               height: 9,
               background: COLORS[i % COLORS.length],
               borderRadius: i % 2 ? "50%" : "1px",
-              animation: `cyb-fall ${1.8 + (i % 5) * 0.35}s linear ${(i % 7) * 0.12}s infinite`,
+              ["--dur" as string]: `${1.8 + (i % 5) * 0.35}s`,
+              ["--delay" as string]: `${(i % 7) * 0.12}s`,
             }}
           />
         ))}
       </div>
 
       <div
-        className="relative w-full max-w-sm rounded-2xl border p-6 text-center"
-        style={{ borderColor: `${accent}66`, background: "#0a0e1a", animation: "cyb-pop 0.35s ease-out" }}
+        className="cyb-pop relative w-full max-w-sm rounded-2xl border p-6 text-center"
+        style={{ borderColor: `${accent}66`, background: "#0a0e1a" }}
       >
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${accent}22`, color: accent }}>
           <Icon size={32} />
