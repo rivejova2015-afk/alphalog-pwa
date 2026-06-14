@@ -22,7 +22,46 @@ import { fetchPolygonBars, mapToPolygonTicker } from "@/lib/backtest/polygon-fet
 import { fetchTwelveDataBars, mapToTwelveDataSymbol } from "@/lib/backtest/twelvedata-fetcher";
 import { fetchPolygonFuturesBars, mapToPolygonFuturesTicker } from "@/lib/backtest/polygon-futures-fetcher";
 import { getApiSourcesForTf, nextStepsForEmpty, type DataSource } from "@/lib/backtest/source-registry";
+import { withRetry } from "@/lib/backtest/retry";
 import { logInfo, logWarn } from "@/lib/log";
+
+/**
+ * Tunable retry budget for individual source fetches. 2 retries = up to 3
+ * attempts per source before we walk to the next entry in the chain. With
+ * baseDelay=500ms exponential, total worst-case wait is ~500 + 1000 = 1.5s
+ * per source before fall-through — still much cheaper than dropping to a
+ * less-preferred source.
+ *
+ * In tests we collapse the delay to 1ms so the existing bars-loader suite
+ * doesn't spend seconds waiting between mocked retries. Production still uses
+ * the full backoff. NODE_ENV='test' is set by vitest automatically.
+ */
+const SOURCE_RETRY_OPTS = {
+  maxRetries: 2,
+  baseDelayMs: process.env.NODE_ENV === "test" ? 1 : 500,
+} as const;
+
+/**
+ * Helper that wraps a source fetcher with the standard retry budget and
+ * normalizes the result to the SourceAttempt shape. Centralizes the
+ * boilerplate that used to live in every branch of `tryApiSource`.
+ */
+async function fetchWithRetry(
+  source: DataSource,
+  fetcher: () => Promise<Bar[]>,
+): Promise<{ bars: Bar[]; attempt: SourceAttempt }> {
+  try {
+    const { value: bars, attempts } = await withRetry(fetcher, SOURCE_RETRY_OPTS);
+    const baseMsg = bars.length === 0 ? "empty_response" : undefined;
+    const msg = attempts > 1
+      ? `${baseMsg ? baseMsg + " — " : ""}succeeded after ${attempts - 1} retry${attempts - 1 === 1 ? "" : "ies"}`
+      : baseMsg;
+    return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: msg, attempts } };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { bars: [], attempt: { source, ok: false, bars: 0, message: msg, attempts: SOURCE_RETRY_OPTS.maxRetries + 1 } };
+  }
+}
 
 const PAGE = 1000;
 const MIN_BARS = 60;
@@ -80,6 +119,13 @@ export interface SourceAttempt {
   ok: boolean;
   bars: number;
   message?: string;
+  /**
+   * Total attempts made for this source (1 = no retries). Surfaces "succeeded
+   * after 2 retries" in the diagnostics panel so the user knows the network
+   * had blips but the chain recovered without falling to a less-preferred
+   * source.
+   */
+  attempts?: number;
 }
 
 export interface LoadResult {
@@ -180,7 +226,13 @@ async function ingestBars(
   );
 }
 
-/** Try a single API source. Returns bars on success or empty + attempt info on failure. */
+/**
+ * Try a single API source. Returns bars on success or empty + attempt info on
+ * failure. Each source fetch is wrapped with `fetchWithRetry` so transient
+ * errors (429 / 5xx / network blips) get up to 2 retries with exponential
+ * backoff before we walk to the next entry in the chain. Non-retryable
+ * errors (401 / 403 / missing key / unmapped symbol) fail fast.
+ */
 async function tryApiSource(
   source: DataSource,
   symbol: string,
@@ -192,82 +244,37 @@ async function tryApiSource(
     if (!mapToYahooTicker(symbol)) {
       return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_yahoo_mapping" } };
     }
-    try {
-      const bars = await fetchYahooBars(symbol, timeframe, from, to);
-      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
-    }
+    return fetchWithRetry(source, () => fetchYahooBars(symbol, timeframe, from, to));
   }
   if (source === "fxratesapi") {
     if (!mapToFxratesapiPair(symbol)) {
       return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_fxratesapi_mapping" } };
     }
-    try {
-      const bars = await fetchFxratesapiBars(symbol, timeframe, from, to);
-      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
-    }
+    return fetchWithRetry(source, () => fetchFxratesapiBars(symbol, timeframe, from, to));
   }
   if (source === "oanda") {
     if (!mapToOandaInstrument(symbol)) {
       return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_oanda_mapping" } };
     }
-    try {
-      const bars = await fetchOandaBars(symbol, timeframe, from, to);
-      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // Token-missing should soft-fail (not abort the chain) — surfaces as
-      // "source disabled" in the diagnostics panel without breaking anything.
-      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
-    }
+    return fetchWithRetry(source, () => fetchOandaBars(symbol, timeframe, from, to));
   }
   if (source === "polygon") {
     if (!mapToPolygonTicker(symbol)) {
       return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_polygon_mapping" } };
     }
-    try {
-      const bars = await fetchPolygonBars(symbol, timeframe, from, to);
-      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
-    } catch (err) {
-      // Same pattern as OANDA: missing API key → soft fail → next source in chain.
-      // Rate-limit hits also fall through so the chain can try Yahoo et al.
-      const msg = err instanceof Error ? err.message : String(err);
-      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
-    }
+    return fetchWithRetry(source, () => fetchPolygonBars(symbol, timeframe, from, to));
   }
   if (source === "twelvedata") {
     if (!mapToTwelveDataSymbol(symbol)) {
       return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_twelvedata_mapping" } };
     }
-    try {
-      const bars = await fetchTwelveDataBars(symbol, timeframe, from, to);
-      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
-    } catch (err) {
-      // Missing API key or daily-credit exhaustion → soft fail → walk to
-      // Polygon → Yahoo → CSV. The diagnostics panel surfaces the message.
-      const msg = err instanceof Error ? err.message : String(err);
-      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
-    }
+    return fetchWithRetry(source, () => fetchTwelveDataBars(symbol, timeframe, from, to));
   }
   if (source === "polygon-futures") {
     if (!mapToPolygonFuturesTicker(symbol, to)) {
       return { bars: [], attempt: { source, ok: false, bars: 0, message: "no_polygon_futures_mapping" } };
     }
-    try {
-      const bars = await fetchPolygonFuturesBars(symbol, timeframe, from, to);
-      return { bars, attempt: { source, ok: bars.length > 0, bars: bars.length, message: bars.length === 0 ? "empty_response" : undefined } };
-    } catch (err) {
-      // Missing API key, subscription tier, or rate-limit → soft fail →
-      // walk to Yahoo (=F continuation) + CSV (tradovate/cme). The
-      // front-month-only limitation is documented in the fetcher comments.
-      const msg = err instanceof Error ? err.message : String(err);
-      return { bars: [], attempt: { source, ok: false, bars: 0, message: msg } };
-    }
+    return fetchWithRetry(source, () => fetchPolygonFuturesBars(symbol, timeframe, from, to));
   }
   return { bars: [], attempt: { source, ok: false, bars: 0, message: `source_${source}_not_implemented_as_api` } };
 }

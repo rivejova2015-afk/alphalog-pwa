@@ -301,3 +301,62 @@ describe("loadHistoricalBarsDetailed — staleness refetch (Sprint G)", () => {
     expect(r.effectiveSource).toBe("yahoo");
   });
 });
+
+// Mejora #4 — withRetry integration: transient errors get up to 2 retries
+// before the chain falls to the next source. Non-retryable errors fail fast.
+describe("loadHistoricalBarsDetailed — retry behavior (Mejora #4)", () => {
+  it("retries Yahoo on 429 and surfaces 'succeeded after N retries' in attempts", async () => {
+    const supabase = stubSupabase({
+      selectBars: [],
+      selectBarsAfter: Array.from({ length: 80 }, (_, i) => bar(100 + i, isoAt(i))),
+    });
+    mockChainFor.mockReturnValue(["yahoo"]);
+    mockYahooFetch
+      .mockRejectedValueOnce(new Error("Yahoo HTTP 429"))
+      .mockResolvedValueOnce([bar(150)]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "D1", FROM, TO);
+
+    expect(mockYahooFetch).toHaveBeenCalledTimes(2);
+    expect(r.effectiveSource).toBe("yahoo");
+    expect(r.attempts[0].source).toBe("yahoo");
+    expect(r.attempts[0].ok).toBe(true);
+    expect(r.attempts[0].attempts).toBe(2);
+    expect(r.attempts[0].message).toContain("succeeded after 1 retry");
+  });
+
+  it("falls through to next source after exhausting retries on transient error", async () => {
+    const supabase = stubSupabase({
+      selectBars: [],
+      selectBarsAfter: Array.from({ length: 80 }, (_, i) => bar(100 + i, isoAt(i))),
+    });
+    mockChainFor.mockReturnValue(["yahoo", "fxratesapi"]);
+    mockYahooFetch.mockRejectedValue(new Error("Yahoo HTTP 503"));   // always fails
+    mockFxFetch.mockResolvedValue([bar(200)]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "D1", FROM, TO);
+
+    // Yahoo tried 3 times (1 initial + 2 retries), then chain walked to FX.
+    expect(mockYahooFetch).toHaveBeenCalledTimes(3);
+    expect(mockFxFetch).toHaveBeenCalledTimes(1);
+    expect(r.effectiveSource).toBe("fxratesapi");
+    expect(r.attempts[0]).toMatchObject({ source: "yahoo", ok: false, attempts: 3 });
+    expect(r.attempts[0].message).toContain("503");
+  });
+
+  it("does NOT retry on non-retryable error (auth failure)", async () => {
+    const supabase = stubSupabase({
+      selectBars: [],
+      selectBarsAfter: Array.from({ length: 80 }, (_, i) => bar(100 + i, isoAt(i))),
+    });
+    mockChainFor.mockReturnValue(["yahoo", "fxratesapi"]);
+    mockYahooFetch.mockRejectedValue(new Error("OANDA: invalid API key"));
+    mockFxFetch.mockResolvedValue([bar(200)]);
+
+    const r = await loadHistoricalBarsDetailed(supabase, "EURUSD", "D1", FROM, TO);
+
+    // Single attempt, then walked immediately.
+    expect(mockYahooFetch).toHaveBeenCalledTimes(1);
+    expect(r.effectiveSource).toBe("fxratesapi");
+  });
+});
