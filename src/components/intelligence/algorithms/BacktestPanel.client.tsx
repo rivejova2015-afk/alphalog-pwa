@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Play, BarChart3, Loader2, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
+import { useBacktestJobProgress } from '@/hooks/useBacktestJobProgress';
 import type { AlgorithmRules, SimulatedTrade } from '@/types/backtest';
 import { BacktestRuleBuilder } from './BacktestRuleBuilder.client';
 import { BacktestEquityChart } from './BacktestEquityChart.client';
@@ -118,7 +119,8 @@ export function BacktestPanel({
   const [to, setTo] = useState(today.toISOString().slice(0, 10));
   const [initialBalance, setInitialBalance] = useState(initialBalanceDefault);
   const [mcIterations, setMcIterations] = useState(1000);
-  const [wfWindows, setWfWindows] = useState(5);
+  // Walk-forward default unificado en 4 ventanas con el sync panel. 0 desactiva.
+  const [wfWindows, setWfWindows] = useState(4);
   const [stress, setStress] = useState(true);
   const [useMl, setUseMl] = useState(false);
   const [useMultiTf, setUseMultiTf] = useState(false);
@@ -141,9 +143,32 @@ export function BacktestPanel({
   useEffect(() => {
     const hasActive = jobs.some((j) => j.status === 'queued' || j.status === 'running');
     if (!hasActive) return;
+    // Polling kept as fallback when Supabase Realtime is unavailable (eg.
+    // browser blocks WebSockets). Once an UPDATE event arrives via the
+    // Realtime subscription below, loadJobs() also fires through the
+    // status-change effect so the table stays in sync.
     const t = setInterval(loadJobs, 3000);
     return () => clearInterval(t);
   }, [jobs, loadJobs]);
+
+  // Realtime subscription to the most recent active job. When run-job.ts
+  // bumps current_phase / progress_pct on the row, this hook receives the
+  // UPDATE event in <100ms (vs ~3s for the polling above), so the user sees
+  // the phase progress live.
+  const activeJobId = useMemo(() => {
+    return jobs.find((j) => j.status === 'queued' || j.status === 'running')?.id ?? null;
+  }, [jobs]);
+  const liveJob = useBacktestJobProgress(activeJobId);
+
+  // Refresh the jobs list immediately when the live job flips to a terminal
+  // state so the table picks up the final row + results without waiting for
+  // the next 3s poll.
+  const liveJobStatus = liveJob.job?.status;
+  useEffect(() => {
+    if (liveJobStatus === 'completed' || liveJobStatus === 'failed' || liveJobStatus === 'cancelled') {
+      void loadJobs();
+    }
+  }, [liveJobStatus, loadJobs]);
 
   const loadResults = useCallback(async (jobId: string) => {
     setLoadingResults(true);
@@ -371,32 +396,53 @@ export function BacktestPanel({
         {jobs.length === 0 && (
           <p className="text-xs text-[#475569] text-center py-3">No backtests yet — run your first robust validation.</p>
         )}
-        {jobs.map((j) => (
+        {jobs.map((j) => {
+          // Merge in the Realtime snapshot for the active job so the phase
+          // label + progress % update in <100ms instead of waiting for the
+          // 3s poll. Non-active jobs render from `j` as before.
+          const liveOverride = liveJob.job && liveJob.job.id === j.id ? liveJob.job : null;
+          const phase = liveOverride?.current_phase ?? j.current_phase;
+          const pct = liveOverride?.progress_pct ?? j.progress_pct;
+          const status = liveOverride?.status ?? j.status;
+          return (
           <button
             key={j.id}
-            onClick={() => j.status === 'completed' && loadResults(j.id)}
-            disabled={j.status !== 'completed'}
+            onClick={() => status === 'completed' && loadResults(j.id)}
+            disabled={status !== 'completed'}
             className={`w-full text-left flex items-center justify-between gap-2 px-2.5 py-1.5 rounded border text-xs transition-colors ${
               selectedJob === j.id ? 'border-[#06b6d4] bg-[#06b6d4]/5' : 'border-[#1f2937] hover:border-[#475569]'
-            } ${j.status === 'completed' ? 'cursor-pointer' : 'cursor-default'}`}
+            } ${status === 'completed' ? 'cursor-pointer' : 'cursor-default'}`}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <StatusIcon status={j.status} />
+              <StatusIcon status={status} />
               <div className="min-w-0">
-                <div className={`font-mono ${STATUS_COLORS[j.status]}`}>
-                  {j.status} {j.current_phase && j.status === 'running' ? `· ${j.current_phase}` : ''}
+                <div className={`font-mono ${STATUS_COLORS[status]}`}>
+                  {status} {phase && status === 'running' ? `· ${phase}` : ''}
                 </div>
                 <div className="text-[10px] text-[#475569]">{new Date(j.created_at).toLocaleString()}</div>
+                {/* Inline progress bar — only visible while running. Drives
+                    off the live override when available, fallback to the
+                    polled row otherwise. */}
+                {status === 'running' && (
+                  <div className="mt-1 h-0.5 w-32 rounded-full bg-[#1f2937] overflow-hidden">
+                    <div
+                      className="h-full bg-[#06b6d4] transition-[width] duration-300 ease-out"
+                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                      aria-label={`Progress ${Math.round(pct)}%`}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-            {j.status === 'running' && (
-              <div className="text-[10px] text-[#06b6d4] font-mono">{Math.round(j.progress_pct)}%</div>
+            {status === 'running' && (
+              <div className="text-[10px] text-[#06b6d4] font-mono">{Math.round(pct)}%</div>
             )}
-            {j.status === 'failed' && j.error && (
+            {status === 'failed' && j.error && (
               <div className="text-[10px] text-[#ef4444] truncate max-w-[200px]" title={j.error}>{j.error}</div>
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {selectedJob && (loadingResults ? (

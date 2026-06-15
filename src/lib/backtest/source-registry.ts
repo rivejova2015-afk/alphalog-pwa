@@ -21,7 +21,7 @@
 
 import type { Timeframe } from "@/types/backtest";
 
-export type DataSource = "yahoo" | "dukascopy" | "histdata" | "mt5" | "mt4" | "tradovate" | "cme" | "oanda" | "fxratesapi";
+export type DataSource = "yahoo" | "dukascopy" | "histdata" | "mt5" | "mt4" | "tradovate" | "cme" | "oanda" | "fxratesapi" | "polygon" | "twelvedata" | "polygon-futures";
 
 export type AssetClass =
   | "forex"           // EURUSD, GBPUSD, ...
@@ -49,19 +49,46 @@ export interface SymbolEntry {
 // API source first.
 
 const DEFAULTS: Record<AssetClass, { apiSources: DataSource[]; csvSources: DataSource[] }> = {
-  "forex":         { apiSources: ["yahoo"],         csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  "metals-spot":   { apiSources: [],                csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  "index-cfd":     { apiSources: ["yahoo"],         csvSources: ["mt5", "mt4"] },
-  "energy-spot":   { apiSources: ["yahoo"],         csvSources: ["mt5", "mt4"] },
-  "crypto":        { apiSources: ["yahoo"],         csvSources: ["mt5", "mt4", "dukascopy"] },
-  "futures-cme":   { apiSources: ["yahoo"],         csvSources: ["tradovate", "cme"] },
-  "stock-equity":  { apiSources: ["yahoo"],         csvSources: [] },
-  "unknown":       { apiSources: [],                csvSources: ["mt5", "mt4"] },
+  "forex":         { apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  "metals-spot":   { apiSources: ["twelvedata", "polygon"],          csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  "index-cfd":     { apiSources: ["yahoo"],                          csvSources: ["mt5", "mt4"] },
+  "energy-spot":   { apiSources: ["yahoo"],                          csvSources: ["mt5", "mt4"] },
+  "crypto":        { apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy"] },
+  "futures-cme":   { apiSources: ["polygon-futures", "yahoo"],      csvSources: ["tradovate", "cme"] },
+  "stock-equity":  { apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  "unknown":       { apiSources: [],                                 csvSources: ["mt5", "mt4"] },
 };
 
 // ─── Explicit per-symbol registry ─────────────────────────────────────────────
 // Override the defaults for special cases. Keep entries to symbols the wizard
 // actually exposes; unknown symbols fall back to assetClass=unknown chain.
+//
+// Coverage philosophy: list every symbol that any source (Twelve Data, Polygon,
+// OANDA, Yahoo) can serve so resolveSymbol() never lands on the 'unknown' chain
+// for a real ticker. Adding a symbol here without API support is fine — it'll
+// just walk all sources and return [] with actionable next-steps.
+
+// Helper to declare bulk symbols with a uniform shape — keeps the explicit
+// registry below readable when we list 100+ tickers in one asset class.
+function bulk(
+  symbols: string[],
+  assetClass: AssetClass,
+  apiSources: DataSource[],
+  csvSources: DataSource[],
+): Record<string, SymbolEntry> {
+  const out: Record<string, SymbolEntry> = {};
+  for (const s of symbols) out[s] = { assetClass, apiSources, csvSources };
+  return out;
+}
+
+const FOREX_TWELVE_POLYGON: DataSource[] = ["oanda", "twelvedata", "polygon", "yahoo"];
+const METALS_TWELVE_POLYGON: DataSource[] = ["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"];
+const CRYPTO_TWELVE_POLYGON: DataSource[] = ["twelvedata", "polygon", "yahoo"];
+const STOCK_TWELVE_POLYGON:  DataSource[] = ["twelvedata", "polygon", "yahoo"];
+
+const FOREX_CSV  = ["mt5", "mt4", "dukascopy", "histdata"] as DataSource[];
+const CRYPTO_CSV = ["mt5", "mt4", "dukascopy"] as DataSource[];
+const STOCK_CSV  = [] as DataSource[];
 
 const REGISTRY: Record<string, SymbolEntry> = {
   // ── Metals spot — Yahoo XAUUSD=X et al están muertos. Como proxy se usa el
@@ -73,45 +100,45 @@ const REGISTRY: Record<string, SymbolEntry> = {
     // Yahoo first (covers all TFs via GC=F futures proxy). fxratesapi as D1
     // backup with real spot price (no futures basis) — only kicks in if
     // Yahoo fails entirely.
-    apiSources: ["oanda", "yahoo", "fxratesapi"],
+    apiSources: ["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"],
     csvSources: ["mt5", "mt4", "dukascopy", "histdata"],
     notes: "Yahoo sirve GC=F (gold futures continuo) como proxy de XAUUSD spot — basis ~$1-5. fxratesapi como respaldo D1 spot real (sin basis). Para fidelity intraday exacta importar CSV de MT5 broker.",
   },
   XAGUSD: {
     assetClass: "metals-spot",
-    apiSources: ["oanda", "yahoo", "fxratesapi"],
+    apiSources: ["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"],
     csvSources: ["mt5", "mt4", "dukascopy", "histdata"],
     notes: "Yahoo sirve SI=F (silver futures) como proxy. fxratesapi como respaldo D1 spot real. Para fidelity exacta importar CSV.",
   },
   XPTUSD: {
     assetClass: "metals-spot",
-    apiSources: ["oanda", "yahoo", "fxratesapi"],
+    apiSources: ["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"],
     csvSources: ["mt5", "mt4", "dukascopy"],
     notes: "Yahoo sirve PL=F como proxy. fxratesapi D1 spot real como respaldo. Para fidelity exacta importar CSV.",
   },
   XPDUSD: {
     assetClass: "metals-spot",
-    apiSources: ["oanda", "yahoo", "fxratesapi"],
+    apiSources: ["oanda", "twelvedata", "polygon", "yahoo", "fxratesapi"],
     csvSources: ["mt5", "mt4", "dukascopy"],
     notes: "Yahoo sirve PA=F como proxy. fxratesapi D1 spot real como respaldo. Para fidelity exacta importar CSV.",
   },
 
   // ── Forex majors + crosses (Yahoo works, broker CSV is canonical) ─────────
-  EURUSD: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  GBPUSD: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  USDJPY: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  USDCHF: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  AUDUSD: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  USDCAD: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  NZDUSD: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  EURJPY: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  GBPJPY: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  EURGBP: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  EURAUD: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  EURCHF: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  AUDJPY: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  CADJPY: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
-  CHFJPY: { assetClass: "forex", apiSources: ["oanda", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  EURUSD: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  GBPUSD: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  USDJPY: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  USDCHF: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  AUDUSD: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  USDCAD: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  NZDUSD: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  EURJPY: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  GBPJPY: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  EURGBP: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  EURAUD: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  EURCHF: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  AUDJPY: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  CADJPY: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
+  CHFJPY: { assetClass: "forex", apiSources: ["oanda", "twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy", "histdata"] },
 
   // ── Index CFDs (mapped to Yahoo index tickers) ────────────────────────────
   US30:   { assetClass: "index-cfd", apiSources: ["yahoo"], csvSources: ["mt5", "mt4"] },
@@ -130,52 +157,106 @@ const REGISTRY: Record<string, SymbolEntry> = {
   NGAS:   { assetClass: "energy-spot", apiSources: ["yahoo"], csvSources: ["mt5", "mt4"] },
 
   // ── Crypto ────────────────────────────────────────────────────────────────
-  BTCUSD: { assetClass: "crypto", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy"] },
-  ETHUSD: { assetClass: "crypto", apiSources: ["yahoo"], csvSources: ["mt5", "mt4", "dukascopy"] },
-  SOLUSD: { assetClass: "crypto", apiSources: ["yahoo"], csvSources: ["mt5", "mt4"] },
-  XRPUSD: { assetClass: "crypto", apiSources: ["yahoo"], csvSources: ["mt5", "mt4"] },
+  BTCUSD: { assetClass: "crypto", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy"] },
+  ETHUSD: { assetClass: "crypto", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4", "dukascopy"] },
+  SOLUSD: { assetClass: "crypto", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4"] },
+  XRPUSD: { assetClass: "crypto", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: ["mt5", "mt4"] },
 
   // ── Futures CME (Tradovate live, Yahoo =F fallback) ───────────────────────
-  ES:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  NQ:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  YM:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  RTY: { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  GC:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"], notes: "Si necesitás gold spot usá XAUUSD; este es el contrato GC=F." },
-  SI:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  HG:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  PL:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  CL:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  NG:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  BZ:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  HO:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  RB:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZB:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZN:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZF:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZT:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZC:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZS:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZW:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZL:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
-  ZM:  { assetClass: "futures-cme", apiSources: ["yahoo"], csvSources: ["tradovate", "cme"] },
+  ES:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  NQ:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  YM:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  RTY: { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  GC:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"], notes: "Si necesitás gold spot usá XAUUSD; este es el contrato GC=F (front-month vía Polygon Futures cuando hay key)." },
+  SI:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  HG:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  PL:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  CL:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  NG:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  BZ:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  HO:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  RB:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZB:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZN:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZF:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZT:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZC:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZS:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZW:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZL:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
+  ZM:  { assetClass: "futures-cme", apiSources: ["polygon-futures", "yahoo"], csvSources: ["tradovate", "cme"] },
 
   // ── Stock equities / ETFs (options underlyings) ───────────────────────────
-  SPY:  { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  QQQ:  { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  IWM:  { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  DIA:  { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  AAPL: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  TSLA: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  NVDA: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  MSFT: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  AMZN: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  GOOGL:{ assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  META: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  NFLX: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  AMD:  { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  INTC: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  BABA: { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
-  DIS:  { assetClass: "stock-equity", apiSources: ["yahoo"], csvSources: [] },
+  SPY:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  QQQ:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  IWM:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  DIA:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  AAPL: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  TSLA: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  NVDA: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  MSFT: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  AMZN: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  GOOGL:{ assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  META: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  NFLX: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  AMD:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  INTC: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  BABA: { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+  DIS:  { assetClass: "stock-equity", apiSources: ["twelvedata", "polygon", "yahoo"], csvSources: [] },
+
+  // ── Bulk-registered symbols (added 2026 expansion) ─────────────────────────
+  // Same chains as the explicit entries above; declared via bulk() to keep
+  // the registry readable when we add 100+ tickers.
+
+  // Forex (extended majors + crosses + EM)
+  ...bulk(
+    ["EURCAD","EURNZD","EURNOK","EURSEK","EURPLN","EURHUF","EURCZK",
+     "GBPAUD","GBPCAD","GBPCHF","GBPNZD",
+     "AUDCAD","AUDCHF","AUDNZD",
+     "NZDJPY","NZDCAD","NZDCHF","CADCHF",
+     "USDMXN","USDZAR","USDTRY","USDSEK","USDNOK","USDDKK","USDPLN","USDHUF",
+     "USDCZK","USDSGD","USDHKD","USDCNH","USDTHB","USDKRW","USDINR","USDILS","USDBRL"],
+    "forex", FOREX_TWELVE_POLYGON, FOREX_CSV
+  ),
+
+  // Spot metals (extra non-USD quotes)
+  ...bulk(
+    ["XPTUSD","XPDUSD","XAUEUR","XAUGBP","XAUJPY","XAUAUD"],
+    "metals-spot", METALS_TWELVE_POLYGON, ["mt5","mt4","dukascopy"] as DataSource[]
+  ),
+
+  // Crypto (top 40+)
+  ...bulk(
+    ["BNBUSD","ADAUSD","DOGEUSD","AVAXUSD","DOTUSD","LINKUSD",
+     "MATICUSD","ATOMUSD","NEARUSD","ALGOUSD","FTMUSD",
+     "ICPUSD","APTUSD","SUIUSD","INJUSD",
+     "UNIUSD","AAVEUSD","MKRUSD","CRVUSD","COMPUSD","GRTUSD","LDOUSD",
+     "ARBUSD","OPUSD","STRKUSD","IMXUSD",
+     "LTCUSD","BCHUSD","XLMUSD","ETCUSD","EOSUSD","XMRUSD","TRXUSD",
+     "SHIBUSD","PEPEUSD","FLOKIUSD",
+     "SANDUSD","MANAUSD","AXSUSD","GALAUSD",
+     "FILUSD","ARUSD","RNDRUSD"],
+    "crypto", CRYPTO_TWELVE_POLYGON, CRYPTO_CSV
+  ),
+
+  // Stocks / ETFs — broad index, sector, commodity, volatility, megacaps
+  ...bulk(
+    ["VOO","VTI","VXUS","VEA","VWO","EEM","EFA",
+     "XLK","XLF","XLE","XLV","XLP","XLY","XLI","XLU","XLB","XLRE","XLC",
+     "GLD","SLV","USO","UNG","DBA","DBC","PDBC","GDX","GDXJ",
+     "UVXY","VIXY","VXX","SQQQ","TQQQ","SOXL","SOXS","TZA","TNA",
+     "GOOG","ORCL","CRM","ADBE","AVGO","CSCO","IBM","QCOM","TXN","MU","ASML","TSM",
+     "JPM","BAC","WFC","GS","MS","C","BLK","SCHW","AXP",
+     "V","MA","PYPL","SQ",
+     "JNJ","PFE","UNH","MRK","LLY","ABBV","TMO","ABT","BMY","AMGN",
+     "WMT","KO","PEP","MCD","NKE","SBUX","COST","HD","LOW","TGT","EL",
+     "XOM","CVX","COP","SLB","OXY","MPC","PSX",
+     "BA","CAT","DE","GE","HON","UPS","FDX","LMT","RTX",
+     "T","VZ","CMCSA","TMUS",
+     "F","GM","RIVN","LCID",
+     "COIN","MSTR","RIOT","MARA","HOOD"],
+    "stock-equity", STOCK_TWELVE_POLYGON, STOCK_CSV
+  ),
 };
 
 // ─── Capability matrix ────────────────────────────────────────────────────────
@@ -192,6 +273,9 @@ const SOURCE_TF_SUPPORT: Record<DataSource, Set<Timeframe>> = {
   cme:        new Set<Timeframe>(["D1"]),
   oanda:      new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1"]),
   fxratesapi: new Set<Timeframe>(["D1"]),  // metales spot, single-point per day → degenerate OHLC
+  polygon:    new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
+  twelvedata: new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
+  "polygon-futures": new Set<Timeframe>(["M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]),
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────

@@ -1,8 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database, Trash2, Info } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database, Trash2, Info, Wand2, Trophy } from "lucide-react";
 import { toast } from "sonner";
+import { useBacktestStream, type BacktestPhaseEvent } from "@/hooks/useBacktestStream";
+import { useAutoTuneStream, type AutoTuneTrial } from "@/hooks/useAutoTuneStream";
+
+/**
+ * Render the SSE phase event as a short Spanish label for the inline status
+ * line. Kept here (not in the hook) because the copy is product-facing.
+ */
+function formatPhaseLabel(ev: BacktestPhaseEvent): string {
+  switch (ev.phase) {
+    case "baseline":
+      return ev.step === "start" ? "Corriendo baseline…" : "Baseline listo";
+    case "monte_carlo":
+      if (ev.step === "start") return `Monte Carlo (${ev.total ?? "?"} iters)…`;
+      if (ev.step === "progress" && ev.current && ev.total) return `Monte Carlo ${ev.current}/${ev.total}`;
+      return "Monte Carlo listo";
+    case "walk_forward":
+      if (ev.step === "start") return `Walk-forward (${ev.total ?? "?"} ventanas)…`;
+      if (ev.step === "progress" && ev.current && ev.total) return `Walk-forward ventana ${ev.current}/${ev.total}`;
+      return "Walk-forward listo";
+    case "done":
+      return "Persistiendo resultados…";
+  }
+}
 import { EquityCurve } from "./EquityCurve";
 import { Mt5BarsImport } from "./Mt5BarsImport.client";
 
@@ -24,8 +47,6 @@ interface BacktestMetrics {
 }
 
 interface EquityRow { ts: string; equity: number; drawdown: number }
-
-interface PortfolioLegDraft { configId: string; symbol: string; weight: number }
 
 interface MonteCarloPayload {
   iterations: number;
@@ -201,22 +222,26 @@ export function EngineBacktestPanel({
   const [slAtrMult, setSl]            = useState("1.5");
   const [tpAtrMult, setTp]            = useState("3.0");
   const [mcIters, setMcIters]         = useState("0");
-  const [wfWindows, setWfWindows]     = useState("0");
+  // Walk-forward defaults to 4 windows (opt-out): every backtest validates
+  // consistency across 4 time slices to catch overfit. 0 disables it. The
+  // engine v1 silently returns {windows:[],...} when bars < 200*windows so
+  // the UI surfaces a warning in that case (see below near results render).
+  const [wfWindows, setWfWindows]     = useState("4");
   const [useMl, setUseMl]             = useState(false);
-  // Multi-TF and Portfolio are now wired in the sync flow (mirrors the async
-  // worker). Multi-TF loads higher-TF bars, builds an EMA50 bias cache and
-  // reports how many baseline trades contradict the higher TF + an alignment
-  // summary. Portfolio runs a multi-symbol backtest over the legs editor below,
-  // cloning the cfg per leg with initialBalance × normalized weight.
-  const [useMultiTf, setUseMultiTf]   = useState(false);
-  const [usePortfolio, setUsePortfolio] = useState(false);
-  const [portfolioLegs, setPortfolioLegs] = useState<PortfolioLegDraft[]>([
-    { configId: "leg-a", symbol: instruments[0] ?? "XAUUSD", weight: 0.5 },
-    { configId: "leg-b", symbol: instruments[1] ?? "EURUSD", weight: 0.5 },
-  ]);
+  // Multi-TF and Portfolio toggles are disabled in the sync flow on purpose
+  // (see Gap #4 hardening). Engine v1's SMC funnel already evaluates D1 → H1
+  // → M15 → M1, so an extra higher-TF filter would be redundant; the portfolio
+  // backtest needs SupabaseClient + per-leg legs editor which only live in the
+  // async flow. The toggles stay visible (with a disabled badge + tooltip) so
+  // users can discover the feature, but the wire-up always sends false here.
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [data, setData]               = useState<BacktestResponse | null>(null);
+  // SSE streaming hook — drives the live "Running baseline..." / "Walk-forward
+  // 3/5" text under the Run button while the backtest is in flight. Falls
+  // back to the JSON path when the user disables streaming or when SSE fails
+  // mid-flight (see runJsonFallback below).
+  const stream = useBacktestStream<BacktestResponse>();
   const [history, setHistory]         = useState<HistoryRow[]>([]);
   const [trainingMl, setTrainingMl]   = useState(false);
   const [mlStatus, setMlStatus]       = useState<string | null>(null);
@@ -229,6 +254,12 @@ export function EngineBacktestPanel({
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [symbolStatus, setSymbolStatus] = useState<Record<string, SymbolStatus> | null>(null);
+
+  // Auto-tune SL/TP grid (Mejora #6). The hook streams per-trial results;
+  // the modal stays open until the user closes it or applies the best combo.
+  const autoTune = useAutoTuneStream();
+  const [autoTuneOpen, setAutoTuneOpen] = useState(false);
+  const [savingTune, setSavingTune] = useState(false);
 
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
@@ -243,6 +274,13 @@ export function EngineBacktestPanel({
   useEffect(() => {
     refreshHistory();
   }, [algorithmId]);
+
+  // Open the auto-tune panel as soon as the stream starts. Without this,
+  // launching the tune programmatically (e.g. via hook from tests) or via
+  // a clicker that didn't toggle autoTuneOpen would leave the panel hidden.
+  useEffect(() => {
+    if (autoTune.isStreaming) setAutoTuneOpen(true);
+  }, [autoTune.isStreaming]);
 
   function loadRun(run: HistoryRow) {
     // Reconstruct a BacktestResponse-shaped payload from the stored row so
@@ -274,7 +312,8 @@ export function EngineBacktestPanel({
   function toggleCompare(runId: string) {
     setCompareIds((prev) => {
       if (prev.includes(runId)) return prev.filter((x) => x !== runId);
-      if (prev.length >= 2) return [prev[1], runId];  // keep last 2, FIFO
+      // FIFO of 3: keep the 2 newest + the just-clicked one when at cap.
+      if (prev.length >= 3) return [prev[1], prev[2], runId];
       return [...prev, runId];
     });
   }
@@ -458,70 +497,124 @@ export function EngineBacktestPanel({
     }
   }
 
-  async function run() {
+  // Auto-tune SL/TP grid (Mejora #6). Streams ~29 trials over SSE, ranks by
+  // Sharpe (tie-break on totalPnl), shows progress + top 5 in a modal, and
+  // optionally writes the best combo to algorithms.parameters under
+  // `sl_atr_mult_recommended` / `tp_atr_mult_recommended` namespaces.
+  function startAutoTune() {
     if (instruments.length === 0) {
       toast.error("La estrategia no tiene instrumentos");
       return;
     }
-    // Portfolio guardrails — match the server-side Zod schema (2..10 legs, each
-    // with a non-empty configId/symbol and weight > 0) so the user gets an
-    // inline error instead of a 400.
-    if (usePortfolio) {
-      if (portfolioLegs.length < 2) {
-        toast.error("Portfolio necesita al menos 2 legs");
-        return;
-      }
-      if (portfolioLegs.length > 10) {
-        toast.error("Portfolio admite como máximo 10 legs");
-        return;
-      }
-      if (portfolioLegs.some((l) => !l.configId.trim() || !l.symbol.trim() || l.weight <= 0)) {
-        toast.error("Cada leg necesita configId, symbol y weight > 0");
-        return;
-      }
+    if (!symbol) {
+      toast.error("Elegí un símbolo primero");
+      return;
     }
-    setLoading(true);
-    setError(null);
+    autoTune.reset();
+    setAutoTuneOpen(true);
+    autoTune.start(`/api/algorithms/${algorithmId}/engine-backtest/auto-tune`, {
+      symbol,
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+      starting_equity: Number(startingEquity) || 10_000,
+    });
+  }
+
+  async function applyAutoTuneBest() {
+    const best = autoTune.best;
+    if (!best) return;
+    setSavingTune(true);
     try {
-      const res = await fetch(`/api/algorithms/${algorithmId}/engine-backtest`, {
-        method: "POST",
+      // PUT /api/algorithms/[id] replaces `parameters` wholesale, so we
+      // fetch the current value first and merge the auto-tune keys into it.
+      // Without this, the kelly_* / arb_gap_min / multi-tf weights would
+      // disappear after a single Apply click.
+      const currentRes = await fetch(`/api/algorithms/${algorithmId}`, { cache: "no-store" });
+      let currentParams: Record<string, unknown> = {};
+      if (currentRes.ok) {
+        const cur = await currentRes.json().catch(() => ({}));
+        currentParams = (cur?.algorithm?.parameters as Record<string, unknown> | undefined) ?? (cur?.parameters as Record<string, unknown> | undefined) ?? {};
+      }
+      const mergedParams = {
+        ...currentParams,
+        sl_atr_mult_recommended: best.slAtrMult,
+        tp_atr_mult_recommended: best.tpAtrMult,
+        auto_tune_best_sharpe:   best.sharpe,
+        auto_tune_run_at:        new Date().toISOString(),
+      };
+      const res = await fetch(`/api/algorithms/${algorithmId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbol,
-          from: new Date(from).toISOString(),
-          to:   new Date(to).toISOString(),
-          starting_equity: Number(startingEquity) || 10000,
-          sl_atr_mult: Number(slAtrMult) || 1.5,
-          tp_atr_mult: Number(tpAtrMult) || 3.0,
-          monte_carlo_iterations: Number(mcIters) || 0,
-          walk_forward_windows: Number(wfWindows) || 0,
-          use_ml: useMl,
-          use_multi_tf: useMultiTf,
-          use_portfolio: usePortfolio,
-          ...(usePortfolio ? { legs: portfolioLegs } : {}),
-        }),
+        body: JSON.stringify({ parameters: mergedParams }),
       });
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        setError(j.error || `HTTP ${res.status}`);
-        toast.error(j.error || "Backtest falló");
+        toast.error(json.error || `HTTP ${res.status}`);
         return;
       }
-      const json = (await res.json()) as BacktestResponse;
-      setData(json);
-      toast.success(`Backtest completado en ${json.result.durationMs}ms`);
-      if (json.promoted) {
+      // Update the live inputs so the next Validar Engine uses the best combo.
+      setSl(String(best.slAtrMult));
+      setTp(String(best.tpAtrMult));
+      toast.success(`Aplicado: SL=${best.slAtrMult} TP=${best.tpAtrMult} (Sharpe ${best.sharpe.toFixed(2)})`);
+      setAutoTuneOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setSavingTune(false);
+    }
+  }
+
+  function run() {
+    if (instruments.length === 0) {
+      toast.error("La estrategia no tiene instrumentos");
+      return;
+    }
+    setError(null);
+    setData(null);
+    stream.start(
+      `/api/algorithms/${algorithmId}/engine-backtest?stream=true`,
+      {
+        symbol,
+        from: new Date(from).toISOString(),
+        to:   new Date(to).toISOString(),
+        starting_equity: Number(startingEquity) || 10000,
+        sl_atr_mult: Number(slAtrMult) || 1.5,
+        tp_atr_mult: Number(tpAtrMult) || 3.0,
+        monte_carlo_iterations: Number(mcIters) || 0,
+        walk_forward_windows: Number(wfWindows) || 0,
+        use_ml: useMl,
+        use_multi_tf: false,
+        use_portfolio: false,
+      },
+    );
+  }
+
+  // Bridge the streaming hook into the existing setData/setError/toast UX.
+  // Keeping these as effects (instead of plumbing the hook directly into the
+  // render) lets the rest of the component stay unchanged: the chart and
+  // tables still read from `data`, error banner from `error`, etc.
+  useEffect(() => {
+    setLoading(stream.isStreaming);
+  }, [stream.isStreaming]);
+
+  useEffect(() => {
+    if (stream.error) {
+      setError(stream.error);
+      toast.error(stream.error);
+    }
+  }, [stream.error]);
+
+  useEffect(() => {
+    if (stream.result) {
+      setData(stream.result);
+      toast.success(`Backtest completado en ${stream.result.result.durationMs}ms`);
+      if (stream.result.promoted) {
         toast.success("Estrategia promovida a Paper — pasó todos los quality gates");
       }
       refreshHistory();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Error de conexión";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.result]);
 
   const metrics = data?.result.metrics;
   const equityPoints = data?.result.equityCurve.map((p) => ({
@@ -731,10 +824,10 @@ export function EngineBacktestPanel({
         }}
       />
 
-      {/* Compare: pick up to 2 runs from history */}
+      {/* Compare: pick up to 3 runs from history */}
       {history.length >= 2 && (
         <div className="space-y-2">
-          <p className="text-[10px] text-[#475569] uppercase tracking-wider">Comparar runs — elige hasta 2</p>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider">Comparar runs — elige hasta 3</p>
           <div className="flex flex-wrap gap-1.5">
             {history.slice(0, 12).map((r) => {
               const selected = compareIds.includes(r.id);
@@ -770,8 +863,8 @@ export function EngineBacktestPanel({
         </div>
       )}
 
-      {compareRuns.length === 2 && (
-        <CompareView a={compareRuns[0]} b={compareRuns[1]} algorithmId={algorithmId} />
+      {compareRuns.length >= 2 && (
+        <CompareView runs={compareRuns} algorithmId={algorithmId} />
       )}
 
       {/* Research-mode capital banner — only when the algorithm has no cuenta
@@ -891,7 +984,7 @@ export function EngineBacktestPanel({
             className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
         </div>
         <div>
-          <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1" title="0 = saltar. 4 ventanas recomendado.">Walk-Fwd ventanas</label>
+          <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1" title="Valida consistencia partiendo el rango en N ventanas independientes. 4 por default; 0 desactiva. Requiere ≥200 bars × N.">Walk-forward (auto)</label>
           <input type="number" value={wfWindows} onChange={(e) => setWfWindows(e.target.value)} step="1" min="0" max="12"
             className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-xs px-2 py-1.5 focus:outline-none" />
         </div>
@@ -900,10 +993,10 @@ export function EngineBacktestPanel({
       <div className="border border-[#1f2937] rounded-lg p-3 space-y-2" data-testid="advanced-toggles">
         <div className="flex items-center gap-2 mb-1">
           <Brain size={11} className="text-[#a78bfa]" />
-          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado (opt-in)</p>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider font-medium">Pipeline avanzado · solo ML disponible en sync</p>
         </div>
         <p className="text-[10px] text-[#475569]">
-          ML, Multi-TF y Portfolio corren in-request. Multi-TF reporta cuántos trades del baseline contradicen los TFs superiores; Portfolio corre multi-símbolo sobre los legs.
+          Multi-TF y Portfolio viven en el flujo async — abrí <span className="font-mono text-[#06b6d4]">Backtest &amp; Validation</span> para configurarlos.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
           <label className="flex items-start gap-2 cursor-pointer" title="Logreg sobre features técnicas (RSI, ATR, EMA spread) con label de retorno forward.">
@@ -919,92 +1012,35 @@ export function EngineBacktestPanel({
               <span className="block text-[10px] text-[#475569]">Train/valid acc + feature names</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 cursor-pointer" title="Carga bars de TFs superiores (H4 + D1), construye un bias cache EMA50 y reporta cuántos trades del baseline contradicen el TF superior.">
+          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Engine v1 ya evalúa el funnel D1 → H1 → M15 → M1 nativamente. El filtro de TF superior solo aplica al engine genérico del flujo async.">
             <input
               type="checkbox"
-              checked={useMultiTf}
-              onChange={(e) => setUseMultiTf(e.target.checked)}
+              checked={false}
+              disabled
+              readOnly
               className="mt-0.5 accent-[#a78bfa]"
               data-testid="toggle-use-multi-tf"
             />
             <span className="text-[11px] text-[#cbd5e1]">
               <span className="font-medium">Multi-TF</span>
-              <span className="block text-[10px] text-[#475569]">Bias H4 + D1 · trades filtrados</span>
+              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">ya integrado en SMC funnel</span>
             </span>
           </label>
-          <label className="flex items-start gap-2 cursor-pointer" title="Multi-símbolo. Cada leg corre la misma estrategia sobre su symbol con initialBalance × weight normalizado.">
+          <label className="flex items-start gap-2 opacity-50 cursor-not-allowed" title="Multi-símbolo necesita editor de legs + SupabaseClient. Disponible en /algorithms/[id] → Backtest & Validation.">
             <input
               type="checkbox"
-              checked={usePortfolio}
-              onChange={(e) => setUsePortfolio(e.target.checked)}
+              checked={false}
+              disabled
+              readOnly
               className="mt-0.5 accent-[#a78bfa]"
               data-testid="toggle-use-portfolio"
             />
             <span className="text-[11px] text-[#cbd5e1]">
               <span className="font-medium">Portfolio</span>
-              <span className="block text-[10px] text-[#475569]">Multi-símbolo · matriz de correlación</span>
+              <span className="block text-[9px] text-[#fbbf24] uppercase tracking-wide">solo en flujo async</span>
             </span>
           </label>
         </div>
-
-        {/* Portfolio legs editor — only when portfolio is ON. Mirrors the async
-            flow's BacktestPanel: 2..10 legs, each with configId/symbol/weight.
-            Weights are normalized server-side. */}
-        {usePortfolio && (
-          <div className="border-t border-[#1f2937] pt-2 space-y-1.5" data-testid="portfolio-legs-editor">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-[#475569] uppercase tracking-wide font-medium">Legs (mínimo 2 · máximo 10)</p>
-              <button
-                type="button"
-                onClick={() => setPortfolioLegs((legs) => [...legs, { configId: `leg-${legs.length + 1}`, symbol: instruments[0] ?? "EURUSD", weight: 0.25 }])}
-                disabled={portfolioLegs.length >= 10}
-                className="text-[10px] px-2 py-0.5 rounded bg-[#a78bfa]/10 text-[#a78bfa] hover:bg-[#a78bfa]/20 disabled:opacity-40"
-                data-testid="portfolio-add-leg"
-              >
-                + leg
-              </button>
-            </div>
-            {portfolioLegs.map((leg, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
-                <input
-                  value={leg.configId}
-                  onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, configId: e.target.value } : l))}
-                  className="col-span-4 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-[10px] px-2 py-1 focus:outline-none font-mono"
-                  placeholder="leg id"
-                  aria-label={`leg ${idx + 1} id`}
-                />
-                <input
-                  value={leg.symbol}
-                  onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, symbol: e.target.value.toUpperCase() } : l))}
-                  className="col-span-4 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-[10px] px-2 py-1 focus:outline-none font-mono"
-                  placeholder="SYMBOL"
-                  aria-label={`leg ${idx + 1} symbol`}
-                />
-                <input
-                  type="number"
-                  step={0.05}
-                  min={0.05}
-                  max={1}
-                  value={leg.weight}
-                  onChange={(e) => setPortfolioLegs((legs) => legs.map((l, i) => i === idx ? { ...l, weight: Number(e.target.value) } : l))}
-                  className="col-span-3 rounded bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-[10px] px-2 py-1 focus:outline-none font-mono"
-                  placeholder="weight"
-                  aria-label={`leg ${idx + 1} weight`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setPortfolioLegs((legs) => legs.filter((_, i) => i !== idx))}
-                  disabled={portfolioLegs.length <= 2}
-                  className="col-span-1 text-[#ef4444] hover:text-[#fca5a5] disabled:opacity-30 text-xs"
-                  aria-label={`remove leg ${idx + 1}`}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <p className="text-[9px] text-[#475569]">Los weights se normalizan internamente al total. Capital inicial × weight por leg.</p>
-          </div>
-        )}
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -1037,11 +1073,32 @@ export function EngineBacktestPanel({
           {trainingMl ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
           {trainingMl ? "Entrenando…" : "Entrenar ML"}
         </button>
+        <button
+          type="button"
+          onClick={startAutoTune}
+          disabled={autoTune.isStreaming || !symbol}
+          data-testid="auto-tune-button"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f2937] border border-[#fbbf24]/30 text-[#fbbf24] text-xs font-bold transition-all hover:border-[#fbbf24]/60 disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Grid search SL [1.0–3.0] × TP [2.0–5.0] step 0.5. Skipea TP≤SL. ~29 combos, ~30s con SSE streaming."
+        >
+          {autoTune.isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+          {autoTune.isStreaming ? `Tuning ${autoTune.progress?.current ?? 0}/${autoTune.progress?.total ?? "?"}…` : "Auto-tune SL/TP"}
+        </button>
         {bootstrapStatus && (
           <span className="text-[10px] font-mono text-[#475569]">{bootstrapStatus}</span>
         )}
         {mlStatus && (
           <span className="text-[10px] font-mono text-[#475569]">{mlStatus}</span>
+        )}
+        {/* Live phase progress from the SSE stream. Replaces the silent wait
+            that previously made the backtest "feel hung" — the user now sees
+            which phase is running, and Monte Carlo / Walk-Forward also show
+            current/total iterations. */}
+        {stream.isStreaming && stream.phase && (
+          <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#a78bfa]" aria-live="polite">
+            <Loader2 size={10} className="animate-spin" />
+            {formatPhaseLabel(stream.phase)}
+          </span>
         )}
         {data && (
           <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
@@ -1050,6 +1107,23 @@ export function EngineBacktestPanel({
           </div>
         )}
       </div>
+
+      {/* Auto-tune SL/TP panel (Mejora #6). Renders while streaming AND after
+          done; lets the user inspect top 5 trials by Sharpe + apply the best
+          combo to algorithms.parameters as a recommendation. */}
+      {autoTuneOpen && (
+        <AutoTuneResults
+          isStreaming={autoTune.isStreaming}
+          isDone={autoTune.isDone}
+          trials={autoTune.trials}
+          best={autoTune.best}
+          progress={autoTune.progress}
+          error={autoTune.error}
+          savingTune={savingTune}
+          onApply={applyAutoTuneBest}
+          onClose={() => { autoTune.abort(); setAutoTuneOpen(false); }}
+        />
+      )}
 
       {/* Data availability panel — driven by the per-symbol registry. Surfaces
           actionable warnings when a symbol has zero API coverage (e.g. XAUUSD
@@ -1241,6 +1315,19 @@ export function EngineBacktestPanel({
             </div>
           )}
 
+          {/* Walk-forward skipped because of insufficient bars. Engine v1
+              returns {windows:[],...} when bars < 200*requestedWindows. Make
+              that case loud so the user understands WHY there's no WF table
+              and can act (shorter range, fewer windows). */}
+          {data.walk_forward && data.walk_forward.windows.length === 0 && Number(wfWindows) > 0 && (
+            <div className="bg-[#1f1408] border border-[#f59e0b]/40 rounded-lg p-3 flex items-start gap-2" data-testid="walk-forward-insufficient">
+              <AlertCircle size={12} className="text-[#f59e0b] mt-0.5 shrink-0" />
+              <div className="text-[10px] text-[#f59e0b]">
+                Walk-forward requiere ≥{200 * Number(wfWindows)} bars para {wfWindows} ventanas. Subí el rango histórico o reducí el número de ventanas.
+              </div>
+            </div>
+          )}
+
           {data.advanced && (
             <div className="bg-[#151b28] border border-[#a78bfa]/30 rounded-lg p-3 space-y-2" data-testid="advanced-results">
               <div className="flex items-center gap-2">
@@ -1266,26 +1353,7 @@ export function EngineBacktestPanel({
                   <div className="bg-[#0a0e1a] border border-[#1f2937] rounded p-2 space-y-1">
                     <p className="text-[10px] text-[#475569] uppercase tracking-wider">Multi-TF</p>
                     <p className="text-[11px] text-[#e2e8f0] font-mono">{data.advanced.multiTf.higherTimeframes.join(" · ")}</p>
-                    {data.advanced.multiTf.status === "completed" ? (
-                      <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
-                        <span className="text-[#475569]">trades filtrados</span>
-                        <span className="text-right text-[#fbbf24]">{data.advanced.multiTf.tradesFilteredCount}</span>
-                        <span className="text-[#475569]">primary bars</span>
-                        <span className="text-right text-[#e2e8f0]">{data.advanced.multiTf.alignment.totalPrimaryBars}</span>
-                        {Object.entries(data.advanced.multiTf.alignment.byTf).map(([tf, a]) => (
-                          <span key={tf} className="col-span-2 text-[9px] text-[#475569]">
-                            {tf}: <span className="text-[#34d399]">{a.bull}↑</span> · <span className="text-[#ef4444]">{a.bear}↓</span> · {a.neutral}–
-                          </span>
-                        ))}
-                      </div>
-                    ) : data.advanced.multiTf.status === "failed" ? (
-                      <>
-                        <p className="text-[10px] text-[#ef4444] font-mono">failed</p>
-                        <p className="text-[9px] text-[#475569]">{data.advanced.multiTf.reason}</p>
-                      </>
-                    ) : (
-                      <p className="text-[9px] text-[#fbbf24]">pending</p>
-                    )}
+                    <p className="text-[9px] text-[#475569]">intent surfaced</p>
                   </div>
                 ) : null}
                 {data.advanced.portfolio ? (
@@ -1371,47 +1439,107 @@ function fmt(v: number | undefined, kind: "pct" | "num" | "money"): string {
   return v.toFixed(2);
 }
 
-function CompareView({ a, b, algorithmId }: { a: HistoryRow; b: HistoryRow; algorithmId: string }) {
-  const aEquity = (a.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity }));
-  const bEquity = (b.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity }));
+// Params snapshot (Mejora #7). The engine-backtest route persists this subset
+// of the body into engine_backtest_runs.params (jsonb). Showing them alongside
+// the metrics in CompareView closes the "why did C win?" loop — the user can
+// see at a glance which inputs differed between runs.
+const COMPARE_PARAMS: { key: string; label: string; kind: "num" | "money" | "bool" | "int" }[] = [
+  { key: "starting_equity",         label: "Starting Equity",  kind: "money" },
+  { key: "sl_atr_mult",             label: "SL × ATR",         kind: "num"   },
+  { key: "tp_atr_mult",             label: "TP × ATR",         kind: "num"   },
+  { key: "monte_carlo_iterations",  label: "Monte Carlo",      kind: "int"   },
+  { key: "walk_forward_windows",    label: "Walk-Forward",     kind: "int"   },
+  { key: "use_ml",                  label: "ML overlay",       kind: "bool"  },
+  { key: "use_multi_tf_requested",  label: "Multi-TF req.",    kind: "bool"  },
+  { key: "use_portfolio_requested", label: "Portfolio req.",   kind: "bool"  },
+];
+
+function fmtParam(v: unknown, kind: "num" | "money" | "bool" | "int"): string {
+  if (v == null) return "—";
+  if (kind === "bool") {
+    if (typeof v !== "boolean") return "—";
+    return v ? "Sí" : "No";
+  }
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+  if (kind === "money") return `$${v.toLocaleString()}`;
+  if (kind === "int")   return v.toLocaleString();
+  // num: always 2 decimals so 1.5 and 2.0 render with comparable digit width
+  return v.toFixed(2);
+}
+
+/**
+ * True when every value is identical under JSON-equivalence. Used to pick
+ * between neutral (gray) and per-run-color rendering for each param row.
+ *
+ * JSON.stringify normalizes undefined→null so `[undefined, null]` reads as
+ * equal, which is correct for our "missing key" treatment. NaN serializes to
+ * "null" too — won't occur for the persisted params (Zod rejects NaN at
+ * ingest), but worth knowing in case the shape ever loosens.
+ */
+function paramsAllEqual(vals: unknown[]): boolean {
+  if (vals.length < 2) return true;
+  const first = JSON.stringify(vals[0] ?? null);
+  return vals.every((v) => JSON.stringify(v ?? null) === first);
+}
+
+// Compare view — generic for N runs (2 or 3). Mejora #5 extended this from
+// hardcoded 2-column layout to dynamic N columns with a single overlapped
+// equity chart. Colors and labels follow stable A/B/C positions so the
+// winner highlight (◄) and the chart legend stay in sync.
+const COMPARE_COLORS = ["#a78bfa", "#22d3ee", "#fbbf24"] as const;  // purple, cyan, yellow
+const COMPARE_LABELS = ["A", "B", "C"] as const;
+
+function CompareView({ runs, algorithmId }: { runs: HistoryRow[]; algorithmId: string }) {
+  const series = runs
+    .map((r, i) => ({
+      points: (r.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity })),
+      color: COMPARE_COLORS[i],
+      label: `${COMPARE_LABELS[i]} · ${r.symbol}`,
+    }))
+    .filter((s) => s.points.length > 1);
+
+  const labelsTitle = runs.map((_, i) => COMPARE_LABELS[i]).join(" vs ");
 
   return (
     <div className="bg-[#151b28] border border-[#a78bfa]/30 rounded-lg p-3 space-y-3">
-      <p className="text-[10px] text-[#a78bfa] uppercase tracking-wider font-medium">Comparación A vs B</p>
+      <p className="text-[10px] text-[#a78bfa] uppercase tracking-wider font-medium">Comparación {labelsTitle}</p>
 
       <div className="overflow-x-auto">
         <table className="w-full text-[11px] font-mono">
           <thead className="text-[#475569]">
             <tr>
               <th className="text-left py-1 px-2">Métrica</th>
-              <th className="text-right py-1 px-2">
-                A · {new Date(a.created_at).toLocaleDateString()} · {a.symbol}
-              </th>
-              <th className="text-right py-1 px-2">
-                B · {new Date(b.created_at).toLocaleDateString()} · {b.symbol}
-              </th>
+              {runs.map((r, i) => (
+                <th key={r.id} className="text-right py-1 px-2" style={{ color: COMPARE_COLORS[i] }}>
+                  {COMPARE_LABELS[i]} · {new Date(r.created_at).toLocaleDateString()} · {r.symbol}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {COMPARE_METRICS.map((m) => {
-              const av = a.baseline_metrics[m.key] as number | undefined;
-              const bv = b.baseline_metrics[m.key] as number | undefined;
-              let aWins = false;
-              let bWins = false;
-              if (av != null && bv != null && Number.isFinite(av) && Number.isFinite(bv) && av !== bv) {
+              const vals = runs.map((r) => r.baseline_metrics[m.key] as number | undefined);
+              const numeric = vals
+                .map((v, i) => ({ v, i }))
+                .filter((x): x is { v: number; i: number } => x.v != null && Number.isFinite(x.v));
+              let winnerIdx = -1;
+              if (numeric.length >= 2) {
                 const lowerBetter = LOWER_IS_BETTER.has(m.key as string);
-                aWins = lowerBetter ? av < bv : av > bv;
-                bWins = !aWins;
+                const sorted = [...numeric].sort((a, b) => lowerBetter ? a.v - b.v : b.v - a.v);
+                // Only highlight a winner when there's a strict best (no tie at the top).
+                if (sorted[0].v !== sorted[1].v) winnerIdx = sorted[0].i;
               }
               return (
                 <tr key={m.key as string} className="border-t border-[#1f2937]">
                   <td className="py-1 px-2 text-[#94a3b8]">{m.label}</td>
-                  <td className={`py-1 px-2 text-right ${aWins ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
-                    {fmt(av, m.kind)}{aWins ? " ◄" : ""}
-                  </td>
-                  <td className={`py-1 px-2 text-right ${bWins ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
-                    {fmt(bv, m.kind)}{bWins ? " ◄" : ""}
-                  </td>
+                  {vals.map((v, i) => {
+                    const isWinner = i === winnerIdx;
+                    return (
+                      <td key={i} className={`py-1 px-2 text-right ${isWinner ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
+                        {fmt(v, m.kind)}{isWinner ? " ◄" : ""}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -1419,20 +1547,162 @@ function CompareView({ a, b, algorithmId }: { a: HistoryRow; b: HistoryRow; algo
         </table>
       </div>
 
-      {(aEquity.length > 1 || bEquity.length > 1) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
-            <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity A</p>
-            {aEquity.length > 1
-              ? <EquityCurve points={aEquity} height={100} algoId={`${algorithmId}-cmp-a`} />
-              : <p className="text-[10px] text-[#2d3748] text-center py-8">sin equity curve</p>}
+      {/* Params snapshot (Mejora #7). Same column layout as the metrics table
+          above. Rows where every run shares the same value render gray;
+          rows that differ render each cell in the column's accent color, so
+          the user can scan vertically for "what changed". */}
+      <div className="overflow-x-auto pt-2 border-t border-[#1f2937]" data-testid="compare-params">
+        <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2 px-2">Params usados</p>
+        <table className="w-full text-[11px] font-mono">
+          <tbody>
+            {COMPARE_PARAMS.map((p) => {
+              const vals = runs.map((r) => (r.params ?? {})[p.key]);
+              const allEqual = paramsAllEqual(vals);
+              return (
+                <tr key={p.key} className="border-t border-[#1f2937]">
+                  <td className="py-1 px-2 text-[#94a3b8]">{p.label}</td>
+                  {vals.map((v, i) => (
+                    <td
+                      key={i}
+                      className="py-1 px-2 text-right"
+                      style={{ color: allEqual ? "#475569" : COMPARE_COLORS[i] }}
+                      data-testid={`param-cell-${p.key}-${i}`}
+                    >
+                      {fmtParam(v, p.kind)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {series.length > 0 && (
+        <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
+          <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity curves (overlap)</p>
+          <EquityCurve series={series} height={140} algoId={`${algorithmId}-cmp`} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Auto-tune results panel (Mejora #6) ────────────────────────────────────
+//
+// Embedded section (not a portal modal) that renders the grid sweep state:
+// progress bar while streaming, top 5 by Sharpe sorted desc when done, plus
+// the "Aplicar y guardar" action that persists the best combo into
+// algorithms.parameters.
+
+function AutoTuneResults({
+  isStreaming,
+  isDone,
+  trials,
+  best,
+  progress,
+  error,
+  savingTune,
+  onApply,
+  onClose,
+}: {
+  isStreaming: boolean;
+  isDone: boolean;
+  trials: AutoTuneTrial[];
+  best: AutoTuneTrial | null;
+  progress: { current: number; total: number } | null;
+  error: string | null;
+  savingTune: boolean;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  const top5 = [...trials]
+    .sort((a, b) => b.sharpe - a.sharpe || b.totalPnl - a.totalPnl)
+    .slice(0, 5);
+
+  return (
+    <div className="bg-[#151b28] border border-[#fbbf24]/30 rounded-lg p-3 space-y-3" data-testid="auto-tune-results">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-[#fbbf24] uppercase tracking-wider font-medium flex items-center gap-1.5">
+          <Wand2 size={11} /> Auto-tune SL/TP {progress && `· ${progress.current}/${progress.total}`}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-[10px] text-[#475569] hover:text-[#e2e8f0] transition-colors"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      {error && (
+        <div className="text-[10px] text-[#ef4444] font-mono">{error}</div>
+      )}
+
+      {isStreaming && progress && (
+        <div className="space-y-1">
+          <div className="h-1 bg-[#0a0e1a] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#fbbf24] transition-all"
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
           </div>
-          <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
-            <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity B</p>
-            {bEquity.length > 1
-              ? <EquityCurve points={bEquity} height={100} algoId={`${algorithmId}-cmp-b`} />
-              : <p className="text-[10px] text-[#2d3748] text-center py-8">sin equity curve</p>}
+          <p className="text-[10px] text-[#475569] font-mono">
+            Probando {progress.current}/{progress.total} combos · best Sharpe hasta ahora: {best?.sharpe.toFixed(2) ?? "—"}
+          </p>
+        </div>
+      )}
+
+      {trials.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px] font-mono">
+            <thead className="text-[#475569]">
+              <tr>
+                <th className="text-left py-1 px-2">#</th>
+                <th className="text-right py-1 px-2">SL × ATR</th>
+                <th className="text-right py-1 px-2">TP × ATR</th>
+                <th className="text-right py-1 px-2">Sharpe</th>
+                <th className="text-right py-1 px-2">PnL</th>
+                <th className="text-right py-1 px-2">Win Rate</th>
+                <th className="text-right py-1 px-2">Max DD</th>
+                <th className="text-right py-1 px-2">Trades</th>
+              </tr>
+            </thead>
+            <tbody>
+              {top5.map((t, i) => {
+                const isWinner = i === 0 && isDone;
+                return (
+                  <tr key={`${t.slAtrMult}-${t.tpAtrMult}`} className="border-t border-[#1f2937]">
+                    <td className="py-1 px-2 text-[#94a3b8]">{isWinner ? <Trophy size={10} className="inline text-[#fbbf24]" /> : i + 1}</td>
+                    <td className="py-1 px-2 text-right">{t.slAtrMult.toFixed(1)}</td>
+                    <td className="py-1 px-2 text-right">{t.tpAtrMult.toFixed(1)}</td>
+                    <td className={`py-1 px-2 text-right ${isWinner ? "text-[#34d399] font-bold" : "text-[#22d3ee]"}`}>{t.sharpe.toFixed(2)}</td>
+                    <td className={`py-1 px-2 text-right ${t.totalPnl >= 0 ? "text-[#34d399]" : "text-[#ef4444]"}`}>${t.totalPnl.toFixed(0)}</td>
+                    <td className="py-1 px-2 text-right">{(t.winRate * 100).toFixed(1)}%</td>
+                    <td className="py-1 px-2 text-right text-[#ef4444]">{(t.maxDrawdownPct * 100).toFixed(1)}%</td>
+                    <td className="py-1 px-2 text-right text-[#475569]">{t.trades}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {isDone && best && (
+        <div className="flex items-center justify-between bg-[#0a0e1a] border border-[#34d399]/30 rounded p-2">
+          <div className="text-[10px] text-[#34d399]">
+            <span className="font-bold">Best:</span> SL={best.slAtrMult.toFixed(1)} · TP={best.tpAtrMult.toFixed(1)} · Sharpe {best.sharpe.toFixed(2)} · PnL ${best.totalPnl.toFixed(0)}
           </div>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={savingTune}
+            className="px-3 py-1.5 rounded-lg bg-[#34d399] hover:bg-[#22b67c] text-[#0a0e1a] text-[10px] font-bold transition-all disabled:opacity-40"
+            data-testid="auto-tune-apply"
+          >
+            {savingTune ? "Guardando…" : "Aplicar y guardar"}
+          </button>
         </div>
       )}
     </div>

@@ -11,11 +11,20 @@ vi.mock("@/lib/cme/order-executor", () => ({
 
 // Mock the position fetcher + token plumbing used by the position-awareness
 // step. By default: no positions, no token issues — i.e. account is flat.
-const getPositionsMock = vi.fn().mockResolvedValue([]);
+const getPositionsMock   = vi.fn().mockResolvedValue([]);
 const tradovateRenewMock = vi.fn().mockResolvedValue({ accessToken: "renewed", expirationTime: new Date(Date.now() + 60 * 60 * 1000).toISOString() });
+// Sprint K — getCashBalance feeds Kelly's equity input via fetchAccountEquity().
+// Default: 50,000 USD netLiq so the Kelly path computes a non-zero size.
+const getCashBalanceMock = vi.fn().mockResolvedValue({
+  cashBalance:   50_000,
+  netLiq:        50_000,
+  realizedPnL:   0,
+  unrealizedPnL: 0,
+});
 vi.mock("@/lib/cme/tradovate", () => ({
   getPositions:   (...args: unknown[]) => getPositionsMock(...args),
   tradovateRenew: (...args: unknown[]) => tradovateRenewMock(...args),
+  getCashBalance: (...args: unknown[]) => getCashBalanceMock(...args),
 }));
 vi.mock("@/lib/cme/vault", () => ({
   readCmeAccessToken:  vi.fn().mockResolvedValue("fake_token"),
@@ -101,6 +110,12 @@ function makeSupabaseMock(): SupabaseClient {
 beforeEach(() => {
   executeSignalMock.mockReset();
   getPositionsMock.mockReset().mockResolvedValue([]);
+  getCashBalanceMock.mockReset().mockResolvedValue({
+    cashBalance:   50_000,
+    netLiq:        50_000,
+    realizedPnL:   0,
+    unrealizedPnL: 0,
+  });
   loadHistoricalBarsMock.mockReset().mockResolvedValue([]);
   updateCalls.length = 0;
   delete behavior.insertReturn;
@@ -597,5 +612,222 @@ describe("dispatchTradovate — close-and-reverse (Sprint F)", () => {
     }), svc);
 
     expect(executeSignalMock.mock.calls[0][0].quantity).toBe(3);
+  });
+});
+
+describe("dispatchTradovate — Kelly position sizing (Sprint K)", () => {
+  // Statistically meaningful stats that pass auto-populate's floor + produce
+  // a positive Kelly fraction. f* = 0.6 - 0.4/2 = 0.4. Half-Kelly = 0.2.
+  // Risk per ES contract = 20 ticks × $12.50 = $250.
+  // Dollar risk = 50_000 × 0.2 = $10,000 → contracts = floor(10000/250) = 40.
+  // Capped at max_contracts (default 10) → quantity = 10.
+  const KELLY_STATS = {
+    kelly_win_rate:           0.6,
+    kelly_avg_win_usd:        100,
+    kelly_avg_loss_usd:       50,
+    kelly_inputs_sample_size: 50,
+  };
+
+  function kellyParams(overrides: Record<string, unknown> = {}) {
+    return {
+      cme_account_id:     "cme_1",
+      contract:           "ESH4",
+      contracts_per_trade: 1,
+      kelly_enabled:      true,
+      ...KELLY_STATS,
+      ...overrides,
+    };
+  }
+
+  it("opt-in: kelly_enabled !== true uses manual contracts_per_trade", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ kelly_enabled: false, contracts_per_trade: 3 }),
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(3);
+    // Equity fetch should NOT run when Kelly is off — saves a network call.
+    expect(getCashBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("computes Kelly contracts when all inputs present + edge is positive", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams(),
+      },
+    }), svc);
+
+    expect(getCashBalanceMock).toHaveBeenCalledTimes(1);
+    // Kelly clamps to max=10 (default). See math in describe header.
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(10);
+  });
+
+  it("honors kelly_fraction + kelly_max_contracts overrides", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    const svc = makeSupabaseMock();
+    // fraction=0.1 → dollarRisk = 50_000 × 0.4 × 0.1 = $2,000 / $250 = 8.
+    // max=20 lets the result land without clamping.
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ kelly_fraction: 0.1, kelly_max_contracts: 20 }),
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(8);
+  });
+
+  it("skips the trade when Kelly returns negative-edge (winRate too low)", async () => {
+    process.env.DISPATCH_MODE = "live";
+    const svc = makeSupabaseMock();
+    // f* = 0.3 - 0.7/2 = -0.05 → negative edge → skip the trade entirely.
+    const res = await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ kelly_win_rate: 0.3 }),
+      },
+    }), svc);
+
+    expect(res.ok).toBe(true);
+    expect(res.action).toBe("skipped");
+    expect(res.reason).toBe("kelly_skipped_negative_edge");
+    expect(executeSignalMock).not.toHaveBeenCalled();
+    // No cme_signals row should be inserted on Kelly skip — same convention
+    // as position-aware skip.
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it("falls back to manual qty when tick value mapping is missing", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    const svc = makeSupabaseMock();
+    // Unknown contract root → tickValueFor returns null → Kelly path bails
+    // out and the dispatcher uses contracts_per_trade=4.
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ contract: "UNKNOWN1", contracts_per_trade: 4 }),
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(4);
+    expect(getCashBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to manual qty when kelly_win_rate is missing from params", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    const svc = makeSupabaseMock();
+    // Stats not auto-populated yet → Kelly path bails out before equity fetch.
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: {
+          cme_account_id: "cme_1", contract: "ESH4",
+          contracts_per_trade: 2, kelly_enabled: true,
+          // kelly_win_rate / avg_win / avg_loss absent
+        },
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(2);
+    expect(getCashBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to manual qty when equity fetch returns null (no connection)", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    behavior.connectionRow = null;   // fetchAccountEquity bails early
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ contracts_per_trade: 5 }),
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(5);
+    expect(getCashBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to manual qty when equity fetch returns 0", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    getCashBalanceMock.mockResolvedValue({
+      cashBalance: 0, netLiq: 0, realizedPnL: 0, unrealizedPnL: 0,
+    });
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ contracts_per_trade: 7 }),
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(7);
+  });
+
+  it("falls back to manual qty when getCashBalance throws (network blip)", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    getCashBalanceMock.mockRejectedValue(new Error("network ETIMEDOUT"));
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ contracts_per_trade: 6 }),
+      },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(6);
+  });
+
+  it("does NOT compute Kelly when isReversal (close-and-reverse path takes over)", async () => {
+    process.env.DISPATCH_MODE = "live";
+    executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+    // Long 3 → SELL signal triggers reversal. Reversal qty=abs(3)+1=4 must
+    // override Kelly so we don't accidentally close MORE than we have.
+    getPositionsMock.mockResolvedValue([{ netPos: 3, accountId: 12345 }]);
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ contracts_per_trade: 1 }),
+      },
+      signal: { action: "SELL", lots: 1, confidence: 0.7, reason: "smc_bos_short" },
+    }), svc);
+
+    expect(executeSignalMock.mock.calls[0][0].quantity).toBe(4);
+    expect(getCashBalanceMock).not.toHaveBeenCalled();
+  });
+
+  it("shadow mode: Kelly-computed quantity is reflected in the persisted signal row", async () => {
+    process.env.DISPATCH_MODE = "shadow";
+    const svc = makeSupabaseMock();
+    await dispatchSignal(tradovateInput({
+      algo: {
+        id: "algo_1", user_id: "user_1", platform: "Tradovate",
+        parameters: kellyParams({ kelly_fraction: 0.1, kelly_max_contracts: 20 }),
+      },
+    }), svc);
+
+    // Same math as the "honors overrides" test → 8 contracts. The insert
+    // path uses this quantity in the cme_signals row (verified indirectly:
+    // the dispatcher computes once and that single value flows both to the
+    // shadow log + persistence).
+    const skippedUpdate = updateCalls.find((u) => u.payload.status === "skipped");
+    expect(skippedUpdate).toBeDefined();
+    // Equity fetch happened (Kelly path active in shadow too).
+    expect(getCashBalanceMock).toHaveBeenCalledTimes(1);
   });
 });

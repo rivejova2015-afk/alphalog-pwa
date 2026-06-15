@@ -5,6 +5,7 @@ import { NewStrategyButton } from "@/components/intelligence/algorithms/NewStrat
 import CmeAlgoTabs from "@/components/intelligence/algorithms/CmeAlgoTabs.client";
 import { DispatchModeChip } from "@/components/intelligence/algorithms/DispatchModeChip.client";
 import { DispatchModeBanner } from "@/components/intelligence/algorithms/DispatchModeBanner.client";
+import { GlobexStatusBanner } from "@/components/intelligence/algorithms/GlobexStatusBanner";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -89,7 +90,8 @@ export default async function AlgorithmsPage() {
         <NewStrategyButton />
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 space-y-2">
+        <GlobexStatusBanner />
         <DispatchModeBanner />
       </div>
 
