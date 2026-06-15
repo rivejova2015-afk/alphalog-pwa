@@ -1,6 +1,6 @@
 # Biblioteca · CyberSec Academy
 
-**170 recursos gratuitos, legales y en español**, organizados por las 19 categorías del syllabus.
+**184 recursos gratuitos, legales y en español**, organizados por las 21 categorías del syllabus.
 
 Leyenda: `[formato · nivel]` — cada recurso indica su licencia/origen (todo open-access, Creative Commons, documentación oficial o guías de organismos públicos).
 
@@ -909,4 +909,80 @@ TFM en español sobre fuzzing dirigido por cobertura con AFL++: LAF-Intel, CmpLo
 `PDF · Avanzado` · Creative Commons Reconocimiento-NoComercial-SinObraDerivada (repositorio open-access UPM)  
 TFM de investigación sobre robustez adversaria en modelos interpretables, con planteamiento metodológico, hipótesis y evaluación experimental. Ejemplo de research en seguridad de ML.  
 🔗 https://oa.upm.es/90997/1/TFM_SILVIA_ARENALES_MUNOZ.pdf
+
+
+## Arquitectura de Seguridad (7)
+
+**El control de accesos: politicas de usuarios, privilegios y autenticacion** — _INCIBE (Instituto Nacional de Ciberseguridad)_  
+`WEB · Básico` · INCIBE (contenido publico gratuito)  
+Fundamentos del control de accesos: politica de usuarios y grupos, asignacion de permisos con minimo privilegio, cuentas administrativas con doble factor, mecanismos de autenticacion y registro de eventos.  
+🔗 https://www.incibe.es/empresas/blog/dia-internacional-seguridad-informacion-el-control-accesos
+
+**Menos es mas: controla el acceso a la informacion (minimo privilegio)** — _INCIBE (Instituto Nacional de Ciberseguridad)_  
+`WEB · Básico` · INCIBE (contenido publico gratuito)  
+Aplicacion del principio de minimo privilegio: clasificacion de informacion, asignacion de permisos por grupos, procedimientos de autorizacion y metodos de autenticacion para evitar accesos no autorizados.  
+🔗 https://www.incibe.es/empresas/blog/menos-mas-controla-el-acceso-informacion
+
+**Recomendaciones para una gestion de identidades eficiente** — _INCIBE (Instituto Nacional de Ciberseguridad)_  
+`WEB · Básico` · INCIBE (contenido publico gratuito)  
+Buenas practicas de IAM para organizaciones: proteccion de cuentas de administrador, autenticacion multifactor y gestion de identidades con privilegios minimos y auditoria periodica de permisos.  
+🔗 https://www.incibe.es/empresas/blog/recomendaciones-gestion-identidades-eficiente
+
+**Tematica de Autenticacion: contrasenas, MFA y control de acceso** — _INCIBE (Instituto Nacional de Ciberseguridad)_  
+`WEB · Básico` · INCIBE (contenido publico gratuito)  
+Pagina tematica con recursos sobre autenticacion: gestion de contrasenas, autenticacion de doble factor (MFA), biometria y tokens, riesgos (phishing, fuerza bruta) y medidas preventivas de control de acceso.  
+🔗 https://www.incibe.es/empresas/tematicas/autenticacion
+
+**Aspectos basicos de la proteccion con Microsoft Entra ID** — _Microsoft Learn_  
+`WEB · Intermedio` · Microsoft Docs (CC BY 4.0 / uso gratuito)  
+Fundamentos de arquitectura de IAM con Entra ID: limite de identidad y acceso, separacion de entornos, autenticacion, SSO, autorizacion (asignacion de roles/permisos), gobernanza y certificacion de acceso.  
+🔗 https://learn.microsoft.com/es-es/entra/architecture/secure-fundamentals
+
+**Guia de seguridad: proteccion de identidades y secretos (Zero Trust)** — _Microsoft Learn_  
+`WEB · Intermedio` · Microsoft Docs (CC BY 4.0 / uso gratuito)  
+Evaluacion practica de Microsoft Entra para reforzar la postura de seguridad de identidades: gestion de secretos, certificados, metodos de autenticacion sin contrasena y MFA dentro del modelo de Confianza Cero.  
+🔗 https://learn.microsoft.com/es-es/entra/fundamentals/zero-trust-protect-identities
+
+**Identidad, el primer pilar de una arquitectura de seguridad de Confianza Cero** — _Microsoft Learn_  
+`WEB · Intermedio` · Microsoft Docs (CC BY 4.0 / uso gratuito)  
+Guia oficial de Microsoft sobre la identidad como plano de control en una arquitectura Zero Trust: federacion, SSO, acceso condicional, MFA, gobernanza de identidades y privilegios minimos con Microsoft Entra ID.  
+🔗 https://learn.microsoft.com/es-es/security/zero-trust/deploy/identity
+
+
+## GRC (7)
+
+**Guia del RGPD para Responsables de Tratamiento** — _AEPD (Agencia Espanola de Proteccion de Datos)_  
+`PDF · Intermedio` · AEPD (publicacion oficial gratuita)  
+Guia oficial que ofrece una hoja de ruta para incorporar la privacidad desde el diseno mediante un enfoque de analisis de riesgos, facilitando el cumplimiento del RGPD por parte de los responsables de tratamiento.  
+🔗 https://www.aepd.es/guias/guia-rgpd-para-responsables-de-tratamiento.pdf
+
+**ISO/IEC 27701: el sistema de gestion de privacidad sobre ISO 27001** — _INCIBE (Instituto Nacional de Ciberseguridad)_  
+`WEB · Intermedio` · INCIBE (contenido publico gratuito)  
+Articulo que explica la norma ISO/IEC 27701 como extension del SGSI ISO 27001/27002 para establecer un sistema de gestion de privacidad (PIMS) y demostrar cumplimiento del RGPD.  
+🔗 https://www.incibe.es/empresas/blog/conoces-nueva-norma-gestion-privacidad
+
+**Plan Director de Seguridad: metodologias de analisis de riesgos** — _INCIBE (Instituto Nacional de Ciberseguridad)_  
+`PDF · Intermedio` · INCIBE (publicacion oficial gratuita)  
+Dosier de INCIBE que compara metodologias reconocidas de analisis y gestion de riesgos (MAGERIT, OCTAVE, CRAMM, NIST) como parte del desarrollo de un Plan Director de Seguridad.  
+🔗 https://www.incibe.es/sites/default/files/contenidos/dosieres/plan-director-seguridad/plan_director_de_seguridad_metodologias_analisis_de_riesgos.pdf
+
+**Gestion del riesgo y evaluacion de impacto en tratamientos de datos personales** — _AEPD (Agencia Espanola de Proteccion de Datos)_  
+`PDF · Avanzado` · AEPD (publicacion oficial gratuita)  
+Documento de referencia (160 paginas) que establece una metodologia para el analisis de riesgos y la realizacion de Evaluaciones de Impacto (EIPD) en la proteccion de datos personales conforme al RGPD.  
+🔗 https://www.aepd.es/documento/gestion-riesgo-y-evaluacion-impacto-en-tratamientos-datos-personales.pdf
+
+**Reglamento General de Proteccion de Datos (UE) 2016/679 - texto oficial** — _Union Europea (EUR-Lex / Diario Oficial de la UE)_  
+`WEB · Avanzado` · Dominio publico (legislacion oficial UE)  
+Texto oficial y completo en espanol del RGPD (Reglamento UE 2016/679) publicado en EUR-Lex, fuente normativa primaria de referencia para cumplimiento de proteccion de datos.  
+🔗 https://eur-lex.europa.eu/eli/reg/2016/679/oj?locale=es
+
+**RGPD - Reglamento (UE) 2016/679 (DOUE, PDF oficial)** — _BOE / Diario Oficial de la Union Europea_  
+`PDF · Avanzado` · Dominio publico (legislacion oficial UE)  
+PDF oficial del texto integro del Reglamento General de Proteccion de Datos (UE) 2016/679 en espanol, tal como se publico en el DOUE L 119 y se difunde a traves del BOE.  
+🔗 https://www.boe.es/doue/2016/119/L00001-00088.pdf
+
+**Guias, informes y documentos sobre proteccion de datos en las AAPP** — _AEPD (Agencia Espanola de Proteccion de Datos)_  
+`WEB · General` · AEPD (publicacion oficial gratuita)  
+Repositorio oficial de guias, listas y modelos de la AEPD sobre cumplimiento normativo, EIPD, consulta previa, medidas de seguridad y proteccion de datos por diseno y por defecto.  
+🔗 https://www.aepd.es/areas-de-actuacion/administraciones-publicas/guias-informes-y-documentos
 

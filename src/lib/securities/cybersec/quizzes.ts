@@ -496,6 +496,34 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "seL4 es notable por ser:", o: ["Un antivirus", "Un microkernel formalmente verificado", "Un fuzzer"], c: 1, e: "Prueba de corrección y aislamiento." },
     { q: "El punto débil de la verificación formal es:", o: ["La spec (si está mal, el bug pasa)", "Que es muy rápida", "Que no usa matemática"], c: 0, e: "La prueba es tan buena como la especificación." },
   ],
+  83: [
+    { q: "En el modelo AAA, 'autorización' responde a:", o: ["¿Quién sos?", "¿Qué podés hacer?", "¿Cuándo entraste?"], c: 1, e: "Autenticación prueba identidad; autorización define permisos." },
+    { q: "MFA significa combinar:", o: ["Dos contraseñas", "2+ factores de distinto tipo", "Usuario y correo"], c: 1, e: "Factores diferentes: algo que sabés/tenés/sos." },
+    { q: "SSO permite:", o: ["Un único inicio de sesión para varias apps", "Cifrar la contraseña", "Bloquear cuentas"], c: 0, e: "Single Sign-On reduce fricción y reutilización de credenciales." },
+    { q: "Una cuenta 'huérfana' es:", o: ["Una cuenta sin permisos", "Una cuenta activa de alguien que ya no debería tener acceso", "Una cuenta de servicio"], c: 1, e: "Surge de un deprovisioning tardío en el ciclo de vida." },
+    { q: "El principio de menor privilegio implica:", o: ["Dar admin para evitar problemas", "Otorgar solo los permisos necesarios", "Rotar contraseñas a diario"], c: 1, e: "Reduce la superficie de abuso si la cuenta se compromete." },
+  ],
+  84: [
+    { q: "Defensa en profundidad significa:", o: ["Un control muy fuerte", "Varias capas de controles redundantes", "Cifrar dos veces"], c: 1, e: "Si una capa falla, otra contiene el ataque." },
+    { q: "'Security by obscurity' es:", o: ["Un buen principio", "Confiar en el secreto del diseño como única defensa (mala práctica)", "Cifrado fuerte"], c: 1, e: "El principio de diseño abierto recomienda lo contrario." },
+    { q: "Un sistema 'fail-secure' ante un error:", o: ["Queda abierto para no molestar", "Queda en estado seguro (denegando)", "Se reinicia sin más"], c: 1, e: "Prioriza la seguridad sobre la disponibilidad ante fallos." },
+    { q: "La segmentación de red sirve para:", o: ["Acelerar el WiFi", "Limitar el alcance (blast radius) de un compromiso", "Eliminar el firewall"], c: 1, e: "Contiene el movimiento lateral del atacante." },
+    { q: "'Secure by default' implica que:", o: ["La opción segura viene activada de fábrica", "El usuario debe endurecer todo manualmente", "No hay configuración"], c: 0, e: "La configuración predeterminada ya es la segura." },
+  ],
+  85: [
+    { q: "GRC son las siglas de:", o: ["Gobernanza, Riesgo y Cumplimiento", "Gestión de Redes Corporativas", "Guía de Respuesta a Crisis"], c: 0, e: "Governance, Risk & Compliance." },
+    { q: "El 'apetito de riesgo' es:", o: ["El riesgo máximo que la organización acepta asumir", "La cantidad de incidentes al año", "Un tipo de control"], c: 0, e: "Marca el umbral para decidir tratar o aceptar riesgos." },
+    { q: "El riesgo se suele expresar como:", o: ["Probabilidad × impacto", "Costo del firewall", "Número de usuarios"], c: 0, e: "Sobre un activo, dada una amenaza y una vulnerabilidad." },
+    { q: "Contratar un seguro cibernético es un ejemplo de:", o: ["Mitigar", "Transferir el riesgo", "Evitar"], c: 1, e: "Se traslada el impacto financiero a un tercero." },
+    { q: "El 'riesgo residual' es:", o: ["El riesgo antes de cualquier control", "El riesgo que queda tras aplicar controles", "Un riesgo inventado"], c: 1, e: "Debe quedar dentro del apetito de riesgo aprobado." },
+  ],
+  86: [
+    { q: "El RGPD regula:", o: ["Datos de tarjetas", "Datos personales en la UE", "Configuración de firewalls"], c: 1, e: "General Data Protection Regulation, datos de personas físicas." },
+    { q: "PCI-DSS aplica a:", o: ["Datos de salud", "Datos de tarjetas de pago", "Datos del sector público"], c: 1, e: "Payment Card Industry Data Security Standard." },
+    { q: "ISO 27001 certifica:", o: ["Un firewall", "Un Sistema de Gestión de Seguridad de la Información (SGSI)", "Un lenguaje de programación"], c: 1, e: "Es la norma certificable del SGSI." },
+    { q: "Una 'evidencia' de auditoría puede ser:", o: ["Un log o una política firmada", "Una opinión personal", "Un rumor"], c: 0, e: "Debe ser verificable y trazable." },
+    { q: "El RGPD exige notificar una brecha de datos personales en, como máximo:", o: ["72 horas", "30 días", "1 año"], c: 0, e: "72 horas a la autoridad de control desde que se tiene constancia." },
+  ],
 };
 
 // ─── Quizzes por nivel (Fase A) ──────────────────────────────────────────────
@@ -1652,6 +1680,62 @@ export const QUIZZES_IA: Record<number, { i?: QuizQuestion[]; a?: QuizQuestion[]
       { q: "El theorem proving interactivo (p.ej. Coq, Isabelle/HOL) se diferencia del model checking en que:", o: ["Construye pruebas (a menudo con guia humana) sobre sistemas posiblemente infinitos, no limitado a estados finitos enumerables", "Solo verifica programas de menos de 100 lineas", "Es totalmente automatico y no requiere guia humana"], c: 0, e: "Los theorem provers permiten razonar sobre dominios infinitos mediante pruebas asistidas/interactivas, a diferencia del model checking que explora un espacio de estados (idealmente finito)." },
       { q: "CEGAR (Counterexample-Guided Abstraction Refinement) opera al:", o: ["Ejecutar el programa sin instrumentar", "Verificar una abstraccion y, si el contraejemplo es espurio, refinar la abstraccion iterativamente para descartarlo", "Generar tests aleatorios guiados por cobertura"], c: 1, e: "CEGAR comienza con una abstraccion gruesa; si halla un contraejemplo que resulta espurio en el sistema concreto, refina la abstraccion y reitera hasta probar o refutar." },
       { q: "La correctness proof de seL4 asume un modelo de hardware, lo que implica que:", o: ["La prueba es invalida", "La prueba cubre fallos de hardware como Rowhammer y side-channels automaticamente", "Las garantias dependen de que el hardware se comporte segun el modelo asumido; ataques fisicos/microarquitectonicos quedan fuera del alcance de la prueba"], c: 2, e: "La verificacion es relativa a sus supuestos (modelo de maquina, compilador/cadena de confianza); amenazas como side-channels o glitching de hardware no estan dentro del enunciado formal probado." },
+    ],
+  },
+  83: {
+    i: [
+      { q: "RBAC vs ABAC: la diferencia clave es que ABAC decide por:", o: ["Rol asignado", "Atributos y contexto (usuario, recurso, entorno)", "Dirección IP únicamente"], c: 1, e: "ABAC es más granular y dinámico que el rol fijo de RBAC." },
+      { q: "SAML y OIDC se usan típicamente para:", o: ["Cifrado de disco", "SSO/federación de identidad", "Escaneo de puertos"], c: 1, e: "SAML (XML) y OIDC (sobre OAuth2) habilitan SSO entre IdP y aplicaciones." },
+      { q: "La 'recertificación de accesos' consiste en:", o: ["Renovar el certificado TLS", "Revisar periódicamente que cada usuario siga necesitando sus permisos", "Reinstalar el IdP"], c: 1, e: "Control de gobierno que detecta acumulación de privilegios (privilege creep)." },
+      { q: "Un MFA resistente a phishing se basa en:", o: ["OTP por SMS", "FIDO2/passkeys ligadas al dominio", "Preguntas de seguridad"], c: 1, e: "FIDO2 vincula la credencial al origen, frustrando el reenvío de la víctima." },
+    ],
+    a: [
+      { q: "En Zero Trust, la decisión de acceso se evalúa:", o: ["Una vez al iniciar sesión", "De forma continua según identidad, dispositivo y contexto", "Solo por ubicación de red"], c: 1, e: "'Never trust, always verify': evaluación dinámica por petición." },
+      { q: "El acceso 'just-in-time' (JIT) en PAM busca:", o: ["Conceder privilegios solo durante una ventana acotada", "Acelerar el login", "Eliminar el MFA"], c: 0, e: "Reduce el tiempo de exposición de credenciales privilegiadas." },
+      { q: "IGA (Identity Governance & Administration) aporta principalmente:", o: ["Aceleración de red", "Flujos de solicitud/aprobación, recertificación y auditoría de identidades", "Cifrado homomórfico"], c: 1, e: "Gobierna el QUIÉN-tiene-QUÉ y por qué, con trazabilidad." },
+      { q: "El riesgo central de las cuentas de servicio mal gestionadas es:", o: ["Consumen mucha RAM", "Credenciales estáticas con altos privilegios y sin rotación", "No pueden usar MFA nunca"], c: 1, e: "Son objetivo de movimiento lateral; conviene bóveda, rotación y mínimo privilegio." },
+    ],
+  },
+  84: {
+    i: [
+      { q: "Aplicar STRIDE durante el diseño es un ejemplo de:", o: ["Pentesting", "Threat modeling temprano", "Análisis forense"], c: 1, e: "Modelar amenazas en diseño es más barato que parchear en producción." },
+      { q: "El patrón 'single point of entry' busca:", o: ["Un único punto controlado para validar accesos", "Un solo servidor físico", "Una sola contraseña global"], c: 0, e: "Centraliza el control en lugar de múltiples puertas sin vigilancia." },
+      { q: "La gestión de secretos recomienda:", o: ["Hardcodear claves en el repo", "Usar una bóveda (Vault/KMS) y rotación", "Enviar claves por email"], c: 1, e: "Evita la fuga de credenciales en código y facilita rotación." },
+      { q: "La microsegmentación se diferencia de la VLAN tradicional en que:", o: ["Usa cables más rápidos", "Aísla a nivel de carga de trabajo con políticas finas", "No requiere políticas"], c: 1, e: "Granularidad por workload, alineada con Zero Trust." },
+    ],
+    a: [
+      { q: "En NIST SP 800-207, el PEP (Policy Enforcement Point):", o: ["Decide la política", "Aplica/ejecuta la decisión de acceso", "Almacena logs únicamente"], c: 1, e: "El PDP decide y el PEP hace cumplir la decisión en el punto de acceso." },
+      { q: "El supuesto que rompe Zero Trust es:", o: ["Que la red interna es confiable", "Que existe el cifrado", "Que hay usuarios"], c: 0, e: "ZTA elimina la confianza implícita por ubicación de red." },
+      { q: "SABSA es principalmente:", o: ["Un escáner de vulnerabilidades", "Un marco de arquitectura de seguridad alineado al negocio/riesgo", "Un lenguaje de programación"], c: 1, e: "Deriva la arquitectura de los objetivos y riesgos del negocio." },
+      { q: "El 'blast radius' en arquitectura mide:", o: ["La latencia de red", "El alcance del daño si un componente se compromete", "El consumo eléctrico"], c: 1, e: "La segmentación y el menor privilegio lo reducen." },
+    ],
+  },
+  85: {
+    i: [
+      { q: "MAGERIT es:", o: ["Un antivirus", "Una metodología de análisis de riesgos (España)", "Un estándar de cifrado"], c: 1, e: "Metodología pública del Gobierno de España, alineada con ISO 27005." },
+      { q: "En análisis cuantitativo, ALE significa:", o: ["Annualized Loss Expectancy (pérdida anual esperada)", "Acceso Lógico Externo", "Auditoría de Logs Empresarial"], c: 0, e: "ALE = SLE × ARO; permite comparar riesgo en términos monetarios." },
+      { q: "Un mapa de calor de riesgos sirve para:", o: ["Cifrar datos", "Priorizar riesgos por probabilidad e impacto", "Monitorear la CPU"], c: 1, e: "Visualiza qué riesgos atender primero." },
+      { q: "ISO 27005 se enfoca en:", o: ["Gestión de riesgos de seguridad de la información", "Calidad de software", "Continuidad de negocio únicamente"], c: 0, e: "Acompaña a ISO 27001 con el proceso de gestión de riesgos." },
+    ],
+    a: [
+      { q: "El modelo FAIR aporta principalmente:", o: ["Cuantificación financiera del riesgo cibernético", "Un escáner de red", "Reglas de firewall"], c: 0, e: "Factor Analysis of Information Risk descompone frecuencia y magnitud de pérdida." },
+      { q: "Un KRI (Key Risk Indicator) es:", o: ["Un control de acceso", "Una métrica que anticipa aumentos de exposición al riesgo", "Un tipo de cifrado"], c: 1, e: "Alerta temprana para la gobernanza (p.ej. % de sistemas sin parchear)." },
+      { q: "El riesgo de terceros (supply chain) se gestiona con:", o: ["Ignorarlo si el proveedor es grande", "Due diligence, cláusulas contractuales y evaluación continua", "Solo un firewall"], c: 1, e: "El proveedor amplía tu superficie de ataque (ej. SolarWinds)." },
+      { q: "Aceptar formalmente un riesgo requiere:", o: ["Nada, es automático", "Aprobación documentada del responsable dentro del apetito", "Eliminar el activo"], c: 1, e: "La aceptación es una decisión de gobierno trazable y con dueño." },
+    ],
+  },
+  86: {
+    i: [
+      { q: "El ENS (Esquema Nacional de Seguridad) aplica a:", o: ["Empresas de EE.UU.", "El sector público español y sus proveedores", "Solo bancos"], c: 1, e: "Marco obligatorio para administraciones públicas en España." },
+      { q: "La 'Declaración de Aplicabilidad' (SoA) en ISO 27001 documenta:", o: ["Qué controles aplican y la justificación", "La contraseña del admin", "El presupuesto de TI"], c: 0, e: "Vincula controles del Anexo A con los riesgos tratados." },
+      { q: "El DPO (Delegado de Protección de Datos) es requerido por:", o: ["PCI-DSS", "RGPD en ciertos casos", "ISO 9001"], c: 1, e: "Supervisa el cumplimiento del RGPD en la organización." },
+      { q: "El ciclo PDCA de un SGSI significa:", o: ["Planificar, Hacer, Verificar, Actuar", "Probar, Depurar, Cifrar, Auditar", "Public Data Compliance Audit"], c: 0, e: "Mejora continua: Plan-Do-Check-Act." },
+    ],
+    a: [
+      { q: "SOC 2 Type II evalúa:", o: ["El diseño de controles en un instante", "La eficacia operativa de los controles durante un periodo", "Solo la confidencialidad"], c: 1, e: "Type I = diseño puntual; Type II = operación sostenida (3-12 meses)." },
+      { q: "Una 'no conformidad mayor' implica:", o: ["Una observación menor", "Una falla sistémica que compromete el objetivo del control", "Un elogio del auditor"], c: 1, e: "Requiere acción correctiva antes de certificar." },
+      { q: "Los Trust Services Criteria de SOC 2 incluyen Security y:", o: ["Availability, Processing Integrity, Confidentiality, Privacy", "Solo Privacy", "Velocidad de red"], c: 0, e: "5 criterios; Security (Common Criteria) es obligatorio." },
+      { q: "Un plan de acción correctiva (CAPA) debe atacar:", o: ["El síntoma visible", "La causa raíz de la no conformidad", "El presupuesto"], c: 1, e: "Corrige el origen para que la desviación no se repita." },
     ],
   },
 };

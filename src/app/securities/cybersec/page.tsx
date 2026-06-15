@@ -15,7 +15,7 @@ export default async function CyberSecPage() {
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#a78bfa]">AlphaLog Securities</p>
         <h1 className="text-3xl font-bold text-[#e2e8f0] font-mono">CyberSec Academy</h1>
         <p className="text-sm text-[#94a3b8]">
-          82 módulos · 82 lecciones · 82 quizzes (×3 niveles) · 82 prácticas · 82 homework · 45 flashcards · 1 examen final · Doctorate Track completo
+          86 módulos · 86 lecciones · 86 quizzes (×3 niveles) · 86 prácticas · 86 homework · 45 flashcards · 1 examen final · Biblioteca con 184 recursos
         </p>
         <div className="flex flex-wrap gap-2">
           <Link

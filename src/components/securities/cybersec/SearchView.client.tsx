@@ -30,7 +30,7 @@ export function SearchView() {
       </div>
 
       {trimmed.length === 0 ? (
-        <p className="text-sm text-[#475569]">Escribí para buscar entre los 82 módulos.</p>
+        <p className="text-sm text-[#475569]">Escribí para buscar entre los 86 módulos.</p>
       ) : results.length === 0 ? (
         <p className="text-sm text-[#475569]">Sin resultados para “{trimmed}”.</p>
       ) : (

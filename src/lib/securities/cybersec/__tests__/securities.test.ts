@@ -40,8 +40,8 @@ describe("EXAM data", () => {
 // ─── HOMEWORK ────────────────────────────────────────────────────────────────
 
 describe("HOMEWORK data + getHomework", () => {
-  it("contiene un homework por cada lección (82)", () => {
-    expect(HW).toHaveLength(82);
+  it("contiene un homework por cada lección (86)", () => {
+    expect(HW).toHaveLength(86);
   });
 
   it("toda lección tiene al menos un homework", () => {

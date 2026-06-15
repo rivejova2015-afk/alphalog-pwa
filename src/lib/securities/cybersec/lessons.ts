@@ -1012,6 +1012,54 @@ export const LESSONS: Lesson[] = [
       { h: "Límites y Práctica", c: "⚠️ La verificación formal no es magia:\n→ **La spec es el punto débil** — Probás que el código cumple la spec, pero si la spec está mal/incompleta, el bug pasa (la prueba es tan buena como la especificación)\n→ **Escalabilidad** — Verificar sistemas grandes es muy costoso en esfuerzo humano\n→ **Fuera de la prueba** — Side-channels, hardware, supuestos del entorno suelen quedar afuera\n→ **Costo/beneficio** — Se justifica en cripto, protocolos, kernels y aviónica; raramente en una app web típica\n\nEl futuro: herramientas más automáticas y razonamiento asistido por IA que acerquen los métodos formales al desarrollo cotidiano. Es la frontera donde matemática y seguridad se encuentran." },
     ],
   },
+  {
+    id: 83,
+    title: "Gestión de Identidades y Accesos (IAM)",
+    sub: "M83",
+    dur: "20m",
+    diff: "Intermedio",
+    sections: [
+      { h: "AAA y ciclo de vida", c: "🆔 **Identificación** — declarar quién sos (usuario).\n🔑 **Autenticación** — probarlo (algo que sabés/tenés/sos).\n✅ **Autorización** — qué podés hacer (permisos).\n📒 **Accounting** — registrar lo que hiciste.\n♻️ **Ciclo de vida:** alta (joiner) → cambios (mover) → baja (leaver). El *deprovisioning* a tiempo evita cuentas huérfanas." },
+      { h: "Autenticación moderna", c: "🔐 **MFA** — 2+ factores; el resistente a phishing (FIDO2/passkeys) > OTP por SMS.\n🎫 **SSO** — un login para muchas apps (SAML, OIDC/OAuth2).\n🌐 **Federación** — confiar en un IdP externo (Entra ID, Google).\n🚫 **Passwordless** — passkeys/biometría eliminan la contraseña como secreto robable." },
+      { h: "Autorización y privilegio", c: "👥 **RBAC** — permisos por rol.\n🏷️ **ABAC** — permisos por atributos/contexto (más granular).\n⬇️ **Menor privilegio** — solo lo necesario; revisión periódica (recertificación).\n👑 **PAM** — bóveda de credenciales, acceso *just-in-time* y grabación de sesión para cuentas privilegiadas.\n🧭 **IGA** — gobierno de identidades: solicitudes, aprobaciones y auditoría." },
+    ],
+  },
+  {
+    id: 84,
+    title: "Arquitectura de Seguridad y Patrones de Diseño",
+    sub: "M84",
+    dur: "22m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Principios de diseño seguro", c: "🧱 **Defensa en profundidad** — capas redundantes; si una falla, otra contiene.\n⬇️ **Menor privilegio** — por defecto, denegar.\n🛟 **Fail-safe / fail-secure** — ante error, quedar en estado seguro.\n🔍 **Mediación completa** — validar cada acceso, sin atajos.\n🧰 **Economía de mecanismo** — diseño simple = menos errores.\n🔓 **Diseño abierto** — la seguridad no depende del secreto del diseño (no security by obscurity)." },
+      { h: "Patrones y secure by design", c: "🛡️ **Secure by design / by default** — la opción segura es la predeterminada.\n🚪 **Single point of entry** — un punto controlado de acceso.\n✅ **Input validation / output encoding** — frente a inyección y XSS.\n🧩 **Segmentación** — zonas (DMZ, redes internas) que limitan el blast radius.\n🔐 **Secrets management** — bóvedas en vez de credenciales en código.\n🧵 **Threat modeling** (STRIDE) en la fase de diseño, no después." },
+      { h: "Zero Trust y marcos", c: "🚫 **ZTA (NIST 800-207)** — sin confianza implícita; verificar identidad + dispositivo + contexto en cada petición.\n🧠 **PDP/PEP** — el *Policy Decision Point* decide, el *Policy Enforcement Point* aplica.\n🧱 **Microsegmentación** — aislamiento por carga de trabajo.\n📐 **SABSA / NIST CSF** — marcos para alinear arquitectura con riesgo y negocio." },
+    ],
+  },
+  {
+    id: 85,
+    title: "Gobernanza y Gestión de Riesgos",
+    sub: "M85",
+    dur: "20m",
+    diff: "Intermedio",
+    sections: [
+      { h: "¿Qué es GRC?", c: "🏛️ **Gobernanza** — quién decide y rinde cuentas sobre la seguridad (roles, políticas, comité).\n🎲 **Riesgo** — identificar, analizar y tratar lo que puede salir mal.\n📜 **Cumplimiento** — satisfacer leyes y normas aplicables.\n🎯 **Apetito de riesgo** — cuánto riesgo está dispuesta a aceptar la organización; guía las decisiones." },
+      { h: "Análisis de riesgos", c: "🧮 **Riesgo = probabilidad × impacto** (sobre un activo, vía amenaza + vulnerabilidad).\n📋 **Cualitativo** — escalas alto/medio/bajo (rápido).\n🔢 **Cuantitativo** — €/año (ALE = SLE × ARO); base de FAIR.\n🗂️ **Metodologías:** ISO 27005, MAGERIT (España), NIST RMF (SP 800-30/37).\n📊 **Mapa de calor** para priorizar." },
+      { h: "Tratamiento del riesgo", c: "🛡️ **Mitigar** — aplicar controles para reducirlo.\n📤 **Transferir** — seguro / tercero.\n🚫 **Evitar** — no realizar la actividad.\n✅ **Aceptar** — asumirlo (dentro del apetito), documentado y aprobado.\n📈 **Riesgo residual** — lo que queda tras el control; debe quedar bajo el apetito.\n📉 **KRIs** — indicadores que alertan si el riesgo sube." },
+    ],
+  },
+  {
+    id: 86,
+    title: "Cumplimiento Normativo y Auditoría",
+    sub: "M86",
+    dur: "22m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Marcos normativos", c: "🇪🇺 **RGPD/GDPR** — datos personales en la UE; derechos ARCO+, DPO, notificación de brechas en 72h, multas hasta 4% facturación.\n🏥 **HIPAA** — datos de salud (EE.UU.).\n💳 **PCI-DSS** — datos de tarjetas de pago.\n☁️ **SOC 2** — controles en proveedores de servicios (Trust Services Criteria).\n🛡️ **ENS** — Esquema Nacional de Seguridad (sector público español)." },
+      { h: "ISO 27001 y SGSI", c: "📋 **ISO 27001** — norma certificable de un **SGSI** (Sistema de Gestión de Seguridad de la Información).\n♻️ **Ciclo PDCA** — Planificar, Hacer, Verificar, Actuar.\n📎 **Anexo A** — catálogo de controles (referenciado por ISO 27002).\n🎯 **Declaración de aplicabilidad (SoA)** — qué controles aplican y por qué.\n🤝 **ENS ↔ ISO 27001** — se complementan en organismos públicos." },
+      { h: "Auditoría y evidencias", c: "🔍 **Auditoría** — verificar que los controles existen y funcionan.\n🧾 **Evidencias** — logs, capturas, políticas firmadas, registros.\n⚠️ **No conformidad** — mayor (falla sistémica del control) o menor (desviación puntual).\n🛠️ **Plan de acción correctiva (CAPA)** — corrige la causa raíz.\n🔄 **Type I vs Type II (SOC 2)** — diseño en un instante vs eficacia operativa durante un periodo." },
+    ],
+  },
 ];
 
 export function getLesson(id: number): Lesson | undefined {

@@ -31,6 +31,7 @@ describe("LIBRARY catálogo", () => {
       "Social Eng.", "Malware", "Forense", "Blue Team", "Cloud", "Especializado",
       "Programación", "Exploit Dev Avanzado", "Cripto Avanzada", "AI/ML Security",
       "Hardware & Low-Level", "Reversing Avanzado", "Investigación",
+      "Arquitectura de Seguridad", "GRC",
     ];
     const counts: Record<string, number> = {};
     for (const b of LIBRARY) counts[b.cat] = (counts[b.cat] ?? 0) + 1;

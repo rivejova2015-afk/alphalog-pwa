@@ -1074,6 +1074,59 @@ export const PRACTICE: PracticeExercise[] = [
     ],
     opts: ["Model checking", "TLA+", "seL4", "Theorem proving", "Safety property"],
   },
+  {
+    id: 83,
+    lesson: 83,
+    title: "Clasifica el control IAM",
+    items: [
+      { s: "Exigir app autenticadora además de contraseña", a: "MFA" },
+      { s: "Un login para Gmail, Slack y Jira", a: "SSO" },
+      { s: "Bóveda con rotación para la cuenta de admin de dominio", a: "PAM" },
+      { s: "Permisos según el rol 'Contabilidad'", a: "RBAC" },
+      { s: "Revisar trimestralmente quién tiene acceso a qué", a: "Recertificación" },
+    ],
+    opts: ["MFA", "SSO", "PAM", "RBAC", "Recertificación"],
+  },
+  {
+    id: 84,
+    lesson: 84,
+    title: "Empareja el principio de diseño",
+    items: [
+      { s: "Por defecto, denegar el acceso", a: "Menor privilegio" },
+      { s: "Capas redundantes de control", a: "Defensa en profundidad" },
+      { s: "Ante un fallo, quedar denegando", a: "Fail-secure" },
+      { s: "No confiar en el secreto del diseño", a: "Diseño abierto" },
+      { s: "Verificar cada acceso sin atajos", a: "Mediación completa" },
+    ],
+    opts: ["Menor privilegio", "Defensa en profundidad", "Fail-secure", "Diseño abierto", "Mediación completa"],
+  },
+  {
+    id: 85,
+    lesson: 85,
+    title: "Clasifica el tratamiento del riesgo",
+    items: [
+      { s: "Instalar un WAF para reducir ataques web", a: "Mitigar" },
+      { s: "Contratar un ciberseguro", a: "Transferir" },
+      { s: "Cancelar un servicio demasiado riesgoso", a: "Evitar" },
+      { s: "Asumir un riesgo bajo, documentado y aprobado", a: "Aceptar" },
+      { s: "Externalizar el pago con tarjeta a una pasarela certificada", a: "Transferir" },
+    ],
+    opts: ["Mitigar", "Transferir", "Evitar", "Aceptar"],
+  },
+  {
+    id: 86,
+    lesson: 86,
+    title: "Asocia la norma con su ámbito",
+    items: [
+      { s: "Datos personales en la Unión Europea", a: "RGPD" },
+      { s: "Datos de tarjetas de pago", a: "PCI-DSS" },
+      { s: "Datos de salud en EE.UU.", a: "HIPAA" },
+      { s: "Controles en proveedores SaaS (Type II)", a: "SOC 2" },
+      { s: "Sector público español", a: "ENS" },
+      { s: "SGSI certificable", a: "ISO 27001" },
+    ],
+    opts: ["RGPD", "PCI-DSS", "HIPAA", "SOC 2", "ENS", "ISO 27001"],
+  },
 ];
 
 export function getPractice(id: number): PracticeExercise | undefined {
