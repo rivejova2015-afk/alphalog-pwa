@@ -78,4 +78,34 @@ describe("idsToDelete", () => {
     ];
     expect(idsToDelete(rows)).toEqual(["z"]);
   });
+
+  // Fase A: la maestría deriva del mejor por (lección, NIVEL). El dedup NO debe
+  // colapsar intentos de distintos niveles de la misma lección.
+  it("conserva el mejor de cada nivel de una misma lección", () => {
+    const rows = [
+      row({ id: "b", lesson_id: 5, level: "b", score: 10, total: 10, taken_at: "2026-06-01T10:00:00Z" }),
+      row({ id: "i", lesson_id: 5, level: "i", score: 8, total: 10, taken_at: "2026-06-01T11:00:00Z" }),
+      row({ id: "a", lesson_id: 5, level: "a", score: 6, total: 10, taken_at: "2026-06-01T12:00:00Z" }),
+    ];
+    // Ninguno se borra: cada nivel es el mejor de su nivel.
+    expect(idsToDelete(rows)).toEqual([]);
+  });
+
+  it("dentro de un mismo nivel sí borra el peor", () => {
+    const rows = [
+      row({ id: "i_lo", lesson_id: 5, level: "i", score: 4, total: 10, taken_at: "2026-06-02T08:00:00Z" }),
+      row({ id: "i_hi", lesson_id: 5, level: "i", score: 9, total: 10, taken_at: "2026-06-02T09:00:00Z" }),
+      row({ id: "b_keep", lesson_id: 5, level: "b", score: 7, total: 10, taken_at: "2026-06-01T09:00:00Z" }),
+    ];
+    // Día 2 conserva i_hi (mejor del nivel i y del día); i_lo se borra.
+    expect(idsToDelete(rows)).toEqual(["i_lo"]);
+  });
+
+  it("fila sin level se trata como 'b' (back-compat) y no colapsa con i", () => {
+    const rows = [
+      row({ id: "legacy", lesson_id: 5, score: 5, total: 10, taken_at: "2026-06-01T10:00:00Z" }), // sin level → b
+      row({ id: "inter", lesson_id: 5, level: "i", score: 5, total: 10, taken_at: "2026-06-01T11:00:00Z" }),
+    ];
+    expect(idsToDelete(rows)).toEqual([]);
+  });
 });

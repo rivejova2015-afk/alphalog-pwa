@@ -20,6 +20,7 @@ export interface QuizRow {
   score: number;
   total: number;
   taken_at: string; // ISO timestamp
+  level?: string | null; // 'b' | 'i' | 'a' — filas históricas sin nivel = 'b'
 }
 
 function ratio(r: QuizRow): number {
@@ -28,6 +29,13 @@ function ratio(r: QuizRow): number {
 
 function dayKey(iso: string): string {
   return iso.slice(0, 10);
+}
+
+// La maestría deriva del mejor intento por (lección, NIVEL): hay que conservar el
+// mejor de cada nivel, no solo el mejor de la lección, o se perderían las coronas
+// de los niveles intermedio/avanzado (Fase A).
+function lessonLevelKey(r: QuizRow): string {
+  return `${r.lesson_id}:${r.level ?? "b"}`;
 }
 
 // `a` es "mejor" que `b` si tiene mayor ratio; a igualdad, el más reciente
@@ -43,8 +51,8 @@ function isBetter(a: QuizRow, b: QuizRow): boolean {
  * ids redundantes a borrar. Agrupa por usuario internamente, así que es seguro
  * pasarle filas de toda la tabla (cron con service role).
  *
- * Garantía: tras borrar estos ids, computeXp (best por lección) y activityDays
- * (días con actividad) producen exactamente el mismo resultado que antes.
+ * Garantía: tras borrar estos ids, computeXp (best por lección y NIVEL) y
+ * activityDays (días con actividad) producen exactamente el mismo resultado.
  */
 export function idsToDelete(rows: QuizRow[]): string[] {
   const keep = new Set<string>();
@@ -56,13 +64,14 @@ export function idsToDelete(rows: QuizRow[]): string[] {
   }
 
   for (const userRows of byUser.values()) {
-    // 1) Mejor intento por lección.
-    const bestByLesson = new Map<number, QuizRow>();
+    // 1) Mejor intento por (lección, nivel) — preserva maestría de cada nivel.
+    const bestByLessonLevel = new Map<string, QuizRow>();
     for (const r of userRows) {
-      const prev = bestByLesson.get(r.lesson_id);
-      if (!prev || isBetter(r, prev)) bestByLesson.set(r.lesson_id, r);
+      const k = lessonLevelKey(r);
+      const prev = bestByLessonLevel.get(k);
+      if (!prev || isBetter(r, prev)) bestByLessonLevel.set(k, r);
     }
-    for (const r of bestByLesson.values()) keep.add(r.id);
+    for (const r of bestByLessonLevel.values()) keep.add(r.id);
 
     // 2) Asegurar ≥1 intento por día con actividad. Si el día ya tiene un intento
     //    conservado por la regla (1), no agregamos nada; si no, conservamos el

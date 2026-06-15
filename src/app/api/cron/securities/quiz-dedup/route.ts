@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from("securities_quiz_results")
-        .select("id, user_id, lesson_id, score, total, taken_at")
+        .select("id, user_id, lesson_id, score, total, taken_at, level")
         .order("id", { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) {
