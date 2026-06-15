@@ -11,6 +11,7 @@ const createSchema = z.object({
   score: z.number().int().min(0),
   total: z.number().int().min(1),
   answers: z.array(z.number().int()).optional(),
+  level: z.enum(["b", "i", "a"]).optional(),
 });
 
 // GET /api/securities/cybersec/quiz-results?lesson_id=X
@@ -22,9 +23,10 @@ export async function GET(request: NextRequest) {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const lessonIdRaw = request.nextUrl.searchParams.get("lesson_id");
+    const levelRaw = request.nextUrl.searchParams.get("level");
     let q = supabase
       .from("securities_quiz_results")
-      .select("id, lesson_id, score, total, taken_at")
+      .select("id, lesson_id, score, total, taken_at, level")
       .eq("user_id", user.id)
       .order("taken_at", { ascending: false })
       .limit(50);
@@ -34,6 +36,7 @@ export async function GET(request: NextRequest) {
       if (!Number.isFinite(lessonId)) return NextResponse.json({ error: "Invalid lesson_id" }, { status: 400 });
       q = q.eq("lesson_id", lessonId);
     }
+    if (levelRaw && ["b", "i", "a"].includes(levelRaw)) q = q.eq("level", levelRaw);
 
     const { data, error } = await q;
     if (error) {
@@ -71,6 +74,7 @@ export async function POST(request: NextRequest) {
         score: parsed.data.score,
         total: parsed.data.total,
         answers: parsed.data.answers ?? [],
+        level: parsed.data.level ?? "b",
       })
       .select()
       .single();

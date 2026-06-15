@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui";
 
 interface CopyGroup {
   id: string;
@@ -88,7 +90,7 @@ export default function AabRightPanel({
     link_type: "solid",
   });
   const [updating, setUpdating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [rollbackVersion, setRollbackVersion] = useState<number | null>(null);
   const [nodeRisk, setNodeRisk] = useState(0);
   const [nodeStatus, setNodeStatus] = useState<CopyGroupNode["status"]>("active");
   const [linkMultiplier, setLinkMultiplier] = useState(1);
@@ -114,7 +116,6 @@ export default function AabRightPanel({
   const handleAddNode = async () => {
     if (!group) return;
     setUpdating(true);
-    setError(null);
     try {
       const res = await fetch(`/api/copy-groups/${group.id}/nodes`, {
         method: "POST",
@@ -126,9 +127,10 @@ export default function AabRightPanel({
         throw new Error(data?.error || "No se pudo crear el nodo");
       }
       setNodeForm({ account_id: "", role: "slave", status: "active", risk_pct: 0 });
+      toast.success("Nodo agregado");
       onReload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear nodo");
+      toast.error(err instanceof Error ? err.message : "Error al crear nodo");
     } finally {
       setUpdating(false);
     }
@@ -137,7 +139,6 @@ export default function AabRightPanel({
   const handleAddLink = async () => {
     if (!group) return;
     setUpdating(true);
-    setError(null);
     try {
       const res = await fetch(`/api/copy-groups/${group.id}/links`, {
         method: "POST",
@@ -149,9 +150,10 @@ export default function AabRightPanel({
         throw new Error(data?.error || "No se pudo crear link");
       }
       setLinkForm({ parent_account_id: "", child_account_id: "", copy_multiplier: 1, link_type: "solid" });
+      toast.success("Link agregado");
       onReload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear link");
+      toast.error(err instanceof Error ? err.message : "Error al crear link");
     } finally {
       setUpdating(false);
     }
@@ -160,7 +162,6 @@ export default function AabRightPanel({
   const handleUpdateNode = async (updates: Partial<CopyGroupNode>) => {
     if (!group || !selectedNode) return;
     setUpdating(true);
-    setError(null);
     try {
       const res = await fetch(`/api/copy-groups/${group.id}/nodes`, {
         method: "PATCH",
@@ -171,9 +172,10 @@ export default function AabRightPanel({
       if (!res.ok) {
         throw new Error(data?.error || "No se pudo actualizar el nodo");
       }
+      toast.success("Nodo actualizado");
       onReload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al actualizar nodo");
+      toast.error(err instanceof Error ? err.message : "Error al actualizar nodo");
     } finally {
       setUpdating(false);
     }
@@ -182,7 +184,6 @@ export default function AabRightPanel({
   const handleUpdateLink = async (updates: Partial<CopyGroupLink>) => {
     if (!group || !selectedParentLink) return;
     setUpdating(true);
-    setError(null);
     try {
       const res = await fetch(`/api/copy-groups/${group.id}/links`, {
         method: "PATCH",
@@ -193,19 +194,18 @@ export default function AabRightPanel({
       if (!res.ok) {
         throw new Error(data?.error || "No se pudo actualizar link");
       }
+      toast.success("Link actualizado");
       onReload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al actualizar link");
+      toast.error(err instanceof Error ? err.message : "Error al actualizar link");
     } finally {
       setUpdating(false);
     }
   };
 
-  const handleRollback = async (versionInt: number) => {
+  const doRollback = async (versionInt: number) => {
     if (!group) return;
-    if (!confirm(`¿Aplicar rollback a v${versionInt}? Esto crea una nueva versión.`)) return;
     setUpdating(true);
-    setError(null);
     try {
       const res = await fetch(`/api/copy-groups/${group.id}/rollback`, {
         method: "POST",
@@ -216,12 +216,14 @@ export default function AabRightPanel({
       if (!res.ok) {
         throw new Error(data?.error || "Rollback falló");
       }
+      toast.success(`Rollback a v${versionInt} aplicado`);
       onReload();
       onSelectNode(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al hacer rollback");
+      toast.error(err instanceof Error ? err.message : "Error al hacer rollback");
     } finally {
       setUpdating(false);
+      setRollbackVersion(null);
     }
   };
 
@@ -229,7 +231,6 @@ export default function AabRightPanel({
     if (!group) return;
     const nextFlags = { ...experiments, [flag]: enabled };
     setUpdating(true);
-    setError(null);
     try {
       const res = await fetch(`/api/copy-groups/${group.id}/experiments`, {
         method: "PATCH",
@@ -240,9 +241,10 @@ export default function AabRightPanel({
       if (!res.ok) {
         throw new Error(data?.error || "No se pudo guardar experiments");
       }
+      toast.success("Experiments actualizado");
       onReload();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al actualizar experiments");
+      toast.error(err instanceof Error ? err.message : "Error al actualizar experiments");
     } finally {
       setUpdating(false);
     }
@@ -258,8 +260,6 @@ export default function AabRightPanel({
             <div className="text-sm font-semibold text-slate-100">{group.name}</div>
             <div className="text-xs text-slate-400">Versión activa: v{group.active_version} • Sync: {group.sync_mode}</div>
           </div>
-
-          {error && <div className="text-xs text-rose-400">{error}</div>}
 
           <div className="space-y-2">
             <div className="text-xs uppercase text-slate-400">Agregar nodo</div>
@@ -451,7 +451,7 @@ export default function AabRightPanel({
                     v{version.version_int} • {version.message || "(sin mensaje)"}
                   </div>
                   <button
-                    onClick={() => handleRollback(version.version_int)}
+                    onClick={() => setRollbackVersion(version.version_int)}
                     className="text-blue-300 hover:text-blue-200"
                   >
                     Rollback
@@ -474,6 +474,23 @@ export default function AabRightPanel({
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={rollbackVersion !== null}
+        title="Aplicar rollback"
+        message={
+          rollbackVersion !== null
+            ? `¿Aplicar rollback a v${rollbackVersion}? Esto crea una nueva versión del CopyGroup.`
+            : ""
+        }
+        variant="warning"
+        confirmLabel="Aplicar rollback"
+        cancelLabel="Cancelar"
+        onCancel={() => setRollbackVersion(null)}
+        onConfirm={() => {
+          if (rollbackVersion !== null) return doRollback(rollbackVersion);
+        }}
+      />
     </div>
   );
 }

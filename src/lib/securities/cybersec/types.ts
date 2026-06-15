@@ -42,6 +42,10 @@ export interface QuizQuestion {
   e: string;
 }
 
+// Niveles de un quiz por módulo: básico → intermedio → avanzado. Se desbloquean
+// en orden y alimentan la maestría (b/i/a + Legendary).
+export type QuizLevel = "b" | "i" | "a";
+
 export interface PracticeItem {
   s: string;
   a: string;

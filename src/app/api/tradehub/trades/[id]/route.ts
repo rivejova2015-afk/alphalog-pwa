@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, encryptText, encryptNumeric, decryptNumeric } from "@/lib/security/encryption";
 import { mirrorTradeOnUpdate } from "@/lib/copygroups/mirroring";
-import { onTradeClosedSaved } from "@/lib/tradermap/progressEngine";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
 import { tradeUpdateResponseSchema, tradeUpdateSchema, validatePayloadSafe, validationErrorResponse } from "@/lib/validation/schemas";
 import { autoFixTradeUpdate } from "@/lib/validation/autoFix";
@@ -184,13 +183,6 @@ export async function PATCH(
       }
     }
 
-    const progressUpdate = await onTradeClosedSaved(supabase, userId, {
-      id: data.id,
-      account_id: data.account_id,
-      status: data.status,
-      exit_date: data.exit_date,
-    });
-
     if (!restore) {
       const changeKeys = Object.keys(updateData).filter(
         k => updateData[k as keyof typeof updateData] !== (existingTrade as Record<string, unknown>)[k]
@@ -230,7 +222,6 @@ export async function PATCH(
       entry_price: decryptNumeric("trades", data.entry_price_enc, data.entry_price),
       exit_price: decryptNumeric("trades", data.exit_price_enc, data.exit_price),
       pnl_percent: decryptNumeric("trades", data.pnl_percent_enc, data.pnl_percent),
-      progress_update: progressUpdate,
     };
 
     const responseCheck = enforceResponseContract(tradeUpdateResponseSchema, responsePayload);

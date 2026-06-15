@@ -116,7 +116,6 @@ alphalog-pwa/
 │   │   ├── supabase/          # server.ts, browser.ts (clientes Supabase)
 │   │   ├── terminal-ia/       # AI report generation
 │   │   ├── trade/             # normalize.ts
-│   │   ├── tradermap/         # xpConfig.ts, progressEngine.ts
 │   │   ├── treasury/          # Payout engine, calendar
 │   │   └── validation/        # schemas.ts (Zod), autoFix.ts, contractGuard.ts, nullGuards.ts
 │   ├── hooks/                 # React hooks
@@ -307,15 +306,17 @@ journal_entries  id, user_id, date, title(CIFRADO), content(CIFRADO JSON), mood,
                                  action_items, trade_id, is_private }
 ```
 
-#### TraderMap (gamificación)
+#### Instrumentos
 ```
-tradermap_goals          id, user_id, account_id→accounts, year, title, active_quarter, sort_index, timestamps, deleted_at
-tradermap_goal_quarters  id, user_id, goal_id→tradermap_goals, quarter, start/end_date, start/target/current_balance, completed_at, timestamps, deleted_at
-progress_events          id, user_id, event_type, ref_table, ref_id, xp_delta, metadata jsonb, occurred_at, created_at
-user_level_state         user_id PK, level, xp_total, streak_days, last_activity_date, updated_at
-goals                    (legacy) id, user_id, account_id, year, active_quarter, Q1-Q4 dates+balances, timestamps, deleted_at
 instruments              id, symbol, display_name, sort_index, timestamps
 ```
+> El subsistema de gamificación TraderMap (XP/niveles) fue eliminado por completo
+> (migration 122 + borrado de `lib/tradermap/*`, `lib/progress-map/*`,
+> `components/tradermap/*` y `/api/tradermap/*`). Era código muerto: ninguna pantalla
+> lo consumía y `onTradeClosedSaved` corría en el hot path de trades sin renderizarse.
+> Goal tracking vive en Map Hot (`map_hot_*`). Tablas dropeadas: `tradermap_goals`,
+> `tradermap_goal_quarters`, `goals`, `progress_events`, `user_level_state`,
+> `progress_map_*`, `progress_ecosystem_*`.
 
 #### Terminal (Análisis)
 ```
@@ -475,17 +476,11 @@ Cada tabla usa `auth.uid() = user_id` para todas las operaciones. Algunos casos 
 |----------|--------|-------------|
 | `GET/POST/DELETE /api/journal` | GET, POST, DELETE | CRUD entradas de diario (content cifrado AES) |
 
-### TraderMap
-| Endpoint | Método | Descripción |
-|----------|--------|-------------|
-| `GET/POST /api/tradermap/goals` | GET, POST | Metas trimestrales |
-| `GET /api/tradermap/level` | GET | Nivel y XP del usuario |
-| `GET/POST /api/tradermap/progress-map/state` | GET, POST | Estado del mapa de progreso |
-| `GET/PUT /api/tradermap/progress-map/config` | GET, PUT | Configuración del mapa |
-| `GET /api/tradermap/progress-map/thresholds` | GET | Umbrales de nivel |
-| `POST /api/tradermap/progress-map/recompute` | POST | Recomputa progreso |
-| `POST /api/tradermap/progress-map/pending-sync/resolve` | POST | Resuelve sync pendiente offline |
-| `GET/PUT /api/tradermap/quarters/[id]` | GET, PUT | CRUD quarter específico |
+### Map Hot (reemplaza a TraderMap)
+El subsistema TraderMap (`/api/tradermap/*`: goals, level, progress-map, quarters) fue
+**eliminado**. El tracking de metas vive ahora en Map Hot — ver `/api/map-hot/goals`,
+`/api/map-hot/milestones` y la ruta `/map-hot/*`. La gamificación XP/niveles no fue
+replicada (decisión documentada en `docs/research/map-hot-xp-v2.md`).
 
 ### Treasury
 | Endpoint | Método | Descripción |
@@ -799,7 +794,8 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 ### 🔴 Pendiente / No implementado
 - Suscripción multi-usuario real (actualmente 1 usuario).
 <!-- (resolved sprint 6) Coinarb segunda capa cubierta: analysis/ (smc-detector, mtf-analyzer, liquidity-map, candle-builder), validators/ (volume-delta, volume-profile, fear-greed, liquidation-heatmap) y risk/phase-manager.ts ahora tienen 79 tests en coinarb/tests/. -->
-- AAB drag/drop nodos: 20% madurez en `AabTreeView.client.tsx`. Bloqueado por spec UX.
+<!-- (resolved 2026-06) AAB drag/drop nodos: completo end-to-end. Spec en docs/research/aab-dragdrop-ux-spec.md; 4 fases implementadas en AabTreeView.client.tsx — reorder de hermanos (@dnd-kit), reparent entre niveles (endpoint PATCH /api/copy-groups/[id]/links/[linkId]/reparent + anti-ciclos vía copy_group_would_create_cycle), connect de huérfanos (Operación C, POST .../links), DragOverlay, coloreo hover verde/rojo aware-de-ciclo (classifyDrop), sensores touch (long-press) + aria-live. cycleCheck.ts puro + tests. -->
+- _(sin pendientes de drag/drop en AAB; ver nota resuelta)_
 <!-- (resolved 2026-06) TerminalReportsBot QStash scheduling: el módulo está completo end-to-end (verify + schedule + run-scheduled + UI). Cobertura con 26 unit tests nuevos. Ver entrada en ✅ Reciente. -->
 <!-- (resolved 2026-06) alphacore-offline E2E: spec del full cycle (offline submit → online drain → entry persiste) en alphacore-offline.spec.ts. -->
 <!-- (resolved 2026-06) console.log → logError sweep cerrado: de 335 ocurrencias en 120 archivos → 60 en 10. Todo lo migrable está hecho (API routes 100%, server libs 100%, UI components, error boundaries, dashboard pages). Lo que queda es intencional: src/lib/log.ts (el logger), src/lib/toast.ts, src/lib/alphashield/* (sistema de logging client-side propio que tiene que usar console como sink final), src/lib/alphacore/testing.ts (harness), JSDoc examples, y contenido educativo XSS demo. Ver entrada en ✅ Reciente. -->
@@ -885,7 +881,7 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
   - `/map-hot/progress` reescrito como server component con 3 widgets: `ProgressDistributionDonut`, `ProgressTimeframeTable`, `AtRiskGoalsList`. Agregado al sidebar.
   - Tests: 11 unit tests nuevos (`goalStatus.test.ts`, `milestoneStatus.test.ts`) + 6 E2E smoke (`tests/e2e/map-hot.spec.ts`). 573 tests totales del proyecto pasan, 0 regresiones.
   - Helpers nuevos: `src/lib/map-hot/goalStatus.ts`, `src/lib/map-hot/milestoneStatus.ts`. Schemas Zod extendidos en `src/lib/validation/schemas.ts` (`mapHotGoalCreateSchema`, `mapHotMilestoneCreateSchema`, etc.). autoFix extendido en `src/lib/validation/autoFix.ts`.
-  - Tradermap legacy: tablas `tradermap_*` + `progress_events` + `user_level_state` + `progress_map_*` quedan en parking lot (header comment en `008_tradermap_schema.sql` y `src/lib/tradermap/progressEngine.ts`). XP/levels no replicado en Map Hot; decisión pendiente para V2.
+  - **Tradermap legacy eliminado** (2026-06-10, Map Hot Fase 0): el subsistema XP/niveles era código muerto corriendo en el hot path de trades (`onTradeClosedSaved`). Borrados `lib/tradermap/*`, `lib/progress-map/*`, `components/tradermap/*`, `/api/tradermap/*`; migration 122 dropea `user_level_state`, `progress_events`, `progress_map_*`, `progress_ecosystem_*`. Goal tracking 100% en Map Hot (`map_hot_*`). Análisis de una eventual V2 de gamificación en `docs/research/map-hot-xp-v2.md` (recomendación: XP nuevo liviano, no resucitar el legacy).
 
 ---
 

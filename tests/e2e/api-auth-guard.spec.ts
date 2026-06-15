@@ -30,11 +30,6 @@ test.describe("API auth guards (unauthenticated)", () => {
     expect(response.status()).toBe(401);
   });
 
-  test("tradermap level requires auth", async () => {
-    const response = await unauthRequest.get("/api/tradermap/level");
-    expect(response.status()).toBe(401);
-  });
-
   test("treasury payout preview requires auth", async () => {
     const response = await unauthRequest.post("/api/treasury/payouts/preview", {
       data: {},

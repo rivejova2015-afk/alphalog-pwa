@@ -5,7 +5,6 @@
 // Retention policy per table:
 //   api_rate_limits      → 2 hours  (only the rolling window matters)
 //   app_logs             → 30 days  (observability dredge)
-//   progress_events      → 60 days  (XP/level activity)
 //   app_update_events    → 30 days  (SW update analytics)
 //   cme_signals          → 90 days  (executed/skipped/rejected only — keep
 //                                    pending for the dispatcher to retry)
@@ -92,9 +91,8 @@ async function handler(request: NextRequest) {
     // Rolling rate-limit window — anything older than 2h is dead weight.
     { table: "api_rate_limits", column: "window_start", cutoffISO: hoursAgo(2) },
 
-    // Observability tables — 30/60/30 day rolling buffers.
+    // Observability tables — 30/30 day rolling buffers.
     { table: "app_logs",          column: "created_at", cutoffISO: daysAgo(30) },
-    { table: "progress_events",   column: "occurred_at", cutoffISO: daysAgo(60) },
     { table: "app_update_events", column: "created_at", cutoffISO: daysAgo(30) },
 
     // CME signals: only purge terminal states. Keep 'pending' indefinitely so

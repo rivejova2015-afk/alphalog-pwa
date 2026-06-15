@@ -6,6 +6,7 @@ import AccountsPanel from "@/components/tradehub/AccountsPanel.client";
 import AabTreeView from "@/components/tradehub/aab/AabTreeView.client";
 import AabRightPanel from "@/components/tradehub/aab/AabRightPanel.client";
 import { isPublicFeatureEnabled } from "@/lib/runtime/featureFlags";
+import { Skeleton } from "@/components/ui";
 
 interface CopyGroup {
   id: string;
@@ -30,6 +31,7 @@ interface CopyGroupNode {
   role: "master" | "slave";
   status: "active" | "paused" | "read_only";
   risk_pct: number;
+  sort_index: number;
   risk_node?: Record<string, unknown> | null;
   account?: Account | null;
 }
@@ -243,13 +245,21 @@ export default function AabPage() {
       {viewMode === "tree" && (
         <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 min-h-[520px]">
-            {loading && <div className="text-slate-400">Cargando árbol...</div>}
+            {loading && (
+              <div className="space-y-3" aria-busy="true" aria-label="Cargando árbol">
+                <Skeleton className="h-16 w-full rounded-xl" />
+                <Skeleton className="h-16 w-[calc(100%-1rem)] ml-4 rounded-xl" />
+                <Skeleton className="h-16 w-[calc(100%-2rem)] ml-8 rounded-xl" />
+              </div>
+            )}
             {!loading && graph && (
               <AabTreeView
                 nodes={graph.nodes}
                 links={graph.links}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={setSelectedNodeId}
+                copyGroupId={selectedGroupId || null}
+                onReorderCommitted={() => selectedGroupId && loadGraph(selectedGroupId)}
               />
             )}
             {!loading && !graph && (
