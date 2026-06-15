@@ -298,7 +298,8 @@ export function EngineBacktestPanel({
   function toggleCompare(runId: string) {
     setCompareIds((prev) => {
       if (prev.includes(runId)) return prev.filter((x) => x !== runId);
-      if (prev.length >= 2) return [prev[1], runId];  // keep last 2, FIFO
+      // FIFO of 3: keep the 2 newest + the just-clicked one when at cap.
+      if (prev.length >= 3) return [prev[1], prev[2], runId];
       return [...prev, runId];
     });
   }
@@ -742,10 +743,10 @@ export function EngineBacktestPanel({
         }}
       />
 
-      {/* Compare: pick up to 2 runs from history */}
+      {/* Compare: pick up to 3 runs from history */}
       {history.length >= 2 && (
         <div className="space-y-2">
-          <p className="text-[10px] text-[#475569] uppercase tracking-wider">Comparar runs — elige hasta 2</p>
+          <p className="text-[10px] text-[#475569] uppercase tracking-wider">Comparar runs — elige hasta 3</p>
           <div className="flex flex-wrap gap-1.5">
             {history.slice(0, 12).map((r) => {
               const selected = compareIds.includes(r.id);
@@ -781,8 +782,8 @@ export function EngineBacktestPanel({
         </div>
       )}
 
-      {compareRuns.length === 2 && (
-        <CompareView a={compareRuns[0]} b={compareRuns[1]} algorithmId={algorithmId} />
+      {compareRuns.length >= 2 && (
+        <CompareView runs={compareRuns} algorithmId={algorithmId} />
       )}
 
       {/* Research-mode capital banner — only when the algorithm has no cuenta
@@ -1329,47 +1330,64 @@ function fmt(v: number | undefined, kind: "pct" | "num" | "money"): string {
   return v.toFixed(2);
 }
 
-function CompareView({ a, b, algorithmId }: { a: HistoryRow; b: HistoryRow; algorithmId: string }) {
-  const aEquity = (a.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity }));
-  const bEquity = (b.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity }));
+// Compare view — generic for N runs (2 or 3). Mejora #5 extended this from
+// hardcoded 2-column layout to dynamic N columns with a single overlapped
+// equity chart. Colors and labels follow stable A/B/C positions so the
+// winner highlight (◄) and the chart legend stay in sync.
+const COMPARE_COLORS = ["#a78bfa", "#22d3ee", "#fbbf24"] as const;  // purple, cyan, yellow
+const COMPARE_LABELS = ["A", "B", "C"] as const;
+
+function CompareView({ runs, algorithmId }: { runs: HistoryRow[]; algorithmId: string }) {
+  const series = runs
+    .map((r, i) => ({
+      points: (r.equity_curve ?? []).map((p) => ({ date: p.ts.slice(0, 10), equity: p.equity })),
+      color: COMPARE_COLORS[i],
+      label: `${COMPARE_LABELS[i]} · ${r.symbol}`,
+    }))
+    .filter((s) => s.points.length > 1);
+
+  const labelsTitle = runs.map((_, i) => COMPARE_LABELS[i]).join(" vs ");
 
   return (
     <div className="bg-[#151b28] border border-[#a78bfa]/30 rounded-lg p-3 space-y-3">
-      <p className="text-[10px] text-[#a78bfa] uppercase tracking-wider font-medium">Comparación A vs B</p>
+      <p className="text-[10px] text-[#a78bfa] uppercase tracking-wider font-medium">Comparación {labelsTitle}</p>
 
       <div className="overflow-x-auto">
         <table className="w-full text-[11px] font-mono">
           <thead className="text-[#475569]">
             <tr>
               <th className="text-left py-1 px-2">Métrica</th>
-              <th className="text-right py-1 px-2">
-                A · {new Date(a.created_at).toLocaleDateString()} · {a.symbol}
-              </th>
-              <th className="text-right py-1 px-2">
-                B · {new Date(b.created_at).toLocaleDateString()} · {b.symbol}
-              </th>
+              {runs.map((r, i) => (
+                <th key={r.id} className="text-right py-1 px-2" style={{ color: COMPARE_COLORS[i] }}>
+                  {COMPARE_LABELS[i]} · {new Date(r.created_at).toLocaleDateString()} · {r.symbol}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {COMPARE_METRICS.map((m) => {
-              const av = a.baseline_metrics[m.key] as number | undefined;
-              const bv = b.baseline_metrics[m.key] as number | undefined;
-              let aWins = false;
-              let bWins = false;
-              if (av != null && bv != null && Number.isFinite(av) && Number.isFinite(bv) && av !== bv) {
+              const vals = runs.map((r) => r.baseline_metrics[m.key] as number | undefined);
+              const numeric = vals
+                .map((v, i) => ({ v, i }))
+                .filter((x): x is { v: number; i: number } => x.v != null && Number.isFinite(x.v));
+              let winnerIdx = -1;
+              if (numeric.length >= 2) {
                 const lowerBetter = LOWER_IS_BETTER.has(m.key as string);
-                aWins = lowerBetter ? av < bv : av > bv;
-                bWins = !aWins;
+                const sorted = [...numeric].sort((a, b) => lowerBetter ? a.v - b.v : b.v - a.v);
+                // Only highlight a winner when there's a strict best (no tie at the top).
+                if (sorted[0].v !== sorted[1].v) winnerIdx = sorted[0].i;
               }
               return (
                 <tr key={m.key as string} className="border-t border-[#1f2937]">
                   <td className="py-1 px-2 text-[#94a3b8]">{m.label}</td>
-                  <td className={`py-1 px-2 text-right ${aWins ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
-                    {fmt(av, m.kind)}{aWins ? " ◄" : ""}
-                  </td>
-                  <td className={`py-1 px-2 text-right ${bWins ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
-                    {fmt(bv, m.kind)}{bWins ? " ◄" : ""}
-                  </td>
+                  {vals.map((v, i) => {
+                    const isWinner = i === winnerIdx;
+                    return (
+                      <td key={i} className={`py-1 px-2 text-right ${isWinner ? "text-[#34d399] font-bold" : "text-[#e2e8f0]"}`}>
+                        {fmt(v, m.kind)}{isWinner ? " ◄" : ""}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -1377,20 +1395,10 @@ function CompareView({ a, b, algorithmId }: { a: HistoryRow; b: HistoryRow; algo
         </table>
       </div>
 
-      {(aEquity.length > 1 || bEquity.length > 1) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
-            <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity A</p>
-            {aEquity.length > 1
-              ? <EquityCurve points={aEquity} height={100} algoId={`${algorithmId}-cmp-a`} />
-              : <p className="text-[10px] text-[#2d3748] text-center py-8">sin equity curve</p>}
-          </div>
-          <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
-            <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity B</p>
-            {bEquity.length > 1
-              ? <EquityCurve points={bEquity} height={100} algoId={`${algorithmId}-cmp-b`} />
-              : <p className="text-[10px] text-[#2d3748] text-center py-8">sin equity curve</p>}
-          </div>
+      {series.length > 0 && (
+        <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
+          <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity curves (overlap)</p>
+          <EquityCurve series={series} height={140} algoId={`${algorithmId}-cmp`} />
         </div>
       )}
     </div>
