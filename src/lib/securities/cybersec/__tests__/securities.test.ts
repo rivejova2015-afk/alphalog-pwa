@@ -40,8 +40,15 @@ describe("EXAM data", () => {
 // ─── HOMEWORK ────────────────────────────────────────────────────────────────
 
 describe("HOMEWORK data + getHomework", () => {
-  it("contiene 18 assignments", () => {
-    expect(HW).toHaveLength(18);
+  it("contiene un homework por cada lección (82)", () => {
+    expect(HW).toHaveLength(82);
+  });
+
+  it("toda lección tiene al menos un homework", () => {
+    const covered = new Set(HW.map((h) => h.l));
+    for (const lesson of LESSONS) {
+      expect(covered.has(lesson.id), `lección ${lesson.id} (${lesson.sub}) sin homework`).toBe(true);
+    }
   });
 
   it("cada homework tiene id único + campos obligatorios", () => {
@@ -214,6 +221,18 @@ describe("PRACTICE integridad", () => {
     const lessonIds = new Set(LESSONS.map((l) => l.id));
     for (const ex of PRACTICE) {
       expect(lessonIds.has(ex.lesson), `ejercicio ${ex.id} → lección ${ex.lesson} inexistente`).toBe(true);
+    }
+  });
+
+  it("ids únicos y toda lección tiene al menos un ejercicio", () => {
+    const ids = new Set<number>();
+    for (const ex of PRACTICE) {
+      expect(ids.has(ex.id), `id de práctica duplicado: ${ex.id}`).toBe(false);
+      ids.add(ex.id);
+    }
+    const covered = new Set(PRACTICE.map((p) => p.lesson));
+    for (const lesson of LESSONS) {
+      expect(covered.has(lesson.id), `lección ${lesson.id} (${lesson.sub}) sin práctica`).toBe(true);
     }
   });
 });
