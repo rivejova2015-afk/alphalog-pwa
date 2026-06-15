@@ -124,16 +124,18 @@ export function computeXp(content: ProgressContent, data: XpData): XpResult {
       }
     }
 
-    // Si el módulo tiene contenido intermedio/avanzado, usa el modelo por niveles;
-    // si solo tiene básico, conserva el modelo legacy (cero regresión histórica).
-    const hasIA = levels.includes("i") || levels.includes("a");
-    const ms = hasIA
-      ? moduleMasteryLeveled({ levelPct, availableLevels: levels, researchDone })
-      : moduleMastery({
-          bestQuizPct: levelPct.b,
-          researchDone,
-          completedLevels: prog?.completed_levels ?? [],
-        });
+    // Maestría = max(modelo por niveles, modelo legacy). El leveled premia
+    // aprobar b/i/a; el legacy (quiz aprobado/perfecto + research + niveles
+    // marcados) es el PISO que preserva las coronas ya ganadas antes de Fase A.
+    // Tomar el máximo es monótono: ninguna corona histórica se pierde, pero
+    // ejercitar los niveles intermedio/avanzado puede sumar más.
+    const leveled = moduleMasteryLeveled({ levelPct, availableLevels: levels, researchDone });
+    const legacy = moduleMastery({
+      bestQuizPct: levelPct.b,
+      researchDone,
+      completedLevels: prog?.completed_levels ?? [],
+    });
+    const ms = Math.max(leveled, legacy);
     mastery[m.m] = ms;
     masteryXp += ms * 25;
   }

@@ -100,27 +100,41 @@ describe("computeXp", () => {
   it("módulo con niveles i/a usa el modelo por niveles", () => {
     const data: XpData = {
       quizResults: [
-        { lesson_id: 1, score: 4, total: 4, level: "b" }, // aprobado
+        { lesson_id: 1, score: 3, total: 4, level: "b" }, // aprobado (0.75, no perfecto)
         { lesson_id: 1, score: 3, total: 4, level: "i" }, // aprobado (0.75)
         { lesson_id: 1, score: 2, total: 4, level: "a" }, // reprobado (0.5)
       ],
       examResults: [],
       homework: {},
-      progress: { 1: { research_done: true } },
+      progress: { 1: { research_done: false } },
     };
     const r = computeXp(leveledContent, data);
-    // b + i aprobados = 2; 'a' no; sin los 3 no hay Legendary.
+    // leveled: b + i aprobados = 2; legacy: solo b aprobado = 1 → max = 2.
     expect(r.mastery[1]).toBe(2);
   });
 
   it("intentos históricos sin level se cuentan como 'b'", () => {
     const data: XpData = {
-      quizResults: [{ lesson_id: 1, score: 4, total: 4 }], // sin level → 'b'
+      quizResults: [{ lesson_id: 1, score: 3, total: 4 }], // sin level → 'b', aprobado no perfecto
       examResults: [],
       homework: {},
-      progress: { 1: { research_done: true } },
+      progress: { 1: { research_done: false } },
     };
     const r = computeXp(leveledContent, data);
-    expect(r.mastery[1]).toBe(1); // solo 'b' aprobado
+    expect(r.mastery[1]).toBe(1); // solo 'b' aprobado (leveled y legacy coinciden)
+  });
+
+  it("preserva coronas legacy: quiz perfecto + research + niveles marcados = 4 sin quizzes i/a", () => {
+    // Usuario histórico: perfeccionó el quiz básico, hizo research y marcó b/i/a
+    // en el detalle del módulo, pero nunca tomó los quizzes intermedio/avanzado.
+    const data: XpData = {
+      quizResults: [{ lesson_id: 1, score: 4, total: 4, level: "b" }], // perfecto
+      examResults: [],
+      homework: {},
+      progress: { 1: { research_done: true, completed_levels: ["b", "i", "a"] } },
+    };
+    const r = computeXp(leveledContent, data);
+    // leveled daría 1 (solo b), pero el piso legacy preserva las 4 coronas.
+    expect(r.mastery[1]).toBe(4);
   });
 });
