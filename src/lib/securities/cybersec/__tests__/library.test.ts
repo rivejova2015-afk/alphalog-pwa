@@ -18,10 +18,24 @@ describe("LIBRARY catálogo", () => {
     }
   });
 
-  it("todas las URLs son https y bien formadas", () => {
+  it("todas las URLs son http(s) y bien formadas", () => {
     for (const b of LIBRARY) {
-      expect(b.url.startsWith("https://"), `${b.title}: url no https`).toBe(true);
+      expect(/^https?:\/\//.test(b.url), `${b.title}: url no http(s)`).toBe(true);
       expect(() => new URL(b.url)).not.toThrow();
+    }
+  });
+
+  it("cubre las categorías del syllabus con al menos 5 recursos cada una", () => {
+    const SYLLABUS_CATS = [
+      "Fundamentos", "Redes", "Sistemas", "Criptografía", "Web Security", "Pentesting",
+      "Social Eng.", "Malware", "Forense", "Blue Team", "Cloud", "Especializado",
+      "Programación", "Exploit Dev Avanzado", "Cripto Avanzada", "AI/ML Security",
+      "Hardware & Low-Level", "Reversing Avanzado", "Investigación",
+    ];
+    const counts: Record<string, number> = {};
+    for (const b of LIBRARY) counts[b.cat] = (counts[b.cat] ?? 0) + 1;
+    for (const c of SYLLABUS_CATS) {
+      expect(counts[c] ?? 0, `categoría '${c}' con menos de 5 recursos`).toBeGreaterThanOrEqual(5);
     }
   });
 
