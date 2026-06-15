@@ -1439,6 +1439,49 @@ function fmt(v: number | undefined, kind: "pct" | "num" | "money"): string {
   return v.toFixed(2);
 }
 
+// Params snapshot (Mejora #7). The engine-backtest route persists this subset
+// of the body into engine_backtest_runs.params (jsonb). Showing them alongside
+// the metrics in CompareView closes the "why did C win?" loop — the user can
+// see at a glance which inputs differed between runs.
+const COMPARE_PARAMS: { key: string; label: string; kind: "num" | "money" | "bool" | "int" }[] = [
+  { key: "starting_equity",         label: "Starting Equity",  kind: "money" },
+  { key: "sl_atr_mult",             label: "SL × ATR",         kind: "num"   },
+  { key: "tp_atr_mult",             label: "TP × ATR",         kind: "num"   },
+  { key: "monte_carlo_iterations",  label: "Monte Carlo",      kind: "int"   },
+  { key: "walk_forward_windows",    label: "Walk-Forward",     kind: "int"   },
+  { key: "use_ml",                  label: "ML overlay",       kind: "bool"  },
+  { key: "use_multi_tf_requested",  label: "Multi-TF req.",    kind: "bool"  },
+  { key: "use_portfolio_requested", label: "Portfolio req.",   kind: "bool"  },
+];
+
+function fmtParam(v: unknown, kind: "num" | "money" | "bool" | "int"): string {
+  if (v == null) return "—";
+  if (kind === "bool") {
+    if (typeof v !== "boolean") return "—";
+    return v ? "Sí" : "No";
+  }
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+  if (kind === "money") return `$${v.toLocaleString()}`;
+  if (kind === "int")   return v.toLocaleString();
+  // num: always 2 decimals so 1.5 and 2.0 render with comparable digit width
+  return v.toFixed(2);
+}
+
+/**
+ * True when every value is identical under JSON-equivalence. Used to pick
+ * between neutral (gray) and per-run-color rendering for each param row.
+ *
+ * JSON.stringify normalizes undefined→null so `[undefined, null]` reads as
+ * equal, which is correct for our "missing key" treatment. NaN serializes to
+ * "null" too — won't occur for the persisted params (Zod rejects NaN at
+ * ingest), but worth knowing in case the shape ever loosens.
+ */
+function paramsAllEqual(vals: unknown[]): boolean {
+  if (vals.length < 2) return true;
+  const first = JSON.stringify(vals[0] ?? null);
+  return vals.every((v) => JSON.stringify(v ?? null) === first);
+}
+
 // Compare view — generic for N runs (2 or 3). Mejora #5 extended this from
 // hardcoded 2-column layout to dynamic N columns with a single overlapped
 // equity chart. Colors and labels follow stable A/B/C positions so the
@@ -1497,6 +1540,37 @@ function CompareView({ runs, algorithmId }: { runs: HistoryRow[]; algorithmId: s
                       </td>
                     );
                   })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Params snapshot (Mejora #7). Same column layout as the metrics table
+          above. Rows where every run shares the same value render gray;
+          rows that differ render each cell in the column's accent color, so
+          the user can scan vertically for "what changed". */}
+      <div className="overflow-x-auto pt-2 border-t border-[#1f2937]" data-testid="compare-params">
+        <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-2 px-2">Params usados</p>
+        <table className="w-full text-[11px] font-mono">
+          <tbody>
+            {COMPARE_PARAMS.map((p) => {
+              const vals = runs.map((r) => (r.params ?? {})[p.key]);
+              const allEqual = paramsAllEqual(vals);
+              return (
+                <tr key={p.key} className="border-t border-[#1f2937]">
+                  <td className="py-1 px-2 text-[#94a3b8]">{p.label}</td>
+                  {vals.map((v, i) => (
+                    <td
+                      key={i}
+                      className="py-1 px-2 text-right"
+                      style={{ color: allEqual ? "#475569" : COMPARE_COLORS[i] }}
+                      data-testid={`param-cell-${p.key}-${i}`}
+                    >
+                      {fmtParam(v, p.kind)}
+                    </td>
+                  ))}
                 </tr>
               );
             })}
