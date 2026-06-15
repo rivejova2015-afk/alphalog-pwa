@@ -188,6 +188,13 @@ describe("QUIZZES integridad", () => {
       expect([...idxs].sort((a, b) => a - b)).toEqual(idxs);
     }
   });
+
+  it("cobertura completa: toda lección con quiz básico tiene también i y a", () => {
+    for (const lesson of LESSONS) {
+      if (!QUIZZES[lesson.id]) continue;
+      expect(availableLevels(lesson.id), `lección ${lesson.id} (${lesson.sub}) sin los 3 niveles`).toEqual(["b", "i", "a"]);
+    }
+  });
 });
 
 // ─── PRACTICE integrity ──────────────────────────────────────────────────────
