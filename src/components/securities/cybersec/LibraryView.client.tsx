@@ -27,11 +27,11 @@ function fmtSize(b: number | null): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function LibraryView() {
+export function LibraryView({ initialCat }: { initialCat?: string } = {}) {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [cat, setCat] = useState<string>("Todas");
+  const [cat, setCat] = useState<string>(initialCat && LIBRARY_CATEGORIES.includes(initialCat) ? initialCat : "Todas");
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const loadUploads = async () => {

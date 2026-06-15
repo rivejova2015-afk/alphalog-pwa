@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, BookOpen, Search } from "lucide-react";
+import { ArrowLeft, Check, BookOpen, Search, Library, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   type Module,
@@ -10,6 +10,7 @@ import {
   type ModuleStatus,
   type ProgressRecord,
   lessonsForModule,
+  libraryByCategory,
 } from "@/lib/securities/cybersec";
 import { ProgressBadge } from "./ProgressBadge.client";
 
@@ -25,6 +26,7 @@ export function ModuleView({ module: mod }: Props) {
   const [saving, setSaving] = useState<LevelKey | "research" | null>(null);
 
   const lessons = lessonsForModule(mod.m);
+  const reading = libraryByCategory(mod.cat);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +191,45 @@ export function ModuleView({ module: mod }: Props) {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {reading.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#94a3b8] flex items-center gap-2">
+              <Library size={14} /> Lecturas recomendadas
+            </h2>
+            <Link
+              href={`/securities/cybersec/biblioteca?cat=${encodeURIComponent(mod.cat)}`}
+              className="text-[11px] text-[#22d3ee] hover:underline"
+            >
+              Ver todas en la biblioteca →
+            </Link>
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {reading.slice(0, 6).map((b) => (
+              <li key={b.id}>
+                <a
+                  href={b.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-full flex-col rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-3 hover:bg-[#151b28] transition-colors"
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/30">{b.format}</span>
+                    <span className="text-[9px] uppercase tracking-wider text-[#475569]">{b.license.length > 28 ? `${b.license.slice(0, 28)}…` : b.license}</span>
+                  </div>
+                  <p className="text-sm font-bold text-[#e2e8f0] leading-tight">{b.title}</p>
+                  <p className="text-[11px] text-[#94a3b8]">{b.author}</p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#22d3ee]">Abrir <ExternalLink size={11} /></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+          {reading.length > 6 && (
+            <p className="text-[11px] text-[#475569]">+{reading.length - 6} recursos más en la biblioteca para «{mod.cat}».</p>
+          )}
         </section>
       )}
     </div>
