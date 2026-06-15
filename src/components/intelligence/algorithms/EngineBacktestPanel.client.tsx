@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database, Trash2, Info } from "lucide-react";
+import { Sparkles, Loader2, AlertCircle, CheckCircle2, History, Brain, ShieldCheck, XCircle, ArrowUpCircle, Database, Trash2, Info, Wand2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { useBacktestStream, type BacktestPhaseEvent } from "@/hooks/useBacktestStream";
+import { useAutoTuneStream, type AutoTuneTrial } from "@/hooks/useAutoTuneStream";
 
 /**
  * Render the SSE phase event as a short Spanish label for the inline status
@@ -254,6 +255,12 @@ export function EngineBacktestPanel({
   const [deletingAll, setDeletingAll] = useState(false);
   const [symbolStatus, setSymbolStatus] = useState<Record<string, SymbolStatus> | null>(null);
 
+  // Auto-tune SL/TP grid (Mejora #6). The hook streams per-trial results;
+  // the modal stays open until the user closes it or applies the best combo.
+  const autoTune = useAutoTuneStream();
+  const [autoTuneOpen, setAutoTuneOpen] = useState(false);
+  const [savingTune, setSavingTune] = useState(false);
+
   // Load history on mount + refresh after each successful run.
   const refreshHistory = async () => {
     try {
@@ -267,6 +274,13 @@ export function EngineBacktestPanel({
   useEffect(() => {
     refreshHistory();
   }, [algorithmId]);
+
+  // Open the auto-tune panel as soon as the stream starts. Without this,
+  // launching the tune programmatically (e.g. via hook from tests) or via
+  // a clicker that didn't toggle autoTuneOpen would leave the panel hidden.
+  useEffect(() => {
+    if (autoTune.isStreaming) setAutoTuneOpen(true);
+  }, [autoTune.isStreaming]);
 
   function loadRun(run: HistoryRow) {
     // Reconstruct a BacktestResponse-shaped payload from the stored row so
@@ -480,6 +494,73 @@ export function EngineBacktestPanel({
       setMlStatus(`error: ${msg}`);
     } finally {
       setTrainingMl(false);
+    }
+  }
+
+  // Auto-tune SL/TP grid (Mejora #6). Streams ~29 trials over SSE, ranks by
+  // Sharpe (tie-break on totalPnl), shows progress + top 5 in a modal, and
+  // optionally writes the best combo to algorithms.parameters under
+  // `sl_atr_mult_recommended` / `tp_atr_mult_recommended` namespaces.
+  function startAutoTune() {
+    if (instruments.length === 0) {
+      toast.error("La estrategia no tiene instrumentos");
+      return;
+    }
+    if (!symbol) {
+      toast.error("Elegí un símbolo primero");
+      return;
+    }
+    autoTune.reset();
+    setAutoTuneOpen(true);
+    autoTune.start(`/api/algorithms/${algorithmId}/engine-backtest/auto-tune`, {
+      symbol,
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+      starting_equity: Number(startingEquity) || 10_000,
+    });
+  }
+
+  async function applyAutoTuneBest() {
+    const best = autoTune.best;
+    if (!best) return;
+    setSavingTune(true);
+    try {
+      // PUT /api/algorithms/[id] replaces `parameters` wholesale, so we
+      // fetch the current value first and merge the auto-tune keys into it.
+      // Without this, the kelly_* / arb_gap_min / multi-tf weights would
+      // disappear after a single Apply click.
+      const currentRes = await fetch(`/api/algorithms/${algorithmId}`, { cache: "no-store" });
+      let currentParams: Record<string, unknown> = {};
+      if (currentRes.ok) {
+        const cur = await currentRes.json().catch(() => ({}));
+        currentParams = (cur?.algorithm?.parameters as Record<string, unknown> | undefined) ?? (cur?.parameters as Record<string, unknown> | undefined) ?? {};
+      }
+      const mergedParams = {
+        ...currentParams,
+        sl_atr_mult_recommended: best.slAtrMult,
+        tp_atr_mult_recommended: best.tpAtrMult,
+        auto_tune_best_sharpe:   best.sharpe,
+        auto_tune_run_at:        new Date().toISOString(),
+      };
+      const res = await fetch(`/api/algorithms/${algorithmId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parameters: mergedParams }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || `HTTP ${res.status}`);
+        return;
+      }
+      // Update the live inputs so the next Validar Engine uses the best combo.
+      setSl(String(best.slAtrMult));
+      setTp(String(best.tpAtrMult));
+      toast.success(`Aplicado: SL=${best.slAtrMult} TP=${best.tpAtrMult} (Sharpe ${best.sharpe.toFixed(2)})`);
+      setAutoTuneOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setSavingTune(false);
     }
   }
 
@@ -992,6 +1073,17 @@ export function EngineBacktestPanel({
           {trainingMl ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
           {trainingMl ? "Entrenando…" : "Entrenar ML"}
         </button>
+        <button
+          type="button"
+          onClick={startAutoTune}
+          disabled={autoTune.isStreaming || !symbol}
+          data-testid="auto-tune-button"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f2937] border border-[#fbbf24]/30 text-[#fbbf24] text-xs font-bold transition-all hover:border-[#fbbf24]/60 disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Grid search SL [1.0–3.0] × TP [2.0–5.0] step 0.5. Skipea TP≤SL. ~29 combos, ~30s con SSE streaming."
+        >
+          {autoTune.isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+          {autoTune.isStreaming ? `Tuning ${autoTune.progress?.current ?? 0}/${autoTune.progress?.total ?? "?"}…` : "Auto-tune SL/TP"}
+        </button>
         {bootstrapStatus && (
           <span className="text-[10px] font-mono text-[#475569]">{bootstrapStatus}</span>
         )}
@@ -1015,6 +1107,23 @@ export function EngineBacktestPanel({
           </div>
         )}
       </div>
+
+      {/* Auto-tune SL/TP panel (Mejora #6). Renders while streaming AND after
+          done; lets the user inspect top 5 trials by Sharpe + apply the best
+          combo to algorithms.parameters as a recommendation. */}
+      {autoTuneOpen && (
+        <AutoTuneResults
+          isStreaming={autoTune.isStreaming}
+          isDone={autoTune.isDone}
+          trials={autoTune.trials}
+          best={autoTune.best}
+          progress={autoTune.progress}
+          error={autoTune.error}
+          savingTune={savingTune}
+          onApply={applyAutoTuneBest}
+          onClose={() => { autoTune.abort(); setAutoTuneOpen(false); }}
+        />
+      )}
 
       {/* Data availability panel — driven by the per-symbol registry. Surfaces
           actionable warnings when a symbol has zero API coverage (e.g. XAUUSD
@@ -1399,6 +1508,127 @@ function CompareView({ runs, algorithmId }: { runs: HistoryRow[]; algorithmId: s
         <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-2">
           <p className="text-[9px] text-[#475569] uppercase tracking-wider mb-1">Equity curves (overlap)</p>
           <EquityCurve series={series} height={140} algoId={`${algorithmId}-cmp`} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Auto-tune results panel (Mejora #6) ────────────────────────────────────
+//
+// Embedded section (not a portal modal) that renders the grid sweep state:
+// progress bar while streaming, top 5 by Sharpe sorted desc when done, plus
+// the "Aplicar y guardar" action that persists the best combo into
+// algorithms.parameters.
+
+function AutoTuneResults({
+  isStreaming,
+  isDone,
+  trials,
+  best,
+  progress,
+  error,
+  savingTune,
+  onApply,
+  onClose,
+}: {
+  isStreaming: boolean;
+  isDone: boolean;
+  trials: AutoTuneTrial[];
+  best: AutoTuneTrial | null;
+  progress: { current: number; total: number } | null;
+  error: string | null;
+  savingTune: boolean;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  const top5 = [...trials]
+    .sort((a, b) => b.sharpe - a.sharpe || b.totalPnl - a.totalPnl)
+    .slice(0, 5);
+
+  return (
+    <div className="bg-[#151b28] border border-[#fbbf24]/30 rounded-lg p-3 space-y-3" data-testid="auto-tune-results">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-[#fbbf24] uppercase tracking-wider font-medium flex items-center gap-1.5">
+          <Wand2 size={11} /> Auto-tune SL/TP {progress && `· ${progress.current}/${progress.total}`}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-[10px] text-[#475569] hover:text-[#e2e8f0] transition-colors"
+        >
+          Cerrar
+        </button>
+      </div>
+
+      {error && (
+        <div className="text-[10px] text-[#ef4444] font-mono">{error}</div>
+      )}
+
+      {isStreaming && progress && (
+        <div className="space-y-1">
+          <div className="h-1 bg-[#0a0e1a] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#fbbf24] transition-all"
+              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-[#475569] font-mono">
+            Probando {progress.current}/{progress.total} combos · best Sharpe hasta ahora: {best?.sharpe.toFixed(2) ?? "—"}
+          </p>
+        </div>
+      )}
+
+      {trials.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px] font-mono">
+            <thead className="text-[#475569]">
+              <tr>
+                <th className="text-left py-1 px-2">#</th>
+                <th className="text-right py-1 px-2">SL × ATR</th>
+                <th className="text-right py-1 px-2">TP × ATR</th>
+                <th className="text-right py-1 px-2">Sharpe</th>
+                <th className="text-right py-1 px-2">PnL</th>
+                <th className="text-right py-1 px-2">Win Rate</th>
+                <th className="text-right py-1 px-2">Max DD</th>
+                <th className="text-right py-1 px-2">Trades</th>
+              </tr>
+            </thead>
+            <tbody>
+              {top5.map((t, i) => {
+                const isWinner = i === 0 && isDone;
+                return (
+                  <tr key={`${t.slAtrMult}-${t.tpAtrMult}`} className="border-t border-[#1f2937]">
+                    <td className="py-1 px-2 text-[#94a3b8]">{isWinner ? <Trophy size={10} className="inline text-[#fbbf24]" /> : i + 1}</td>
+                    <td className="py-1 px-2 text-right">{t.slAtrMult.toFixed(1)}</td>
+                    <td className="py-1 px-2 text-right">{t.tpAtrMult.toFixed(1)}</td>
+                    <td className={`py-1 px-2 text-right ${isWinner ? "text-[#34d399] font-bold" : "text-[#22d3ee]"}`}>{t.sharpe.toFixed(2)}</td>
+                    <td className={`py-1 px-2 text-right ${t.totalPnl >= 0 ? "text-[#34d399]" : "text-[#ef4444]"}`}>${t.totalPnl.toFixed(0)}</td>
+                    <td className="py-1 px-2 text-right">{(t.winRate * 100).toFixed(1)}%</td>
+                    <td className="py-1 px-2 text-right text-[#ef4444]">{(t.maxDrawdownPct * 100).toFixed(1)}%</td>
+                    <td className="py-1 px-2 text-right text-[#475569]">{t.trades}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {isDone && best && (
+        <div className="flex items-center justify-between bg-[#0a0e1a] border border-[#34d399]/30 rounded p-2">
+          <div className="text-[10px] text-[#34d399]">
+            <span className="font-bold">Best:</span> SL={best.slAtrMult.toFixed(1)} · TP={best.tpAtrMult.toFixed(1)} · Sharpe {best.sharpe.toFixed(2)} · PnL ${best.totalPnl.toFixed(0)}
+          </div>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={savingTune}
+            className="px-3 py-1.5 rounded-lg bg-[#34d399] hover:bg-[#22b67c] text-[#0a0e1a] text-[10px] font-bold transition-all disabled:opacity-40"
+            data-testid="auto-tune-apply"
+          >
+            {savingTune ? "Guardando…" : "Aplicar y guardar"}
+          </button>
         </div>
       )}
     </div>
