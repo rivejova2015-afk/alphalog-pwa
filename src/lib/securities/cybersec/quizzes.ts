@@ -1,7 +1,10 @@
-import type { QuizQuestion } from "./types";
+import type { QuizQuestion, QuizLevel } from "./types";
 
 // Quizzes keyed by lesson id. Each one is short (4-5 questions) so users can
 // finish in a couple minutes. `c` is the index of the correct option in `o`.
+// NOTA: este mapa es el nivel BÁSICO ('b') de cada lección — back-compat con el
+// histórico de antes de los quizzes por nivel (Fase A). Los niveles intermedio
+// ('i') y avanzado ('a') viven en QUIZZES_IA y se van autoríando por lotes.
 export const QUIZZES: Record<number, QuizQuestion[]> = {
   1: [
     { q: "La ciberseguridad combina:", o: ["HW, SW, Cloud", "Tecnología, Procesos, Personas", "Ataque, Defensa, Análisis"], c: 1, e: "Tecnología + Procesos + Personas." },
@@ -495,6 +498,149 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
   ],
 };
 
-export function getQuiz(lessonId: number): QuizQuestion[] | undefined {
-  return QUIZZES[lessonId];
+// ─── Quizzes por nivel (Fase A) ──────────────────────────────────────────────
+// Niveles intermedio ('i') y avanzado ('a') por lección. El básico ('b') sigue en
+// QUIZZES (back-compat). Se autoría por lotes; una lección sin entrada acá solo
+// tiene nivel básico disponible. Las preguntas siguen el mismo shape (c = índice
+// de la opción correcta).
+export const QUIZZES_IA: Record<number, { i?: QuizQuestion[]; a?: QuizQuestion[] }> = {
+  // ── Bloque Fundamentos ──
+  1: {
+    i: [
+      { q: "En el Cyber Kill Chain de Lockheed Martin, ¿qué fase sigue a 'Weaponization'?", o: ["Reconnaissance", "Delivery", "Installation"], c: 1, e: "Recon → Weaponization → Delivery → Exploitation → Installation → C2 → Actions." },
+      { q: "Un modelo de amenazas busca principalmente:", o: ["Cifrar los datos en reposo", "Identificar activos, amenazas y mitigaciones antes de construir", "Reemplazar al firewall"], c: 1, e: "Threat modeling es preventivo: se hace en diseño." },
+      { q: "El ataque a SolarWinds (2020) fue un ejemplo de:", o: ["Phishing masivo", "Compromiso de la cadena de suministro", "Ataque de fuerza bruta"], c: 1, e: "Se troyanizó la build de Orion (supply chain)." },
+      { q: "Un IoC (Indicator of Compromise) es:", o: ["Una política de seguridad", "Una evidencia observable de una intrusión", "Un tipo de firewall"], c: 1, e: "Hashes, IPs, dominios maliciosos, etc." },
+    ],
+    a: [
+      { q: "En STRIDE, la 'S' corresponde a:", o: ["Spoofing", "Scanning", "Sniffing"], c: 0, e: "STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, DoS, Elevation of privilege." },
+      { q: "DREAD se usa para:", o: ["Cifrar tráfico", "Priorizar/puntuar riesgos", "Escanear puertos"], c: 1, e: "Damage, Reproducibility, Exploitability, Affected users, Discoverability." },
+      { q: "La 'E' de STRIDE (Elevation of privilege) viola principalmente:", o: ["Disponibilidad", "Autorización", "No repudio"], c: 1, e: "Obtener permisos mayores a los asignados." },
+      { q: "Un 'attack tree' modela:", o: ["La topología de red", "Las rutas alternativas para lograr un objetivo de ataque", "El presupuesto de seguridad"], c: 1, e: "Raíz = objetivo; ramas = formas de alcanzarlo." },
+    ],
+  },
+  2: {
+    i: [
+      { q: "Separación de deberes (SoD) busca:", o: ["Acelerar procesos", "Que ninguna persona controle un proceso crítico de punta a punta", "Reducir el número de empleados"], c: 1, e: "Evita fraude/error con control dividido." },
+      { q: "El principio de menor privilegio aplica a:", o: ["Solo administradores", "Usuarios, procesos y servicios", "Solo cuentas de servicio"], c: 1, e: "Todo sujeto recibe el mínimo necesario." },
+      { q: "Defensa en profundidad significa:", o: ["Un solo control muy fuerte", "Múltiples capas de controles redundantes", "Cifrar dos veces"], c: 1, e: "Si una capa falla, otra contiene." },
+      { q: "El modelo AAA incluye Authentication, Authorization y:", o: ["Auditing/Accounting", "Availability", "Allocation"], c: 0, e: "Accounting/Auditing = registro de actividad." },
+    ],
+    a: [
+      { q: "El pilar central de Zero Trust es:", o: ["Confiar en la red interna", "Never trust, always verify", "VPN siempre activa"], c: 1, e: "No hay perímetro de confianza implícito." },
+      { q: "En Zero Trust, el acceso se decide por:", o: ["Ubicación de red únicamente", "Identidad + contexto + postura del dispositivo", "Dirección MAC"], c: 1, e: "Decisión dinámica basada en señales." },
+      { q: "BeyondCorp (Google) eliminó la dependencia de:", o: ["Contraseñas", "La VPN/perímetro de red", "La autenticación"], c: 1, e: "Acceso basado en identidad/dispositivo, sin red de confianza." },
+      { q: "Un 'policy decision point' (PDP) en ZTA:", o: ["Cifra el tráfico", "Evalúa políticas y autoriza/deniega cada acceso", "Almacena logs"], c: 1, e: "El PDP decide; el PEP (enforcement point) aplica." },
+    ],
+  },
+  3: {
+    i: [
+      { q: "Una APT se caracteriza por:", o: ["Ataques rápidos y ruidosos", "Persistencia prolongada y sigilo, usualmente con respaldo estatal", "Solo afectar a usuarios domésticos"], c: 1, e: "Advanced Persistent Threat = largo plazo, sigilosa." },
+      { q: "Un IoC de tipo comportamental sería:", o: ["Un hash de archivo", "Un patrón de beaconing C2 cada N segundos", "Una IP"], c: 1, e: "Comportamiento > artefacto estático." },
+      { q: "El 'dwell time' mide:", o: ["El tiempo de cifrado", "Cuánto permanece el atacante sin ser detectado", "La latencia de red"], c: 1, e: "Tiempo entre intrusión y detección." },
+      { q: "Living off the land (LOTL) se refiere a:", o: ["Usar herramientas legítimas del sistema para atacar", "Sembrar malware en USB", "Atacar granjas de servidores"], c: 0, e: "PowerShell, WMI, etc. para evadir detección." },
+    ],
+    a: [
+      { q: "MITRE ATT&CK organiza el conocimiento en:", o: ["Vulnerabilidades CVE", "Tácticas y técnicas de adversarios", "Certificaciones"], c: 1, e: "Matriz de TTPs por fase." },
+      { q: "Una 'táctica' en ATT&CK responde a:", o: ["El cómo (técnica específica)", "El por qué (objetivo del adversario)", "El cuándo"], c: 1, e: "Táctica = objetivo (p.ej. Persistence); técnica = cómo." },
+      { q: "Threat intelligence 'estratégica' está dirigida a:", o: ["Analistas SOC en tiempo real", "Decisores/ejecutivos (tendencias y riesgo)", "Firewalls"], c: 1, e: "Estratégica = alto nivel; táctica/operacional = técnica." },
+      { q: "Mapear detecciones a ATT&CK ayuda a:", o: ["Cifrar mejor", "Medir cobertura y gaps de detección", "Reducir el ancho de banda"], c: 1, e: "Identifica técnicas sin cobertura." },
+    ],
+  },
+  4: {
+    i: [
+      { q: "Los CIS Controls se caracterizan por estar:", o: ["Ordenados sin prioridad", "Priorizados por grupos de implementación (IG1-IG3)", "Solo para gobierno"], c: 1, e: "IG1 (básico) → IG3 (avanzado)." },
+      { q: "Un control 'preventivo' busca:", o: ["Detectar tras el hecho", "Evitar que el incidente ocurra", "Recuperar datos"], c: 1, e: "Preventivo vs detectivo vs correctivo." },
+      { q: "El 'inventario de activos' es el control CIS #1 porque:", o: ["Es el más barato", "No puedes proteger lo que no sabes que tienes", "Lo exige la ley"], c: 1, e: "Visibilidad es la base." },
+      { q: "NIST CSF se compone de Funciones, Categorías y:", o: ["Subcategorías", "Certificaciones", "Multas"], c: 0, e: "Functions → Categories → Subcategories." },
+    ],
+    a: [
+      { q: "SOC 2 Type II evalúa:", o: ["El diseño de controles en un punto del tiempo", "La efectividad operativa de los controles durante un período", "Solo la confidencialidad"], c: 1, e: "Type I = diseño puntual; Type II = operación sostenida." },
+      { q: "Los Trust Services Criteria de SOC 2 incluyen Security y:", o: ["Availability, Processing Integrity, Confidentiality, Privacy", "Solo Privacy", "Velocidad"], c: 0, e: "5 criterios; Security es obligatorio." },
+      { q: "En una auditoría de cumplimiento, una 'no conformidad mayor' implica:", o: ["Una observación menor", "Una falla sistémica del control", "Un elogio"], c: 1, e: "Compromete el objetivo del control." },
+      { q: "La diferencia clave entre ISO 27001 y NIST CSF es:", o: ["ISO es certificable; NIST CSF es un marco voluntario", "Son idénticos", "NIST es obligatorio mundialmente"], c: 0, e: "ISO 27001 se certifica; CSF guía, no certifica." },
+    ],
+  },
+  // ── Bloque Redes ──
+  5: {
+    i: [
+      { q: "La PDU de la capa de Transporte (OSI 4) se llama:", o: ["Trama (frame)", "Segmento", "Paquete"], c: 1, e: "Bits→Trama(2)→Paquete(3)→Segmento(4)." },
+      { q: "El encapsulamiento agrega cabeceras:", o: ["De capa superior a inferior al enviar", "Solo en la capa física", "Únicamente al recibir"], c: 0, e: "Cada capa envuelve los datos de la superior." },
+      { q: "TLS opera principalmente entre las capas:", o: ["1 y 2", "Sesión/Presentación (5-6) sobre Transporte", "Solo capa 7"], c: 1, e: "Asegura sesiones sobre TCP." },
+      { q: "Un switch opera nativamente en la capa:", o: ["1 (Física)", "2 (Enlace)", "3 (Red)"], c: 1, e: "Conmuta por dirección MAC." },
+    ],
+    a: [
+      { q: "ARP poisoning es un ataque de capa 2 que permite:", o: ["Agotar puertos TCP", "Man-in-the-middle en la LAN", "Romper TLS directamente"], c: 1, e: "Asocia la MAC del atacante a una IP legítima." },
+      { q: "Un ataque de capa 7 típico es:", o: ["SYN flood", "HTTP flood / Slowloris", "MAC flooding"], c: 1, e: "Explota la lógica de aplicación." },
+      { q: "MAC flooding contra un switch busca:", o: ["Llenar la CAM table y forzar fail-open (hub-like)", "Cifrar el tráfico", "Cambiar la IP"], c: 0, e: "Saturada la tabla, el switch difunde a todos." },
+      { q: "VLAN hopping (double tagging) explota:", o: ["DNS", "El manejo de etiquetas 802.1Q en trunks", "Certificados"], c: 1, e: "Capa 2: salta entre VLANs." },
+    ],
+  },
+  6: {
+    i: [
+      { q: "El three-way handshake de TCP es:", o: ["SYN → SYN-ACK → ACK", "ACK → SYN → FIN", "SYN → FIN → ACK"], c: 0, e: "Establece la conexión fiable." },
+      { q: "DNS sobre UDP usa el puerto 53, pero recurre a TCP cuando:", o: ["Nunca usa TCP", "La respuesta excede el tamaño (p.ej. zone transfer)", "Se usa HTTPS"], c: 1, e: "AXFR y respuestas grandes usan TCP/53." },
+      { q: "Un registro DNS tipo MX define:", o: ["El servidor de correo del dominio", "La IP del host", "El alias"], c: 0, e: "MX = mail exchanger." },
+      { q: "El flag TCP que solicita cerrar ordenadamente la conexión es:", o: ["RST", "FIN", "PSH"], c: 1, e: "RST aborta; FIN cierra ordenado." },
+    ],
+    a: [
+      { q: "DNS cache poisoning busca:", o: ["Inyectar registros falsos en el resolver", "Saturar el ancho de banda", "Robar certificados"], c: 0, e: "Redirige a hosts maliciosos." },
+      { q: "DNSSEC mitiga el poisoning mediante:", o: ["Cifrado del payload", "Firmas criptográficas que validan la integridad de las respuestas", "Cambiar el puerto"], c: 1, e: "Autentica el origen e integridad, no confidencialidad." },
+      { q: "En Wireshark, el filtro 'tcp.flags.syn==1 && tcp.flags.ack==0' aísla:", o: ["Respuestas del servidor", "Intentos de inicio de conexión (posible scan)", "Tráfico cifrado"], c: 1, e: "SYN sin ACK = primer paquete del handshake." },
+      { q: "DNS tunneling se detecta observando:", o: ["Consultas TXT/anormalmente largas y de alta frecuencia", "Pings ICMP", "Tráfico HTTPS normal"], c: 0, e: "Exfiltra datos codificados en consultas DNS." },
+    ],
+  },
+  7: {
+    i: [
+      { q: "La máscara /26 deja para hosts usables:", o: ["62", "64", "30"], c: 0, e: "2^6 - 2 = 62." },
+      { q: "NAT de tipo PAT (overload) permite:", o: ["Una IP pública por host", "Muchos hosts privados compartiendo una IP pública vía puertos", "Solo IPv6"], c: 1, e: "Multiplexa por puerto de origen." },
+      { q: "El rango 10.0.0.0/8 es:", o: ["Público", "Privado (RFC 1918)", "Multicast"], c: 1, e: "10/8, 172.16/12, 192.168/16 son privados." },
+      { q: "CIDR permite:", o: ["Subneteo de longitud variable (VLSM)", "Solo clases A/B/C fijas", "Eliminar el routing"], c: 0, e: "Asignación eficiente con prefijos arbitrarios." },
+    ],
+    a: [
+      { q: "Una DMZ se diseña para:", o: ["Alojar servicios públicos aislados de la red interna", "Acelerar el WiFi", "Reemplazar el firewall"], c: 0, e: "Zona intermedia entre Internet y LAN." },
+      { q: "La segmentación de red limita el:", o: ["Ancho de banda total", "Movimiento lateral del atacante", "Número de switches"], c: 1, e: "Contención: un segmento comprometido no expone todo." },
+      { q: "Una arquitectura de red 'three-tier' separa:", o: ["Core, distribución y acceso", "WAN, MAN y PAN", "TCP, UDP e ICMP"], c: 0, e: "Modelo jerárquico clásico de Cisco." },
+      { q: "Microsegmentación se diferencia de VLAN tradicional en que:", o: ["Aísla a nivel de carga de trabajo/host con políticas finas", "Usa cables más rápidos", "No requiere políticas"], c: 0, e: "Granularidad por workload, alineada a Zero Trust." },
+    ],
+  },
+  8: {
+    i: [
+      { q: "El display filter de Wireshark para aislar un host es:", o: ["ip.addr == 10.0.0.5", "host=10.0.0.5", "filter ip 10.0.0.5"], c: 0, e: "Sintaxis de display filter." },
+      { q: "'Follow TCP Stream' sirve para:", o: ["Reensamblar el flujo de una conexión y leerlo", "Cifrar paquetes", "Generar tráfico"], c: 0, e: "Reconstruye la conversación completa." },
+      { q: "Credenciales en texto plano se ven típicamente en protocolos como:", o: ["HTTPS y SSH", "FTP, Telnet y HTTP", "TLS 1.3"], c: 1, e: "Protocolos sin cifrado exponen credenciales." },
+      { q: "La diferencia entre capture filter y display filter es:", o: ["No hay diferencia", "Capture limita lo que se graba; display filtra lo ya capturado", "Display es más lento siempre"], c: 1, e: "Capture (BPF) en captura; display tras capturar." },
+    ],
+    a: [
+      { q: "Un patrón de muchos SYN a puertos secuenciales desde una IP sugiere:", o: ["Transferencia de archivos", "Un escaneo de puertos (p.ej. Nmap)", "Tráfico de VoIP"], c: 1, e: "Barrido de puertos clásico." },
+      { q: "tshark se prefiere sobre Wireshark GUI cuando:", o: ["Se necesita análisis automatizado/por línea de comandos", "Hay poca RAM siempre", "No existe la GUI"], c: 0, e: "Scripting y captura headless." },
+      { q: "ARP spoofing en una captura se evidencia por:", o: ["Múltiples respuestas ARP mapeando una IP a distintas MAC", "Paquetes ICMP grandes", "Consultas DNS TXT"], c: 0, e: "Conflicto IP↔MAC = envenenamiento." },
+      { q: "Para detectar DNS tunneling en Wireshark se observa:", o: ["Subdominios largos y codificados con alta frecuencia", "Handshakes TLS normales", "Pocos paquetes UDP"], c: 0, e: "Volumen y entropía anómalos en consultas DNS." },
+    ],
+  },
+};
+
+export const QUIZ_LEVELS: QuizLevel[] = ["b", "i", "a"];
+
+export const QUIZ_LEVEL_LABELS: Record<QuizLevel, string> = {
+  b: "Básico",
+  i: "Intermedio",
+  a: "Avanzado",
+};
+
+// Devuelve el quiz de una lección para el nivel pedido (básico por defecto).
+// 'b' sale de QUIZZES (back-compat); 'i'/'a' de QUIZZES_IA.
+export function getQuiz(lessonId: number, level: QuizLevel = "b"): QuizQuestion[] | undefined {
+  if (level === "b") return QUIZZES[lessonId];
+  return QUIZZES_IA[lessonId]?.[level];
+}
+
+// Niveles con contenido disponible para una lección, en orden b → i → a.
+export function availableLevels(lessonId: number): QuizLevel[] {
+  const levels: QuizLevel[] = [];
+  if (QUIZZES[lessonId]) levels.push("b");
+  const ia = QUIZZES_IA[lessonId];
+  if (ia?.i) levels.push("i");
+  if (ia?.a) levels.push("a");
+  return levels;
 }

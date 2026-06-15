@@ -5,7 +5,7 @@ import {
   LESSONS, SYLLABUS, HW,
   computeXp, computeProgress, computeAchievements,
   streakWithFreeze, activityDays, xpEarnedToday,
-  snapshotFromData, detectMilestones,
+  snapshotFromData, detectMilestones, availableLevels,
   type XpData, type MilestoneSnapshot,
 } from "@/lib/securities/cybersec";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 // user's result tables, runs the (pure, isomorphic) engines once, detects +
 // persists milestones, and returns everything ready to render.
 const CONTENT = {
-  lessons: LESSONS.map((l) => ({ id: l.id, sub: l.sub })),
+  lessons: LESSONS.map((l) => ({ id: l.id, sub: l.sub, levels: availableLevels(l.id) })),
   modules: SYLLABUS.map((m) => ({ m: m.m, cat: m.cat })),
   homework: HW.map((h) => ({ id: h.id, l: h.l, pts: h.pts })),
 };
@@ -29,7 +29,7 @@ export async function GET() {
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const [quizQ, examQ, hwQ, progQ, stateQ] = await Promise.all([
-      supabase.from("securities_quiz_results").select("lesson_id, score, total, taken_at").eq("user_id", user.id),
+      supabase.from("securities_quiz_results").select("lesson_id, score, total, taken_at, level").eq("user_id", user.id),
       supabase.from("securities_exam_results").select("score, total, passed, taken_at, section").eq("user_id", user.id),
       supabase.from("securities_homework_submissions").select("homework_id, status, points, submitted_at, graded_at").eq("user_id", user.id),
       supabase.from("securities_progress").select("module_id, completed_levels, research_done").eq("user_id", user.id),

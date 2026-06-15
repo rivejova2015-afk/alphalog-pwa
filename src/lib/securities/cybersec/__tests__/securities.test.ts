@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { EXAM, EXAM_PASS_RATIO } from "../exam";
 import { HW, getHomework, HW_TOTAL_POINTS } from "../homework";
 import { LESSONS, getLesson, lessonsForModule } from "../lessons";
-import { QUIZZES } from "../quizzes";
+import { QUIZZES, QUIZZES_IA, getQuiz, availableLevels } from "../quizzes";
 import { PRACTICE } from "../practice";
 import { FLASHCARDS, FLASHCARD_CATEGORIES, flashcardsByCategory } from "../flashcards";
 import { tokenizeInline, splitLines, isCodeLine, parseContent } from "../markdown";
@@ -149,6 +149,43 @@ describe("QUIZZES integridad", () => {
     const lessonIds = new Set(LESSONS.map((l) => l.id));
     for (const key of Object.keys(QUIZZES)) {
       expect(lessonIds.has(Number(key))).toBe(true);
+    }
+  });
+
+  // ── Quizzes por nivel (Fase A) ──
+  it("QUIZZES_IA: cada nivel autoríado es válido y de lección existente", () => {
+    const lessonIds = new Set(LESSONS.map((l) => l.id));
+    for (const [key, ia] of Object.entries(QUIZZES_IA)) {
+      expect(lessonIds.has(Number(key)), `lección ${key} de QUIZZES_IA inexistente`).toBe(true);
+      for (const lv of ["i", "a"] as const) {
+        const quiz = ia[lv];
+        if (!quiz) continue;
+        expect(quiz.length, `lección ${key} nivel ${lv} vacío`).toBeGreaterThanOrEqual(3);
+        for (const q of quiz) {
+          expect(q.q.length).toBeGreaterThan(0);
+          expect(q.o.length).toBeGreaterThan(1);
+          expect(q.c).toBeGreaterThanOrEqual(0);
+          expect(q.c).toBeLessThan(q.o.length);
+          expect(q.e.length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("getQuiz devuelve el nivel correcto y availableLevels es coherente", () => {
+    // Lección 1 tiene i y a autoríados en el primer lote.
+    expect(getQuiz(1, "b")).toBe(QUIZZES[1]);
+    expect(getQuiz(1, "i")).toBe(QUIZZES_IA[1]?.i);
+    expect(getQuiz(1, "a")).toBe(QUIZZES_IA[1]?.a);
+    expect(availableLevels(1)).toEqual(["b", "i", "a"]);
+
+    // availableLevels siempre arranca con 'b' si hay quiz básico, y mantiene orden.
+    for (const lesson of LESSONS) {
+      const lv = availableLevels(lesson.id);
+      if (QUIZZES[lesson.id]) expect(lv[0]).toBe("b");
+      const order = ["b", "i", "a"];
+      const idxs = lv.map((x) => order.indexOf(x));
+      expect([...idxs].sort((a, b) => a - b)).toEqual(idxs);
     }
   });
 });

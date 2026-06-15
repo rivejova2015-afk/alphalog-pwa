@@ -45,6 +45,29 @@ export function moduleMastery(args: {
   return s;
 }
 
+const PASS = 0.7;
+
+// Maestría por niveles de quiz (Fase A): +1 por cada nivel APROBADO entre los
+// disponibles + 1 Legendary si los tres niveles (b/i/a) existen, están aprobados
+// y el research está hecho. Se usa solo para módulos que ya tienen contenido
+// intermedio/avanzado autoríado; los demás caen al modelo legacy (moduleMastery).
+export function moduleMasteryLeveled(args: {
+  levelPct: Record<string, number | null>;
+  availableLevels: string[];
+  researchDone: boolean;
+}): number {
+  let s = 0;
+  for (const lv of args.availableLevels) {
+    const pct = args.levelPct[lv];
+    if (pct != null && pct >= PASS) s += 1;
+  }
+  const allThree = (["b", "i", "a"] as const).every(
+    (lv) => args.availableLevels.includes(lv) && (args.levelPct[lv] ?? 0) >= PASS,
+  );
+  if (allThree && args.researchDone) s += 1; // Legendary
+  return s;
+}
+
 export const MASTERY_MAX = 4;
 
 export interface XpBreakdown { lessonXp: number; homeworkXp: number; examXp: number; masteryXp: number }
@@ -57,17 +80,20 @@ export interface XpResult {
 }
 
 export function computeXp(content: ProgressContent, data: XpData): XpResult {
-  // Best quiz score per lesson.
-  const bestByLesson = new Map<number, { score: number; total: number }>();
+  // Best quiz score per (lesson, level). Filas históricas sin nivel = 'b'.
+  const bestByLessonLevel = new Map<string, { score: number; total: number }>();
   for (const r of data.quizResults) {
-    const prev = bestByLesson.get(r.lesson_id);
+    const lv = r.level ?? "b";
+    const key = `${r.lesson_id}:${lv}`;
+    const prev = bestByLessonLevel.get(key);
     if (!prev || r.score / r.total > prev.score / prev.total) {
-      bestByLesson.set(r.lesson_id, { score: r.score, total: r.total });
+      bestByLessonLevel.set(key, { score: r.score, total: r.total });
     }
   }
 
+  // XP por lección: cada (lección, nivel) con su mejor intento aporta.
   let lessonXp = 0;
-  for (const b of bestByLesson.values()) {
+  for (const b of bestByLessonLevel.values()) {
     lessonXp += b.score * 10;
     if (b.total > 0 && b.score === b.total) lessonXp += 20; // perfect bonus
   }
@@ -85,14 +111,29 @@ export function computeXp(content: ProgressContent, data: XpData): XpResult {
   let masteryXp = 0;
   for (const m of content.modules) {
     const lesson = lessonBySub.get(`M${m.m}`);
-    const best = lesson ? bestByLesson.get(lesson.id) : undefined;
-    const pct = best && best.total > 0 ? best.score / best.total : null;
     const prog = data.progress?.[m.m];
-    const ms = moduleMastery({
-      bestQuizPct: pct,
-      researchDone: Boolean(prog?.research_done),
-      completedLevels: prog?.completed_levels ?? [],
-    });
+    const researchDone = Boolean(prog?.research_done);
+
+    // Niveles con contenido para esta lección (default ['b'] para back-compat).
+    const levels = lesson?.levels ?? ["b"];
+    const levelPct: Record<string, number | null> = { b: null, i: null, a: null };
+    if (lesson) {
+      for (const lv of ["b", "i", "a"]) {
+        const best = bestByLessonLevel.get(`${lesson.id}:${lv}`);
+        levelPct[lv] = best && best.total > 0 ? best.score / best.total : null;
+      }
+    }
+
+    // Si el módulo tiene contenido intermedio/avanzado, usa el modelo por niveles;
+    // si solo tiene básico, conserva el modelo legacy (cero regresión histórica).
+    const hasIA = levels.includes("i") || levels.includes("a");
+    const ms = hasIA
+      ? moduleMasteryLeveled({ levelPct, availableLevels: levels, researchDone })
+      : moduleMastery({
+          bestQuizPct: levelPct.b,
+          researchDone,
+          completedLevels: prog?.completed_levels ?? [],
+        });
     mastery[m.m] = ms;
     masteryXp += ms * 25;
   }

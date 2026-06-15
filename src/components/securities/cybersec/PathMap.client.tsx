@@ -163,6 +163,7 @@ function PathNode({ m, title, mastery, isCurrent, ahead, locked }: { m: number; 
     return (
       <div
         role="treeitem"
+        aria-selected={false}
         aria-disabled="true"
         aria-label={`Módulo ${m}: ${title} — bloqueado, completá los módulos previos`}
         title="Bloqueado — completá los módulos previos para desbloquearlo"
@@ -194,6 +195,7 @@ function PathNode({ m, title, mastery, isCurrent, ahead, locked }: { m: number; 
     <Link
       href={`/securities/cybersec/modules/${m}`}
       role="treeitem"
+      aria-selected={isCurrent}
       aria-label={`Módulo ${m}: ${title} — maestría ${mastery} de ${MASTERY_MAX}${isCurrent ? " (actual)" : ""}`}
       className="flex flex-col items-center gap-1 w-[120px] group"
     >

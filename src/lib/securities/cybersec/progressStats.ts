@@ -1,12 +1,13 @@
 // Pure aggregation of the learner's progress across quizzes, exam and homework.
 // Kept free of network/imports so it can be unit-tested in isolation.
 
-export interface QuizResultRow { lesson_id: number; score: number; total: number; taken_at?: string | null }
+export interface QuizResultRow { lesson_id: number; score: number; total: number; taken_at?: string | null; level?: string | null }
 export interface ExamResultRow { score: number; total: number; passed: boolean; taken_at: string }
 export interface HomeworkRow { status: string; points: number | null; submitted_at?: string | null; graded_at?: string | null }
 
 export interface ProgressContent {
-  lessons: { id: number; sub: string }[];
+  // `levels` = niveles de quiz con contenido (b/i/a); default ['b'] si se omite.
+  lessons: { id: number; sub: string; levels?: string[] }[];
   modules: { m: number; cat: string }[];
   homework: { id: number; l: number; pts: number }[];
 }

@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, X, Trophy, Clock, GraduationCap, Timer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import type { QuizQuestion } from "@/lib/securities/cybersec";
-import { shuffle, formatClock } from "@/lib/securities/cybersec";
+import type { QuizQuestion, QuizLevel } from "@/lib/securities/cybersec";
+import { shuffle, formatClock, QUIZ_LEVEL_LABELS } from "@/lib/securities/cybersec";
 
 interface Props {
   lessonId: number;
   lessonTitle: string;
   questions: QuizQuestion[];
+  level?: QuizLevel;
 }
 
 type Mode = "practica" | "test";
@@ -24,11 +25,11 @@ function prepareQuiz(qs: QuizQuestion[]): QuizQuestion[] {
   });
 }
 
-function wrongKey(lessonId: number) {
-  return `cybersec.quiz.${lessonId}.wrong`;
+function wrongKey(lessonId: number, level: QuizLevel) {
+  return `cybersec.quiz.${lessonId}.${level}.wrong`;
 }
 
-export function QuizRunner({ lessonId, lessonTitle, questions }: Props) {
+export function QuizRunner({ lessonId, lessonTitle, questions, level = "b" }: Props) {
   const [mode, setMode] = useState<Mode>("practica");
   const [session, setSession] = useState<QuizQuestion[]>(questions);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -40,10 +41,10 @@ export function QuizRunner({ lessonId, lessonTitle, questions }: Props) {
   // Load persisted "wrong" set so the user can review only failed questions.
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(wrongKey(lessonId));
+      const raw = localStorage.getItem(wrongKey(lessonId, level));
       if (raw) setSavedWrong(JSON.parse(raw) as string[]);
     } catch { /* ignore */ }
-  }, [lessonId]);
+  }, [lessonId, level]);
 
   const total = session.length;
   const score = useMemo(
@@ -56,11 +57,11 @@ export function QuizRunner({ lessonId, lessonTitle, questions }: Props) {
   const persistWrong = useCallback((sess: QuizQuestion[], ans: Record<number, number>) => {
     const wrong = sess.filter((q, i) => ans[i] !== q.c).map((q) => q.q);
     try {
-      if (wrong.length > 0) localStorage.setItem(wrongKey(lessonId), JSON.stringify(wrong));
-      else localStorage.removeItem(wrongKey(lessonId));
+      if (wrong.length > 0) localStorage.setItem(wrongKey(lessonId, level), JSON.stringify(wrong));
+      else localStorage.removeItem(wrongKey(lessonId, level));
     } catch { /* ignore */ }
     setSavedWrong(wrong);
-  }, [lessonId]);
+  }, [lessonId, level]);
 
   const saveResult = useCallback(async (finalScore: number, sess: QuizQuestion[], ans: Record<number, number>) => {
     setSaving(true);
@@ -68,7 +69,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions }: Props) {
       const res = await fetch("/api/securities/cybersec/quiz-results", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lesson_id: lessonId, score: finalScore, total: sess.length, answers: sess.map((_, i) => ans[i] ?? -1) }),
+        body: JSON.stringify({ lesson_id: lessonId, score: finalScore, total: sess.length, level, answers: sess.map((_, i) => ans[i] ?? -1) }),
       });
       if (!res.ok) toast.error("No se pudo guardar el resultado");
       else toast.success(`Guardado: ${finalScore}/${sess.length}`);
@@ -77,7 +78,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [lessonId]);
+  }, [lessonId, level]);
 
   const finishTest = useCallback(() => {
     setSubmitted(true);
@@ -134,7 +135,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions }: Props) {
       </Link>
 
       <header className="space-y-1">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[#475569]">Quiz · Lección {lessonId}</p>
+        <p className="text-[10px] font-mono uppercase tracking-wider text-[#475569]">Quiz · Lección {lessonId} · Nivel {QUIZ_LEVEL_LABELS[level]}</p>
         <h1 className="text-xl font-bold text-[#e2e8f0] font-mono">{lessonTitle}</h1>
       </header>
 
