@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createServiceClient: () => mockSupabase,
 }));
 vi.mock("../market-hours", () => ({
-  isMarketHours: () => mockIsMarketHours(),
+  isGlobexOpen: () => mockIsMarketHours(),
   isPastCutoffEt: (_now: Date, cutoff: string) => mockIsPastCutoffEt(cutoff),
 }));
 
@@ -15,7 +15,7 @@ const mockIsPastCutoffEt = vi.fn((_cutoff: string) => false);
 type TableData = {
   cme_risk_configs?: { enabled: boolean; paused_reason?: string | null; circuit_breaker_pct: number; max_positions?: number | null } | null;
   algo_cme_accounts?: { max_daily_loss?: number | null; max_trailing_dd?: number | null; funded_amount?: number | null; provider_name?: string | null } | null;
-  cme_positions?: Array<{ id: string; is_manual: boolean }>;
+  cme_positions?: Array<{ id: string; is_manual: boolean; quantity?: number | null }>;
   cme_connections?: { daily_pnl_usd: number; status: string } | null;
   cme_equity_snapshots?: Array<{ equity_usd: number; snapshot_at: string }>;
   terminal_events?: Array<{ id: string; name: string; impact: string; timestamp_utc: string }>;
@@ -219,6 +219,56 @@ describe("risk-manager", () => {
         tableData.algo_cme_accounts!.provider_name = "TopstepX";
         mockIsPastCutoffEt.mockReturnValue(true);
         const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+    });
+
+    describe("propfirm max contracts per tier (Apex)", () => {
+      it("Apex $25K + 0 positions + orden de 2 → permite (justo en el límite)", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 25000, provider_name: "Apex",
+        };
+        tableData.cme_positions = [];
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 2 });
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Apex $25K + 1 posición de 1 contract + orden de 2 → bloqueado (1+2 > 2)", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 25000, provider_name: "Apex",
+        };
+        tableData.cme_positions = [{ id: "pos-1", is_manual: false, quantity: 1 }];
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 2 });
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_max_contracts");
+      });
+
+      it("Apex $50K + 3 positions de 1 + orden de 1 → permite (3+1=4 ≤ 4)", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000, provider_name: "Apex",
+        };
+        tableData.cme_positions = [
+          { id: "p1", is_manual: false, quantity: 1 },
+          { id: "p2", is_manual: false, quantity: 1 },
+          { id: "p3", is_manual: false, quantity: 1 },
+        ];
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 1 });
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Apex con funded_amount no-tier ($75K) → no aplica check de contracts", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 75000, provider_name: "Apex",
+        };
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 100 });
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Lucid (sin maxContractsByTier) + 100 contracts → permite", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000, provider_name: "Lucid Trading",
+        };
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 100 });
         expect(r.allowed).toBe(true);
       });
     });

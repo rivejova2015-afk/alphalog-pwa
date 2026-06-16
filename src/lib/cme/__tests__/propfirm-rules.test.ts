@@ -18,6 +18,22 @@ describe("PROPFIRM_RULES catalog", () => {
     expect(r.newsBlackoutMinutesBefore).toBeUndefined();
   });
 
+  it("Apex max contracts por tier (PA/funded values, conservador)", () => {
+    const r = PROPFIRM_RULES.Apex;
+    expect(r.maxContractsByTier).toEqual({
+      "25000": 2,
+      "50000": 4,
+      "100000": 6,
+      "150000": 9,
+    });
+  });
+
+  it("Lucid/MFFU/Tradeify NO tienen maxContractsByTier (research: no encontrado)", () => {
+    expect(PROPFIRM_RULES["Lucid Trading"].maxContractsByTier).toBeUndefined();
+    expect(PROPFIRM_RULES.MyFundedFutures.maxContractsByTier).toBeUndefined();
+    expect(PROPFIRM_RULES.Tradeify.maxContractsByTier).toBeUndefined();
+  });
+
   it("Lucid Trading tiene overnight 16:45 ET sin news ni trailing lock", () => {
     const r = PROPFIRM_RULES["Lucid Trading"];
     expect(r.overnightCutoffEt).toBe("16:45");

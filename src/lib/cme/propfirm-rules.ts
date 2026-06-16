@@ -28,6 +28,12 @@ export interface PropfirmRule {
    * efectivo se fija en (funded_amount + lock). Apex EOD / MFFU Pro / Tradeify
    * Select usan este patrón con $100. */
   trailingDdLockAtProfitDollars?: number;
+
+  /** Max contracts simultáneos por tier (clave = funded_amount en USD como string).
+   * Para Apex usamos el min entre eval/funded (= funded, el más restrictivo) por
+   * conservadurismo. Lucid/MFFU/Tradeify: research no encontró números oficiales
+   * → no se setea (caller hace fallback a `cme_risk_configs.max_positions`). */
+  maxContractsByTier?: Record<string, number>;
 }
 
 /**
@@ -39,6 +45,14 @@ export const PROPFIRM_RULES: Record<string, PropfirmRule> = {
   Apex: {
     overnightCutoffEt: "16:59",
     trailingDdLockAtProfitDollars: 100,
+    // Apex 4.0 (Marzo 2026): Eval contracts vs PA (funded) contracts.
+    // Tomamos el min (PA) por conservadurismo — el funded es siempre más estricto.
+    maxContractsByTier: {
+      "25000": 2,
+      "50000": 4,
+      "100000": 6,
+      "150000": 9,
+    },
   },
   "Lucid Trading": {
     overnightCutoffEt: "16:45",

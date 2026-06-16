@@ -8,6 +8,7 @@ import CmeEquityCurve from './CmeEquityCurve.client';
 import CmeRiskConfigPanel from './CmeRiskConfigPanel.client';
 import CmeTradesTable from './CmeTradesTable.client';
 import CmeShadowSignalsPanel from './CmeShadowSignalsPanel.client';
+import CmePropfirmRulesPanel from './CmePropfirmRulesPanel.client';
 
 interface AlgoCmeAccount {
   id: string;
@@ -264,6 +265,11 @@ export default function CmePropFirmWorkspace() {
                     <div>
                       <h4 className="text-xs text-white/40 uppercase tracking-wider mb-2">Risk Config</h4>
                       <CmeRiskConfigPanel cmeAccountId={conn.cme_account_id} />
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs text-white/40 uppercase tracking-wider mb-2">PropFirm Rules</h4>
+                      <CmePropfirmRulesPanel cmeAccountId={conn.cme_account_id} />
                     </div>
 
                     <div>

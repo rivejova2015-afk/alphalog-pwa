@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server';
-import { isMarketHours, isPastCutoffEt } from './market-hours';
+import { isGlobexOpen, isPastCutoffEt } from './market-hours';
 import { getPropfirmRule } from './propfirm-rules';
 
 export interface RiskCheckResult {
@@ -17,7 +17,7 @@ export async function checkOrderRisk(p: {
 }): Promise<RiskCheckResult> {
   const now = p.now ?? new Date();
 
-  if (!isMarketHours(now)) {
+  if (!isGlobexOpen(now)) {
     return { allowed: false, reason: 'outside_market_hours' };
   }
 
@@ -37,7 +37,7 @@ export async function checkOrderRisk(p: {
       .maybeSingle(),
     supabase
       .from('cme_positions')
-      .select('id, is_manual')
+      .select('id, is_manual, quantity')
       .eq('user_id', p.userId)
       .eq('cme_account_id', p.cmeAccountId),
     supabase
@@ -76,7 +76,8 @@ export async function checkOrderRisk(p: {
     return { allowed: false, reason: 'account_not_connected' };
   }
 
-  const hasManualPosition = positions.some((pos: { id: string; is_manual: boolean }) => pos.is_manual);
+  const typedPositions = positions as { id: string; is_manual: boolean; quantity?: number | null }[];
+  const hasManualPosition = typedPositions.some((pos) => pos.is_manual);
   if (hasManualPosition) {
     return { allowed: false, reason: 'manual_position_active' };
   }
@@ -104,6 +105,23 @@ export async function checkOrderRisk(p: {
   // MFFU permite holds → no tiene cutoff configurado.
   if (propfirmRule?.overnightCutoffEt && isPastCutoffEt(now, propfirmRule.overnightCutoffEt)) {
     return { allowed: false, reason: 'propfirm_overnight_cutoff' };
+  }
+
+  // Max contracts per tier — Apex tiene límites estrictos por tier (PA values).
+  // Sumamos quantity de todas las posiciones abiertas + la quantity de la orden
+  // nueva y comparamos contra el límite del tier (funded_amount como key).
+  if (propfirmRule?.maxContractsByTier && account?.funded_amount != null) {
+    const tierKey = String(Math.round(Number(account.funded_amount)));
+    const limit = propfirmRule.maxContractsByTier[tierKey];
+    if (limit != null) {
+      const currentContracts = typedPositions.reduce(
+        (sum, pos) => sum + Number(pos.quantity ?? 1),
+        0,
+      );
+      if (currentContracts + p.quantity > limit) {
+        return { allowed: false, reason: 'propfirm_max_contracts' };
+      }
+    }
   }
 
   // News blackout — MFFU exige flat 2 min antes/después de Tier 1 events
