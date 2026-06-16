@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server';
-import { isGlobexOpen, isPastCutoffEt } from './market-hours';
+import { isGlobexOpen, isPastCutoffEt, nowToEt } from './market-hours';
 import { getPropfirmRule } from './propfirm-rules';
 
 export interface RiskCheckResult {
@@ -125,7 +125,8 @@ export async function checkOrderRisk(p: {
   }
 
   // News blackout — MFFU exige flat 2 min antes/después de Tier 1 events
-  // (FOMC/NFP/CPI). Lee terminal_events impact='high' en la ventana.
+  // (FOMC/NFP/CPI específicamente). Lee terminal_events en la ventana, filtra
+  // por impact level y opcionalmente por keywords en el nombre.
   if (propfirmRule?.newsBlackoutMinutesBefore != null || propfirmRule?.newsBlackoutMinutesAfter != null) {
     const beforeMin = propfirmRule.newsBlackoutMinutesBefore ?? 0;
     const afterMin = propfirmRule.newsBlackoutMinutesAfter ?? 0;
@@ -138,9 +139,28 @@ export async function checkOrderRisk(p: {
       .in('impact', impacts as string[])
       .gte('timestamp_utc', windowStart)
       .lte('timestamp_utc', windowEnd)
-      .limit(1);
-    if (events && events.length > 0) {
+      .limit(50);
+    const keywords = propfirmRule.newsBlackoutKeywords;
+    const filtered = ((events ?? []) as { name: string | null }[]).filter((evt) => {
+      if (!keywords || keywords.length === 0) return true;
+      const name = String(evt.name ?? '').toLowerCase();
+      return keywords.some((kw) => name.includes(kw.toLowerCase()));
+    });
+    if (filtered.length > 0) {
       return { allowed: false, reason: 'propfirm_news_blackout' };
+    }
+  }
+
+  // Weekend holds — propfirms estrictas (futuro: Apex no permite holds weekend
+  // según T&C). Si la regla lo prohíbe explícitamente y estamos en weekend
+  // (sábado completo o domingo antes de la apertura ETH 18:00 ET), bloquea.
+  // Aunque isGlobexOpen ya bloquea estos momentos, este check
+  // refuerza la regla específica del propfirm para audit logs claros.
+  if (propfirmRule?.disallowWeekendHolds) {
+    const { dayOfWeek: dayWeekend, minutesOfDay: minWeekend } = nowToEt(now);
+    const sundayBeforeOpen = dayWeekend === 0 && minWeekend < 18 * 60;
+    if (dayWeekend === 6 || sundayBeforeOpen) {
+      return { allowed: false, reason: 'propfirm_weekend_blocked' };
     }
   }
 

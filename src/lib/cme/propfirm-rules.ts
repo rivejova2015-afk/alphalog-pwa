@@ -34,6 +34,19 @@ export interface PropfirmRule {
    * conservadurismo. Lucid/MFFU/Tradeify: research no encontró números oficiales
    * → no se setea (caller hace fallback a `cme_risk_configs.max_positions`). */
   maxContractsByTier?: Record<string, number>;
+
+  /** Keywords (case-insensitive substring match) que deben aparecer en
+   * `terminal_events.name` para que el evento dispare blackout. Útil cuando
+   * la propfirm define "Tier 1" como un subset específico (MFFU: FOMC/NFP/CPI)
+   * en lugar de cualquier impact='high'. Si no se setea, blackout dispara con
+   * cualquier evento que matchee `newsBlackoutImpactLevels`. */
+  newsBlackoutKeywords?: string[];
+
+  /** Si true, bloquea órdenes durante el fin de semana entero (sábado completo
+   * + viernes desde overnightCutoffEt + domingo hasta apertura ETH). Útil para
+   * propfirms que prohíben weekend holds — diferente de overnight (que ya
+   * cubre el cierre diario). */
+  disallowWeekendHolds?: boolean;
 }
 
 /**
@@ -61,6 +74,10 @@ export const PROPFIRM_RULES: Record<string, PropfirmRule> = {
     newsBlackoutMinutesBefore: 2,
     newsBlackoutMinutesAfter: 2,
     newsBlackoutImpactLevels: ["high"],
+    // MFFU define "Tier 1" como FOMC + NFP + CPI específicamente.
+    // Otros eventos high-impact (Retail Sales, GDP) no califican como Tier 1
+    // según sus T&C — el bot puede tradearlos sin violar la regla.
+    newsBlackoutKeywords: ["FOMC", "NFP", "Nonfarm", "CPI", "Consumer Price"],
     trailingDdLockAtProfitDollars: 100,
   },
   Tradeify: {

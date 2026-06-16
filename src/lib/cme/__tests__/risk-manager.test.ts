@@ -7,10 +7,12 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("../market-hours", () => ({
   isGlobexOpen: () => mockIsMarketHours(),
   isPastCutoffEt: (_now: Date, cutoff: string) => mockIsPastCutoffEt(cutoff),
+  nowToEt: () => mockNowToEt(),
 }));
 
 const mockIsMarketHours = vi.fn(() => true);
 const mockIsPastCutoffEt = vi.fn((_cutoff: string) => false);
+const mockNowToEt = vi.fn(() => ({ dayOfWeek: 1, minutesOfDay: 10 * 60 })); // Mon 10:00 ET default
 
 type TableData = {
   cme_risk_configs?: { enabled: boolean; paused_reason?: string | null; circuit_breaker_pct: number; max_positions?: number | null } | null;
@@ -55,6 +57,7 @@ describe("risk-manager", () => {
   beforeEach(() => {
     mockIsMarketHours.mockReturnValue(true);
     mockIsPastCutoffEt.mockReset().mockReturnValue(false);
+    mockNowToEt.mockReset().mockReturnValue({ dayOfWeek: 1, minutesOfDay: 10 * 60 });
     tableData = {
       cme_risk_configs: { enabled: true, paused_reason: null, circuit_breaker_pct: 80, max_positions: 5 },
       algo_cme_accounts: { max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000, provider_name: null },
@@ -299,6 +302,85 @@ describe("risk-manager", () => {
         ];
         const r = await checkOrderRisk(PARAMS);
         expect(r.allowed).toBe(true);
+      });
+
+      it("MFFU keyword filter: 'Retail Sales' high impact NO bloquea (no es Tier 1)", async () => {
+        tableData.algo_cme_accounts!.provider_name = "MyFundedFutures";
+        tableData.terminal_events = [
+          { id: "evt-1", name: "Retail Sales m/m", impact: "high", timestamp_utc: new Date().toISOString() },
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+
+      it("MFFU keyword filter: 'CPI y/y' bloquea (matchea 'CPI')", async () => {
+        tableData.algo_cme_accounts!.provider_name = "MyFundedFutures";
+        tableData.terminal_events = [
+          { id: "evt-1", name: "Core CPI y/y", impact: "high", timestamp_utc: new Date().toISOString() },
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_news_blackout");
+      });
+
+      it("MFFU keyword filter: 'Nonfarm Payrolls' bloquea (matchea 'Nonfarm' o 'NFP')", async () => {
+        tableData.algo_cme_accounts!.provider_name = "MyFundedFutures";
+        tableData.terminal_events = [
+          { id: "evt-1", name: "Nonfarm Payrolls", impact: "high", timestamp_utc: new Date().toISOString() },
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_news_blackout");
+      });
+    });
+
+    describe("propfirm weekend hold check (A8)", () => {
+      // Test del comportamiento futuro — ninguna propfirm actual tiene
+      // disallowWeekendHolds=true por default. Mockeamos el rule directamente.
+      it("disallowWeekendHolds + sábado → bloqueado con propfirm_weekend_blocked", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Apex";
+        mockNowToEt.mockReturnValue({ dayOfWeek: 6, minutesOfDay: 10 * 60 }); // sábado 10:00 ET
+        // Apex no tiene disallowWeekendHolds por default → no bloquea.
+        // Para testear el comportamiento, parcheo PROPFIRM_RULES en runtime.
+        const propfirmRules = await import("../propfirm-rules");
+        const original = propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds;
+        propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds = true;
+        try {
+          const r = await checkOrderRisk(PARAMS);
+          expect(r.allowed).toBe(false);
+          expect(r.reason).toBe("propfirm_weekend_blocked");
+        } finally {
+          propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds = original;
+        }
+      });
+
+      it("disallowWeekendHolds + domingo 17:00 ET (antes apertura ETH) → bloqueado", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Apex";
+        mockNowToEt.mockReturnValue({ dayOfWeek: 0, minutesOfDay: 17 * 60 });
+        const propfirmRules = await import("../propfirm-rules");
+        const original = propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds;
+        propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds = true;
+        try {
+          const r = await checkOrderRisk(PARAMS);
+          expect(r.allowed).toBe(false);
+          expect(r.reason).toBe("propfirm_weekend_blocked");
+        } finally {
+          propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds = original;
+        }
+      });
+
+      it("disallowWeekendHolds + domingo 18:30 ET (ETH abierto) → permite", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Apex";
+        mockNowToEt.mockReturnValue({ dayOfWeek: 0, minutesOfDay: 18 * 60 + 30 });
+        const propfirmRules = await import("../propfirm-rules");
+        const original = propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds;
+        propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds = true;
+        try {
+          const r = await checkOrderRisk(PARAMS);
+          expect(r.allowed).toBe(true);
+        } finally {
+          propfirmRules.PROPFIRM_RULES.Apex.disallowWeekendHolds = original;
+        }
       });
     });
 

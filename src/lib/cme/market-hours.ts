@@ -57,6 +57,12 @@ export function isGlobexOpen(now: Date = new Date()): boolean {
   return true;
 }
 
+/** Helper público para convertir una fecha UTC a (dayOfWeek, minutesOfDay) en ET
+ *  con DST awareness. Usar para chequeos custom como weekend policy propfirm. */
+export function nowToEt(utcDate: Date): { dayOfWeek: number; minutesOfDay: number } {
+  return toETMinutes(utcDate);
+}
+
 export function isMarketHours(now: Date = new Date()): boolean {
   const { dayOfWeek, minutesOfDay } = toETMinutes(now);
   if (dayOfWeek === 0 || dayOfWeek === 6) return false; // weekend
