@@ -57,8 +57,7 @@ const OPTIONS_STRATEGIES = [
 ];
 
 const PROPFIRM_PROVIDERS = [
-  'TopstepX', 'Apex', 'Earn2Trade', 'Topstep',
-  'MyFundedFutures', 'TradeDay', 'Elite Trader Funding',
+  'Apex', 'Lucid Trading', 'MyFundedFutures', 'Tradeify',
 ];
 const BROKER_PROVIDERS = [
   'IBKR', 'Rithmic', 'NinjaTrader Brokerage',
