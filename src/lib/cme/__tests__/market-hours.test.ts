@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isMarketHours, nextMarketOpen, isGlobexOpen } from "../market-hours";
+import { isMarketHours, nextMarketOpen, isGlobexOpen, isPastCutoffEt, nowEtHHMM } from "../market-hours";
 
 describe("market-hours", () => {
   describe("isMarketHours", () => {
@@ -130,6 +130,63 @@ describe("market-hours", () => {
       const r = nextMarketOpen(fridayPost);
       // Siguiente open = lunes 2026-05-11
       expect(r.getUTCDay()).toBe(1); // Monday
+    });
+  });
+
+  describe("isPastCutoffEt", () => {
+    // Junio 2026 está en DST → ET = UTC-4. 17:00 ET = 21:00 UTC.
+    it("Apex 16:59 ET: false a las 16:50 ET (antes)", () => {
+      // 16:50 ET = 20:50 UTC en Junio (DST)
+      const t = new Date("2026-06-15T20:50:00Z");
+      expect(isPastCutoffEt(t, "16:59")).toBe(false);
+    });
+
+    it("Apex 16:59 ET: true a las 17:00 ET (después)", () => {
+      const t = new Date("2026-06-15T21:00:00Z");
+      expect(isPastCutoffEt(t, "16:59")).toBe(true);
+    });
+
+    it("Lucid 16:45 ET: true a las 16:46 ET, false a las 16:44 ET", () => {
+      const at1646 = new Date("2026-06-15T20:46:00Z");
+      const at1644 = new Date("2026-06-15T20:44:00Z");
+      expect(isPastCutoffEt(at1646, "16:45")).toBe(true);
+      expect(isPastCutoffEt(at1644, "16:45")).toBe(false);
+    });
+
+    it("weekend cuenta como past cutoff (no se permiten órdenes)", () => {
+      const saturday = new Date("2026-06-13T15:00:00Z");
+      expect(isPastCutoffEt(saturday, "16:59")).toBe(true);
+    });
+
+    it("formato inválido → false (no bloquea defensivamente)", () => {
+      const t = new Date("2026-06-15T18:00:00Z");
+      expect(isPastCutoffEt(t, "garbage")).toBe(false);
+      expect(isPastCutoffEt(t, "25:99")).toBe(false);
+    });
+
+    it("respeta el cambio DST (invierno)", () => {
+      // Enero está en STD → ET = UTC-5. 17:00 ET = 22:00 UTC.
+      const at1659EST = new Date("2026-01-15T21:59:00Z"); // 16:59 ET
+      expect(isPastCutoffEt(at1659EST, "16:59")).toBe(true);
+      const at1650EST = new Date("2026-01-15T21:50:00Z"); // 16:50 ET
+      expect(isPastCutoffEt(at1650EST, "16:59")).toBe(false);
+    });
+  });
+
+  describe("nowEtHHMM", () => {
+    it("formatea hora ET en DST correctamente", () => {
+      const t = new Date("2026-06-15T20:30:00Z"); // 16:30 ET DST
+      expect(nowEtHHMM(t)).toBe("16:30");
+    });
+
+    it("formatea hora ET en STD correctamente", () => {
+      const t = new Date("2026-01-15T21:00:00Z"); // 16:00 ET STD
+      expect(nowEtHHMM(t)).toBe("16:00");
+    });
+
+    it("zero-pads minutos < 10", () => {
+      const t = new Date("2026-06-15T13:35:00Z"); // 09:35 ET DST
+      expect(nowEtHHMM(t)).toBe("09:35");
     });
   });
 });

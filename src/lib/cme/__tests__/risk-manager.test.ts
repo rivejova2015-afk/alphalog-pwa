@@ -6,16 +6,19 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("../market-hours", () => ({
   isMarketHours: () => mockIsMarketHours(),
+  isPastCutoffEt: (_now: Date, cutoff: string) => mockIsPastCutoffEt(cutoff),
 }));
 
 const mockIsMarketHours = vi.fn(() => true);
+const mockIsPastCutoffEt = vi.fn((_cutoff: string) => false);
 
 type TableData = {
   cme_risk_configs?: { enabled: boolean; paused_reason?: string | null; circuit_breaker_pct: number; max_positions?: number | null } | null;
-  algo_cme_accounts?: { max_daily_loss?: number | null; max_trailing_dd?: number | null; funded_amount?: number | null } | null;
+  algo_cme_accounts?: { max_daily_loss?: number | null; max_trailing_dd?: number | null; funded_amount?: number | null; provider_name?: string | null } | null;
   cme_positions?: Array<{ id: string; is_manual: boolean }>;
   cme_connections?: { daily_pnl_usd: number; status: string } | null;
   cme_equity_snapshots?: Array<{ equity_usd: number; snapshot_at: string }>;
+  terminal_events?: Array<{ id: string; name: string; impact: string; timestamp_utc: string }>;
 };
 
 let tableData: TableData = {};
@@ -26,7 +29,9 @@ const mockSupabase = {
     const chain = {
       select: () => chain,
       eq: () => chain,
+      in: () => chain,
       gte: () => chain,
+      lte: () => chain,
       order: () => chain,
       limit: () => chain,
       maybeSingle: async () => ({ data: data ?? null }),
@@ -49,12 +54,14 @@ const PARAMS = {
 describe("risk-manager", () => {
   beforeEach(() => {
     mockIsMarketHours.mockReturnValue(true);
+    mockIsPastCutoffEt.mockReset().mockReturnValue(false);
     tableData = {
       cme_risk_configs: { enabled: true, paused_reason: null, circuit_breaker_pct: 80, max_positions: 5 },
-      algo_cme_accounts: { max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000 },
+      algo_cme_accounts: { max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 50000, provider_name: null },
       cme_positions: [],
       cme_connections: { daily_pnl_usd: 0, status: "connected" },
       cme_equity_snapshots: [],
+      terminal_events: [],
     };
   });
 
@@ -174,6 +181,130 @@ describe("risk-manager", () => {
       const r = await checkOrderRisk(PARAMS);
       expect(r.allowed).toBe(false);
       expect(r.reason).toBe("max_trailing_dd_breached");
+    });
+
+    // ── Reglas por propfirm (Fase 2) ─────────────────────────────────────
+    describe("propfirm overnight cutoff", () => {
+      it("Apex past 16:59 ET → bloqueado con propfirm_overnight_cutoff", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Apex";
+        mockIsPastCutoffEt.mockImplementation((cutoff) => cutoff === "16:59");
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_overnight_cutoff");
+      });
+
+      it("Apex antes del cutoff → permite", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Apex";
+        mockIsPastCutoffEt.mockReturnValue(false);
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Lucid Trading past 16:45 ET → bloqueado", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Lucid Trading";
+        mockIsPastCutoffEt.mockImplementation((cutoff) => cutoff === "16:45");
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_overnight_cutoff");
+      });
+
+      it("MyFundedFutures no tiene cutoff → permite a cualquier hora", async () => {
+        tableData.algo_cme_accounts!.provider_name = "MyFundedFutures";
+        mockIsPastCutoffEt.mockReturnValue(true); // aunque sea past, MFFU no tiene cutoff
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+
+      it("provider desconocido (TopstepX legacy) → no aplica cutoff", async () => {
+        tableData.algo_cme_accounts!.provider_name = "TopstepX";
+        mockIsPastCutoffEt.mockReturnValue(true);
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+    });
+
+    describe("propfirm news blackout", () => {
+      it("MFFU con terminal_event impact=high en ventana → bloqueado", async () => {
+        tableData.algo_cme_accounts!.provider_name = "MyFundedFutures";
+        tableData.terminal_events = [
+          { id: "evt-1", name: "FOMC", impact: "high", timestamp_utc: new Date().toISOString() },
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_news_blackout");
+      });
+
+      it("MFFU sin events en ventana → permite", async () => {
+        tableData.algo_cme_accounts!.provider_name = "MyFundedFutures";
+        tableData.terminal_events = [];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Apex no tiene news blackout → no se consulta terminal_events", async () => {
+        tableData.algo_cme_accounts!.provider_name = "Apex";
+        // Aunque haya eventos, Apex no debería bloquearse por news.
+        tableData.terminal_events = [
+          { id: "evt-1", name: "FOMC", impact: "high", timestamp_utc: new Date().toISOString() },
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+    });
+
+    describe("propfirm trailing DD lock-at-profit", () => {
+      it("Apex con equity actual bajo lock floor → bloqueado por trailing DD", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000,
+          max_trailing_dd: 50,
+          funded_amount: 50000,
+          provider_name: "Apex",
+        };
+        // Equity llegó a 50200 (>= funded+100 lock) y ahora cayó a 50000.
+        // effectivePeak = max(50200, funded+100=50100) = 50200.
+        // DD = 50200 - 50000 = 200 ≥ max_trailing_dd 50 → bloqueado.
+        tableData.cme_equity_snapshots = [
+          { equity_usd: 50000, snapshot_at: "2026-06-15T18:00:00Z" }, // actual
+          { equity_usd: 50200, snapshot_at: "2026-06-14T18:00:00Z" }, // peak post-lock
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("max_trailing_dd_breached");
+      });
+
+      it("Apex sin equity ≥ lock floor → trailing DD aplica solo a peak observado", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000,
+          max_trailing_dd: 500,
+          funded_amount: 50000,
+          provider_name: "Apex",
+        };
+        // Equity nunca alcanzó funded+100 → lock no se activa.
+        // peak observado = max(50000, 50050) = 50050. current=49600. DD=450 < 500 → permite.
+        tableData.cme_equity_snapshots = [
+          { equity_usd: 49600, snapshot_at: "2026-06-15T18:00:00Z" },
+          { equity_usd: 50050, snapshot_at: "2026-06-14T18:00:00Z" },
+        ];
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Lucid sin trailing lock → comportamiento idéntico a sin propfirm rules", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000,
+          max_trailing_dd: 200,
+          funded_amount: 50000,
+          provider_name: "Lucid Trading",
+        };
+        tableData.cme_equity_snapshots = [
+          { equity_usd: 49850, snapshot_at: "2026-06-15T18:00:00Z" },
+          { equity_usd: 50100, snapshot_at: "2026-06-14T18:00:00Z" },
+        ];
+        // peak=50100, current=49850, DD=250 ≥ 200 → bloqueado (sin lock applies).
+        const r = await checkOrderRisk(PARAMS);
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("max_trailing_dd_breached");
+      });
     });
   });
 });

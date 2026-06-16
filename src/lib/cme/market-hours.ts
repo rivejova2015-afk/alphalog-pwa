@@ -65,6 +65,35 @@ export function isMarketHours(now: Date = new Date()): boolean {
   return minutesOfDay >= open && minutesOfDay < close;
 }
 
+/** Parsea "HH:MM" → minutos del día. Devuelve -1 si el formato es inválido. */
+function parseHHMM(hhmm: string): number {
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return -1;
+  const h = Number(m[1]);
+  const mm = Number(m[2]);
+  if (h < 0 || h > 23 || mm < 0 || mm > 59) return -1;
+  return h * 60 + mm;
+}
+
+/** True si la hora ET actual es ≥ cutoffHHMM (formato "HH:MM"). Días no laborables
+ *  (sábado / domingo en ET) cuentan como "past cutoff" — no se permiten órdenes.
+ *  Sirve para enforcement del overnight cutoff propfirm. */
+export function isPastCutoffEt(now: Date, cutoffHHMM: string): boolean {
+  const cutoffMin = parseHHMM(cutoffHHMM);
+  if (cutoffMin < 0) return false; // formato inválido → no bloquea
+  const { dayOfWeek, minutesOfDay } = toETMinutes(now);
+  if (dayOfWeek === 0 || dayOfWeek === 6) return true; // weekend = bloqueado
+  return minutesOfDay >= cutoffMin;
+}
+
+/** Hora ET actual en formato "HH:MM" — para audit logs y mensajes de reason. */
+export function nowEtHHMM(now: Date = new Date()): string {
+  const { minutesOfDay } = toETMinutes(now);
+  const h = Math.floor(minutesOfDay / 60);
+  const m = minutesOfDay % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export function nextMarketOpen(now: Date = new Date()): Date {
   const candidate = new Date(now);
   for (let i = 0; i < 7; i++) {
