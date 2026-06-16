@@ -14,8 +14,9 @@ const putSchema = z.object({
   notify_streak: z.boolean().optional(),
   placement_done: z.boolean().optional(),
   gating: z.enum(["soft", "strict", "block"]).optional(),
+  specialization: z.enum(["foundations", "offensive", "defensive", "dfir", "appsec", "cloud", "grc", "infra"]).optional(),
 }).refine(
-  (d) => d.daily_goal !== undefined || d.notify_streak !== undefined || d.placement_done !== undefined || d.gating !== undefined,
+  (d) => d.daily_goal !== undefined || d.notify_streak !== undefined || d.placement_done !== undefined || d.gating !== undefined || d.specialization !== undefined,
   { message: "Nada para actualizar" },
 );
 
@@ -36,6 +37,7 @@ export async function PUT(request: NextRequest) {
     if (parsed.data.notify_streak !== undefined) patch.notify_streak = parsed.data.notify_streak;
     if (parsed.data.placement_done !== undefined) patch.placement_done = parsed.data.placement_done;
     if (parsed.data.gating !== undefined) patch.gating = parsed.data.gating;
+    if (parsed.data.specialization !== undefined) patch.specialization = parsed.data.specialization;
 
     const { error } = await supabase
       .from("securities_user_state")

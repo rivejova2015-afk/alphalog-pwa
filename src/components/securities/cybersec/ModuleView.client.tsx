@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, BookOpen, Search, Library, ExternalLink } from "lucide-react";
+import { ArrowLeft, Check, BookOpen, Search, Library, ExternalLink, Award } from "lucide-react";
 import { toast } from "sonner";
 import {
   type Module,
@@ -11,6 +11,9 @@ import {
   type ProgressRecord,
   lessonsForModule,
   libraryByCategory,
+  certsByCategory,
+  trackForCategory,
+  CERT_TIER_LABELS,
 } from "@/lib/securities/cybersec";
 import { ProgressBadge } from "./ProgressBadge.client";
 
@@ -27,6 +30,8 @@ export function ModuleView({ module: mod }: Props) {
 
   const lessons = lessonsForModule(mod.m);
   const reading = libraryByCategory(mod.cat);
+  const certs = certsByCategory(mod.cat);
+  const certTrack = trackForCategory(mod.cat);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +235,42 @@ export function ModuleView({ module: mod }: Props) {
           {reading.length > 6 && (
             <p className="text-[11px] text-[#475569]">+{reading.length - 6} recursos más en la biblioteca para «{mod.cat}».</p>
           )}
+        </section>
+      )}
+
+      {certs.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-[#94a3b8] flex items-center gap-2">
+              <Award size={14} /> Certificaciones recomendadas
+            </h2>
+            <Link
+              href={`/securities/cybersec/certificaciones?track=${certTrack}`}
+              className="text-[11px] text-[#eab308] hover:underline"
+            >
+              Ver el roadmap →
+            </Link>
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {certs.slice(0, 4).map((c) => (
+              <li key={c.id}>
+                <a
+                  href={c.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-full flex-col rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-3 hover:bg-[#151b28] transition-colors"
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#eab308]/10 text-[#eab308] border border-[#eab308]/30">Nivel {c.tier} · {CERT_TIER_LABELS[c.tier]}</span>
+                    <span className="text-[9px] uppercase tracking-wider text-[#475569]">{c.priceUsd === 0 ? "Gratis" : `≈$${c.priceUsd} USD`}</span>
+                  </div>
+                  <p className="text-sm font-bold text-[#e2e8f0] leading-tight">{c.name}</p>
+                  <p className="text-[11px] text-[#94a3b8]">{c.vendor}</p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#eab308]">Sitio oficial <ExternalLink size={11} /></span>
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
     </div>

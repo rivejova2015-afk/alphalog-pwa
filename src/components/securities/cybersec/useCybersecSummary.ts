@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type {
-  XpResult, ProgressStats, Achievement, Milestone, StreakResult, GatingMode,
+  XpResult, ProgressStats, Achievement, Milestone, StreakResult, GatingMode, CertTrack,
 } from "@/lib/securities/cybersec";
 
 export interface CybersecSummary {
@@ -15,6 +15,7 @@ export interface CybersecSummary {
   notifyStreak: boolean;
   placementDone: boolean;
   gating: GatingMode;
+  specialization: CertTrack | null;
   sectionExams: Record<string, { bestPct: number; passed: boolean }>;
   milestones: Milestone[];
   mastery: Record<number, number>;
@@ -81,5 +82,18 @@ export function useCybersecSummary() {
     }
   }, []);
 
-  return { summary, loading, updateGoal, updateNotify, updateGating };
+  const updateSpecialization = useCallback(async (track: CertTrack) => {
+    setSummary((s) => (s ? { ...s, specialization: track } : s)); // optimistic
+    try {
+      await fetch("/api/securities/cybersec/user-state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specialization: track }),
+      });
+    } catch {
+      // optimistic only
+    }
+  }, []);
+
+  return { summary, loading, updateGoal, updateNotify, updateGating, updateSpecialization };
 }
