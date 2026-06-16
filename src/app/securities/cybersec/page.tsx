@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Layers, LineChart, Map, Zap, Search, Compass, BookOpen } from "lucide-react";
+import { Layers, LineChart, Map, Zap, Search, Compass, BookOpen, Award } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { SyllabusPanel } from "@/components/securities/cybersec/SyllabusPanel.client";
 
@@ -59,6 +59,12 @@ export default async function CyberSecPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#22d3ee]/10 border border-[#22d3ee]/40 text-[#22d3ee] hover:bg-[#22d3ee]/20"
           >
             <BookOpen size={14} /> Biblioteca
+          </Link>
+          <Link
+            href="/securities/cybersec/certificaciones"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm bg-[#eab308]/10 border border-[#eab308]/40 text-[#eab308] hover:bg-[#eab308]/20"
+          >
+            <Award size={14} /> Certificaciones
           </Link>
         </div>
       </header>

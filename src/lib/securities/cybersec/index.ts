@@ -12,6 +12,7 @@ export * from "./placement";
 export * from "./gating";
 export * from "./quizDedup";
 export * from "./library";
+export * from "./certifications";
 export * from "./flashcards";
 export * from "./progressStats";
 export * from "./xp";
