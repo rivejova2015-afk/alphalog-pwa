@@ -14,14 +14,16 @@ interface Props {
 }
 
 interface ConnectResponse {
+  // The endpoint (src/app/api/cme/connect/route.ts:116-121) returns
+  // `{ success, connectionId, tradovateAccountId, tradovateAccountName }`.
+  // Older versions also returned `ok: true` — we accept both shapes so a
+  // contract drift on either side doesn't silently break the modal.
   ok?: boolean;
+  success?: boolean;
   error?: string | Record<string, unknown>;
-  connection?: {
-    id: string;
-    tradovate_account_id: number;
-    tradovate_account_spec: string;
-    token_expires_at: string;
-  };
+  connectionId?: string;
+  tradovateAccountId?: number;
+  tradovateAccountName?: string;
 }
 
 export default function TradovateConnectModal({
@@ -66,7 +68,12 @@ export default function TradovateConnectModal({
       });
       const json: ConnectResponse = await res.json().catch(() => ({}));
 
-      if (!res.ok || !json.ok) {
+      // Accept either `ok` or `success` so we tolerate both contract shapes.
+      // The current endpoint returns `success: true`; the historical interface
+      // declared `ok: true`. Without this OR, a 200 with `success:true` was
+      // being mistakenly treated as a failure.
+      const okFlag = json.ok === true || json.success === true;
+      if (!res.ok || !okFlag) {
         const msg = typeof json.error === "string"
           ? json.error
           : `Conexión falló (HTTP ${res.status})`;
