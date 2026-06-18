@@ -6,6 +6,7 @@ import { BRANCHES, branchesByModule } from "../branches";
 import { CERT_TRACK_IDS } from "../certifications";
 
 const PILOT_MODULES = [1, 2, 3, 4];
+const REDES_MODULES = [5, 6, 7, 8, 9];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -22,6 +23,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo del piloto (M1-M4) tiene ≥4 definiciones", () => {
     for (const m of PILOT_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Redes (M5-M9) tiene ≥4 definiciones", () => {
+    for (const m of REDES_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -52,6 +58,12 @@ describe("FRAMEWORKS", () => {
     expect(frameworksByModule(1).some((f) => f.kind === "killchain")).toBe(true);
     expect(frameworksByModule(3).some((f) => f.kind === "attack")).toBe(true);
   });
+  it("M5 tiene el modelo OSI (layers, 7 capas) y M9 un flujo de ataque WiFi", () => {
+    const osi = frameworksByModule(5).find((f) => f.kind === "layers");
+    expect(osi).toBeDefined();
+    expect(osi!.phases).toHaveLength(7);
+    expect(frameworksByModule(9).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -69,6 +81,10 @@ describe("TIMELINES", () => {
   });
   it("M1 tiene una línea de tiempo de historia", () => {
     expect(timelinesByModule(1).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M6 y M9 tienen líneas de tiempo (protocolos y seguridad WiFi)", () => {
+    expect(timelinesByModule(6).length).toBeGreaterThanOrEqual(1);
+    expect(timelinesByModule(9).length).toBeGreaterThanOrEqual(1);
   });
 });
 

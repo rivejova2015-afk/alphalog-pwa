@@ -113,7 +113,7 @@ export interface Framework {
   id: number;
   module: number;
   name: string;        // ej. "Cyber Kill Chain (Lockheed Martin)"
-  kind: "killchain" | "attack" | "controls";
+  kind: "killchain" | "attack" | "controls" | "layers" | "flow";
   summary: string;
   phases: FrameworkPhase[];
 }

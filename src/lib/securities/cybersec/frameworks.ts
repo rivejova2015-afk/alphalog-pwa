@@ -55,6 +55,52 @@ export const FRAMEWORKS: Framework[] = [
       { n: 6, name: "Recover (Recuperar)", desc: "Restaurar capacidades y aprender del incidente.", defenses: ["Backups y DR", "Lecciones aprendidas", "Plan de continuidad"] },
     ],
   },
+  {
+    id: 4,
+    module: 5,
+    name: "Modelo OSI — 7 capas",
+    kind: "layers",
+    summary:
+      "Las 7 capas del modelo OSI, de la física (1) a la aplicación (7). Cada capa tiene su función, protocolos y amenazas/defensas características.",
+    phases: [
+      { n: 1, name: "Física", desc: "Transmite bits crudos por el medio (cables, radio, voltajes). Protocolos: Ethernet físico, fibra, RJ45.", defenses: ["Seguridad física", "Control de acceso a puertos", "Protección de cableado"] },
+      { n: 2, name: "Enlace de datos", desc: "Entrega tramas en la red local por dirección MAC. Protocolos: Ethernet, ARP, switching, VLAN.", defenses: ["Port security", "Dynamic ARP Inspection", "Segmentación con VLAN"] },
+      { n: 3, name: "Red", desc: "Enruta paquetes entre redes por dirección IP. Protocolos: IP, ICMP, routing.", defenses: ["Filtrado de IP", "Anti-DDoS", "ACLs de router"] },
+      { n: 4, name: "Transporte", desc: "Entrega extremo a extremo por puertos. Protocolos: TCP (fiable), UDP (rápido).", defenses: ["Firewall stateful", "SYN cookies", "Rate limiting"] },
+      { n: 5, name: "Sesión", desc: "Establece, mantiene y cierra sesiones entre aplicaciones.", defenses: ["Gestión segura de sesiones", "Timeouts"] },
+      { n: 6, name: "Presentación", desc: "Formato, cifrado y compresión de datos. Aquí actúa TLS/SSL.", defenses: ["TLS/cifrado en tránsito", "Validación de certificados"] },
+      { n: 7, name: "Aplicación", desc: "Interfaz con el usuario y los servicios. Protocolos: HTTP/S, DNS, SSH, FTP.", defenses: ["WAF", "Validación de entrada", "Autenticación (MFA)", "Formación anti-phishing"] },
+    ],
+  },
+  {
+    id: 5,
+    module: 6,
+    name: "Modelo TCP/IP — 4 capas",
+    kind: "layers",
+    summary:
+      "El modelo práctico de Internet condensa el OSI en 4 capas. Cada una agrupa protocolos reales y sus controles de seguridad.",
+    phases: [
+      { n: 1, name: "Acceso a red", desc: "Equivale a OSI 1-2. Medio físico y enlace local. Ethernet, WiFi, ARP.", defenses: ["Port security", "Seguridad WiFi (WPA3)", "Anti-ARP spoofing"] },
+      { n: 2, name: "Internet", desc: "Equivale a OSI 3. Direccionamiento y enrutamiento. IP, ICMP.", defenses: ["Filtrado/ACLs", "Anti-spoofing", "Anti-DDoS"] },
+      { n: 3, name: "Transporte", desc: "Equivale a OSI 4. Entrega extremo a extremo. TCP, UDP.", defenses: ["Firewall stateful", "SYN cookies"] },
+      { n: 4, name: "Aplicación", desc: "Equivale a OSI 5-6-7. Servicios y datos de usuario. HTTP/S, DNS, SSH.", defenses: ["TLS", "WAF", "DNSSEC/DoH", "Autenticación"] },
+    ],
+  },
+  {
+    id: 6,
+    module: 9,
+    name: "Cadena de ataque WiFi (Evil Twin)",
+    kind: "flow",
+    summary:
+      "Secuencia típica de un ataque a una red WiFi WPA2-Personal, paso a paso, con la defensa que corta cada fase.",
+    phases: [
+      { n: 1, name: "Reconocimiento", desc: "El atacante escanea redes y clientes cercanos (SSID, canal, BSSID) en modo monitor.", defenses: ["Ocultar info innecesaria", "WIDS (detección de intrusos wireless)"] },
+      { n: 2, name: "Deautenticación", desc: "Envía tramas deauth para expulsar a un cliente y forzar su reconexión.", defenses: ["802.11w (PMF)", "WPA3 (PMF obligatorio)"] },
+      { n: 3, name: "Captura del handshake", desc: "Al reconectar, captura el 4-way handshake WPA2.", defenses: ["WPA3-SAE (sin crackeo offline)", "Passphrase larga y aleatoria"] },
+      { n: 4, name: "Cracking offline", desc: "Ataca el handshake por diccionario/fuerza bruta con hashcat/aircrack-ng.", defenses: ["WPA2-Enterprise (802.1X)", "Contraseñas robustas"] },
+      { n: 5, name: "Evil Twin / MITM", desc: "Levanta un AP clon del SSID para interceptar tráfico o robar credenciales con portal falso.", defenses: ["Verificar certificados/HTTPS", "Validación del servidor (EAP)", "VPN"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

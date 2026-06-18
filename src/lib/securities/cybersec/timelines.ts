@@ -20,6 +20,32 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2024, title: "Era de la IA ofensiva", desc: "Phishing y deepfakes generados por IA elevan la escala y el realismo de los ataques de ingeniería social.", impact: "medium" },
     ],
   },
+  {
+    id: 2,
+    module: 6,
+    title: "Evolución de los protocolos de Internet",
+    events: [
+      { year: 1969, title: "ARPANET (NCP)", desc: "Nace la red precursora de Internet con el protocolo NCP.", impact: "medium" },
+      { year: 1983, title: "TCP/IP", desc: "ARPANET adopta TCP/IP como estándar: el 'cumpleaños' de la Internet moderna.", impact: "high" },
+      { year: 1983, title: "DNS", desc: "Se introduce el sistema de nombres de dominio; adiós a los archivos hosts manuales.", impact: "high" },
+      { year: 1991, title: "HTTP / World Wide Web", desc: "Tim Berners-Lee publica la Web y el protocolo HTTP.", impact: "high" },
+      { year: 1995, title: "SSL", desc: "Netscape crea SSL para cifrar el tráfico; base del futuro HTTPS.", impact: "medium" },
+      { year: 1999, title: "TLS 1.0", desc: "SSL se estandariza como TLS; evoluciona hasta TLS 1.3 (2018).", impact: "medium" },
+      { year: 2021, title: "HTTP/3 (QUIC)", desc: "HTTP sobre QUIC (UDP) reduce latencia y mejora la conexión móvil.", impact: "medium" },
+    ],
+  },
+  {
+    id: 3,
+    module: 9,
+    title: "Evolución de la seguridad WiFi",
+    events: [
+      { year: 1997, title: "WEP", desc: "Primer cifrado WiFi (RC4); se demostró roto pocos años después.", impact: "high" },
+      { year: 2003, title: "WPA", desc: "Solución de transición con TKIP mientras se finalizaba WPA2.", impact: "medium" },
+      { year: 2004, title: "WPA2 (802.11i)", desc: "Cifrado AES-CCMP; estándar dominante durante más de una década.", impact: "high" },
+      { year: 2017, title: "Ataque KRACK", desc: "Vulnerabilidad en el 4-way handshake de WPA2; impulsó la urgencia de WPA3.", impact: "high" },
+      { year: 2018, title: "WPA3", desc: "Introduce SAE (Dragonfly) y PMF obligatorio; frena el cracking offline.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

@@ -373,6 +373,378 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Riesgo", "NIST CSF", "ISO 27001"],
   },
+
+  // ── M5 · Redes: Modelo OSI ───────────────────────────────────────────────
+  {
+    id: 80,
+    module: 5,
+    term: "Modelo OSI",
+    short: "Modelo de referencia que divide la comunicación de red en 7 capas independientes.",
+    detail:
+      "El **modelo OSI** (*Open Systems Interconnection*) estandariza cómo viajan los datos en **7 capas**, de abajo (física) hacia arriba (aplicación). Cada capa presta un servicio a la superior y se apoya en la inferior, de forma que un problema o ataque se puede aislar por capa.\n" +
+      "> 💡 Mnemotecnia (de capa 1 a 7): **F**ísica · **E**nlace · **R**ed · **T**ransporte · **S**esión · **P**resentación · **A**plicación.",
+    examples: [
+      "Un cable y voltajes son capa 1 (física); una IP es capa 3 (red).",
+      "Aislar un fallo: si hace ping (capa 3) pero no carga la web (capa 7), el problema es de capa superior.",
+    ],
+    related: ["Encapsulamiento", "TCP/IP", "Ataques por capa"],
+  },
+  {
+    id: 81,
+    module: 5,
+    term: "Encapsulamiento y PDU",
+    short: "Proceso por el que cada capa envuelve los datos con su propia cabecera.",
+    detail:
+      "Al bajar por la pila, cada capa añade su **cabecera** (y a veces cola) a los datos: esto es el **encapsulamiento**. La unidad de datos resultante (**PDU**) cambia de nombre por capa:\n" +
+      "| Capa | PDU | Direccionamiento |\n" +
+      "|---|---|---|\n" +
+      "| Aplicación (7) | Datos | — |\n" +
+      "| Transporte (4) | Segmento (TCP) / Datagrama (UDP) | Puerto |\n" +
+      "| Red (3) | Paquete | Dirección IP |\n" +
+      "| Enlace (2) | Trama | Dirección MAC |\n" +
+      "El receptor hace el proceso inverso (**desencapsulamiento**).",
+    examples: [
+      "Una petición HTTP se vuelve segmento TCP → paquete IP → trama Ethernet.",
+      "El switch lee la trama (MAC); el router lee el paquete (IP).",
+    ],
+    related: ["Modelo OSI", "Dirección IPv4 vs IPv6", "TCP vs UDP"],
+  },
+  {
+    id: 82,
+    module: 5,
+    term: "Ataques por capa OSI",
+    short: "Cada capa tiene amenazas características; pensar por capa ayuda a defender.",
+    detail:
+      "Mapear ataques al modelo OSI orienta las defensas:\n" +
+      "| Capa | Ataque típico | Defensa |\n" +
+      "|---|---|---|\n" +
+      "| 2 Enlace | ARP spoofing, MAC flooding | Dynamic ARP Inspection, port security |\n" +
+      "| 3 Red | IP spoofing, DDoS | Filtrado, anti-DDoS |\n" +
+      "| 4 Transporte | SYN flood, escaneo de puertos | SYN cookies, firewall |\n" +
+      "| 7 Aplicación | SQLi, XSS, phishing | WAF, validación, formación |\n" +
+      "> ⚠️ La mayoría de los ataques modernos golpean la **capa 7** (aplicación), la más expuesta.",
+    examples: [
+      "Un ARP spoofing (capa 2) permite un MITM en la red local.",
+      "Un SYN flood (capa 4) agota la tabla de conexiones del servidor.",
+    ],
+    related: ["Modelo OSI", "DDoS", "MITM"],
+  },
+  {
+    id: 83,
+    module: 5,
+    term: "Capa de enlace vs capa de red",
+    short: "La capa 2 mueve tramas en la red local (MAC); la capa 3 enruta paquetes entre redes (IP).",
+    detail:
+      "La **capa 2 (enlace)** entrega tramas dentro del **mismo segmento** usando **direcciones MAC** (físicas, del fabricante) y la maneja el **switch**. La **capa 3 (red)** lleva paquetes **entre redes distintas** usando **direcciones IP** (lógicas) y la maneja el **router**.",
+    examples: [
+      "Dos PCs del mismo WiFi se hablan por MAC (capa 2).",
+      "Para salir a Internet, el router enruta por IP (capa 3).",
+    ],
+    related: ["Encapsulamiento", "Dirección IPv4 vs IPv6", "Modelo OSI"],
+  },
+
+  // ── M6 · TCP/IP y Protocolos ─────────────────────────────────────────────
+  {
+    id: 90,
+    module: 6,
+    term: "TCP vs UDP",
+    short: "TCP es fiable y orientado a conexión; UDP es rápido y sin conexión.",
+    detail:
+      "Son los dos protocolos de **transporte** (capa 4). La elección es un trade-off **fiabilidad vs velocidad**:\n" +
+      "| | TCP | UDP |\n" +
+      "|---|---|---|\n" +
+      "| Conexión | Sí (handshake) | No |\n" +
+      "| Fiabilidad | Garantiza entrega y orden | Sin garantías |\n" +
+      "| Velocidad | Mayor overhead | Más rápido y ligero |\n" +
+      "| Usos | Web, SSH, correo | DNS, VoIP, streaming, juegos |",
+    examples: [
+      "Descargar un archivo usa TCP (no puede faltar un byte).",
+      "Una videollamada usa UDP (mejor perder un frame que esperar).",
+    ],
+    related: ["Three-way handshake", "Puertos y sockets", "DNS"],
+  },
+  {
+    id: 91,
+    module: 6,
+    term: "Three-way handshake",
+    short: "El saludo de 3 pasos con que TCP establece una conexión: SYN, SYN-ACK, ACK.",
+    detail:
+      "Antes de enviar datos, TCP sincroniza ambos extremos en **3 pasos**:\n" +
+      "• **SYN** — el cliente propone conexión y un número de secuencia inicial.\n" +
+      "• **SYN-ACK** — el servidor acepta y responde con el suyo.\n" +
+      "• **ACK** — el cliente confirma; la conexión queda establecida.\n" +
+      "> ⚠️ Un **SYN flood** abusa de este proceso: envía miles de SYN sin completar el ACK para agotar los recursos del servidor.",
+    examples: [
+      "Cada conexión HTTPS empieza con un three-way handshake.",
+      "nmap puede dejar handshakes a medias (SYN scan) para escanear con sigilo.",
+    ],
+    related: ["TCP vs UDP", "Puertos y sockets", "Ataques por capa OSI"],
+  },
+  {
+    id: 92,
+    module: 6,
+    term: "Puertos y sockets",
+    short: "El puerto identifica un servicio dentro de un host; IP + puerto forman un socket.",
+    detail:
+      "Un **puerto** (0-65535) indica a qué **servicio** va el tráfico dentro de una máquina. La combinación **IP:puerto** es un **socket**. Se agrupan en:\n" +
+      "| Rango | Tipo | Ejemplos |\n" +
+      "|---|---|---|\n" +
+      "| 0-1023 | Bien conocidos | 80 HTTP, 443 HTTPS, 22 SSH, 53 DNS |\n" +
+      "| 1024-49151 | Registrados | 3306 MySQL, 3389 RDP |\n" +
+      "| 49152-65535 | Dinámicos | puertos efímeros del cliente |\n" +
+      "> 💡 Conocer los **puertos esenciales** acelera el reconocimiento y el triage de un escaneo.",
+    examples: [
+      "192.168.1.10:443 es el socket de un servidor web HTTPS.",
+      "Ver el puerto 3389 abierto sugiere RDP expuesto (riesgo).",
+    ],
+    related: ["TCP vs UDP", "DNS", "Three-way handshake"],
+  },
+  {
+    id: 93,
+    module: 6,
+    term: "DNS",
+    short: "La 'agenda de Internet': traduce nombres de dominio a direcciones IP.",
+    detail:
+      "El **DNS** (*Domain Name System*) resuelve `alphalog.io` → `IP`. La resolución es jerárquica: **resolver → raíz → TLD (.io) → servidor autoritativo**, con caché en cada paso. Suele ir sobre **UDP/53** (TCP para respuestas grandes).\n" +
+      "> ⚠️ Vectores comunes: **DNS spoofing/cache poisoning** (respuestas falsas), **DNS tunneling** (exfiltrar datos) y **DDoS de amplificación**. Mitigaciones: **DNSSEC**, **DoH/DoT**.",
+    examples: [
+      "Escribir una web dispara una consulta DNS antes del handshake TCP.",
+      "Malware usando DNS tunneling para sacar datos evitando el firewall.",
+    ],
+    related: ["Puertos y sockets", "TCP vs UDP", "Vector de ataque"],
+  },
+  {
+    id: 94,
+    module: 6,
+    term: "Modelo TCP/IP",
+    short: "El modelo práctico de Internet: 4 capas que condensan las 7 del OSI.",
+    detail:
+      "El **modelo TCP/IP** es el que realmente usa Internet. Sus **4 capas** mapean al OSI:\n" +
+      "| TCP/IP | OSI equivalente | Ejemplos |\n" +
+      "|---|---|---|\n" +
+      "| Aplicación | 5-6-7 | HTTP, DNS, SSH |\n" +
+      "| Transporte | 4 | TCP, UDP |\n" +
+      "| Internet | 3 | IP, ICMP |\n" +
+      "| Acceso a red | 1-2 | Ethernet, WiFi |",
+    examples: [
+      "El OSI es teórico/didáctico; el TCP/IP es el operativo.",
+      "HTTPS = capa aplicación sobre TCP (transporte) sobre IP (internet).",
+    ],
+    related: ["Modelo OSI", "TCP vs UDP", "DNS"],
+  },
+
+  // ── M7 · Direccionamiento IP y Subnetting ────────────────────────────────
+  {
+    id: 100,
+    module: 7,
+    term: "Dirección IPv4 vs IPv6",
+    short: "IPv4 usa 32 bits (~4.300 millones); IPv6 usa 128 bits (prácticamente infinitas).",
+    detail:
+      "Una **dirección IP** identifica un host en la red. **IPv4** son 32 bits en 4 octetos decimales (`192.168.1.1`); su agotamiento motivó **IPv6**, de 128 bits en hexadecimal (`2001:db8::1`). IPv6 elimina la necesidad de NAT por su enorme espacio.",
+    examples: [
+      "IPv4: 192.168.1.20 — IPv6: fe80::1ff:fe23:4567:890a.",
+      "IPv4 se agotó; los ISP migran gradualmente a IPv6.",
+    ],
+    related: ["IP privada vs pública", "Subnetting y CIDR", "NAT/PAT"],
+  },
+  {
+    id: 101,
+    module: 7,
+    term: "IP privada vs pública",
+    short: "Las privadas viven dentro de la LAN; las públicas son enrutables en Internet.",
+    detail:
+      "Las **IP privadas** (RFC 1918) no se enrutan en Internet y se reutilizan en cada red local; las **públicas** son únicas y visibles. El **NAT** traduce entre ambas.\n" +
+      "| Rango privado | Tamaño |\n" +
+      "|---|---|\n" +
+      "| 10.0.0.0/8 | ~16,7 M |\n" +
+      "| 172.16.0.0/12 | ~1 M |\n" +
+      "| 192.168.0.0/16 | ~65 K |",
+    examples: [
+      "Tu PC en casa: privada 192.168.1.x; tu router muestra una pública al ISP.",
+      "Muchos hosts privados comparten una IP pública vía NAT.",
+    ],
+    related: ["NAT/PAT", "Dirección IPv4 vs IPv6", "DHCP"],
+  },
+  {
+    id: 102,
+    module: 7,
+    term: "Subnetting y CIDR",
+    short: "Dividir una red en subredes más pequeñas; CIDR expresa la máscara como /N.",
+    detail:
+      "El **subnetting** parte una red en **subredes** para mejorar organización, rendimiento y **seguridad** (aislar segmentos). **CIDR** (`/24`) indica cuántos bits son de red: `/24` = máscara `255.255.255.0` = 256 direcciones (254 usables).\n" +
+      "> 💡 Cuanto **mayor** el número tras la `/`, **más pequeña** la subred (más bits de red, menos de host).",
+    examples: [
+      "192.168.1.0/24 → 254 hosts usables.",
+      "Separar servidores y usuarios en subredes distintas reduce el movimiento lateral.",
+    ],
+    related: ["DMZ y segmentación", "IP privada vs pública", "NAT/PAT"],
+  },
+  {
+    id: 103,
+    module: 7,
+    term: "NAT y PAT",
+    short: "Traducen direcciones privadas a públicas; PAT multiplexa muchas IP en una usando puertos.",
+    detail:
+      "El **NAT** (*Network Address Translation*) reescribe la IP privada de origen por una pública al salir a Internet. El **PAT** (NAT *overload*) permite que **muchos hosts compartan una sola IP pública** distinguiéndolos por **puerto**. Es lo que usa cualquier router doméstico.",
+    examples: [
+      "10 dispositivos de casa navegan con una única IP pública (PAT).",
+      "El NAT también oculta la topología interna (beneficio colateral de seguridad).",
+    ],
+    related: ["IP privada vs pública", "DHCP", "Puertos y sockets"],
+  },
+  {
+    id: 104,
+    module: 7,
+    term: "DMZ y segmentación de red",
+    short: "Aislar zonas de la red para que un compromiso no se propague a todo.",
+    detail:
+      "La **segmentación** divide la red en zonas con controles entre ellas. Una **DMZ** (*zona desmilitarizada*) es una subred intermedia donde se ubican los servicios **expuestos a Internet** (web, correo), separados de la red interna por firewalls.\n" +
+      "> 💡 Si comprometen el servidor web de la DMZ, **no** tiene línea directa a la red interna sensible.",
+    examples: [
+      "Servidor web público en la DMZ; base de datos en la red interna.",
+      "Microsegmentación + Zero Trust para limitar el movimiento lateral.",
+    ],
+    related: ["Subnetting y CIDR", "Defensa en profundidad", "Mínimo privilegio"],
+  },
+
+  // ── M8 · Análisis de Tráfico (Wireshark) ─────────────────────────────────
+  {
+    id: 110,
+    module: 8,
+    term: "Captura de paquetes y PCAP",
+    short: "Interceptar y guardar el tráfico de red para inspeccionarlo paquete a paquete.",
+    detail:
+      "Capturar tráfico (*packet sniffing*) registra los paquetes que pasan por una interfaz en **modo promiscuo**. El formato estándar de guardado es **PCAP** (`.pcap`/`.pcapng`), que herramientas como **Wireshark** abren para análisis e investigación forense.",
+    examples: [
+      "Guardar un .pcap durante un incidente para analizarlo después.",
+      "Reproducir una sesión sospechosa desde una captura.",
+    ],
+    related: ["Filtros de captura vs display", "tcpdump y tshark", "Detección de anomalías en tráfico"],
+  },
+  {
+    id: 111,
+    module: 8,
+    term: "Filtros de captura vs display",
+    short: "Los de captura deciden qué se graba; los de display, qué se muestra de lo grabado.",
+    detail:
+      "Wireshark distingue dos filtros con **sintaxis diferente**:\n" +
+      "| Tipo | Cuándo actúa | Sintaxis | Ejemplo |\n" +
+      "|---|---|---|---|\n" +
+      "| Captura | Antes de grabar | BPF | `tcp port 80` |\n" +
+      "| Display | Sobre lo ya grabado | Wireshark | `http.request.method == \"POST\"` |\n" +
+      "> 💡 Filtra en **captura** para reducir volumen; filtra en **display** para investigar sin perder datos.",
+    examples: [
+      "Captura: `host 10.0.0.5` para grabar solo a ese equipo.",
+      "Display: `ip.addr == 10.0.0.5 && dns` para ver su DNS.",
+    ],
+    related: ["Captura de paquetes y PCAP", "tcpdump y tshark", "Puertos y sockets"],
+  },
+  {
+    id: 112,
+    module: 8,
+    term: "tcpdump y tshark",
+    short: "Las versiones de línea de comandos para capturar y analizar tráfico sin interfaz gráfica.",
+    detail:
+      "Cuando no hay GUI (servidores, SSH), se usan herramientas CLI: **tcpdump** (clásica, sintaxis BPF) y **tshark** (el Wireshark de terminal). Son ideales para **capturar en remoto** y guardar un `.pcap` que luego se abre en Wireshark.",
+    examples: [
+      "`tcpdump -i eth0 -w captura.pcap` graba la interfaz a un archivo.",
+      "`tshark -r captura.pcap -Y http` filtra HTTP de una captura.",
+    ],
+    related: ["Captura de paquetes y PCAP", "Filtros de captura vs display"],
+  },
+  {
+    id: 113,
+    module: 8,
+    term: "Detección de anomalías en tráfico",
+    short: "Reconocer patrones de ataque o exfiltración dentro del tráfico capturado.",
+    detail:
+      "El análisis de tráfico revela actividad maliciosa por sus **patrones**:\n" +
+      "• **Escaneo de puertos** — muchos SYN a puertos distintos desde un origen.\n" +
+      "• **Exfiltración** — transferencias grandes o regulares hacia una IP externa.\n" +
+      "• **Beaconing C2** — conexiones periódicas idénticas a un mismo destino.\n" +
+      "• **Texto en claro** — credenciales viajando sin cifrar (HTTP, FTP, Telnet).",
+    examples: [
+      "Detectar un nmap por la ráfaga de SYN a múltiples puertos.",
+      "Ver una contraseña FTP en claro dentro de la captura.",
+    ],
+    related: ["Captura de paquetes y PCAP", "IoC (Indicador de Compromiso)", "Ataques por capa OSI"],
+  },
+
+  // ── M9 · Seguridad WiFi ──────────────────────────────────────────────────
+  {
+    id: 120,
+    module: 9,
+    term: "Estándares de seguridad WiFi",
+    short: "La evolución del cifrado inalámbrico: WEP → WPA → WPA2 → WPA3.",
+    detail:
+      "El cifrado WiFi mejoró por generaciones al irse rompiendo el anterior:\n" +
+      "| Estándar | Cifrado | Estado |\n" +
+      "|---|---|---|\n" +
+      "| WEP | RC4 | Roto (inseguro) |\n" +
+      "| WPA | TKIP | Obsoleto |\n" +
+      "| WPA2 | AES-CCMP | Estándar actual (vulnerable a KRACK) |\n" +
+      "| WPA3 | AES + SAE | Recomendado |\n" +
+      "> ⚠️ **WEP** se rompe en minutos: nunca usarlo. **WPA3** mitiga el cracking offline del handshake con **SAE** (*Dragonfly*).",
+    examples: [
+      "Una red WEP puede crackearse capturando suficientes IV.",
+      "WPA3 protege incluso con contraseñas débiles gracias a SAE.",
+    ],
+    related: ["Cracking del handshake WPA2-PSK", "802.1X / WPA2-Enterprise", "Evil Twin y Rogue AP"],
+  },
+  {
+    id: 121,
+    module: 9,
+    term: "Evil Twin y Rogue AP",
+    short: "Un punto de acceso falso que suplanta a uno legítimo para interceptar a las víctimas.",
+    detail:
+      "Un **Rogue AP** es un punto de acceso no autorizado en la red. El **Evil Twin** es su variante de ingeniería social: **clona el SSID** de una red de confianza (mismo nombre, señal más fuerte) para que las víctimas se conecten y poder hacer **MITM** o robar credenciales con un portal cautivo falso.",
+    examples: [
+      "Un AP 'WiFi_Cafe_Gratis' clonado en una cafetería captura el tráfico.",
+      "Portal cautivo falso que pide la contraseña del correo.",
+    ],
+    related: ["Ataque de deautenticación", "MITM", "Estándares de seguridad WiFi"],
+  },
+  {
+    id: 122,
+    module: 9,
+    term: "Ataque de deautenticación",
+    short: "Forzar la desconexión de clientes WiFi enviando tramas de deauth falsificadas.",
+    detail:
+      "Las tramas de gestión **deauth** de 802.11 no están autenticadas (salvo con 802.11w/PMF), así que un atacante puede **expulsar** a un cliente de su red. Se usa para forzar una **reconexión** (y capturar el handshake WPA2) o para empujar a la víctima hacia un **Evil Twin**.\n" +
+      "> ⚠️ Mitigación: habilitar **802.11w (PMF, Protected Management Frames)**, obligatorio en WPA3.",
+    examples: [
+      "Lanzar deauth para capturar el 4-way handshake y crackearlo offline.",
+      "Echar a un cliente de la red real para que caiga en el AP falso.",
+    ],
+    related: ["Evil Twin y Rogue AP", "Cracking del handshake WPA2-PSK", "Estándares de seguridad WiFi"],
+  },
+  {
+    id: 123,
+    module: 9,
+    term: "Cracking del handshake WPA2-PSK",
+    short: "Capturar el 4-way handshake y atacarlo offline por diccionario/fuerza bruta.",
+    detail:
+      "En WPA2-Personal, la contraseña no viaja por el aire, pero el **4-way handshake** que se intercambia al conectar **deriva** de ella. Capturándolo (a menudo tras un deauth) se ataca **offline** probando contraseñas con `hashcat`/`aircrack-ng`. Por eso la **longitud y aleatoriedad** de la PSK es crítica.\n" +
+      "> 💡 WPA3 frustra este ataque: su handshake **SAE** no permite el crackeo offline del material capturado.",
+    examples: [
+      "Capturar el handshake con airodump-ng y crackearlo con un diccionario.",
+      "Una passphrase larga y aleatoria hace inviable el ataque por diccionario.",
+    ],
+    related: ["Ataque de deautenticación", "Estándares de seguridad WiFi", "Exploit y Payload"],
+  },
+  {
+    id: 124,
+    module: 9,
+    term: "802.1X / WPA2-Enterprise",
+    short: "Autenticación WiFi por usuario (no por contraseña compartida) mediante un servidor RADIUS.",
+    detail:
+      "**WPA2/WPA3-Enterprise** usa **802.1X**: cada usuario se autentica con **credenciales o certificados** propios contra un servidor **RADIUS** (vía EAP), en vez de una **PSK** compartida. Elimina el riesgo de la contraseña única y permite **revocar accesos** individualmente.",
+    examples: [
+      "El WiFi corporativo donde inicias sesión con tu usuario de dominio.",
+      "Revocar el acceso de un empleado sin cambiar la clave de todos.",
+    ],
+    related: ["Estándares de seguridad WiFi", "AAA (Autenticación, Autorización, Accounting)", "Mínimo privilegio"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
