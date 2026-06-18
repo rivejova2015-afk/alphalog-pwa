@@ -1,6 +1,8 @@
 // AlphaLog Securities — CyberSec Academy
 // Static content types. Per-user state lives in Supabase (see migration 094).
 
+import type { CertTrack } from "./certifications";
+
 export type ModuleStatus = "locked" | "active" | "completed";
 export type LevelKey = "b" | "i" | "a";
 
@@ -86,6 +88,64 @@ export interface ProgressRecord {
 export type ProgressMap = Record<number, ProgressRecord>;
 
 export type HomeworkStatus = "pending" | "submitted" | "graded";
+
+// ── Enriquecimiento de lecciones (definiciones, frameworks, timeline, ramas) ──
+// Catálogos de contenido keyed por módulo, mostrados dentro de LessonViewer.
+
+export interface ConceptDefinition {
+  id: number;
+  module: number;      // módulo al que pertenece (1-86)
+  term: string;        // concepto (ej. "Superficie de ataque")
+  short: string;       // definición de una línea
+  detail: string;      // explicación extendida (markdown: bold, tablas, callouts)
+  examples: string[];  // ejemplos concretos
+  related: string[];   // términos relacionados (chips)
+}
+
+export interface FrameworkPhase {
+  n: number;           // número de fase (1..N, consecutivo)
+  name: string;
+  desc: string;
+  defenses: string[];  // contramedidas/defensas de la fase
+}
+
+export interface Framework {
+  id: number;
+  module: number;
+  name: string;        // ej. "Cyber Kill Chain (Lockheed Martin)"
+  kind: "killchain" | "attack" | "controls";
+  summary: string;
+  phases: FrameworkPhase[];
+}
+
+export type ImpactLevel = "low" | "medium" | "high";
+
+export interface TimelineEvent {
+  year: number;
+  title: string;
+  desc: string;
+  impact: ImpactLevel;
+}
+
+export interface HistoryTimeline {
+  id: number;
+  module: number;
+  title: string;
+  events: TimelineEvent[]; // ordenados por año ascendente
+}
+
+export interface FieldBranch {
+  id: number;
+  module: number;
+  name: string;        // ej. "Red Team / Ofensiva"
+  color: string;       // acento hex para la tarjeta
+  summary: string;
+  roles: string[];
+  skills: string[];
+  tools: string[];
+  track: CertTrack;    // enlaza a /certificaciones?track=
+}
+
 
 export interface HomeworkSubmission {
   homework_id: number;
