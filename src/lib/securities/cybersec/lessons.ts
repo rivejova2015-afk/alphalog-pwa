@@ -1071,3 +1071,10 @@ export function lessonsForModule(moduleId: number): Lesson[] {
   const tag = `M${moduleId}`;
   return LESSONS.filter((l) => l.sub === tag);
 }
+
+// Primera lección (ordenada por id) sin quiz hecho, excluyendo la lección actual.
+// Sirve para ofrecer "Continuar →" al terminar un quiz/examen.
+export function nextPendingLesson(currentId: number, takenIds: Set<number>): Lesson | null {
+  const sorted = [...LESSONS].sort((a, b) => a.id - b.id);
+  return sorted.find((l) => l.id !== currentId && !takenIds.has(l.id)) ?? null;
+}

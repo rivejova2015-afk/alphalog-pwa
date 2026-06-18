@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trophy, Check, X, Clock, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { ArrowLeft, Trophy, Check, X, Clock, ChevronLeft, ChevronRight, Play, ArrowRight, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import type { ExamQuestion } from "@/lib/securities/cybersec";
 import {
@@ -12,13 +12,18 @@ import {
   EXAM_SECONDS_PER_QUESTION,
   type PreparedQuestion,
 } from "@/lib/securities/cybersec";
+import { CelebrationOverlay } from "./CelebrationOverlay.client";
 
 interface Props {
   questions: ExamQuestion[]; // the full bank
   passRatio: number;
   section?: string; // ausente = examen final global; presente = examen de esa categoría
   count?: number;   // cantidad de preguntas a samplear (default = examen final)
+  nextLessonId?: number | null;
+  nextLessonTitle?: string | null;
 }
+
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 interface PriorAttempt {
   attempt_no: number;
@@ -30,7 +35,7 @@ interface PriorAttempt {
 
 type Phase = "intro" | "running" | "done";
 
-export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTION_COUNT }: Props) {
+export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTION_COUNT, nextLessonId = null, nextLessonTitle = null }: Props) {
   const historyUrl = section
     ? `/api/securities/cybersec/exam-results?section=${encodeURIComponent(section)}`
     : "/api/securities/cybersec/exam-results";
@@ -41,6 +46,8 @@ export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTIO
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [endsAt, setEndsAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [celebrateKey, setCelebrateKey] = useState(0); // >0 → confeti de aprobación
   const [history, setHistory] = useState<PriorAttempt[]>([]);
 
   useEffect(() => {
@@ -69,7 +76,9 @@ export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTIO
   const submit = useCallback(async () => {
     setPhase("done");
     setSaving(true);
+    setSaveState("saving");
     const finalScore = exam.reduce((acc, q, i) => acc + (answers[i] === q.c ? 1 : 0), 0);
+    const passed = finalScore >= Math.ceil(exam.length * passRatio);
     try {
       const res = await fetch("/api/securities/cybersec/exam-results", {
         method: "POST",
@@ -81,16 +90,20 @@ export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTIO
           ...(section ? { section } : {}),
         }),
       });
-      if (!res.ok) toast.error("No se pudo guardar el resultado");
-      else {
-        const passed = finalScore >= Math.ceil(exam.length * passRatio);
+      if (!res.ok) {
+        toast.error("No se pudo guardar el resultado");
+        setSaveState("error");
+      } else {
         toast.success(passed ? `¡Aprobaste con ${finalScore}/${exam.length}!` : `${finalScore}/${exam.length} — necesitas ${Math.ceil(exam.length * passRatio)}`);
+        setSaveState("saved");
       }
     } catch {
       toast.error("Error de conexión");
+      setSaveState("error");
     } finally {
       setSaving(false);
     }
+    if (passed) setCelebrateKey((k) => k + 1); // confeti inline
   }, [exam, answers, passRatio, section]);
 
   // Wall-clock countdown: recompute remaining time from a fixed end timestamp so
@@ -171,10 +184,21 @@ export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTIO
 
   // ── Done (review) ────────────────────────────────────────────────────────
   if (phase === "done") {
+    const passed = score >= minToPass;
     return (
       <div className="space-y-6">
+        {passed && celebrateKey > 0 && (
+          <CelebrationOverlay
+            key={celebrateKey}
+            milestones={[{
+              kind: "exam",
+              title: section ? "¡Sección aprobada!" : "¡Graduado!",
+              detail: section ? `${section} · ${score}/${total}` : `Aprobaste el examen final · ${score}/${total}`,
+            }]}
+          />
+        )}
         <Back />
-        <ResultBanner score={score} total={total} minToPass={minToPass} />
+        <ResultBanner score={score} total={total} minToPass={minToPass} saveState={saveState} />
         <div className="space-y-3">
           {exam.map((q, i) => {
             const ua = answers[i];
@@ -202,12 +226,31 @@ export function ExamRunner({ questions, passRatio, section, count = EXAM_QUESTIO
             );
           })}
         </div>
-        <button
-          onClick={() => setPhase("intro")}
-          className="px-5 py-2 bg-[#1f2937] hover:bg-[#151b28] text-[#e2e8f0] font-bold rounded text-sm"
-        >
-          Nuevo intento
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {passed && (
+            nextLessonId != null ? (
+              <Link
+                href={`/securities/cybersec/quizzes/${nextLessonId}`}
+                className="inline-flex items-center gap-1.5 px-5 py-2 bg-[#34d399] hover:bg-[#10b981] text-[#0a0e1a] font-bold rounded text-sm"
+              >
+                Continuar{nextLessonTitle ? `: ${nextLessonTitle}` : ""} <ArrowRight size={15} />
+              </Link>
+            ) : (
+              <Link
+                href="/securities/cybersec"
+                className="inline-flex items-center gap-1.5 px-5 py-2 bg-[#34d399] hover:bg-[#10b981] text-[#0a0e1a] font-bold rounded text-sm"
+              >
+                <TrendingUp size={15} /> Ver tu progreso
+              </Link>
+            )
+          )}
+          <button
+            onClick={() => setPhase("intro")}
+            className="px-5 py-2 bg-[#1f2937] hover:bg-[#151b28] text-[#e2e8f0] font-bold rounded text-sm"
+          >
+            Nuevo intento
+          </button>
+        </div>
       </div>
     );
   }
@@ -320,9 +363,14 @@ function Back() {
   );
 }
 
-function ResultBanner({ score, total, minToPass }: { score: number; total: number; minToPass: number }) {
+function ResultBanner({ score, total, minToPass, saveState }: { score: number; total: number; minToPass: number; saveState: SaveState }) {
   const passed = score >= minToPass;
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+  const savedLabel =
+    saveState === "saving" ? "Guardando…"
+    : saveState === "error" ? "No se pudo guardar — reintenta"
+    : saveState === "saved" ? "Guardado ✓ · cuenta para tu progreso"
+    : null;
   return (
     <div className={`flex items-center gap-3 rounded-lg border p-4 ${
       passed ? "border-[#34d399]/40 bg-[#34d399]/5" : "border-[#ef4444]/40 bg-[#ef4444]/5"
@@ -333,6 +381,9 @@ function ResultBanner({ score, total, minToPass }: { score: number; total: numbe
         <p className="text-xs text-[#94a3b8]">
           {passed ? "¡Aprobaste el examen final!" : `Necesitas al menos ${minToPass} aciertos para aprobar.`}
         </p>
+        {savedLabel && (
+          <p className={`mt-0.5 text-[11px] font-mono ${saveState === "error" ? "text-[#ef4444]" : "text-[#34d399]"}`}>{savedLabel}</p>
+        )}
       </div>
     </div>
   );

@@ -37,3 +37,42 @@ describe("QuizRunner — modo práctica", () => {
     expect(screen.getByRole("button", { name: /Test/ })).toBeInTheDocument();
   });
 });
+
+describe("QuizRunner — al aprobar (confirmación + navegación)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("muestra 'Guardado ✓' y el botón 'Continuar →' cuando hay próxima lección", async () => {
+    render(
+      <QuizRunner
+        lessonId={1}
+        lessonTitle="Test"
+        questions={questions}
+        moduleId={1}
+        nextLessonId={2}
+        nextLessonTitle="Tríada CIA"
+      />,
+    );
+    fireEvent.click(screen.getByText("Tecnología, Procesos, Personas")); // respuesta correcta → 100%
+
+    await waitFor(() => expect(screen.getByText(/Guardado ✓/)).toBeInTheDocument());
+    const continuar = await screen.findByText(/Continuar: Tríada CIA/);
+    expect(continuar).toBeInTheDocument();
+    // marca el progreso del módulo al aprobar
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/securities/cybersec/progress",
+      expect.objectContaining({ method: "POST" }),
+    ));
+  });
+
+  it("no muestra 'Continuar →' si no hay próxima lección", async () => {
+    render(
+      <QuizRunner lessonId={1} lessonTitle="Test" questions={questions} moduleId={1} nextLessonId={null} />,
+    );
+    fireEvent.click(screen.getByText("Tecnología, Procesos, Personas"));
+    await waitFor(() => expect(screen.getByText(/Guardado ✓/)).toBeInTheDocument());
+    expect(screen.queryByText(/Continuar/)).toBeNull();
+  });
+});
