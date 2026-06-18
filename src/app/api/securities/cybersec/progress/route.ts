@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
+import { mergeCompletedLevels } from "@/lib/securities/cybersec";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,9 @@ const upsertSchema = z.object({
   status: z.enum(["locked", "active", "completed"]).optional(),
   completed_levels: z.array(z.enum(["b", "i", "a"])).optional(),
   research_done: z.boolean().optional(),
+  // Merge aditivo: agrega un nivel a completed_levels sin pisar los existentes.
+  // Lo usa el quiz al aprobar para marcar el progreso del módulo.
+  add_completed_level: z.enum(["b", "i", "a"]).optional(),
 });
 
 // GET /api/securities/cybersec/progress
@@ -71,6 +75,23 @@ export async function POST(request: NextRequest) {
     if (parsed.data.status !== undefined) payload.status = parsed.data.status;
     if (parsed.data.completed_levels !== undefined) payload.completed_levels = parsed.data.completed_levels;
     if (parsed.data.research_done !== undefined) payload.research_done = parsed.data.research_done;
+
+    // Merge aditivo de un nivel (quiz aprobado): leer la fila actual, unir el nivel
+    // y asegurar que el módulo quede al menos 'active'. No pisa lo ya marcado a mano.
+    if (parsed.data.add_completed_level !== undefined) {
+      const { data: current } = await supabase
+        .from("securities_progress")
+        .select("completed_levels, status")
+        .eq("user_id", user.id)
+        .eq("module_id", parsed.data.module_id)
+        .maybeSingle();
+
+      const base = (parsed.data.completed_levels ?? current?.completed_levels ?? []) as string[];
+      payload.completed_levels = mergeCompletedLevels(base, parsed.data.add_completed_level);
+      if (payload.status === undefined && (current?.status ?? "locked") === "locked") {
+        payload.status = "active";
+      }
+    }
 
     const { data, error } = await supabase
       .from("securities_progress")

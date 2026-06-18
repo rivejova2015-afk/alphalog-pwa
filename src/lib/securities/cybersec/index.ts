@@ -15,6 +15,7 @@ export * from "./library";
 export * from "./certifications";
 export * from "./flashcards";
 export * from "./progressStats";
+export * from "./moduleProgress";
 export * from "./xp";
 export * from "./habit";
 export * from "./achievements";

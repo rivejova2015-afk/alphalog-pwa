@@ -4,6 +4,7 @@ import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   getQuiz, getLesson, availableLevels, QUIZ_LEVELS, QUIZ_LEVEL_LABELS,
+  nextPendingLesson, moduleIdFromSub,
   type QuizLevel,
 } from "@/lib/securities/cybersec";
 import { QuizRunner } from "@/components/securities/cybersec/QuizRunner.client";
@@ -62,6 +63,15 @@ export default async function QuizPage({ params, searchParams }: Props) {
   const quiz = getQuiz(lessonId, level);
   if (!quiz) notFound();
 
+  // Próxima lección pendiente (sin quiz hecho) para el botón "Continuar →".
+  const { data: takenRows } = await supabase
+    .from("securities_quiz_results")
+    .select("lesson_id")
+    .eq("user_id", user.id);
+  const takenIds = new Set<number>((takenRows ?? []).map((r) => r.lesson_id as number));
+  const nextLesson = nextPendingLesson(lessonId, takenIds);
+  const moduleId = moduleIdFromSub(lesson.sub);
+
   return (
     <div className="max-w-3xl mx-auto py-6 px-4 space-y-5">
       {/* Selector de nivel */}
@@ -104,7 +114,16 @@ export default async function QuizPage({ params, searchParams }: Props) {
         })}
       </div>
 
-      <QuizRunner key={level} lessonId={lessonId} lessonTitle={lesson.title} questions={quiz} level={level} />
+      <QuizRunner
+        key={level}
+        lessonId={lessonId}
+        lessonTitle={lesson.title}
+        questions={quiz}
+        level={level}
+        moduleId={moduleId}
+        nextLessonId={nextLesson?.id ?? null}
+        nextLessonTitle={nextLesson?.title ?? null}
+      />
     </div>
   );
 }

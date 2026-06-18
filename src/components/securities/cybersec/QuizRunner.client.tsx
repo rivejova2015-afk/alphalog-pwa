@@ -2,19 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, X, Trophy, Clock, GraduationCap, Timer, RotateCcw } from "lucide-react";
+import { ArrowLeft, Check, X, Trophy, Clock, GraduationCap, Timer, RotateCcw, ArrowRight, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import type { QuizQuestion, QuizLevel } from "@/lib/securities/cybersec";
 import { shuffle, formatClock, QUIZ_LEVEL_LABELS } from "@/lib/securities/cybersec";
+import { CelebrationOverlay } from "./CelebrationOverlay.client";
 
 interface Props {
   lessonId: number;
   lessonTitle: string;
   questions: QuizQuestion[];
   level?: QuizLevel;
+  moduleId?: number | null;
+  nextLessonId?: number | null;
+  nextLessonTitle?: string | null;
 }
 
 type Mode = "practica" | "test";
+type SaveState = "idle" | "saving" | "saved" | "error";
+const PASS_RATIO = 0.7;
 const SECONDS_PER_Q = 45;
 
 function prepareQuiz(qs: QuizQuestion[]): QuizQuestion[] {
@@ -29,14 +35,17 @@ function wrongKey(lessonId: number, level: QuizLevel) {
   return `cybersec.quiz.${lessonId}.${level}.wrong`;
 }
 
-export function QuizRunner({ lessonId, lessonTitle, questions, level = "b" }: Props) {
+export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", moduleId = null, nextLessonId = null, nextLessonTitle = null }: Props) {
   const [mode, setMode] = useState<Mode>("practica");
   const [session, setSession] = useState<QuizQuestion[]>(questions);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false); // test mode: reveals review
   const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [savedWrong, setSavedWrong] = useState<string[]>([]);
+  // Confeti inline: se remonta (key) en cada aprobación para re-disparar la animación.
+  const [celebration, setCelebration] = useState<{ key: number; score: number; total: number } | null>(null);
 
   // Load persisted "wrong" set so the user can review only failed questions.
   useEffect(() => {
@@ -64,21 +73,42 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b" }: Pr
   }, [lessonId, level]);
 
   const saveResult = useCallback(async (finalScore: number, sess: QuizQuestion[], ans: Record<number, number>) => {
+    const passed = sess.length > 0 && finalScore / sess.length >= PASS_RATIO;
     setSaving(true);
+    setSaveState("saving");
     try {
       const res = await fetch("/api/securities/cybersec/quiz-results", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lesson_id: lessonId, score: finalScore, total: sess.length, level, answers: sess.map((_, i) => ans[i] ?? -1) }),
       });
-      if (!res.ok) toast.error("No se pudo guardar el resultado");
-      else toast.success(`Guardado: ${finalScore}/${sess.length}`);
+      if (!res.ok) {
+        toast.error("No se pudo guardar el resultado");
+        setSaveState("error");
+      } else {
+        toast.success(`Guardado: ${finalScore}/${sess.length}`);
+        setSaveState("saved");
+      }
     } catch {
       toast.error("Error de conexión");
+      setSaveState("error");
     } finally {
       setSaving(false);
     }
-  }, [lessonId, level]);
+
+    if (passed) {
+      // Confeti inmediato (reutiliza CelebrationOverlay).
+      setCelebration((c) => ({ key: (c?.key ?? 0) + 1, score: finalScore, total: sess.length }));
+      // Marca el nivel del quiz como progreso del módulo (best-effort, no bloquea).
+      if (moduleId != null) {
+        void fetch("/api/securities/cybersec/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ module_id: moduleId, add_completed_level: level }),
+        }).catch(() => { /* el progreso se recalcula igual al recargar */ });
+      }
+    }
+  }, [lessonId, level, moduleId]);
 
   const finishTest = useCallback(() => {
     setSubmitted(true);
@@ -130,6 +160,17 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b" }: Pr
 
   return (
     <div className="space-y-6">
+      {celebration && (
+        <CelebrationOverlay
+          key={celebration.key}
+          milestones={[{
+            kind: "achievement",
+            title: "¡Quiz aprobado!",
+            detail: `${celebration.score}/${celebration.total} · cuenta para tu progreso`,
+          }]}
+        />
+      )}
+
       <Link href={`/securities/cybersec/lessons/${lessonId}`} className="inline-flex items-center gap-1.5 text-sm text-[#94a3b8] hover:text-[#22d3ee]">
         <ArrowLeft size={14} /> Volver a la lección
       </Link>
@@ -155,7 +196,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b" }: Pr
         )}
       </div>
 
-      {submitted && <ScoreBanner score={score} total={total} />}
+      {submitted && <ScoreBanner score={score} total={total} saveState={saveState} />}
 
       <div className="space-y-4">
         {session.map((q, i) => {
@@ -214,12 +255,30 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b" }: Pr
             {saving ? "Guardando…" : "Enviar respuestas"}
           </button>
         ) : submitted ? (
-          <button
-            onClick={() => startSession(mode, mode === "practica" ? questions : questions)}
-            className="px-5 py-2 bg-[#1f2937] hover:bg-[#151b28] text-[#e2e8f0] font-bold rounded text-sm"
-          >
-            Reintentar
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {nextLessonId != null && (
+              <Link
+                href={`/securities/cybersec/quizzes/${nextLessonId}`}
+                className="inline-flex items-center gap-1.5 px-5 py-2 bg-[#22d3ee] hover:bg-[#06b6d4] text-[#0a0e1a] font-bold rounded text-sm"
+              >
+                Continuar{nextLessonTitle ? `: ${nextLessonTitle}` : ""} <ArrowRight size={15} />
+              </Link>
+            )}
+            <button
+              onClick={() => startSession(mode, questions)}
+              className="px-5 py-2 bg-[#1f2937] hover:bg-[#151b28] text-[#e2e8f0] font-bold rounded text-sm"
+            >
+              Reintentar
+            </button>
+            {moduleId != null && (
+              <Link
+                href={`/securities/cybersec/modules/${moduleId}`}
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-[#1f2937] hover:bg-[#151b28] text-[#94a3b8] rounded text-sm"
+              >
+                <BookOpen size={14} /> Volver al módulo
+              </Link>
+            )}
+          </div>
         ) : null}
         <span className="text-xs text-[#94a3b8]">{answeredCount}/{total} respondidas</span>
       </div>
@@ -242,15 +301,23 @@ function ModeBtn({ active, onClick, icon, label, hint }: { active: boolean; onCl
   );
 }
 
-function ScoreBanner({ score, total }: { score: number; total: number }) {
+function ScoreBanner({ score, total, saveState }: { score: number; total: number; saveState: SaveState }) {
   const pct = total > 0 ? Math.round((score / total) * 100) : 0;
   const passed = pct >= 70;
+  const savedLabel =
+    saveState === "saving" ? "Guardando…"
+    : saveState === "error" ? "No se pudo guardar — reintenta"
+    : saveState === "saved" ? (passed ? "Guardado ✓ · cuenta para tu progreso" : "Guardado ✓")
+    : null;
   return (
     <div className={`flex items-center gap-3 rounded-lg border p-4 ${passed ? "border-[#34d399]/40 bg-[#34d399]/5" : "border-[#eab308]/40 bg-[#eab308]/5"}`}>
       <Trophy size={22} className={passed ? "text-[#34d399]" : "text-[#eab308]"} />
       <div>
         <p className="text-lg font-bold text-[#e2e8f0]">{score}/{total} ({pct}%)</p>
         <p className="text-xs text-[#94a3b8]">{passed ? "¡Bien hecho!" : "Repasa la lección y reintenta."}</p>
+        {savedLabel && (
+          <p className={`mt-0.5 text-[11px] font-mono ${saveState === "error" ? "text-[#ef4444]" : "text-[#34d399]"}`}>{savedLabel}</p>
+        )}
       </div>
     </div>
   );
