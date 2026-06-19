@@ -160,6 +160,41 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Finished y datos cifrados", desc: "Se confirma el handshake y el tráfico de aplicación viaja cifrado con AES-GCM.", defenses: ["HSTS", "Cuidado con 0-RTT (replay)"] },
     ],
   },
+  {
+    id: 11,
+    module: 21,
+    name: "OWASP Top 10 (2021)",
+    kind: "controls",
+    summary:
+      "Las 10 categorías de riesgo web más críticas según OWASP, ordenadas por prioridad. Cada una con su idea central y su mitigación.",
+    phases: [
+      { n: 1, name: "A01 — Broken Access Control", desc: "Usuarios acceden a datos/acciones que no les corresponden (IDOR, escalada).", defenses: ["Autorización en servidor por petición", "Denegar por defecto", "Mínimo privilegio"] },
+      { n: 2, name: "A02 — Cryptographic Failures", desc: "Datos sensibles mal protegidos: sin cifrar, TLS débil, hashes obsoletos.", defenses: ["TLS moderno", "Cifrado en reposo", "bcrypt/Argon2"] },
+      { n: 3, name: "A03 — Injection", desc: "Entrada no confiable interpretada como código (SQLi, XSS, OS command).", defenses: ["Consultas parametrizadas", "Validación de entrada", "Codificación de salida"] },
+      { n: 4, name: "A04 — Insecure Design", desc: "El fallo está en el diseño: faltaron controles y threat modeling.", defenses: ["Threat modeling", "Patrones seguros", "Requisitos de seguridad"] },
+      { n: 5, name: "A05 — Security Misconfiguration", desc: "Defaults inseguros, errores verbosos, buckets públicos, headers ausentes.", defenses: ["Hardening (CIS)", "Headers de seguridad", "Quitar lo innecesario"] },
+      { n: 6, name: "A06 — Vulnerable & Outdated Components", desc: "Dependencias con CVEs conocidas sin parchear (ej. Log4Shell).", defenses: ["Inventario/SBOM", "Escaneo SCA", "Actualización continua"] },
+      { n: 7, name: "A07 — Identification & Auth Failures", desc: "Login y sesiones débiles: brute force, tokens predecibles, sin MFA.", defenses: ["MFA", "Rate limiting", "Gestión de sesión segura"] },
+      { n: 8, name: "A08 — Software & Data Integrity Failures", desc: "Confiar en código/datos sin verificar integridad (cadena de suministro).", defenses: ["Firmar/verificar artefactos", "Pipeline CI/CD seguro"] },
+      { n: 9, name: "A09 — Security Logging & Monitoring Failures", desc: "Sin logs ni alertas, las brechas pasan desapercibidas.", defenses: ["Logging centralizado", "Alertas", "Retención para forense"] },
+      { n: 10, name: "A10 — Server-Side Request Forgery", desc: "El servidor es engañado para pedir destinos internos o metadata cloud.", defenses: ["Allowlist de destinos", "Bloquear IPs internas/metadata", "IMDSv2"] },
+    ],
+  },
+  {
+    id: 12,
+    module: 24,
+    name: "Anatomía de un ataque SSRF a la nube",
+    kind: "flow",
+    summary:
+      "Cómo un SSRF escala a robo de credenciales en la nube — el patrón del caso Capital One (2019). Cada paso tiene su defensa.",
+    phases: [
+      { n: 1, name: "Parámetro con URL", desc: "El atacante encuentra una función que pide una URL provista por el usuario (webhook, importador, miniaturas).", defenses: ["Validar/normalizar URLs", "No aceptar URLs arbitrarias"] },
+      { n: 2, name: "Apuntar al interior", desc: "Cambia la URL hacia servicios internos o el endpoint de metadata 169.254.169.254.", defenses: ["Allowlist de destinos", "Bloquear rango link-local/privado"] },
+      { n: 3, name: "Leer metadata IAM", desc: "El servidor consulta el endpoint y devuelve credenciales IAM temporales.", defenses: ["IMDSv2 (token obligatorio)", "Rol IAM de mínimo privilegio"] },
+      { n: 4, name: "Usar las credenciales", desc: "Con las claves robadas, el atacante accede a recursos cloud (buckets, bases de datos).", defenses: ["Permisos mínimos del rol", "Detección de uso anómalo de credenciales"] },
+      { n: 5, name: "Exfiltración", desc: "Descarga datos sensibles desde el almacenamiento accesible.", defenses: ["Cifrado + políticas de acceso", "Alertas de egress", "Logging (CloudTrail)"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

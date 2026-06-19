@@ -9,6 +9,7 @@ const PILOT_MODULES = [1, 2, 3, 4];
 const REDES_MODULES = [5, 6, 7, 8, 9];
 const SISTEMAS_MODULES = [10, 11, 12, 13, 14, 15];
 const CRIPTO_MODULES = [16, 17, 18, 19];
+const WEB_MODULES = [20, 21, 22, 23, 24];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -40,6 +41,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Criptografía (M16-M19) tiene ≥4 definiciones", () => {
     for (const m of CRIPTO_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Web Security (M20-M24) tiene ≥4 definiciones", () => {
+    for (const m of WEB_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -84,6 +90,12 @@ describe("FRAMEWORKS", () => {
     expect(frameworksByModule(19).some((f) => f.kind === "flow")).toBe(true);
     expect(frameworksByModule(18).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M21 tiene el OWASP Top 10 (controls, 10 categorías) y M24 un flujo SSRF", () => {
+    const owasp = frameworksByModule(21).find((f) => f.kind === "controls");
+    expect(owasp).toBeDefined();
+    expect(owasp!.phases).toHaveLength(10);
+    expect(frameworksByModule(24).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -113,6 +125,10 @@ describe("TIMELINES", () => {
   it("M16 y M19 tienen líneas de tiempo (criptografía y SSL/TLS)", () => {
     expect(timelinesByModule(16).length).toBeGreaterThanOrEqual(1);
     expect(timelinesByModule(19).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M20 y M21 tienen líneas de tiempo (ataques web y OWASP Top 10)", () => {
+    expect(timelinesByModule(20).length).toBeGreaterThanOrEqual(1);
+    expect(timelinesByModule(21).length).toBeGreaterThanOrEqual(1);
   });
 });
 

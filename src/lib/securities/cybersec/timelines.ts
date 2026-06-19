@@ -95,6 +95,30 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2018, title: "TLS 1.3", desc: "Handshake de 1-RTT, solo cifrados AEAD y forward secrecy obligatorio.", impact: "high" },
     ],
   },
+  {
+    id: 8,
+    module: 20,
+    title: "Historia de los ataques web",
+    events: [
+      { year: 1998, title: "SQL Injection", desc: "Rain Forest Puppy documenta la inyección SQL; sigue siendo un riesgo top 25 años después.", impact: "high" },
+      { year: 2001, title: "Fundación de OWASP", desc: "Nace la comunidad que estandarizará las buenas prácticas de seguridad web.", impact: "high" },
+      { year: 2005, title: "Gusano Samy (XSS)", desc: "Un XSS en MySpace infecta un millón de perfiles en horas; demuestra el poder del XSS stored.", impact: "high" },
+      { year: 2008, title: "Brecha de Heartland", desc: "Una SQL Injection compromete 130M+ tarjetas; impulsa el cumplimiento PCI.", impact: "high" },
+      { year: 2014, title: "Heartbleed", desc: "Fallo en OpenSSL que expone memoria de servidores; cambia la gestión de vulnerabilidades.", impact: "high" },
+      { year: 2019, title: "Capital One (SSRF)", desc: "Un SSRF a metadata de AWS filtra datos de 100M+ personas; consagra el SSRF en el Top 10.", impact: "high" },
+    ],
+  },
+  {
+    id: 9,
+    module: 21,
+    title: "Evolución del OWASP Top 10",
+    events: [
+      { year: 2003, title: "Primer OWASP Top 10", desc: "La lista inaugural establece un lenguaje común para los riesgos web.", impact: "medium" },
+      { year: 2013, title: "Top 10 2013", desc: "Injection en el #1; consolida la lista como referencia de la industria.", impact: "medium" },
+      { year: 2017, title: "Top 10 2017", desc: "Entran XXE y deserialización insegura; refleja apps más complejas y APIs.", impact: "medium" },
+      { year: 2021, title: "Top 10 2021", desc: "Broken Access Control sube al #1 y aparece SSRF (A10); enfoque por categorías de causa.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

@@ -1525,6 +1525,369 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["TLS 1.2 vs 1.3", "Certificate transparency y pinning", "Handshake TLS"],
   },
+
+  // ── M20 · Seguridad Web: Fundamentos ─────────────────────────────────────
+  {
+    id: 230,
+    module: 20,
+    term: "Arquitectura cliente-servidor y HTTP",
+    short: "El navegador (cliente) pide recursos vía HTTP a un servidor que responde.",
+    detail:
+      "La web funciona con **peticiones HTTP**: el cliente envía un **método** (GET, POST…) a una URL y el servidor devuelve un **código de estado** (200, 404, 500) y un cuerpo. HTTP es **sin estado**, por eso se usan **cookies/tokens** para mantener la sesión.\n" +
+      "> 💡 Entender la petición/respuesta cruda (cabeceras incluidas) es la base de todo pentest web; herramientas como Burp Suite las interceptan.",
+    examples: [
+      "GET /perfil devuelve 200 con el HTML del perfil.",
+      "Un 401/403 indica falta de autenticación/autorización.",
+    ],
+    related: ["Same-Origin Policy", "Headers de seguridad", "Cookie security"],
+  },
+  {
+    id: 231,
+    module: 20,
+    term: "Same-Origin Policy",
+    short: "Regla del navegador: un origen no puede leer recursos de otro origen distinto.",
+    detail:
+      "La **Same-Origin Policy (SOP)** es la defensa base del navegador: por defecto, una página solo puede leer datos de su **mismo origen** (mismo **protocolo + dominio + puerto**). Impide que un sitio malicioso lea tu sesión de otro.\n" +
+      "| Comparado con https://app.com:443 | ¿Mismo origen? |\n" +
+      "|---|---|\n" +
+      "| https://app.com/otra | Sí |\n" +
+      "| http://app.com | No (protocolo) |\n" +
+      "| https://api.app.com | No (subdominio) |",
+    examples: [
+      "Un sitio atacante no puede leer tu webmail abierto en otra pestaña.",
+      "Para compartir datos entre orígenes se necesita CORS.",
+    ],
+    related: ["CORS", "Cookie security", "Arquitectura cliente-servidor y HTTP"],
+  },
+  {
+    id: 232,
+    module: 20,
+    term: "CORS",
+    short: "Mecanismo para relajar la Same-Origin Policy de forma controlada.",
+    detail:
+      "**CORS** (*Cross-Origin Resource Sharing*) permite que un servidor autorice explícitamente a otros orígenes mediante cabeceras (`Access-Control-Allow-Origin`). Es necesario para APIs consumidas desde otro dominio.\n" +
+      "> ⚠️ Mal configurado es peligroso: `Access-Control-Allow-Origin: *` **junto con** credenciales, o reflejar el `Origin` sin validar, expone datos a cualquier sitio.",
+    examples: [
+      "Una API que permite el origen https://app.com pero no otros.",
+      "El antipatrón: reflejar cualquier Origin con allow-credentials.",
+    ],
+    related: ["Same-Origin Policy", "Headers de seguridad", "Cookie security"],
+  },
+  {
+    id: 233,
+    module: 20,
+    term: "Headers de seguridad",
+    short: "Cabeceras de respuesta que endurecen el navegador contra ataques comunes.",
+    detail:
+      "El servidor puede enviar cabeceras que activan defensas en el cliente:\n" +
+      "| Header | Protege contra |\n" +
+      "|---|---|\n" +
+      "| Content-Security-Policy | XSS / inyección de recursos |\n" +
+      "| Strict-Transport-Security | SSL stripping (fuerza HTTPS) |\n" +
+      "| X-Frame-Options / frame-ancestors | Clickjacking |\n" +
+      "| X-Content-Type-Options: nosniff | MIME sniffing |\n" +
+      "> 💡 **CSP** es la más potente contra XSS: define de qué orígenes pueden cargarse scripts y recursos.",
+    examples: [
+      "Una CSP estricta bloquea scripts inline inyectados.",
+      "HSTS evita el primer salto en HTTP plano.",
+    ],
+    related: ["Cookie security", "CORS", "Cross-Site Scripting (XSS)"],
+  },
+  {
+    id: 234,
+    module: 20,
+    term: "Cookie security",
+    short: "Atributos de las cookies que limitan su robo y su uso en ataques.",
+    detail:
+      "Las cookies de sesión son un objetivo principal. Sus atributos defensivos:\n" +
+      "• **HttpOnly** — inaccesible desde JavaScript (mitiga el robo por XSS).\n" +
+      "• **Secure** — solo se envía por HTTPS.\n" +
+      "• **SameSite** (Lax/Strict) — no se envía en peticiones cross-site (mitiga CSRF).\n" +
+      "> 💡 En AlphaLog, la cookie CSRF `al_csrf` y el patrón SameSite=Lax son parte de esta defensa.",
+    examples: [
+      "Cookie de sesión con HttpOnly + Secure + SameSite=Lax.",
+      "Sin HttpOnly, un XSS roba la sesión con document.cookie.",
+    ],
+    related: ["Headers de seguridad", "Cross-Site Request Forgery (CSRF)", "Cross-Site Scripting (XSS)"],
+  },
+
+  // ── M21 · OWASP Top 10 (Parte 1) ─────────────────────────────────────────
+  {
+    id: 240,
+    module: 21,
+    term: "OWASP Top 10",
+    short: "El estándar de facto de los 10 riesgos de seguridad web más críticos.",
+    detail:
+      "El **OWASP Top 10** es una lista consensuada y periódica (última: **2021**) de las categorías de riesgo más serias en aplicaciones web. No es un checklist exhaustivo, sino una **referencia de concienciación y prioridad**.\n" +
+      "> 💡 Ver el diagrama 'OWASP Top 10 (2021)' más abajo para las 10 categorías con su mitigación.",
+    examples: [
+      "Usar el Top 10 como base mínima en un pentest web.",
+      "Mapear hallazgos a categorías A01-A10 en un reporte.",
+    ],
+    related: ["Broken Access Control", "Injection", "Security Misconfiguration"],
+  },
+  {
+    id: 241,
+    module: 21,
+    term: "Broken Access Control",
+    short: "A01: usuarios acceden a datos o acciones que no les corresponden.",
+    detail:
+      "**A01 (el #1 actual)**: fallos en la autorización. El más común es el **IDOR** (*Insecure Direct Object Reference*): cambiar un identificador para ver datos ajenos. También incluye **escalada** vertical (a admin) u horizontal (a otro usuario).\n" +
+      "/api/user/123  →  /api/user/124\n" +
+      "> ⚠️ La autorización debe verificarse **en el servidor**, en cada petición — nunca confiar en el cliente.",
+    examples: [
+      "Cambiar /factura/123 por /factura/124 y ver la de otro cliente.",
+      "Acceder a /admin sin ser administrador (forced browsing).",
+    ],
+    related: ["IDOR y referencias inseguras", "OWASP Top 10", "Mínimo privilegio"],
+  },
+  {
+    id: 242,
+    module: 21,
+    term: "Cryptographic Failures",
+    short: "A02: datos sensibles mal protegidos (sin cifrar, cripto débil, claves expuestas).",
+    detail:
+      "**A02** cubre la protección deficiente de datos: transmisión sin TLS, almacenamiento sin cifrar, **hashes obsoletos** (MD5/SHA-1) para contraseñas, o **claves/credenciales expuestas** en el código. El foco: clasificar qué datos son sensibles y cifrarlos en tránsito y en reposo.",
+    examples: [
+      "Contraseñas guardadas con MD5 sin sal.",
+      "Una API key hardcodeada en el repositorio.",
+    ],
+    related: ["Salting y key stretching", "TLS 1.2 vs 1.3", "OWASP Top 10"],
+  },
+  {
+    id: 243,
+    module: 21,
+    term: "Injection",
+    short: "A03: entrada no confiable se interpreta como código o comando (SQLi, XSS, etc.).",
+    detail:
+      "**A03** ocurre cuando datos del usuario se mezclan con un intérprete sin separación: **SQL Injection**, **XSS**, inyección de comandos OS, LDAP, etc. La causa raíz es **mezclar datos y código**.\n" +
+      "> 💡 Defensa transversal: **consultas parametrizadas**, validación de entrada y **codificación de salida**. Ver el módulo de SQLi/XSS para el detalle.",
+    examples: [
+      "' OR 1=1 -- en un login vulnerable.",
+      "Un comentario con <script> que se ejecuta en otros usuarios.",
+    ],
+    related: ["SQL Injection", "Cross-Site Scripting (XSS)", "OWASP Top 10"],
+  },
+  {
+    id: 244,
+    module: 21,
+    term: "Insecure Design y Security Misconfiguration",
+    short: "A04 y A05: fallos de diseño desde el origen y configuraciones inseguras.",
+    detail:
+      "Dos categorías relacionadas:\n" +
+      "• **A04 Insecure Design** — el fallo está en el **diseño**, no en un bug puntual: faltó *threat modeling*, controles inexistentes por concepto.\n" +
+      "• **A05 Security Misconfiguration** — causa de innumerables brechas: credenciales por defecto, servicios/puertos innecesarios, errores verbosos (stack traces), **buckets S3 públicos**, headers ausentes, software sin actualizar.",
+    examples: [
+      "Una consola de admin con usuario/clave 'admin/admin'.",
+      "Un bucket de almacenamiento expuesto públicamente por error.",
+    ],
+    related: ["Hardening y CIS Benchmarks", "Headers de seguridad", "OWASP Top 10"],
+  },
+
+  // ── M22 · OWASP Top 10 (Parte 2) ─────────────────────────────────────────
+  {
+    id: 250,
+    module: 22,
+    term: "Vulnerable and Outdated Components",
+    short: "A06: usar librerías o software con vulnerabilidades conocidas.",
+    detail:
+      "**A06**: las apps modernas dependen de cientos de **componentes de terceros**; si alguno tiene una CVE conocida y no se parchea, se hereda el riesgo. **Log4Shell** es el ejemplo perfecto.\n" +
+      "> 💡 Defensa: inventario de dependencias (**SBOM**), escaneo SCA (Snyk, Dependabot) y actualización continua.",
+    examples: [
+      "Una app con una versión vulnerable de Log4j (Log4Shell).",
+      "Dependabot abriendo PRs para parchear librerías con CVE.",
+    ],
+    related: ["CVE y CVSS", "Software and Data Integrity Failures", "OWASP Top 10"],
+  },
+  {
+    id: 251,
+    module: 22,
+    term: "Identification and Authentication Failures",
+    short: "A07: fallos en login, sesiones y gestión de credenciales.",
+    detail:
+      "**A07** abarca autenticación débil: permitir **fuerza bruta**/credential stuffing, contraseñas débiles, **gestión de sesión** insegura (tokens predecibles, sin expiración), o falta de **MFA**. La identidad es la puerta de entrada, así que es un objetivo prioritario.",
+    examples: [
+      "Login sin rate limiting vulnerable a credential stuffing.",
+      "Tokens de sesión que no expiran ni se invalidan al cerrar sesión.",
+    ],
+    related: ["AAA (Autenticación, Autorización, Accounting)", "Broken Access Control", "OWASP Top 10"],
+  },
+  {
+    id: 252,
+    module: 22,
+    term: "Software and Data Integrity Failures",
+    short: "A08: confiar en código o datos sin verificar su integridad (cadena de suministro).",
+    detail:
+      "**A08**: actualizaciones, plugins o pipelines CI/CD sin **verificación de integridad** (firmas). Incluye la **deserialización insegura** y los ataques a la **cadena de suministro** como **SolarWinds**.\n" +
+      "> 💡 Defensa: firmar artefactos, verificar firmas/hashes y proteger el pipeline de build.",
+    examples: [
+      "Una actualización troyanizada por un proveedor comprometido (SolarWinds).",
+      "Deserializar objetos no confiables y lograr RCE.",
+    ],
+    related: ["Firmas digitales", "Vulnerable and Outdated Components", "OWASP Top 10"],
+  },
+  {
+    id: 253,
+    module: 22,
+    term: "Security Logging and Monitoring Failures",
+    short: "A09: sin logs ni alertas, los ataques pasan desapercibidos.",
+    detail:
+      "**A09**: la falta de **registro, monitoreo y alertas** hace que las brechas se detecten tarde (el tiempo medio de detección se mide en meses). No basta con loguear: hay que **alertar** sobre eventos sospechosos y conservar evidencia para forense.",
+    examples: [
+      "Logins fallidos masivos que nunca generan una alerta.",
+      "Sin logs, no se puede reconstruir cómo entró el atacante.",
+    ],
+    related: ["Detección de anomalías en tráfico", "Pipeline de detección en Windows", "OWASP Top 10"],
+  },
+  {
+    id: 254,
+    module: 22,
+    term: "Server-Side Request Forgery (SSRF)",
+    short: "A10: el servidor es engañado para hacer peticiones a destinos elegidos por el atacante.",
+    detail:
+      "**A10 SSRF**: la app toma una URL del usuario y la pide **desde el servidor**, permitiendo alcanzar **servicios internos** no expuestos o el **endpoint de metadata cloud**:\n" +
+      "http://169.254.169.254/latest/meta-data/\n" +
+      "> ⚠️ El caso **Capital One (2019)** explotó SSRF para robar credenciales IAM de AWS y datos de 100M+ personas. Defensa: allowlist de destinos, bloquear IPs internas/metadata, validar URLs.",
+    examples: [
+      "Apuntar un parámetro 'url' a 169.254.169.254 para leer credenciales IAM.",
+      "Escanear servicios internos desde el servidor vulnerable.",
+    ],
+    related: ["SSRF y metadata cloud", "OWASP Top 10", "Headers de seguridad"],
+  },
+
+  // ── M23 · SQL Injection y XSS ────────────────────────────────────────────
+  {
+    id: 260,
+    module: 23,
+    term: "SQL Injection",
+    short: "Inyectar SQL a través de entrada no sanitizada para manipular la base de datos.",
+    detail:
+      "La **SQL Injection (SQLi)** ocurre cuando la entrada del usuario se concatena en una consulta. Tipos principales:\n" +
+      "• **Clásica:** ' OR 1=1 --\n" +
+      "• **UNION:** ' UNION SELECT usuario,clave FROM users --\n" +
+      "• **Blind (booleana):** ' AND SUBSTRING(@@version,1,1)='8' --\n" +
+      "• **Time-based:** ' AND IF(1=1,SLEEP(5),0) --\n" +
+      "> 💡 Defensa definitiva: **consultas parametrizadas** (prepared statements); nunca concatenar entrada.",
+    examples: [
+      "Saltarse un login con ' OR 1=1 -- como usuario.",
+      "Extraer la tabla de usuarios con un UNION SELECT.",
+    ],
+    related: ["Injection", "Herramientas: sqlmap", "Prevención de inyección"],
+  },
+  {
+    id: 261,
+    module: 23,
+    term: "Cross-Site Scripting (XSS)",
+    short: "Inyectar JavaScript que se ejecuta en el navegador de otras víctimas.",
+    detail:
+      "El **XSS** inyecta script que corre en el contexto de la víctima (puede robar sesión, hacer acciones). Tres tipos:\n" +
+      "| Tipo | Dónde vive |\n" +
+      "|---|---|\n" +
+      "| Reflected | En la URL/petición, no persiste |\n" +
+      "| Stored | Persistido en el servidor (comentario) |\n" +
+      "| DOM-based | En el JS del cliente, sin tocar el servidor |\n" +
+      "> ⚠️ Un payload típico stored: una imagen con `onerror` que lee `document.cookie`.",
+    examples: [
+      "Un comentario con script que se ejecuta en quien lo lee (stored).",
+      "?q=<script>... reflejado sin sanitizar (reflected).",
+    ],
+    related: ["Injection", "Headers de seguridad", "Prevención de inyección"],
+  },
+  {
+    id: 262,
+    module: 23,
+    term: "Herramientas: sqlmap",
+    short: "El estándar para automatizar la detección y explotación de SQL Injection.",
+    detail:
+      "**sqlmap** automatiza todo el ciclo de SQLi: detecta el punto inyectable, identifica el motor, extrae bases de datos/tablas y hasta obtiene una shell. Para XSS existen fuzzers como **XSStrike**.\n" +
+      "sqlmap -u \"https://sitio/item?id=1\" --dbs\n" +
+      "> ⚠️ Usar solo con autorización explícita; son herramientas de pentest, no de uso libre.",
+    examples: [
+      "Enumerar bases de datos con sqlmap --dbs.",
+      "Volcar una tabla con sqlmap --dump.",
+    ],
+    related: ["SQL Injection", "Cross-Site Scripting (XSS)", "Prevención de inyección"],
+  },
+  {
+    id: 263,
+    module: 23,
+    term: "Prevención de inyección",
+    short: "Parametrizar, validar entrada y codificar salida cierra SQLi y XSS.",
+    detail:
+      "Las defensas son bien conocidas:\n" +
+      "• **SQLi** → **consultas parametrizadas/ORM**, mínimo privilegio del usuario de BD.\n" +
+      "• **XSS** → **codificación de salida** según contexto, **CSP**, frameworks que escapan por defecto, cookies **HttpOnly**.\n" +
+      "• Transversal → **validar/normalizar** toda entrada y un **WAF** como capa extra.\n" +
+      "> 💡 Un WAF ayuda pero no sustituye el código seguro: hay técnicas de bypass.",
+    examples: [
+      "Prepared statements en vez de concatenar SQL.",
+      "Escapar la salida HTML y aplicar una CSP estricta.",
+    ],
+    related: ["SQL Injection", "Cross-Site Scripting (XSS)", "Headers de seguridad"],
+  },
+
+  // ── M24 · CSRF, SSRF y File Upload ───────────────────────────────────────
+  {
+    id: 270,
+    module: 24,
+    term: "Cross-Site Request Forgery (CSRF)",
+    short: "Engañar al navegador de una víctima autenticada para que ejecute una acción no deseada.",
+    detail:
+      "El **CSRF** abusa de que el navegador **adjunta las cookies automáticamente**: un sitio malicioso provoca una petición (transferir dinero, cambiar email) usando la sesión activa de la víctima, sin leer la respuesta.\n" +
+      "> 💡 Defensa: **tokens anti-CSRF** (como `al_csrf` en AlphaLog) + cookies **SameSite**. La verificación token-en-header vs cookie es justo el patrón del middleware del proyecto.",
+    examples: [
+      "Una imagen oculta que dispara una transferencia con tu sesión.",
+      "AlphaLog exige x-csrf-token == cookie al_csrf en mutaciones.",
+    ],
+    related: ["Cookie security", "SSRF y metadata cloud", "IDOR y referencias inseguras"],
+  },
+  {
+    id: 271,
+    module: 24,
+    term: "SSRF y metadata cloud",
+    short: "Forzar al servidor a pedir recursos internos, incluido el endpoint de metadata de la nube.",
+    detail:
+      "El **SSRF** se vuelve crítico en la nube: el endpoint de **metadata** (`169.254.169.254`) entrega **credenciales IAM** temporales al instar a la app a consultarlo.\n" +
+      "http://169.254.169.254/latest/meta-data/iam/security-credentials/\n" +
+      "> ⚠️ Caso **Capital One (2019)**: SSRF vía un WAF mal configurado robó datos de 100M+ personas. **IMDSv2** (token obligatorio) mitiga este vector.",
+    examples: [
+      "Leer credenciales IAM vía el endpoint de metadata por SSRF.",
+      "Habilitar IMDSv2 para exigir un token y frenar el abuso.",
+    ],
+    related: ["Server-Side Request Forgery (SSRF)", "Cross-Site Request Forgery (CSRF)", "Ataques de subida de archivos"],
+  },
+  {
+    id: 272,
+    module: 24,
+    term: "IDOR y referencias inseguras",
+    short: "Acceder a objetos ajenos manipulando un identificador previsible.",
+    detail:
+      "Un **IDOR** (*Insecure Direct Object Reference*) expone objetos por su identificador sin verificar la **autorización** del solicitante. Es la manifestación más común de Broken Access Control y suele ser trivial de explotar.\n" +
+      "GET /api/pedido/1001  →  GET /api/pedido/1002\n" +
+      "> 💡 Defensa: verificar ownership en el servidor en cada acceso; usar identificadores no predecibles (UUID) como capa extra.",
+    examples: [
+      "Cambiar el id de un pedido en la URL y ver el de otro usuario.",
+      "Descargar /docs/124.pdf siendo dueño solo del 123.",
+    ],
+    related: ["Broken Access Control", "Cross-Site Request Forgery (CSRF)", "Mínimo privilegio"],
+  },
+  {
+    id: 273,
+    module: 24,
+    term: "Ataques de subida de archivos",
+    short: "Subidas mal validadas permiten webshells, RCE y otros abusos.",
+    detail:
+      "Una subida de archivos insegura puede dar control del servidor:\n" +
+      "• Subir un **webshell** (`shell.php`) y ejecutarlo → **RCE**.\n" +
+      "• Bypass por **Content-Type** falso o **doble extensión** (`shell.php.jpg`).\n" +
+      "• **Path traversal** en el nombre (`../../`), XSS vía SVG/HTML, zip bombs (DoS).\n" +
+      "> ✅ Defensa: validar el tipo por **contenido (magic bytes)** no por extensión, renombrar, almacenar **fuera del webroot**, límites de tamaño y escaneo AV.",
+    examples: [
+      "Subir shell.php.jpg para saltarse el filtro de extensión.",
+      "Guardar las subidas en storage dedicado fuera del webroot.",
+    ],
+    related: ["SSRF y metadata cloud", "Injection", "Hardening y CIS Benchmarks"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
