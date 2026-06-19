@@ -41,6 +41,8 @@ import { checkRiskReward } from '../math/kelly-sizer.js';
 import { DecisionLogger } from '../ops/decision-logger.js';
 import { CommandPoller } from '../ops/command-poller.js';
 import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-alphalog.js';
+import { syncAgentHeartbeat } from '../ops/agent-heartbeat.js';
+import { buildSmcSignalRow, persistSmcSignal } from '../ops/smc-signal-persist.js';
 import { getSupabase } from '../supabase.js';
 import {
   SYMBOLS, TIMEFRAMES, ARB_GAP_MIN_PCT, RR_MIN, LOOP_INTERVAL_MS, PAPER_MODE,
@@ -280,6 +282,22 @@ export class CoinarbLoop {
     const sig15m = mtf.perTimeframe.get('15M')!;
     const sig5m  = mtf.perTimeframe.get('5M')!;
     const sig1m  = mtf.perTimeframe.get('1M')!;
+
+    // Best-effort analytics: record the 5m SMC signal that passed MTF threshold.
+    // Skipped/failed signals already live in coinarb_decisions with their reject reason.
+    if (COINARB_USER_ID) {
+      void persistSmcSignal(
+        getSupabase(),
+        buildSmcSignalRow({
+          userId: COINARB_USER_ID,
+          agentId: COINARB_AGENT_ID,
+          symbol,
+          timeframe: '5M',
+          signal: sig5m,
+          price: cbPrice.last,
+        }),
+      ).catch((err) => console.warn(`[loop] smc signal persist failed (${symbol}):`, err));
+    }
 
     const pd = evaluatePremiumDiscount(
       cbPrice.last,
@@ -619,6 +637,12 @@ export class CoinarbLoop {
           per_symbol_cap: 33,
         },
       }, { onConflict: 'agent_id' });
+      // Mirror heartbeat to coinarb_agents (legacy table still consumed by
+      // /intelligence/agents dashboard). Best-effort: errors logged, not thrown.
+      const agentResult = await syncAgentHeartbeat(supabase, COINARB_USER_ID, paused);
+      if (!agentResult.ok && agentResult.error !== 'no user_id') {
+        console.warn('[loop] coinarb_agents heartbeat sync failed:', agentResult.error);
+      }
     } catch (err) {
       console.error('[loop] telemetry flush failed:', err);
     }
