@@ -1,5 +1,26 @@
+/// <reference lib="esnext" />
 /// <reference lib="webworker" />
+import { defaultCache } from "@serwist/next/worker";
+import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
+import { Serwist } from "serwist";
+
+// `__SW_MANIFEST` is replaced at build time with the precache manifest.
+declare global {
+  interface WorkerGlobalScope extends SerwistGlobalConfig {
+    __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
+  }
+}
+
 declare const self: ServiceWorkerGlobalScope;
+
+// ── Custom handlers (preserved from the previous worker/index.ts) ────────────
+
+// Apply an update when the page posts SKIP_WAITING (driven by updateManager.ts).
+self.addEventListener("message", (event: ExtendableMessageEvent) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    void self.skipWaiting();
+  }
+});
 
 interface PushPayload {
   title?: string;
@@ -47,4 +68,23 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
   );
 });
 
-export {};
+// ── Serwist core ─────────────────────────────────────────────────────────────
+const serwist = new Serwist({
+  precacheEntries: self.__SW_MANIFEST,
+  skipWaiting: true,
+  clientsClaim: true,
+  navigationPreload: true,
+  runtimeCaching: defaultCache,
+  fallbacks: {
+    entries: [
+      {
+        url: "/offline",
+        matcher({ request }) {
+          return request.destination === "document";
+        },
+      },
+    ],
+  },
+});
+
+serwist.addEventListeners();
