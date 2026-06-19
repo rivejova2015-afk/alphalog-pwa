@@ -572,6 +572,36 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Sistema operativo y apps", desc: "Ya en ejecución; la integridad medida puede atestiguarse a un tercero.", defenses: ["Remote attestation", "Integridad en runtime"] },
     ],
   },
+  {
+    id: 37,
+    module: 77,
+    name: "Niveles de un rootkit",
+    kind: "layers",
+    summary:
+      "Los rootkits se ordenan por la capa donde viven, de la más alta (userland) a la más profunda (firmware). Cuanto más bajo, más sigilo y más difícil de detectar.",
+    phases: [
+      { n: 1, name: "Userland", desc: "Hooks en librerías (libc, ntdll) e inyección de DLL. Vive en cada proceso, no toca el kernel.", defenses: ["EDR detecta hooks anómalos", "AMSI / ETW"] },
+      { n: 2, name: "Kernel", desc: "Driver malicioso en ring 0: SSDT hooks, DKOM. Privilegio total, oculta procesos al propio kernel.", defenses: ["Firma de drivers", "PatchGuard", "Detectar BYOVD"] },
+      { n: 3, name: "Hipervisor", desc: "Carga un fino hipervisor por debajo del SO y observa/manipula desde fuera.", defenses: ["Virtualization-based security (VBS)", "Detección de blue pill"] },
+      { n: 4, name: "Firmware / UEFI", desc: "Vive en la flash del firmware o en SMM; sobrevive al formateo y la reinstalación.", defenses: ["Secure Boot", "Measured boot + TPM", "chipsec"] },
+      { n: 5, name: "Hardware", desc: "Implantes físicos (chips añadidos, modificaciones del SoC). El más raro y el más persistente.", defenses: ["Auditoría de cadena de suministro", "Inspección física"] },
+    ],
+  },
+  {
+    id: 38,
+    module: 78,
+    name: "Ciclo de un implante / C2",
+    kind: "flow",
+    summary:
+      "Cómo opera un implante moderno desde la entrega hasta el objetivo. Cada fase deja una huella que un buen SOC puede detectar.",
+    phases: [
+      { n: 1, name: "Entrega y ejecución", desc: "Un loader (macro, LNK, exploit) ejecuta shellcode en memoria sin tocar disco.", defenses: ["Filtrado de correo", "Bloqueo de macros", "EDR en endpoint"] },
+      { n: 2, name: "Inyección y persistencia", desc: "Se inyecta en un proceso legítimo (process hollowing) y establece persistencia sigilosa.", defenses: ["Monitoreo de inyección", "Detección de autostart anómalo"] },
+      { n: 3, name: "Evasión de defensas", desc: "Desactiva o evade el EDR: unhook, syscalls directas, patch AMSI/ETW, BYOVD.", defenses: ["Tamper Protection", "Monitoreo de modificación de ntdll/ETW"] },
+      { n: 4, name: "Beaconing al C2", desc: "Contacta periódicamente al C2 por HTTPS/DNS con jitter para mimetizarse.", defenses: ["Detección de beaconing", "Filtrado de dominios recientes", "JA3"] },
+      { n: 5, name: "Acción sobre el objetivo", desc: "Reconocimiento interno, robo de credenciales, movimiento lateral, exfiltración.", defenses: ["Segmentación", "Detección de PsExec/PtH", "Alertas de egress"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

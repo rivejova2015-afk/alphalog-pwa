@@ -5232,6 +5232,260 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["TEEs y confidential computing", "Spectre y Meltdown", "Root of trust"],
   },
+
+  // ── M75 · Reverse Engineering Avanzado ───────────────────────────────────
+  {
+    id: 780,
+    module: 75,
+    term: "RE workflow avanzado",
+    short: "El método maduro: triage rápido, foco en la lógica clave, no leer todo línea a línea.",
+    detail:
+      "Un RE eficiente sigue un **workflow**: triage (hashes, strings, imports), localizar funciones de interés, decompilar y **anotar** (tipos, nombres), correlacionar estático y dinámico, y documentar hipótesis. La meta no es entender todo, sino la **lógica relevante** (config de C2, rutina de cifrado, anti-análisis).\n" +
+      "> 💡 Renombrar y tipar en el decompilador transforma 100 líneas ilegibles en algo leíble.",
+    examples: [
+      "Triagear con `file`/`strings`/`yara` antes de abrir Ghidra.",
+      "Anotar tipos de struct para que el decompilador genere C limpio.",
+    ],
+    related: ["Anti-análisis y obfuscación", "Deobfuscación", "Tooling (Ghidra/Frida/Unicorn)"],
+  },
+  {
+    id: 781,
+    module: 75,
+    term: "Anti-análisis y obfuscación",
+    short: "El malware se defiende: detecta VMs, depuradores y se ofusca para que no lo leas.",
+    detail:
+      "Técnicas comunes de **anti-análisis**:\n" +
+      "• **Anti-debug** — `IsDebuggerPresent`, timing checks, excepciones.\n" +
+      "• **Anti-VM** — buscar artefactos de VirtualBox/VMware/sandboxes.\n" +
+      "• **Anti-disassembly** — saltos calculados, basura entre instrucciones.\n" +
+      "• **Ofuscación** — strings cifrados, control flow flattening, packers.\n" +
+      "> ⚠️ Saltarse el anti-análisis a mano (parchear el binario, hookear APIs) es paso uno.",
+    examples: [
+      "Parchear `IsDebuggerPresent` para que siempre devuelva 0.",
+      "Strings descifrados al vuelo que no aparecen con `strings`.",
+    ],
+    related: ["Deobfuscación", "Unpacking y deofuscación", "Tooling (Ghidra/Frida/Unicorn)"],
+  },
+  {
+    id: 782,
+    module: 75,
+    term: "Deobfuscación",
+    short: "Revertir la ofuscación: scripts, emulación parcial y análisis de patrones.",
+    detail:
+      "**Deobfuscar** es revertir capas: descifrar strings, aplanar control flow, identificar **virtualization-based obfuscation** (VMProtect, Themida) y reconstruir la lógica original. Combina **scripting** en el decompilador (Ghidra/IDA), **emulación** (Unicorn) para tramos concretos y **patrón sobre patrón**.\n" +
+      "> 💡 Para strings cifrados, escribir un script que invoque el mismo desencriptor revela todo el catálogo de una vez.",
+    examples: [
+      "Script de Ghidra que descifra todas las strings de una familia.",
+      "Emular con Unicorn una rutina ofuscada para ver su salida.",
+    ],
+    related: ["Anti-análisis y obfuscación", "Tooling (Ghidra/Frida/Unicorn)", "Ejecución simbólica"],
+  },
+  {
+    id: 783,
+    module: 75,
+    term: "Tooling (Ghidra/Frida/Unicorn)",
+    short: "Estático (Ghidra), dinámico instrumentado (Frida) y emulación (Unicorn) — combinados.",
+    detail:
+      "Trío estrella del RE moderno:\n" +
+      "| Herramienta | Para qué |\n" +
+      "|---|---|\n" +
+      "| Ghidra / IDA | Disasm + decompiler + scripting |\n" +
+      "| Frida | Hookear funciones en runtime (móvil, desktop) |\n" +
+      "| Unicorn | Emular CPU sin SO (deobf, prototipos) |\n" +
+      "> 💡 Frida cambió el RE de apps móviles: hookear sin recompilar la app.",
+    examples: [
+      "Frida script que loguea cada llamada a `decrypt_string`.",
+      "Unicorn ejecutando una rutina aislada con memoria controlada.",
+    ],
+    related: ["RE workflow avanzado", "Deobfuscación", "Ejecución simbólica"],
+  },
+
+  // ── M76 · Ejecución Simbólica y Concólica ────────────────────────────────
+  {
+    id: 790,
+    module: 76,
+    term: "Ejecución simbólica",
+    short: "Ejecutar el programa con valores 'simbólicos' para explorar todos los caminos posibles.",
+    detail:
+      "En vez de correr el programa con datos concretos, la **ejecución simbólica** trata la entrada como una **variable** y, en cada rama, acumula **restricciones** sobre ella. Un **SMT solver** luego resuelve qué entrada llega a un punto dado — útil para **encontrar bugs** o **resolver retos** automáticamente.\n" +
+      "> 💡 Ideal para hallar la entrada que dispara una rama 'oculta' (clave correcta, payload trigger).",
+    examples: [
+      "Resolver el reto 'introduce la clave correcta' sin reverse manual.",
+      "Hallar la entrada que provoca un buffer overflow.",
+    ],
+    related: ["angr", "Concólica (DSE)", "Aplicaciones y límites del simbólico"],
+  },
+  {
+    id: 791,
+    module: 76,
+    term: "angr",
+    short: "El framework de ejecución simbólica más usado en seguridad — Python, abierto.",
+    detail:
+      "**angr** es el framework de referencia para análisis simbólico de binarios: carga el binario, simula su CPU y memoria, propaga símbolos y conecta con **Z3** para resolver restricciones. Se usa para CTFs, fuzzing dirigido y vuln research.\n" +
+      "import angr\n" +
+      "proj = angr.Project('./bin')\n" +
+      "sm = proj.factory.simulation_manager(state)\n" +
+      "sm.explore(find=0x400abc)",
+    examples: [
+      "angr explorando hasta una llamada a `puts(\"win\")`.",
+      "Resolver un crackme en pocas líneas de Python.",
+    ],
+    related: ["Ejecución simbólica", "Concólica (DSE)", "Vulnerability research"],
+  },
+  {
+    id: 792,
+    module: 76,
+    term: "Concólica (DSE)",
+    short: "Mezcla 'concreta + simbólica': se ejecuta de verdad y se acumulan restricciones a la vez.",
+    detail:
+      "La **ejecución concólica** (*concolic = concrete + symbolic*, o **DSE**: Dynamic Symbolic Execution) ejecuta con valores **reales** pero traza simbólicamente las restricciones. Resuelve mejor el problema del **path explosion** y maneja entornos complejos (syscalls, libs externas).\n" +
+      "> 💡 Es lo que usan internamente fuzzers modernos (KLEE, SAGE) para dirigir la exploración.",
+    examples: [
+      "Un fuzzer que usa DSE para inventar entradas que cubran nuevas ramas.",
+      "Explorar un binario real (con libc) sin modelar todo simbólicamente.",
+    ],
+    related: ["Ejecución simbólica", "angr", "Vulnerability research"],
+  },
+  {
+    id: 793,
+    module: 76,
+    term: "Aplicaciones y límites del simbólico",
+    short: "Excelente para retos y código acotado; sufre con criptografía, loops y código enorme.",
+    detail:
+      "El simbólico/concólico brilla en **vuln research**, **deobfuscación**, **CTFs** y **fuzzing dirigido**. Sus límites: **path explosion** (caminos crecen exponencialmente), **cripto** (las restricciones se vuelven intratables), **loops** sin cota, y **entornos** complejos (sockets, kernel).\n" +
+      "> ⚠️ Por eso se combina con fuzzing tradicional, no lo reemplaza.",
+    examples: [
+      "Resolver un crackme en minutos vs horas de reverse manual.",
+      "Renunciar a explorar simbólicamente una rutina de descifrado AES.",
+    ],
+    related: ["Ejecución simbólica", "Concólica (DSE)", "Fuzzing coverage-guided"],
+  },
+
+  // ── M77 · Rootkits y Bootkits ────────────────────────────────────────────
+  {
+    id: 800,
+    module: 77,
+    term: "Tipos de rootkit",
+    short: "Userland, kernel, hipervisor, firmware: cada nivel da más sigilo y permisos.",
+    detail:
+      "Un **rootkit** oculta su presencia y la del atacante. Se clasifican por **dónde viven**:\n" +
+      "| Nivel | Privilegio | Detección |\n" +
+      "|---|---|---|\n" +
+      "| Userland | Bajo | Más fácil (EDR lo ve) |\n" +
+      "| Kernel | Total | Muy difícil |\n" +
+      "| Hipervisor | Sobre el SO | Casi invisible |\n" +
+      "| Firmware/UEFI | Pre-SO | Sobrevive al formateo |\n" +
+      "> 💡 Cuanto más bajo, más sigiloso — y más caro de desarrollar.",
+    examples: [
+      "Un LD_PRELOAD trojan (userland) ocultando procesos.",
+      "Un bootkit UEFI persistente (LoJax) tras reinstalar el SO.",
+    ],
+    related: ["Técnicas userland", "Rootkits de kernel", "Bootkits y detección"],
+  },
+  {
+    id: 801,
+    module: 77,
+    term: "Técnicas userland",
+    short: "Hookear funciones de librería: el rootkit vive en cada proceso, sin tocar el kernel.",
+    detail:
+      "En userland el rootkit intercepta llamadas a **librerías** (libc, ntdll) para ocultar archivos, procesos y conexiones. Vectores: **LD_PRELOAD** (Linux), **DLL injection / hijacking** (Windows), **IAT/EAT hooking**.\n" +
+      "> ⚠️ Son los más comunes; un EDR moderno los detecta por sus hooks anómalos.",
+    examples: [
+      "LD_PRELOAD que sobrescribe `readdir` para ocultar archivos.",
+      "Una DLL inyectada en explorer.exe que filtra procesos del Task Manager.",
+    ],
+    related: ["Tipos de rootkit", "Rootkits de kernel", "Defender, AMSI y ETW"],
+  },
+  {
+    id: 802,
+    module: 77,
+    term: "Rootkits de kernel",
+    short: "Cargar un driver malicioso da control absoluto y ocultación profunda.",
+    detail:
+      "Un rootkit de **kernel** (módulo o driver firmado) opera en ring 0: modifica la **SSDT** (Windows), engancha syscalls, **DKOM** (Direct Kernel Object Manipulation) para ocultar procesos del propio kernel. Privilegio total y muy difícil de detectar desde userland.\n" +
+      "> ⚠️ Windows exige drivers **firmados**; los atacantes recurren a **BYOVD** (Bring Your Own Vulnerable Driver) o roban firmas legítimas.",
+    examples: [
+      "DKOM para sacar un proceso de la lista del kernel — invisible a `tasklist`.",
+      "BYOVD: cargar un driver legítimo vulnerable para escalar a kernel.",
+    ],
+    related: ["Tipos de rootkit", "Bootkits y detección", "Kernel vs user space"],
+  },
+  {
+    id: 803,
+    module: 77,
+    term: "Bootkits y detección",
+    short: "Infectar el arranque para cargarse antes que el SO; se detectan por measurement/firma.",
+    detail:
+      "Un **bootkit** infecta el **arranque** (MBR, bootloader, UEFI) para correr **antes que el SO** — el rootkit ideal. Defensa: **Secure Boot** (rechaza firmas no confiables) y **measured boot + TPM** (no impide arrancar, pero la attestation **delata** el cambio).\n" +
+      "> 💡 Detectar bootkits desde el SO comprometido es casi imposible: hace falta arrancar desde medios externos o usar attestation.",
+    examples: [
+      "BlackLotus (2023): primer bootkit UEFI que evade Secure Boot.",
+      "Remote attestation que detecta el bootkit comparando PCRs del TPM.",
+    ],
+    related: ["Rootkits de kernel", "Ataques de firmware", "TPM y attestation"],
+  },
+
+  // ── M78 · Implants, C2 y Evasión de EDR ──────────────────────────────────
+  {
+    id: 810,
+    module: 78,
+    term: "Implants modernos",
+    short: "Beacons sigilosos en memoria, no en disco — eluden el AV clásico.",
+    detail:
+      "Un **implante** moderno (beacon de Cobalt Strike, Sliver, Mythic) corre **en memoria**, no toca disco, se comunica con su C2 por canales legítimos y **rota** sus huellas. Pequeño, modular, y cargado mediante **shellcode** o **DLL injection** desde un loader.\n" +
+      "> 💡 'Beacon' = sigiloso: contacta al C2 cada X minutos con jitter, no en streaming.",
+    examples: [
+      "Beacon de Cobalt Strike inyectado en explorer.exe vía process hollowing.",
+      "Sliver corriendo solo en memoria, sin payload en disco.",
+    ],
+    related: ["Command and Control (C2)", "Evasión de EDR", "PowerShell ofensivo"],
+  },
+  {
+    id: 811,
+    module: 78,
+    term: "Evasión de EDR",
+    short: "Romper los hooks del EDR sin que se entere: unhook, syscalls directas, parchear ETW/AMSI.",
+    detail:
+      "Los EDR observan el SO con **hooks** en userland (en ntdll) y **ETW**/**AMSI**. La evasión:\n" +
+      "• **Unhooking** — restaurar las bytes originales de ntdll.\n" +
+      "• **Direct syscalls** — invocar el kernel saltando ntdll.dll.\n" +
+      "• **Patch AMSI/ETW** — neutralizar los pipes de visibilidad.\n" +
+      "• **BYOVD** — usar un driver vulnerable para apagar el EDR desde kernel.\n" +
+      "> ⚠️ Tamper Protection y soluciones que viven en kernel (no solo userland) frenan muchas de estas técnicas.",
+    examples: [
+      "Hells Gate para resolver syscalls dinámicamente sin ntdll.",
+      "Patch de `AmsiScanBuffer` para que siempre devuelva 'limpio'.",
+    ],
+    related: ["Implants modernos", "Command and Control (C2)", "Defender, AMSI y ETW"],
+  },
+  {
+    id: 812,
+    module: 78,
+    term: "Command and Control (C2)",
+    short: "El canal por el que el operador habla con el implante — y donde se delata su beaconing.",
+    detail:
+      "El **C2** orquesta a los implantes. Canales: **HTTP/S** (con dominio fronting o CDN), **DNS** (lento pero sigiloso), **mensajería** (Telegram, Discord). Patrones a detectar: **beaconing** regular, **dominios recién registrados**, **JA3** anómalos, **volumen DNS** elevado.\n" +
+      "> 💡 Las **C2 matrices** de MITRE listan canales conocidos; un buen SOC monitorea por patrón, no solo por IoC.",
+    examples: [
+      "Beacon HTTPS cada 60s a un dominio CDN reciente.",
+      "DNS tunneling exfiltrando datos en consultas TXT.",
+    ],
+    related: ["Implants modernos", "Detección y caza de implantes", "Detección de C2 y exfiltración"],
+  },
+  {
+    id: 813,
+    module: 78,
+    term: "Detección y caza de implantes",
+    short: "Cazar lo que el EDR no vio: anomalías de proceso, memoria y red.",
+    detail:
+      "Detectar un implante sigiloso exige **hunting**: procesos hijos anómalos de Office/navegador, hilos sin módulo (shellcode en memoria), regiones **RWX** en procesos legítimos, **beaconing** en logs DNS/proxy. Herramientas: **Yara en memoria**, **Sigma**, telemetría de **Sysmon**/EDR.\n" +
+      "> 💡 'Inyección de shellcode' deja huellas: regiones de memoria ejecutables sin archivo respaldo, threads sospechosos.",
+    examples: [
+      "Hunting query: procesos con threads cuyo start address no mapea a ningún módulo.",
+      "Yara escaneando memoria para hallar beacons conocidos.",
+    ],
+    related: ["Command and Control (C2)", "Evasión de EDR", "Threat hunting"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

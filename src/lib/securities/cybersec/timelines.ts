@@ -277,6 +277,20 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2022, title: "Hertzbleed", desc: "La frecuencia dinámica (DVFS) convierte cripto constant-time en un side-channel de tiempo remoto.", impact: "medium" },
     ],
   },
+  {
+    id: 22,
+    module: 77,
+    title: "Evolución de rootkits y evasión",
+    events: [
+      { year: 2005, title: "Sony rootkit (XCP)", desc: "Sony BMG distribuye un rootkit comercial en CDs de música; escándalo que populariza el término.", impact: "high" },
+      { year: 2007, title: "Mebroot / TDL", desc: "Bootkits del MBR profesionalizan la persistencia pre-SO en el ecosistema del malware bancario.", impact: "medium" },
+      { year: 2012, title: "Windows 8 + Secure Boot", desc: "Microsoft estandariza el arranque verificado en consumer; eleva el listón para bootkits.", impact: "high" },
+      { year: 2014, title: "Cobalt Strike + auge de C2", desc: "Las plataformas comerciales de red teaming se vuelven el estándar (y se filtran a actores ofensivos).", impact: "high" },
+      { year: 2018, title: "LoJax", desc: "Primer implante UEFI in-the-wild (APT28); el firmware como vector real, no teórico.", impact: "high" },
+      { year: 2021, title: "Era de BYOVD", desc: "Cargar drivers vulnerables firmados para apagar EDR se vuelve técnica estándar.", impact: "high" },
+      { year: 2023, title: "BlackLotus", desc: "Primer bootkit UEFI que evade Secure Boot mediante baton drop; demuestra que la cadena UEFI sigue rompible.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
