@@ -633,6 +633,54 @@ export const FRAMEWORKS: Framework[] = [
       { n: 4, name: "Víctima", desc: "A quién apunta: sector, geografía, tipo de organización; el patrón delata motivación.", defenses: ["Información sectorial (ISACs)", "Defensa según target group"] },
     ],
   },
+  {
+    id: 41,
+    module: 83,
+    name: "Modelos de autorización por capas",
+    kind: "layers",
+    summary:
+      "Los modelos de autorización se ordenan por granularidad y flexibilidad. La elección depende del contexto: cuanto más arriba, más finura — y más coste de gestión.",
+    phases: [
+      { n: 1, name: "Ninguna / accesos abiertos", desc: "Sin control real: todo el que entra puede hacer todo. El antipatrón.", defenses: ["Solo aceptable en sandboxes de prueba", "Migrar lo antes posible"] },
+      { n: 2, name: "DAC (Discretionary)", desc: "El dueño del recurso decide quién accede (típico en sistemas de archivos).", defenses: ["Owner explícito", "Auditoría de cambios de permisos"] },
+      { n: 3, name: "MAC (Mandatory)", desc: "Reglas obligatorias dictadas por el sistema (etiquetas/niveles); típico en SELinux/AppArmor o entornos militares.", defenses: ["Etiquetado consistente", "Política central no eludible"] },
+      { n: 4, name: "RBAC (Role-Based)", desc: "Permisos agrupados en roles; el usuario hereda los de su rol. El estándar corporativo.", defenses: ["Roles bien definidos", "Revisión periódica (entitlement review)"] },
+      { n: 5, name: "ABAC / PBAC", desc: "Decisiones según atributos y políticas (usuario, recurso, contexto, hora). Máxima flexibilidad.", defenses: ["Policy-as-code (OPA, Cedar)", "Pruebas de la política"] },
+    ],
+  },
+  {
+    id: 42,
+    module: 84,
+    name: "Pilares de Zero Trust",
+    kind: "controls",
+    summary:
+      "Los 7 pilares del modelo Zero Trust de CISA. La seguridad madura cubre los 7 y los integra con visibilidad y automatización.",
+    phases: [
+      { n: 1, name: "Identidad", desc: "Cada acceso pide identidad fuerte (MFA, passkeys) y se evalúa el contexto.", defenses: ["MFA resistente a phishing", "Gestión de identidad federada", "Identity Threat Detection"] },
+      { n: 2, name: "Dispositivo", desc: "Solo dispositivos conocidos y en postura aceptable acceden a recursos.", defenses: ["Inventario y compliance", "EDR/MDM", "Atestación del dispositivo"] },
+      { n: 3, name: "Red / entorno", desc: "Microsegmentación; tráfico cifrado por defecto incluso dentro del perímetro.", defenses: ["Microsegmentación", "Cifrado este-oeste", "ZTNA en lugar de VPN"] },
+      { n: 4, name: "Aplicación / carga", desc: "Cada workload se autentica, se autoriza y se aísla en runtime.", defenses: ["Identidad por workload (SPIFFE)", "Sandbox/aislamiento", "Hardening"] },
+      { n: 5, name: "Datos", desc: "Clasificar, cifrar y controlar el acceso al dato — donde quiera que viaje.", defenses: ["Clasificación", "Cifrado en reposo y en tránsito", "DLP"] },
+      { n: 6, name: "Visibilidad y analítica", desc: "Telemetría unificada de los 5 pilares para detectar y reaccionar.", defenses: ["SIEM + UEBA", "Correlación cross-pilar", "Métricas de postura"] },
+      { n: 7, name: "Automatización y orquestación", desc: "Respuesta automatizada a partir de la analítica; políticas como código.", defenses: ["SOAR", "Policy-as-code", "Remediación automática"] },
+    ],
+  },
+  {
+    id: 43,
+    module: 85,
+    name: "Ciclo de gestión de riesgos (ISO 27005 / NIST RMF)",
+    kind: "flow",
+    summary:
+      "El proceso continuo de gobernar el riesgo. No es lineal: monitorear realimenta todas las fases, y la realidad obliga a reanudar el ciclo.",
+    phases: [
+      { n: 1, name: "Establecer el contexto", desc: "Alcance, criterios, partes interesadas, apetito y tolerancia al riesgo.", defenses: ["Apetito de riesgo aprobado", "Criterios de aceptación claros"] },
+      { n: 2, name: "Identificar riesgos", desc: "Catalogar amenazas, vulnerabilidades, activos e impactos potenciales.", defenses: ["Inventario de activos vivo", "Catálogo de amenazas (ATT&CK, ENISA)"] },
+      { n: 3, name: "Analizar riesgos", desc: "Determinar probabilidad e impacto (cualitativo, cuantitativo o híbrido).", defenses: ["Datos históricos", "Métodos como FAIR o matrices 5x5"] },
+      { n: 4, name: "Evaluar y priorizar", desc: "Comparar contra el apetito; decidir qué tratar primero.", defenses: ["Mapa de calor", "Priorización por riesgo residual"] },
+      { n: 5, name: "Tratar el riesgo", desc: "Mitigar, transferir, aceptar o evitar; registrar al risk owner.", defenses: ["Plan de tratamiento", "Decisiones documentadas con dueño"] },
+      { n: 6, name: "Monitorear y revisar", desc: "Seguir indicadores (KRIs), revisar cambios y re-evaluar; el ciclo se reabre.", defenses: ["KRIs y dashboards", "Revisión periódica del registro"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

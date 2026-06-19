@@ -5739,6 +5739,328 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Sistemas verificados", "Por qué formal methods", "Hacer investigación en seguridad"],
   },
+
+  // ── M83 · Gestión de Identidades y Accesos (IAM) ─────────────────────────
+  {
+    id: 860,
+    module: 83,
+    term: "Ciclo de vida de la identidad",
+    short: "Provisioning, cambios y deprovisioning gobernados — para que cada persona tenga solo lo justo en cada momento.",
+    detail:
+      "El **ciclo de vida JML** (*Joiner-Mover-Leaver*) gobierna cómo nace, evoluciona y se cierra cada identidad:\n" +
+      "• **Joiner** — alta con permisos por rol y MFA configurada.\n" +
+      "• **Mover** — al cambiar de rol, **revisar y rotar** permisos (no acumular).\n" +
+      "• **Leaver** — deshabilitar/borrar y **revocar tokens/sesiones** rápido.\n" +
+      "> ⚠️ Las cuentas 'huérfanas' (ex-empleados activos) y la **acumulación de privilegios** de los movers son hallazgos clásicos de auditoría.",
+    examples: [
+      "Provisioning automático desde RR.HH. → AD/Okta al alta.",
+      "Revisión trimestral de accesos (entitlement review).",
+    ],
+    related: ["AAA (Autenticación, Autorización, Accounting)", "MFA y autenticación moderna", "PAM"],
+  },
+  {
+    id: 861,
+    module: 83,
+    term: "MFA y autenticación moderna",
+    short: "Más allá de la contraseña: TOTP, push, y passkeys/WebAuthn resistentes al phishing.",
+    detail:
+      "La **MFA** combina factores: algo que sabes (contraseña), algo que tienes (token, móvil), algo que eres (biometría). No todos son iguales:\n" +
+      "| Factor | Resistencia a phishing |\n" +
+      "|---|---|\n" +
+      "| SMS / Push | Baja (interceptable, fatiga) |\n" +
+      "| TOTP (Authenticator) | Media |\n" +
+      "| WebAuthn / Passkeys (FIDO2) | Alta (ligado al dominio) |\n" +
+      "> 💡 Las **passkeys** son la dirección moderna: criptografía asimétrica, sin contraseña, **inmunes al phishing**.",
+    examples: [
+      "Migrar de SMS a una app TOTP y luego a passkeys.",
+      "MFA push con number matching para mitigar fatiga.",
+    ],
+    related: ["Ciclo de vida de la identidad", "SSO y federación", "Defensas anti-phishing"],
+  },
+  {
+    id: 862,
+    module: 83,
+    term: "SSO y federación",
+    short: "Una identidad, muchas apps: OAuth/OIDC delegan auth, SAML federa entre dominios.",
+    detail:
+      "El **SSO** (*Single Sign-On*) deja que el usuario inicie sesión una vez y acceda a muchas apps. Los estándares:\n" +
+      "• **OAuth 2.0** — delegación de **autorización** (acceso a recursos).\n" +
+      "• **OIDC** — capa de **autenticación** sobre OAuth 2.0; el estándar web moderno.\n" +
+      "• **SAML** — federación entre dominios (clásico en empresa).\n" +
+      "> 💡 SSO reduce contraseñas reusadas y centraliza la auditoría; el IdP comprometido = todo cae.",
+    examples: [
+      "Login con Google (OIDC) en una app SaaS.",
+      "SAML entre el IdP corporativo y aplicaciones internas.",
+    ],
+    related: ["MFA y autenticación moderna", "Modelos de autorización", "Active Directory: dominio, bosque y OU"],
+  },
+  {
+    id: 863,
+    module: 83,
+    term: "Modelos de autorización",
+    short: "RBAC asigna por rol; ABAC decide por atributos; el menor privilegio es la regla común.",
+    detail:
+      "• **RBAC** — permisos asignados a **roles**; el usuario hereda los de su rol. Fácil de gobernar, rígido.\n" +
+      "• **ABAC** — política basada en **atributos** (usuario, recurso, contexto). Flexible pero más complejo.\n" +
+      "• **ReBAC / PBAC** — variantes basadas en relaciones o políticas declarativas (OPA/Cedar).\n" +
+      "> 💡 Sea cual sea el modelo, la regla es **menor privilegio**: dar lo mínimo necesario, por el menor tiempo posible. Ver el diagrama 'Modelos de autorización por capas'.",
+    examples: [
+      "RBAC: rol 'Editor' permite publicar pero no borrar.",
+      "ABAC: 'permitir si user.dept == resource.dept y hora ∈ laboral'.",
+    ],
+    related: ["Principio de mínimo privilegio", "SSO y federación", "PAM"],
+  },
+  {
+    id: 864,
+    module: 83,
+    term: "PAM (Privileged Access Management)",
+    short: "Custodia y vigila las cuentas con superpoderes: bóvedas, sesiones grabadas, just-in-time.",
+    detail:
+      "El **PAM** gestiona las **identidades privilegiadas** (admins, service accounts, root). Funciones clave:\n" +
+      "• **Bóveda** de credenciales con rotación automática.\n" +
+      "• **Just-in-time access** — privilegios temporales por aprobación, no permanentes.\n" +
+      "• **Grabación de sesión** para auditoría forense.\n" +
+      "• **Aislamiento** — el admin nunca ve la contraseña real.\n" +
+      "> ⚠️ Cuentas admin permanentes y compartidas son uno de los riesgos #1 en cualquier auditoría.",
+    examples: [
+      "Aprobación de 1h para hacerse admin de un servidor.",
+      "Rotación automática de la contraseña de una service account.",
+    ],
+    related: ["Modelos de autorización", "Principio de mínimo privilegio", "Ciclo de vida de la identidad"],
+  },
+
+  // ── M84 · Arquitectura de Seguridad y Patrones de Diseño ─────────────────
+  {
+    id: 870,
+    module: 84,
+    term: "Principios de diseño seguro",
+    short: "Las máximas que guían toda arquitectura: defensa en profundidad, fail-safe, menor privilegio.",
+    detail:
+      "Los principios clásicos (Saltzer & Schroeder + acumulado moderno) son la brújula:\n" +
+      "• **Defensa en profundidad** — capas; ningún control único debe ser fatal.\n" +
+      "• **Fail-safe defaults** — denegar por defecto; abrir explícito.\n" +
+      "• **Menor privilegio** — solo lo necesario, el menor tiempo posible.\n" +
+      "• **Separación de responsabilidades** — ninguna acción crítica en manos de uno solo.\n" +
+      "• **Mecanismo económico** — simple es más auditable que clever.\n" +
+      "> 💡 Lo no listado: no inventar tu propia cripto y minimizar superficie.",
+    examples: [
+      "Permisos en una API: deny by default y allow explícito.",
+      "Separar quien aprueba un pago de quien lo ejecuta.",
+    ],
+    related: ["Defensa en profundidad", "Patrones de diseño seguro", "Zero Trust Architecture"],
+  },
+  {
+    id: 871,
+    module: 84,
+    term: "Patrones de diseño seguro",
+    short: "Soluciones reutilizables: gatekeeper, broker, reverse proxy, BFF, valet key.",
+    detail:
+      "Patrones recurrentes:\n" +
+      "• **Gatekeeper / API Gateway** — punto único que valida, autentica y enruta.\n" +
+      "• **Broker** — desacopla cliente y backend; permite cambiar la implementación.\n" +
+      "• **Reverse proxy + WAF** — protege la app y centraliza TLS/headers.\n" +
+      "• **BFF (Backend For Frontend)** — un backend por canal, evita exponer toda la API al móvil/web.\n" +
+      "• **Valet key** — token de un solo uso para acceso temporal a un recurso.\n" +
+      "> 💡 La intención: aislar la complejidad y poner el control en lugares **chequeables**.",
+    examples: [
+      "Un BFF para la app móvil que filtra qué expone del backend.",
+      "API Gateway con throttling, auth y observabilidad centralizadas.",
+    ],
+    related: ["Principios de diseño seguro", "Zero Trust Architecture", "Headers de seguridad"],
+  },
+  {
+    id: 872,
+    module: 84,
+    term: "Zero Trust Architecture",
+    short: "Nunca confiar, siempre verificar: cada acceso evalúa identidad, dispositivo y contexto.",
+    detail:
+      "El modelo clásico (perímetro confiable, dentro libre) ya no funciona. **Zero Trust** (NIST SP 800-207) parte de **'asumir brecha'** y exige verificación **en cada acceso**: quién (identidad fuerte), desde dónde (dispositivo conforme), a qué (recurso concreto), bajo qué condiciones (contexto, riesgo). No hay 'dentro' implícito.\n" +
+      "> 💡 Pasar a Zero Trust no es un producto: es un **viaje** que va eliminando la confianza implícita pieza por pieza. Ver el diagrama 'Pilares de Zero Trust'.",
+    examples: [
+      "Acceso a una app condicionado a postura del dispositivo + MFA.",
+      "Eliminar VPN clásica a favor de un broker ZTNA.",
+    ],
+    related: ["Principio de mínimo privilegio", "Microsegmentación", "Principios de diseño seguro"],
+  },
+  {
+    id: 873,
+    module: 84,
+    term: "Microsegmentación",
+    short: "Segmentar más allá de la red plana: cada workload en su microperímetro con políticas explícitas.",
+    detail:
+      "La **microsegmentación** lleva la idea de DMZ a su límite: cada **workload** (VM, contenedor, pod) opera en un **microperímetro** con reglas explícitas de quién puede hablar con quién. Limita drásticamente el **movimiento lateral**: comprometer una pieza no abre la puerta al resto.\n" +
+      "> 💡 Es la materialización de Zero Trust a nivel de red — políticas declarativas que viajan con la carga.",
+    examples: [
+      "NetworkPolicies de Kubernetes aislando el frontend del backend.",
+      "Segmentación east-west en data center con políticas L7.",
+    ],
+    related: ["Zero Trust Architecture", "DMZ y segmentación de red", "Defensa contra el movimiento lateral"],
+  },
+  {
+    id: 874,
+    module: 84,
+    term: "Marcos de arquitectura (SABSA, NIST, TOGAF)",
+    short: "Marcos que estructuran el diseño: del 'por qué' del negocio al 'cómo' técnico.",
+    detail:
+      "Para que la arquitectura sea coherente y trazable, se apoyan en marcos:\n" +
+      "| Marco | Enfoque |\n" +
+      "|---|---|\n" +
+      "| SABSA | Capas desde 'contextual' (negocio) a 'componente' (técnica) |\n" +
+      "| NIST CSF | Funciones (Govern, Identify, Protect, Detect, Respond, Recover) |\n" +
+      "| TOGAF | Arquitectura empresarial general |\n" +
+      "> 💡 SABSA es de los más usados para diseñar seguridad **alineada al negocio**.",
+    examples: [
+      "Mapear capacidades del negocio a controles con NIST CSF.",
+      "Diseñar con SABSA garantizando trazabilidad del 'por qué' al 'cómo'.",
+    ],
+    related: ["Principios de diseño seguro", "NIST Cybersecurity Framework (CSF)", "Gobernanza de seguridad"],
+  },
+
+  // ── M85 · Gobernanza y Gestión de Riesgos ────────────────────────────────
+  {
+    id: 880,
+    module: 85,
+    term: "Gobernanza de seguridad",
+    short: "Quién decide qué, con qué autoridad: el marco que alinea seguridad con la dirección.",
+    detail:
+      "La **gobernanza** establece **quién manda en qué** (CISO, comités, RACI), define el **apetito y la tolerancia al riesgo**, aprueba políticas y revisa métricas. Es lo que separa una función de seguridad **estratégica** (con voz en la dirección) de una **reactiva** (apagar fuegos).\n" +
+      "> 💡 Apetito de riesgo: cuánto riesgo está dispuesta a aceptar la organización para perseguir objetivos. Sin él, todo decision es ad hoc.",
+    examples: [
+      "Un comité de riesgo de TI que aprueba la matriz anual.",
+      "Una política aprobada por el CEO que el CISO ejecuta.",
+    ],
+    related: ["Apetito y tolerancia al riesgo", "Gestión de riesgos", "Cumplimiento normativo"],
+  },
+  {
+    id: 881,
+    module: 85,
+    term: "Identificación y análisis de riesgos",
+    short: "Listar lo que puede salir mal y medir cuánto importa — cualitativo o cuantitativo.",
+    detail:
+      "Identificar riesgos cataloga **amenazas × vulnerabilidades × activos**. El análisis los **valora**:\n" +
+      "• **Cualitativo** — matriz probabilidad × impacto (Alto/Medio/Bajo).\n" +
+      "• **Cuantitativo** — **ALE** = SLE × ARO (pérdida anual esperada).\n" +
+      "• **FAIR** — combina ambos con factores explícitos.\n" +
+      "> 💡 Para PyMEs y comunicación con dirección: cualitativo. Para decisiones de gran inversión: cuantitativo.",
+    examples: [
+      "Matriz 5x5 de riesgos del trimestre.",
+      "Calcular el ALE de un escenario de ransomware.",
+    ],
+    related: ["Amenaza, Vulnerabilidad y Riesgo", "Tratamiento del riesgo", "Gobernanza de seguridad"],
+  },
+  {
+    id: 882,
+    module: 85,
+    term: "Tratamiento del riesgo",
+    short: "Para cada riesgo: mitigar, transferir, aceptar o evitar — y registrar la decisión.",
+    detail:
+      "Tras valorar, hay **cuatro estrategias**:\n" +
+      "| Estrategia | Cuándo |\n" +
+      "|---|---|\n" +
+      "| Mitigar | Reducir con controles |\n" +
+      "| Transferir | Seguro, outsourcing |\n" +
+      "| Aceptar | El control cuesta más que el daño |\n" +
+      "| Evitar | Eliminar la actividad que lo genera |\n" +
+      "Toda decisión queda en el **registro de riesgos**, firmada por el **risk owner**.\n" +
+      "> 💡 Aceptar un riesgo NO es ignorarlo: es decidirlo conscientemente, con responsable y revisión.",
+    examples: [
+      "Aceptar un riesgo bajo en un sistema que se retira en 6 meses.",
+      "Transferir el riesgo de fraude con un ciberseguro.",
+    ],
+    related: ["Identificación y análisis de riesgos", "Gestión de riesgos", "Metodologías de riesgo"],
+  },
+  {
+    id: 883,
+    module: 85,
+    term: "Metodologías de riesgo",
+    short: "ISO 27005, NIST RMF y MAGERIT: los marcos estándar para hacerlo de forma defendible.",
+    detail:
+      "Marcos consolidados:\n" +
+      "• **ISO/IEC 27005** — gestión de riesgos en el contexto de un SGSI (ISO 27001).\n" +
+      "• **NIST RMF / SP 800-37** — el marco federal de EE.UU., con foco en ciclo completo.\n" +
+      "• **MAGERIT** — referente en sector público español.\n" +
+      "• **OCTAVE / FAIR** — alternativas más cualitativas/cuantitativas.\n" +
+      "Todos comparten el ciclo: **contexto → identificar → analizar → evaluar → tratar → monitorear**. Ver el diagrama 'Ciclo de gestión de riesgos'.",
+    examples: [
+      "Usar ISO 27005 como base del proceso de la empresa.",
+      "MAGERIT para una administración pública española.",
+    ],
+    related: ["Tratamiento del riesgo", "ISO/IEC 27001", "NIST Cybersecurity Framework (CSF)"],
+  },
+
+  // ── M86 · Cumplimiento Normativo y Auditoría ─────────────────────────────
+  {
+    id: 890,
+    module: 86,
+    term: "Marcos regulatorios clave",
+    short: "RGPD, HIPAA, PCI-DSS, SOC 2: qué proteger según sector y geografía.",
+    detail:
+      "Los marcos más extendidos:\n" +
+      "| Marco | Foco |\n" +
+      "|---|---|\n" +
+      "| RGPD / GDPR | Datos personales (UE) |\n" +
+      "| HIPAA | Datos sanitarios (EE.UU.) |\n" +
+      "| PCI-DSS | Pagos con tarjeta |\n" +
+      "| SOC 2 | Servicios SaaS (confianza) |\n" +
+      "| NIS2 / DORA | Infraestructura crítica / finanzas (UE) |\n" +
+      "> ⚠️ El **RGPD** llega hasta sanciones del **4% de la facturación global** — es alineación de incentivos, no un papel.",
+    examples: [
+      "Un SaaS B2B obteniendo el informe SOC 2 Type II.",
+      "Un comercio cumpliendo PCI-DSS para procesar tarjetas.",
+    ],
+    related: ["ISO/IEC 27001", "Proceso de auditoría", "Cumplimiento normativo"],
+  },
+  {
+    id: 891,
+    module: 86,
+    term: "ISO 27001, SGSI y SoA",
+    short: "El SGSI es el sistema vivo; la SoA dice qué controles aplican y por qué.",
+    detail:
+      "**ISO/IEC 27001** define un **SGSI** basado en el ciclo **PDCA** (Plan-Do-Check-Act) y la gestión de riesgos. Su **Anexo A** lista controles de referencia (revisión 2022: 93 controles en 4 dominios). La **Declaración de Aplicabilidad (SoA)** justifica **cuáles aplican** y cuáles no, **y por qué** — es el documento estrella de la auditoría.\n" +
+      "> 💡 Certificarse no es 'tenerlo todo'; es demostrar un sistema **vivo** y trazable. La SoA es la pieza más mirada por el auditor externo.",
+    examples: [
+      "PDCA: revisar el SGSI tras cada incidente relevante.",
+      "Documentar en la SoA por qué se excluye un control concreto.",
+    ],
+    related: ["Marcos regulatorios clave", "Proceso de auditoría", "ISO/IEC 27001"],
+  },
+  {
+    id: 892,
+    module: 86,
+    term: "Proceso de auditoría",
+    short: "Planificación → trabajo de campo → reporte → seguimiento; con evidencia objetiva en cada paso.",
+    detail:
+      "Una auditoría sigue cuatro fases:\n" +
+      "1. **Planificación** — alcance, criterios, equipo, plan de muestreo.\n" +
+      "2. **Trabajo de campo** — entrevistas, revisión de evidencias, pruebas.\n" +
+      "3. **Reporte** — hallazgos clasificados (mayor / menor / observación / oportunidad).\n" +
+      "4. **Seguimiento** — verificar el cierre de las acciones correctivas.\n" +
+      "> 💡 Auditoría **interna** (mejora) y **externa** (certificación) tienen lógicas distintas pero el mismo método: **evidencia objetiva**.",
+    examples: [
+      "Plan de muestreo de logs y registros del trimestre.",
+      "Acta de cierre tras verificar las no conformidades.",
+    ],
+    related: ["ISO 27001, SGSI y SoA", "Marcos regulatorios clave", "Políticas y no conformidades"],
+  },
+  {
+    id: 893,
+    module: 86,
+    term: "Políticas y no conformidades",
+    short: "Las políticas marcan el 'qué'; las no conformidades son brechas entre lo escrito y lo hecho.",
+    detail:
+      "La **jerarquía documental** clásica:\n" +
+      "• **Política** — qué y por qué (firmada por dirección).\n" +
+      "• **Norma** — qué nivel de cumplimiento exigir.\n" +
+      "• **Procedimiento** — cómo hacerlo.\n" +
+      "• **Registro/Evidencia** — prueba de que se hizo.\n" +
+      "Una **no conformidad** es la **brecha** entre lo escrito y lo ejecutado. Se clasifica (mayor/menor), se trata con un **plan de acciones correctivas** y se sigue hasta el cierre.\n" +
+      "> ⚠️ Una política sin evidencia es papel mojado en una auditoría.",
+    examples: [
+      "Política de contraseñas + procedimiento + logs de cumplimiento.",
+      "No conformidad: la política exige MFA y un sistema crítico no lo tiene.",
+    ],
+    related: ["Proceso de auditoría", "ISO 27001, SGSI y SoA", "Gobernanza de seguridad"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

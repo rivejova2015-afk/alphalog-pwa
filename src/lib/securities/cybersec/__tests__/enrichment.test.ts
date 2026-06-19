@@ -24,6 +24,8 @@ const AIML_MODULES = [67, 68, 69, 70];
 const HW_MODULES = [71, 72, 73, 74];
 const REV_MODULES = [75, 76, 77, 78];
 const RESEARCH_MODULES = [79, 80, 81, 82];
+const ARQ_MODULES = [83, 84];
+const GRC_MODULES = [85, 86];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -130,6 +132,16 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Investigación (M79-M82) tiene ≥4 definiciones", () => {
     for (const m of RESEARCH_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Arquitectura de Seguridad (M83-M84) tiene ≥4 definiciones", () => {
+    for (const m of ARQ_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de GRC (M85-M86) tiene ≥4 definiciones", () => {
+    for (const m of GRC_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -258,6 +270,15 @@ describe("FRAMEWORKS", () => {
     expect(diamond).toBeDefined();
     expect(diamond!.phases).toHaveLength(4);
   });
+  it("M83 tiene modelos de autorización (layers, 5), M84 los 7 pilares ZT (controls, 7), M85 el ciclo de riesgos (flow)", () => {
+    const auth = frameworksByModule(83).find((f) => f.kind === "layers");
+    expect(auth).toBeDefined();
+    expect(auth!.phases).toHaveLength(5);
+    const zt = frameworksByModule(84).find((f) => f.kind === "controls");
+    expect(zt).toBeDefined();
+    expect(zt!.phases).toHaveLength(7);
+    expect(frameworksByModule(85).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -333,6 +354,9 @@ describe("TIMELINES", () => {
   });
   it("M79 tiene línea de tiempo (hitos del vulnerability research)", () => {
     expect(timelinesByModule(79).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M86 tiene línea de tiempo (marcos de cumplimiento y regulación)", () => {
+    expect(timelinesByModule(86).length).toBeGreaterThanOrEqual(1);
   });
 });
 

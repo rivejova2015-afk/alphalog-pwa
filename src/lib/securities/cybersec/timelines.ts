@@ -305,6 +305,21 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2022, title: "CISA KEV", desc: "Se estandariza la lista de vulnerabilidades explotadas conocidas, vital para priorizar parches.", impact: "high" },
     ],
   },
+  {
+    id: 24,
+    module: 86,
+    title: "Marcos de cumplimiento y regulación de seguridad",
+    events: [
+      { year: 2002, title: "SOX", desc: "Tras Enron, EE.UU. obliga a controles internos sobre reporting financiero; la seguridad entra en la sala de juntas.", impact: "high" },
+      { year: 2004, title: "PCI-DSS", desc: "Las marcas de tarjetas estandarizan los requisitos de seguridad para comercios y procesadores.", impact: "high" },
+      { year: 2005, title: "ISO/IEC 27001", desc: "Estándar internacional del SGSI; referencia certificable global.", impact: "high" },
+      { year: 2005, title: "HIPAA Security Rule", desc: "EE.UU. publica reglas técnicas para proteger datos sanitarios electrónicos.", impact: "medium" },
+      { year: 2014, title: "NIST CSF", desc: "Marco voluntario que se vuelve la lingua franca para reportar postura de seguridad a la dirección.", impact: "high" },
+      { year: 2018, title: "RGPD", desc: "Entra en vigor el reglamento europeo de protección de datos; sanciones de hasta el 4% del volumen global.", impact: "high" },
+      { year: 2020, title: "Auge del SOC 2", desc: "El informe SOC 2 Type II se vuelve casi obligatorio para SaaS B2B vendiendo a EE.UU.", impact: "medium" },
+      { year: 2024, title: "NIS2, DORA, EU AI Act", desc: "Nueva ola europea: ciberseguridad para infraestructuras críticas, resiliencia financiera y regulación de la IA.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
