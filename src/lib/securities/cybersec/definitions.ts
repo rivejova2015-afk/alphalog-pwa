@@ -745,6 +745,466 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Estándares de seguridad WiFi", "AAA (Autenticación, Autorización, Accounting)", "Mínimo privilegio"],
   },
+
+  // ── M10 · Linux: Fundamentos ─────────────────────────────────────────────
+  {
+    id: 130,
+    module: 10,
+    term: "Jerarquía del sistema de archivos (FHS)",
+    short: "Linux organiza todo bajo una única raíz '/', con directorios estándar por función.",
+    detail:
+      "El **FHS** (*Filesystem Hierarchy Standard*) define dónde vive cada cosa. No hay 'unidades C:'; todo cuelga de **`/`**:\n" +
+      "| Ruta | Contenido |\n" +
+      "|---|---|\n" +
+      "| /etc | Configuración del sistema |\n" +
+      "| /home | Carpetas de los usuarios |\n" +
+      "| /var | Datos variables (logs en /var/log) |\n" +
+      "| /bin /usr/bin | Binarios/ejecutables |\n" +
+      "| /tmp | Temporales |\n" +
+      "> 💡 Los logs de seguridad suelen estar en **/var/log** (`auth.log`, `syslog`).",
+    examples: [
+      "cat /etc/passwd lista las cuentas del sistema.",
+      "tail -f /var/log/auth.log sigue los intentos de login en vivo.",
+    ],
+    related: ["La shell", "Permisos rwx", "Streams y redirección"],
+  },
+  {
+    id: 131,
+    module: 10,
+    term: "La shell",
+    short: "El intérprete de comandos que traduce lo que escribes en acciones del sistema.",
+    detail:
+      "La **shell** (normalmente **Bash**) es el programa que lee tus comandos y los ejecuta. Es la interfaz central del trabajo en seguridad: rápida, scriptable y presente en cualquier servidor. El **prompt** (`$` usuario normal, `#` root) indica con qué privilegios operas.\n" +
+      "> ⚠️ Un `#` significa que eres **root**: máximo cuidado, cualquier error es total.",
+    examples: [
+      "whoami muestra tu usuario actual.",
+      "which bash revela la ruta del intérprete en uso.",
+    ],
+    related: ["Jerarquía del sistema de archivos (FHS)", "Streams y redirección", "Shebang y ejecución"],
+  },
+  {
+    id: 132,
+    module: 10,
+    term: "Todo es un archivo",
+    short: "En Linux, dispositivos, procesos y conexiones se representan como archivos.",
+    detail:
+      "Filosofía Unix: **casi todo se maneja como un archivo**, lo que unifica las herramientas. Discos (`/dev/sda`), información de procesos (`/proc`) y dispositivos son rutas que se leen/escriben con los mismos comandos que un fichero de texto.",
+    examples: [
+      "cat /proc/cpuinfo muestra info del procesador como si fuera un archivo.",
+      "Escribir en /dev/null descarta la salida.",
+    ],
+    related: ["La shell", "Streams y redirección"],
+  },
+  {
+    id: 133,
+    module: 10,
+    term: "Distribuciones para seguridad",
+    short: "Distros de Linux que ya traen el arsenal de herramientas de pentesting preinstalado.",
+    detail:
+      "Una **distro** combina el kernel Linux con un conjunto de software. Para seguridad ofensiva destacan **Kali Linux** (la referencia, mantenida por OffSec) y **Parrot OS**, que incluyen cientos de herramientas (nmap, Burp, Metasploit). Para uso diario o servidores se usan **Debian/Ubuntu**.\n" +
+      "> 💡 Kali está pensada como **herramienta de trabajo**, no como SO de uso diario.",
+    examples: [
+      "Arrancar Kali en una VM para un laboratorio de pentest.",
+      "Parrot Security como alternativa más ligera a Kali.",
+    ],
+    related: ["La shell", "Jerarquía del sistema de archivos (FHS)"],
+  },
+  {
+    id: 134,
+    module: 10,
+    term: "Streams y redirección",
+    short: "Cada comando tiene entrada (stdin), salida (stdout) y errores (stderr) redirigibles.",
+    detail:
+      "Los **tres flujos estándar** permiten encadenar y guardar resultados:\n" +
+      "• **stdin (0)** — entrada · **stdout (1)** — salida · **stderr (2)** — errores.\n" +
+      "Operadores: `>` guarda en archivo (sobrescribe), `>>` añade, `|` conecta la salida de un comando con la entrada del siguiente.\n" +
+      "> 💡 El **pipe** (`|`) es la base del poder de la línea de comandos: combinar herramientas pequeñas.",
+    examples: [
+      "ls -la > listado.txt guarda el resultado en un archivo.",
+      "cat /etc/passwd | grep root filtra solo la línea de root.",
+    ],
+    related: ["La shell", "El trío grep/awk/sed", "Pipes y automatización"],
+  },
+
+  // ── M11 · Bash Scripting ─────────────────────────────────────────────────
+  {
+    id: 140,
+    module: 11,
+    term: "Shebang y ejecución",
+    short: "La primera línea '#!' indica qué intérprete corre el script.",
+    detail:
+      "Un script empieza con un **shebang** que define su intérprete, y necesita permiso de ejecución para correr como programa:\n" +
+      "#!/bin/bash\n" +
+      "echo \"Hola, mundo\"\n" +
+      "Luego se le da permiso y se ejecuta:\n" +
+      "chmod +x script.sh\n" +
+      "./script.sh",
+    examples: [
+      "#!/bin/bash al inicio fuerza el uso de Bash.",
+      "chmod +x recon.sh && ./recon.sh ejecuta el script.",
+    ],
+    related: ["Variables y argumentos", "La shell", "Permisos rwx"],
+  },
+  {
+    id: 141,
+    module: 11,
+    term: "Variables y argumentos",
+    short: "Guardan datos y reciben parámetros de entrada del usuario o de otro proceso.",
+    detail:
+      "Las **variables** almacenan valores (`nombre=\"valor\"`, se leen con `$nombre`). Los **argumentos** posicionales que recibe el script son `$1`, `$2`, … y `$@` (todos):\n" +
+      "objetivo=$1\n" +
+      "echo \"Escaneando $objetivo\"\n" +
+      "> 💡 Sin comillas, los espacios rompen los valores: **entrecomilla siempre** las variables (`\"$var\"`).",
+    examples: [
+      "host=$1 toma el primer argumento de la línea de comandos.",
+      "echo \"Hay $# argumentos\" cuenta los parámetros recibidos.",
+    ],
+    related: ["Shebang y ejecución", "Condicionales y loops"],
+  },
+  {
+    id: 142,
+    module: 11,
+    term: "Condicionales y loops",
+    short: "Dan lógica al script: decidir (if) y repetir (for/while).",
+    detail:
+      "Permiten automatizar tareas repetitivas, como iterar sobre una lista de hosts o puertos:\n" +
+      "for ip in $(cat hosts.txt); do\n" +
+      "  ping -c1 $ip\n" +
+      "done\n" +
+      "Los condicionales evalúan con `[ ... ]`: existencia de archivos, comparaciones, códigos de salida.",
+    examples: [
+      "Un for que recorre IPs de un archivo y las pinguea.",
+      "if [ -f archivo ]; then ... comprueba si un archivo existe.",
+    ],
+    related: ["Variables y argumentos", "Pipes y automatización"],
+  },
+  {
+    id: 143,
+    module: 11,
+    term: "El trío grep / awk / sed",
+    short: "Las tres herramientas clásicas para buscar, extraer y transformar texto.",
+    detail:
+      "Procesar texto (logs, salidas, listas) es el 80% del scripting de seguridad:\n" +
+      "| Herramienta | Hace |\n" +
+      "|---|---|\n" +
+      "| grep | Busca/filtra líneas por patrón |\n" +
+      "| awk | Extrae columnas y procesa campos |\n" +
+      "| sed | Edita/sustituye texto en flujo |\n" +
+      "Combinadas con pipes son extremadamente potentes.",
+    examples: [
+      "grep \"Failed password\" auth.log | awk '{print $11}' extrae IPs de logins fallidos.",
+      "sed 's/http/https/g' redirecciona en un archivo.",
+    ],
+    related: ["Streams y redirección", "Pipes y automatización"],
+  },
+  {
+    id: 144,
+    module: 11,
+    term: "Pipes y automatización",
+    short: "Encadenar comandos para construir auditorías y herramientas reproducibles.",
+    detail:
+      "El **pipe** (`|`) conecta herramientas simples en flujos potentes; combinado con scripts permite **automatizar auditorías** (escaneos, parseo de resultados, reportes). La meta: convertir un proceso manual en un comando repetible.",
+    examples: [
+      "cat ips.txt | while read ip; do nmap -sV $ip; done escanea una lista.",
+      "Un script que corre nmap, filtra puertos abiertos y genera un informe.",
+    ],
+    related: ["El trío grep / awk / sed", "Condicionales y loops", "Streams y redirección"],
+  },
+
+  // ── M12 · Linux: Permisos y Hardening ────────────────────────────────────
+  {
+    id: 150,
+    module: 12,
+    term: "Permisos rwx",
+    short: "Cada archivo tiene permisos de lectura/escritura/ejecución para dueño, grupo y otros.",
+    detail:
+      "Los permisos se aplican a tres clases (**usuario / grupo / otros**) y tres acciones (**r**ead, **w**rite, e**x**ecute). Se expresan en octal:\n" +
+      "| Octal | Permiso | Significado |\n" +
+      "|---|---|---|\n" +
+      "| 4 | r-- | Lectura |\n" +
+      "| 6 | rw- | Lectura + escritura |\n" +
+      "| 7 | rwx | Todo |\n" +
+      "Se cambian con chmod:\n" +
+      "chmod 750 script.sh\n" +
+      "> ⚠️ `chmod 777` (todos pueden todo) es una mala práctica clásica de seguridad.",
+    examples: [
+      "ls -l muestra los permisos como -rwxr-x---.",
+      "chmod u+x da permiso de ejecución solo al dueño.",
+    ],
+    related: ["Propietario y grupo", "Bits especiales SUID/SGID", "Hardening y CIS Benchmarks"],
+  },
+  {
+    id: 151,
+    module: 12,
+    term: "Propietario y grupo",
+    short: "Todo archivo pertenece a un usuario y a un grupo, que determinan qué permisos aplican.",
+    detail:
+      "Cada archivo tiene un **dueño** y un **grupo**. `chown` cambia el propietario y `chgrp`/`chown :grupo` el grupo. El modelo de grupos permite dar acceso a varios usuarios sin abrir el archivo a 'otros'.\n" +
+      "chown root:admins config.conf",
+    examples: [
+      "chown www-data:www-data /var/www asigna los archivos al usuario del servidor web.",
+      "Un grupo 'devs' con acceso compartido a un directorio de proyecto.",
+    ],
+    related: ["Permisos rwx", "Gestión de usuarios y sudo"],
+  },
+  {
+    id: 152,
+    module: 12,
+    term: "Bits especiales SUID/SGID/sticky",
+    short: "Permisos avanzados que cambian con qué identidad se ejecuta un binario o cómo se comparte un directorio.",
+    detail:
+      "Tres bits especiales con gran impacto en seguridad:\n" +
+      "• **SUID** — el binario corre con los permisos de su **dueño** (no del que lo lanza). Si es root, es vía clásica de **escalada de privilegios**.\n" +
+      "• **SGID** — corre con el grupo del archivo / hereda grupo en directorios.\n" +
+      "• **Sticky bit** — en /tmp, solo el dueño puede borrar sus archivos.\n" +
+      "> ⚠️ Buscar binarios SUID es de lo primero que hace un atacante:\n" +
+      "find / -perm -4000 2>/dev/null",
+    examples: [
+      "passwd es SUID root para poder modificar /etc/shadow.",
+      "Un SUID mal configurado permite obtener una shell de root.",
+    ],
+    related: ["Permisos rwx", "Gestión de usuarios y sudo", "Hardening y CIS Benchmarks"],
+  },
+  {
+    id: 153,
+    module: 12,
+    term: "Gestión de usuarios y sudo",
+    short: "sudo concede privilegios elevados puntuales sin compartir la contraseña de root.",
+    detail:
+      "En vez de iniciar sesión como root, los usuarios usan **sudo** para ejecutar comandos concretos con privilegios, dejando **traza auditable** (`/var/log/auth.log`). La config vive en `/etc/sudoers` (editar con `visudo`).\n" +
+      "> ⚠️ Reglas sudo demasiado amplias (`ALL=(ALL) NOPASSWD: ALL`) son un riesgo de escalada.",
+    examples: [
+      "sudo apt update ejecuta solo ese comando como root.",
+      "sudo -l lista qué te permite ejecutar sudo (recon de privesc).",
+    ],
+    related: ["Bits especiales SUID/SGID", "Permisos rwx", "Mínimo privilegio"],
+  },
+  {
+    id: 154,
+    module: 12,
+    term: "Hardening y CIS Benchmarks",
+    short: "Endurecer un sistema reduciendo su superficie y siguiendo guías de configuración segura.",
+    detail:
+      "El **hardening** elimina lo innecesario y aplica configuración segura: cerrar servicios, deshabilitar root por SSH, actualizar, mínimo privilegio. Los **CIS Benchmarks** son guías consensuadas y verificables por sistema (Linux, Windows, cloud). **SELinux/AppArmor** añaden control de acceso obligatorio (MAC).",
+    examples: [
+      "Deshabilitar PermitRootLogin en sshd_config.",
+      "Aplicar el CIS Benchmark de Ubuntu y auditar con Lynis.",
+    ],
+    related: ["Gestión de usuarios y sudo", "Bits especiales SUID/SGID", "CIS Controls"],
+  },
+
+  // ── M13 · Windows: Seguridad ─────────────────────────────────────────────
+  {
+    id: 160,
+    module: 13,
+    term: "Registro de Windows",
+    short: "Base de datos jerárquica con toda la configuración del sistema y las aplicaciones.",
+    detail:
+      "El **Registro** guarda ajustes en árboles (*hives*). Los más relevantes:\n" +
+      "| Hive | Contenido |\n" +
+      "|---|---|\n" +
+      "| HKLM | Configuración global del equipo |\n" +
+      "| HKCU | Config del usuario actual |\n" +
+      "> ⚠️ Las claves **Run** (`HKCU\\...\\Run`) son un mecanismo clásico de **persistencia** de malware.",
+    examples: [
+      "Revisar claves Run para detectar autostart malicioso.",
+      "reg query para inspeccionar el registro desde consola.",
+    ],
+    related: ["Servicios y procesos", "Event Viewer y logs", "Group Policy (GPO)"],
+  },
+  {
+    id: 161,
+    module: 13,
+    term: "Servicios y procesos",
+    short: "Los servicios son programas en segundo plano; abusar de ellos da persistencia y privilegios.",
+    detail:
+      "Un **servicio** corre en background, a menudo con privilegios altos (**SYSTEM**). Los atacantes los usan para **persistencia** y **escalada**. Saber inventariar procesos/servicios es clave en respuesta a incidentes.",
+    examples: [
+      "tasklist y Get-Process listan los procesos en ejecución.",
+      "Un servicio con ruta sin comillas explotable para escalar a SYSTEM.",
+    ],
+    related: ["Registro de Windows", "Event Viewer y logs"],
+  },
+  {
+    id: 162,
+    module: 13,
+    term: "Event Viewer y Event IDs",
+    short: "El visor de eventos centraliza los logs; ciertos Event IDs son oro para la detección.",
+    detail:
+      "Windows registra todo en el **Visor de eventos** (Security, System, Application). Para seguridad, algunos **Event IDs** son críticos:\n" +
+      "| Event ID | Significado |\n" +
+      "|---|---|\n" +
+      "| 4624 | Inicio de sesión exitoso |\n" +
+      "| 4625 | Inicio de sesión fallido |\n" +
+      "| 4688 | Creación de proceso |\n" +
+      "| 4672 | Privilegios especiales asignados |\n" +
+      "> 💡 Una ráfaga de **4625** seguida de un **4624** sugiere fuerza bruta exitosa.",
+    examples: [
+      "Correlacionar 4625 repetidos para detectar password spraying.",
+      "Get-WinEvent para consultar logs desde PowerShell.",
+    ],
+    related: ["Servicios y procesos", "Defender, AMSI y ETW", "Pipeline de detección en Windows"],
+  },
+  {
+    id: 163,
+    module: 13,
+    term: "Group Policy (GPO)",
+    short: "Mecanismo centralizado para aplicar configuración y políticas de seguridad en un dominio.",
+    detail:
+      "Las **GPO** (*Group Policy Objects*) permiten imponer ajustes a miles de equipos/usuarios desde Active Directory: políticas de contraseñas, restricción de software, hardening. Son la principal herramienta de administración segura en entornos Windows.",
+    examples: [
+      "Forzar bloqueo de pantalla y complejidad de contraseña por GPO.",
+      "Deshabilitar macros de Office en toda la organización vía GPO.",
+    ],
+    related: ["Registro de Windows", "Active Directory: dominio, bosque y OU"],
+  },
+  {
+    id: 164,
+    module: 13,
+    term: "Defender, AMSI y ETW",
+    short: "La tríada de telemetría y defensa nativa de Windows que los atacantes intentan evadir.",
+    detail:
+      "Tres tecnologías clave de defensa:\n" +
+      "• **Windows Defender** — el antivirus/EDR integrado.\n" +
+      "• **AMSI** (*Antimalware Scan Interface*) — inspecciona scripts (PowerShell, macros) **en memoria**, antes de ejecutarse.\n" +
+      "• **ETW** (*Event Tracing for Windows*) — telemetría profunda del SO que alimenta a los EDR.\n" +
+      "> ⚠️ El **AMSI bypass** y el *patching* de ETW son técnicas ofensivas comunes; protegerlos (tamper protection) es esencial.",
+    examples: [
+      "AMSI bloquea un script de PowerShell malicioso ofuscado.",
+      "Un EDR usa ETW para detectar inyección de procesos.",
+    ],
+    related: ["Event Viewer y Event IDs", "PowerShell ofensivo", "Pipeline de detección en Windows"],
+  },
+
+  // ── M14 · Active Directory ───────────────────────────────────────────────
+  {
+    id: 170,
+    module: 14,
+    term: "Active Directory: dominio, bosque y OU",
+    short: "El directorio que centraliza usuarios, equipos y permisos de una red Windows.",
+    detail:
+      "**Active Directory (AD)** es la columna vertebral de las redes corporativas Windows. Su jerarquía:\n" +
+      "• **Dominio** — unidad administrativa (usuarios, equipos).\n" +
+      "• **Bosque** — conjunto de dominios que comparten esquema; el **límite de seguridad** real.\n" +
+      "• **OU (Unidad Organizativa)** — contenedor para organizar y aplicar GPO.\n" +
+      "El **Controlador de Dominio (DC)** es el servidor que autentica; comprometerlo es 'game over'.",
+    examples: [
+      "Una empresa con dominio corp.local y OUs por departamento.",
+      "Comprometer el DC = control total del dominio.",
+    ],
+    related: ["Kerberos", "LDAP", "Ataques a Active Directory"],
+  },
+  {
+    id: 171,
+    module: 14,
+    term: "Kerberos",
+    short: "El protocolo de autenticación de AD basado en tickets, sin enviar la contraseña por la red.",
+    detail:
+      "**Kerberos** autentica mediante **tickets** emitidos por el **KDC** (en el DC). Tras validar al usuario, recibe un **TGT** (*Ticket Granting Ticket*); con él pide **TGS** para servicios concretos. La contraseña nunca viaja, pero el modelo de tickets habilita ataques específicos (Kerberoasting, Golden Ticket).\n" +
+      "> 💡 Ver el diagrama 'Autenticación Kerberos' más abajo para el flujo completo.",
+    examples: [
+      "Al iniciar sesión en el dominio, el usuario obtiene un TGT.",
+      "Un Golden Ticket falsifica TGTs si se roba la cuenta krbtgt.",
+    ],
+    related: ["Active Directory: dominio, bosque y OU", "Ataques a Active Directory", "LDAP"],
+  },
+  {
+    id: 172,
+    module: 14,
+    term: "LDAP",
+    short: "El protocolo para consultar y modificar el directorio (usuarios, grupos, equipos).",
+    detail:
+      "**LDAP** (*Lightweight Directory Access Protocol*) es el lenguaje de consultas de AD. Pentesters y administradores lo usan para **enumerar** el dominio: usuarios, grupos privilegiados, políticas. Herramientas como **BloodHound** abusan de LDAP para mapear rutas de ataque.",
+    examples: [
+      "ldapsearch para enumerar usuarios del dominio.",
+      "BloodHound recolecta datos LDAP y grafica caminos a Domain Admin.",
+    ],
+    related: ["Active Directory: dominio, bosque y OU", "Kerberos", "Ataques a Active Directory"],
+  },
+  {
+    id: 173,
+    module: 14,
+    term: "Ataques a Active Directory",
+    short: "Técnicas para escalar de un usuario común a control total del dominio.",
+    detail:
+      "AD concentra el riesgo: comprometer el dominio da acceso a todo. Ataques emblemáticos:\n" +
+      "| Ataque | Idea | Defensa |\n" +
+      "|---|---|---|\n" +
+      "| Kerberoasting | Crackear tickets de cuentas de servicio | Contraseñas largas, gMSA |\n" +
+      "| Pass-the-Hash | Autenticarse con el hash, sin la clave | Credential Guard, LAPS |\n" +
+      "| DCSync | Pedir hashes replicando como un DC | Restringir permisos de replicación |\n" +
+      "| Golden Ticket | Falsificar TGTs con la clave krbtgt | Rotar krbtgt, proteger el DC |\n" +
+      "> ⚠️ La mayoría se apoya en **mínimo privilegio** débil y cuentas de servicio mal gestionadas.",
+    examples: [
+      "Kerberoasting sobre una cuenta de servicio con contraseña débil.",
+      "DCSync con Mimikatz para volcar todos los hashes del dominio.",
+    ],
+    related: ["Kerberos", "LDAP", "Mínimo privilegio"],
+  },
+
+  // ── M15 · PowerShell para Seguridad ──────────────────────────────────────
+  {
+    id: 180,
+    module: 15,
+    term: "Cmdlets (verbo-sustantivo)",
+    short: "Los comandos de PowerShell siguen el patrón predecible Verbo-Sustantivo.",
+    detail:
+      "Un **cmdlet** usa la convención **Verbo-Sustantivo** (`Get-Process`, `Set-Service`, `New-Item`), lo que hace el lenguaje fácil de descubrir. `Get-Help` y `Get-Command` permiten explorar:\n" +
+      "Get-Command -Verb Get\n" +
+      "Get-Help Get-Process -Examples",
+    examples: [
+      "Get-Process lista procesos; Stop-Process los detiene.",
+      "Get-Service muestra el estado de los servicios.",
+    ],
+    related: ["El pipeline de objetos", "PowerShell defensivo"],
+  },
+  {
+    id: 181,
+    module: 15,
+    term: "El pipeline de objetos",
+    short: "A diferencia de Bash (texto), PowerShell pasa objetos completos entre comandos.",
+    detail:
+      "El gran diferenciador: el pipe de PowerShell transporta **objetos .NET**, no texto plano. Así se filtran y ordenan por **propiedades** sin parsear cadenas:\n" +
+      "Get-Process | Where-Object { $_.CPU -gt 100 } | Sort-Object CPU\n" +
+      "> 💡 Esto hace el scripting más robusto que el parseo de texto con grep/awk.",
+    examples: [
+      "Get-Service | Where-Object Status -eq 'Running' filtra por propiedad.",
+      "Ordenar procesos por uso de memoria sin tocar texto.",
+    ],
+    related: ["Cmdlets (verbo-sustantivo)", "PowerShell defensivo"],
+  },
+  {
+    id: 182,
+    module: 15,
+    term: "PowerShell defensivo",
+    short: "Auditar y endurecer el propio PowerShell con logging y modos restringidos.",
+    detail:
+      "PowerShell es tan potente que también es un objetivo de defensa. Controles clave:\n" +
+      "• **Script Block Logging** — registra el código ejecutado (Event ID 4104).\n" +
+      "• **Transcription** — guarda transcripciones de las sesiones.\n" +
+      "• **Constrained Language Mode** — limita las capacidades peligrosas.\n" +
+      "• **AMSI** — inspecciona scripts en memoria.\n" +
+      "Juntos dan visibilidad y frenan el abuso ofensivo.",
+    examples: [
+      "Activar Script Block Logging por GPO para auditar todo.",
+      "Revisar Event ID 4104 para ver scripts ejecutados.",
+    ],
+    related: ["Defender, AMSI y ETW", "El pipeline de objetos", "PowerShell ofensivo"],
+  },
+  {
+    id: 183,
+    module: 15,
+    term: "PowerShell ofensivo",
+    short: "El mismo poder usado por atacantes para 'vivir de la tierra' sin tocar disco.",
+    detail:
+      "PowerShell es ideal para *Living off the Land*: ya viene instalado y permite operar **en memoria**. Frameworks como **PowerShell Empire** dan C2; técnicas como **AMSI bypass** y **ofuscación** evaden defensas. Por eso el logging defensivo (módulo anterior) es crítico.\n" +
+      "> ⚠️ Detectar abuso de PowerShell (descargas en memoria, EncodedCommand) es una señal de alerta clave.",
+    examples: [
+      "IEX (New-Object Net.WebClient).DownloadString(...) ejecuta código en memoria.",
+      "powershell -enc <base64> oculta el comando real.",
+    ],
+    related: ["PowerShell defensivo", "Defender, AMSI y ETW", "Ataques a Active Directory"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

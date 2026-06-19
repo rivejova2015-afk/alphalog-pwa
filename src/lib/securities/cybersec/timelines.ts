@@ -46,6 +46,31 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2018, title: "WPA3", desc: "Introduce SAE (Dragonfly) y PMF obligatorio; frena el cracking offline.", impact: "high" },
     ],
   },
+  {
+    id: 4,
+    module: 10,
+    title: "Historia de Linux y las distros de seguridad",
+    events: [
+      { year: 1991, title: "Linux", desc: "Linus Torvalds publica el kernel; nace el ecosistema libre que domina los servidores.", impact: "high" },
+      { year: 1993, title: "Debian y Slackware", desc: "Primeras distros mayores; Debian será base de Ubuntu y Kali.", impact: "medium" },
+      { year: 2003, title: "Knoppix (live CD)", desc: "Populariza el Linux 'en vivo' sin instalación, base de las distros forenses.", impact: "low" },
+      { year: 2006, title: "BackTrack", desc: "Primera distro de pentesting de referencia, precursora de Kali.", impact: "medium" },
+      { year: 2013, title: "Kali Linux", desc: "OffSec reescribe BackTrack sobre Debian; estándar de facto del pentesting.", impact: "high" },
+      { year: 2013, title: "Parrot OS", desc: "Alternativa ligera orientada a seguridad y privacidad.", impact: "low" },
+    ],
+  },
+  {
+    id: 5,
+    module: 14,
+    title: "Evolución de los ataques a Active Directory",
+    events: [
+      { year: 2000, title: "Active Directory", desc: "Microsoft lo lanza con Windows 2000; se vuelve la columna vertebral corporativa.", impact: "high" },
+      { year: 2011, title: "Mimikatz", desc: "Benjamin Delpy publica la herramienta que populariza Pass-the-Hash y el volcado de credenciales.", impact: "high" },
+      { year: 2014, title: "Kerberoasting", desc: "Tim Medin presenta el ataque a cuentas de servicio vía tickets Kerberos.", impact: "high" },
+      { year: 2015, title: "Golden Ticket", desc: "Se difunde la falsificación de TGTs abusando de la cuenta krbtgt.", impact: "high" },
+      { year: 2016, title: "BloodHound", desc: "Grafica rutas de ataque en AD usando teoría de grafos; cambia el red teaming.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

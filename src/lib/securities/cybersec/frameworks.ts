@@ -101,6 +101,36 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Evil Twin / MITM", desc: "Levanta un AP clon del SSID para interceptar tráfico o robar credenciales con portal falso.", defenses: ["Verificar certificados/HTTPS", "Validación del servidor (EAP)", "VPN"] },
     ],
   },
+  {
+    id: 7,
+    module: 13,
+    name: "Pipeline de detección en Windows",
+    kind: "flow",
+    summary:
+      "Cómo fluye la telemetría de seguridad de un endpoint Windows hasta convertirse en una alerta accionable. Cada etapa tiene una buena práctica.",
+    phases: [
+      { n: 1, name: "Event Log nativo", desc: "Windows registra logins, procesos y privilegios (Event IDs 4624/4625/4688).", defenses: ["Auditoría avanzada habilitada", "Retención adecuada de logs"] },
+      { n: 2, name: "Sysmon", desc: "Telemetría enriquecida de procesos, red y cambios (creación de procesos, hashes, conexiones).", defenses: ["Config Sysmon curada (p.ej. SwiftOnSecurity)", "Cobertura de ATT&CK"] },
+      { n: 3, name: "AMSI / ETW", desc: "Inspección en memoria de scripts y trazas profundas del SO que alimentan al EDR.", defenses: ["Tamper protection", "Anti-AMSI-bypass", "ScriptBlock logging"] },
+      { n: 4, name: "Reenvío (WEF)", desc: "Los eventos se centralizan vía Windows Event Forwarding hacia un colector.", defenses: ["Canal seguro", "Colector redundante"] },
+      { n: 5, name: "SIEM y alerta", desc: "El SIEM correlaciona, aplica reglas (Sigma) y genera alertas para el SOC.", defenses: ["Reglas mapeadas a ATT&CK", "Reducción de falsos positivos"] },
+    ],
+  },
+  {
+    id: 8,
+    module: 14,
+    name: "Autenticación Kerberos",
+    kind: "flow",
+    summary:
+      "El intercambio de tickets por el que un usuario prueba su identidad en Active Directory sin enviar nunca su contraseña. Entender el flujo explica los ataques.",
+    phases: [
+      { n: 1, name: "AS-REQ", desc: "El cliente pide autenticación al KDC, presentando un timestamp cifrado con el hash de su contraseña.", defenses: ["Pre-autenticación obligatoria", "Contraseñas fuertes (anti AS-REP roasting)"] },
+      { n: 2, name: "AS-REP (TGT)", desc: "El KDC valida y entrega el TGT (Ticket Granting Ticket), cifrado con la clave de krbtgt.", defenses: ["Proteger/rotar la cuenta krbtgt", "Monitoreo de emisión de TGT"] },
+      { n: 3, name: "TGS-REQ", desc: "Con el TGT, el cliente solicita un ticket para un servicio concreto (SPN).", defenses: ["gMSA para cuentas de servicio", "Detección de peticiones masivas (Kerberoasting)"] },
+      { n: 4, name: "TGS-REP", desc: "El KDC entrega el TGS, cifrado con el hash de la cuenta del servicio.", defenses: ["Cifrado AES (no RC4)", "Contraseñas largas en cuentas de servicio"] },
+      { n: 5, name: "AP-REQ", desc: "El cliente presenta el TGS al servicio, que lo valida y concede acceso.", defenses: ["Mínimo privilegio en SPNs", "Auditoría de accesos"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

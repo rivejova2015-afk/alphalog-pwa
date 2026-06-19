@@ -7,6 +7,7 @@ import { CERT_TRACK_IDS } from "../certifications";
 
 const PILOT_MODULES = [1, 2, 3, 4];
 const REDES_MODULES = [5, 6, 7, 8, 9];
+const SISTEMAS_MODULES = [10, 11, 12, 13, 14, 15];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -28,6 +29,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Redes (M5-M9) tiene ≥4 definiciones", () => {
     for (const m of REDES_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Sistemas (M10-M15) tiene ≥4 definiciones", () => {
+    for (const m of SISTEMAS_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -64,6 +70,10 @@ describe("FRAMEWORKS", () => {
     expect(osi!.phases).toHaveLength(7);
     expect(frameworksByModule(9).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M14 tiene el flujo de autenticación Kerberos y M13 un pipeline de detección", () => {
+    expect(frameworksByModule(14).some((f) => f.kind === "flow")).toBe(true);
+    expect(frameworksByModule(13).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -85,6 +95,10 @@ describe("TIMELINES", () => {
   it("M6 y M9 tienen líneas de tiempo (protocolos y seguridad WiFi)", () => {
     expect(timelinesByModule(6).length).toBeGreaterThanOrEqual(1);
     expect(timelinesByModule(9).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M10 y M14 tienen líneas de tiempo (Linux/distros y ataques AD)", () => {
+    expect(timelinesByModule(10).length).toBeGreaterThanOrEqual(1);
+    expect(timelinesByModule(14).length).toBeGreaterThanOrEqual(1);
   });
 });
 
