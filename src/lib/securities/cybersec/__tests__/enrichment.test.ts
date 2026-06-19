@@ -10,6 +10,7 @@ const REDES_MODULES = [5, 6, 7, 8, 9];
 const SISTEMAS_MODULES = [10, 11, 12, 13, 14, 15];
 const CRIPTO_MODULES = [16, 17, 18, 19];
 const WEB_MODULES = [20, 21, 22, 23, 24];
+const PENTEST_MODULES = [25, 26, 27, 28, 29, 30, 31, 32, 33];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -46,6 +47,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Web Security (M20-M24) tiene ≥4 definiciones", () => {
     for (const m of WEB_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Pentesting (M25-M33) tiene ≥4 definiciones", () => {
+    for (const m of PENTEST_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -96,6 +102,13 @@ describe("FRAMEWORKS", () => {
     expect(owasp!.phases).toHaveLength(10);
     expect(frameworksByModule(24).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M25 tiene la metodología de pentest (flow, 7 fases) y M29/M33 flujos", () => {
+    const metodologia = frameworksByModule(25).find((f) => f.kind === "flow");
+    expect(metodologia).toBeDefined();
+    expect(metodologia!.phases).toHaveLength(7);
+    expect(frameworksByModule(29).some((f) => f.kind === "flow")).toBe(true);
+    expect(frameworksByModule(33).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -129,6 +142,9 @@ describe("TIMELINES", () => {
   it("M20 y M21 tienen líneas de tiempo (ataques web y OWASP Top 10)", () => {
     expect(timelinesByModule(20).length).toBeGreaterThanOrEqual(1);
     expect(timelinesByModule(21).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M25 tiene línea de tiempo (historia del pentesting)", () => {
+    expect(timelinesByModule(25).length).toBeGreaterThanOrEqual(1);
   });
 });
 

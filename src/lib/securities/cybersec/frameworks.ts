@@ -195,6 +195,54 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Exfiltración", desc: "Descarga datos sensibles desde el almacenamiento accesible.", defenses: ["Cifrado + políticas de acceso", "Alertas de egress", "Logging (CloudTrail)"] },
     ],
   },
+  {
+    id: 13,
+    module: 25,
+    name: "Metodología de un pentest",
+    kind: "flow",
+    summary:
+      "Las fases estándar de un test de intrusión, de la recolección de información al reporte. Cada fase mapea a un módulo de esta categoría y tiene su contramedida defensiva.",
+    phases: [
+      { n: 1, name: "Reconocimiento", desc: "Recolectar información del objetivo (OSINT, dorking, Shodan) de forma pasiva y activa.", defenses: ["Reducir exposición pública", "Monitoreo de marca/OSINT"] },
+      { n: 2, name: "Escaneo", desc: "Descubrir hosts, puertos y servicios vivos con Nmap.", defenses: ["Firewall + IDS", "Reducir superficie expuesta"] },
+      { n: 3, name: "Enumeración", desc: "Sonsacar detalles de cada servicio (usuarios, shares, versiones).", defenses: ["Cerrar null sessions", "Restringir AXFR/SNMP"] },
+      { n: 4, name: "Análisis de vulnerabilidades", desc: "Identificar y priorizar fallos explotables (escáneres + validación).", defenses: ["Gestión de parches", "Hardening (CIS)"] },
+      { n: 5, name: "Explotación", desc: "Aprovechar una vulnerabilidad para obtener acceso (Metasploit, exploits web).", defenses: ["EDR/WAF", "Parcheo", "Mínimo privilegio"] },
+      { n: 6, name: "Post-explotación", desc: "Escalar privilegios, recolectar credenciales, pivotar y mantener acceso.", defenses: ["Segmentación", "Detección de privesc/lateral", "LAPS"] },
+      { n: 7, name: "Reporte", desc: "Documentar hallazgos, impacto y remediación priorizada para el cliente.", defenses: ["Remediar según riesgo", "Re-test de verificación"] },
+    ],
+  },
+  {
+    id: 14,
+    module: 29,
+    name: "Flujo de explotación con Metasploit",
+    kind: "flow",
+    summary:
+      "El ciclo de trabajo en msfconsole desde que se busca un módulo hasta la post-explotación. Cada paso tiene su huella detectable.",
+    phases: [
+      { n: 1, name: "search", desc: "Buscar un módulo de exploit/auxiliary acorde al servicio y versión hallados.", defenses: ["Ocultar versiones (banners)", "Parcheo al día"] },
+      { n: 2, name: "use + info", desc: "Seleccionar el módulo y revisar sus opciones y requisitos.", defenses: ["Reducir servicios expuestos"] },
+      { n: 3, name: "set options", desc: "Configurar RHOSTS, LHOST/LPORT y el payload (ej. Meterpreter).", defenses: ["Egress filtering (bloquear reverse shells)"] },
+      { n: 4, name: "check", desc: "Verificar si el objetivo es vulnerable sin lanzar el exploit (cuando el módulo lo soporta).", defenses: ["IDS/IPS de red"] },
+      { n: 5, name: "exploit", desc: "Lanzar el exploit; si tiene éxito, se abre una sesión.", defenses: ["EDR", "Memoria protegida (DEP/ASLR)"] },
+      { n: 6, name: "Meterpreter / post", desc: "Operar la sesión: escalar, volcar credenciales, pivotar, persistir.", defenses: ["Detección de post-explotación", "Monitoreo de procesos"] },
+    ],
+  },
+  {
+    id: 15,
+    module: 33,
+    name: "Pivoting y movimiento lateral",
+    kind: "flow",
+    summary:
+      "Cómo un atacante se expande desde el primer host comprometido hacia el objetivo final dentro de la red. Cada fase se contiene con segmentación y monitoreo.",
+    phases: [
+      { n: 1, name: "Compromiso inicial", desc: "Se obtiene acceso a un primer host (la 'cabeza de playa').", defenses: ["Hardening del perímetro", "EDR en endpoints"] },
+      { n: 2, name: "Túnel / port forward", desc: "Se establece un túnel (SSH, chisel, ligolo) para alcanzar la red interna.", defenses: ["Egress filtering", "Detección de túneles/beaconing"] },
+      { n: 3, name: "Descubrir la red interna", desc: "Se escanea y enumera la red ahora alcanzable a través del pivote.", defenses: ["Microsegmentación", "Detección de escaneo interno"] },
+      { n: 4, name: "Movimiento lateral", desc: "Se salta a otros hosts con credenciales robadas (PsExec, WMI, WinRM, Pass-the-Hash).", defenses: ["LAPS", "Mínimo privilegio", "Deshabilitar SMBv1"] },
+      { n: 5, name: "Alcanzar el objetivo", desc: "Se llega al activo crítico (Domain Controller, base de datos) y se cumple el objetivo.", defenses: ["Tiering de AD", "Monitoreo de cuentas privilegiadas", "Backups"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

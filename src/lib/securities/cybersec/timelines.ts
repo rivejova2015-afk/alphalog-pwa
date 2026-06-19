@@ -119,6 +119,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2021, title: "Top 10 2021", desc: "Broken Access Control sube al #1 y aparece SSRF (A10); enfoque por categorías de causa.", impact: "high" },
     ],
   },
+  {
+    id: 10,
+    module: 25,
+    title: "Historia del pentesting y sus herramientas",
+    events: [
+      { year: 1997, title: "Nmap", desc: "Fyodor publica el escáner de red que se vuelve el estándar de descubrimiento de puertos.", impact: "high" },
+      { year: 1998, title: "Nessus", desc: "Nace el escáner de vulnerabilidades más influyente (luego comercial; OpenVAS surge de su fork).", impact: "medium" },
+      { year: 2003, title: "Metasploit", desc: "H.D. Moore crea el framework que democratiza la explotación y la post-explotación.", impact: "high" },
+      { year: 2006, title: "Burp Suite", desc: "PortSwigger lanza la plataforma que se vuelve el estándar del testing web.", impact: "high" },
+      { year: 2013, title: "Kali Linux", desc: "OffSec consolida el arsenal ofensivo en una distro de referencia.", impact: "high" },
+      { year: 2016, title: "BloodHound y C2 modernos", desc: "El auge de Cobalt Strike y BloodHound profesionaliza el red teaming y el movimiento lateral.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
