@@ -46,8 +46,8 @@ Live trading requires both Coinbase CDP creds:
 
 Optional (graceful fallback when missing):
 
-- `COINGLASS_API_KEY` — for liquidation heatmap validator (currently stub)
-- `CRYPTOQUANT_API_KEY` — for exchange flows validator (currently stub)
+- `COINGLASS_API_KEY` — for liquidation heatmap validator (currently stub). The bot logs ONE warning at boot if missing (`[coinarb.startup] COINGLASS_API_KEY missing...`), then the validator returns `{ available: false }` for the lifetime of the process.
+- `CRYPTOQUANT_API_KEY` — for exchange flows validator (currently stub). Same fallback + boot warning pattern as Coinglass.
 - `ALPHALOG_PUSH_NOTIFY_URL` + `ALPHALOG_PUSH_NOTIFY_TOKEN` — push notifications on entries/exits
 
 ---
@@ -216,8 +216,8 @@ Likely cause: filter pipeline rejection. Look at `coinarb_decisions` (Supabase) 
 
 `/intelligence/algorithms` → Detalles "Coinarb 50x" → Tunables tab:
 
-- `mtf_confidence_min` (current default 0.15, range 0.10–0.50)
-- `sweep_confirm_body_ratio` (current default 0.40, range 0.30–0.60)
+- `mtf_confidence_min` (current default **0.12**, range 0.10–0.50)
+- `sweep_confirm_body_ratio` (current default **0.35**, range 0.30–0.60)
 - `pd_macro_band` (current default 0.005)
 - `pd_micro_band` (current default 0.005)
 - Per-symbol `arb_gap_min` for BTC/ETH/SOL

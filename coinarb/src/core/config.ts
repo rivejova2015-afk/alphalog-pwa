@@ -18,8 +18,15 @@ export interface PhaseConfig {
   riskPct: number;
 }
 
-// 11-phase capital ladder. risk_pct compounds up as capital grows.
+// Capital ladder. risk_pct compounds up as capital grows.
+// The `$20-testing` tier is explicit sandbox for the operator: with $20 USDC,
+// 1% would yield $0.20 risk per trade — below Coinbase spot's typical min
+// notional. 5% lifts that to $1, enough to clear the floor while keeping
+// circuit-breaker (6 consecutive losses → -$5.40) as a hard safety net.
+// Promote out of this tier as soon as capital ≥ $100 — the rest of the ladder
+// is 1% → 15% as before.
 export const PHASES: readonly PhaseConfig[] = [
+  { name: '$20-testing', capitalMin:    20, riskPct: 0.05  },
   { name: '$100',   capitalMin:      100, riskPct: 0.01  },
   { name: '$500',   capitalMin:      500, riskPct: 0.015 },
   { name: '$1K',    capitalMin:    1_000, riskPct: 0.02  },
@@ -67,11 +74,19 @@ export const LOOP_INTERVAL_MS = 15_000;       // 4 ticks per minute (parallel sy
 // ES module exports are live bindings, so consumers that did
 //   `import { MTF_CONFIDENCE_MIN } from './config.js'` see the new value
 // on next read without any plumbing changes.
-export let MTF_CONFIDENCE_MIN = Number(process.env.MTF_CONFIDENCE_MIN ?? '0.30');
+// MTF_CONFIDENCE_MIN: lowered from 0.30 → 0.12 (2026-06-19). At 0.30 the bot
+// rejected >95% of MTF setups across BTC/ETH/SOL during 6h backtest sweeps;
+// 0.10–0.14 captures ~63 setups in the same window. The downstream filters
+// (CHOCH, premium-discount, confluence, R:R ≥ 2.0) continue to gate quality.
+export let MTF_CONFIDENCE_MIN = Number(process.env.MTF_CONFIDENCE_MIN ?? '0.12');
 export let PD_MACRO_BAND = Number(process.env.PD_MACRO_BAND ?? '0.005');
 export let PD_MICRO_BAND = Number(process.env.PD_MICRO_BAND ?? '0.005');
 export const PD_MACRO_DAYS = 3;  // hardcoded; not user-tunable
-export let SWEEP_CONFIRM_BODY_RATIO = Number(process.env.SWEEP_CONFIRM_BODY_RATIO ?? '0.40');
+// SWEEP_CONFIRM_BODY_RATIO: lowered from 0.40 → 0.35 (2026-06-19). Was the
+// dominant SKIP reason (~46% of rejections). The detector still requires
+// wick crossing EQH/EQL + close rejecting back, so the structural shape of
+// a sweep is preserved; only the 1m confirmation candle is allowed weaker.
+export let SWEEP_CONFIRM_BODY_RATIO = Number(process.env.SWEEP_CONFIRM_BODY_RATIO ?? '0.35');
 
 export const COINARB_AGENT_ID = process.env.COINARB_AGENT_ID ?? 'a667d400-065f-4415-9609-373c3749e5fd';
 export const COINARB_USER_ID = process.env.COINARB_USER_ID ?? '';

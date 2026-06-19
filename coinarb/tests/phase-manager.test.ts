@@ -8,8 +8,18 @@ describe("phase-manager", () => {
       expect(pickPhase(100).riskPct).toBe(0.01);
     });
 
-    it("$0 (debajo del mínimo) → phase '$100' (default lowest)", () => {
-      expect(pickPhase(0).name).toBe("$100");
+    it("$20 exacto → phase '$20-testing' (riskPct 5%, $1/trade)", () => {
+      expect(pickPhase(20).name).toBe("$20-testing");
+      expect(pickPhase(20).riskPct).toBe(0.05);
+      expect(computeRiskUsd(20, pickPhase(20).riskPct)).toBe(1);
+    });
+
+    it("$50 (entre tiers) → sigue en '$20-testing'", () => {
+      expect(pickPhase(50).name).toBe("$20-testing");
+    });
+
+    it("$0 (debajo del mínimo) → phase '$20-testing' (default lowest)", () => {
+      expect(pickPhase(0).name).toBe("$20-testing");
     });
 
     it("$500 exacto → phase '$500'", () => {
@@ -38,8 +48,8 @@ describe("phase-manager", () => {
       expect(pickPhase(10_000_000).name).toBe("$5M");
     });
 
-    it("phases son monotónicas (riskPct nunca decrece con más capital)", () => {
-      const capitals = [50, 500, 5000, 50_000, 500_000, 5_000_000];
+    it("phases son monotónicas desde $100 hacia arriba (el tier $20-testing es deliberadamente más agresivo)", () => {
+      const capitals = [100, 500, 5000, 50_000, 500_000, 5_000_000];
       const risks = capitals.map((c) => pickPhase(c).riskPct);
       for (let i = 1; i < risks.length; i++) {
         expect(risks[i]).toBeGreaterThanOrEqual(risks[i - 1]);
