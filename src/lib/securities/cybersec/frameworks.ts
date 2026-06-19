@@ -448,6 +448,36 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Shellcode o ROP", desc: "Se ejecuta el payload: shellcode inyectado o, si el stack no es ejecutable, una cadena ROP.", defenses: ["DEP/NX (stack no ejecutable)", "CFI"] },
     ],
   },
+  {
+    id: 29,
+    module: 61,
+    name: "Full chain de explotación de navegador",
+    kind: "flow",
+    summary:
+      "Cómo un sitio web malicioso pasa de un bug en JavaScript a controlar el sistema. Cada eslabón tiene una mitigación que obliga a encadenar más bugs.",
+    phases: [
+      { n: 1, name: "Bug en el motor JS", desc: "Una vulnerabilidad (type confusion, bug del JIT) en el motor que ejecuta el JS de la página.", defenses: ["Fuzzing del motor", "Hardening del JIT", "Parcheo rápido"] },
+      { n: 2, name: "Primitiva addrof/fakeobj", desc: "Se transforma el bug en saber direcciones de objetos y fabricar objetos falsos.", defenses: ["Pointer compression", "Aislamiento del heap JS"] },
+      { n: 3, name: "Lectura/escritura arbitraria", desc: "Con addrof+fakeobj se obtiene R/W en el espacio del renderer.", defenses: ["Hardened allocators", "Guard pages"] },
+      { n: 4, name: "Ejecución en el renderer", desc: "Se sobrescribe un puntero de función / buffer JIT para ejecutar código nativo.", defenses: ["W^X en el JIT", "CFG/CFI"] },
+      { n: 5, name: "Sandbox escape", desc: "Un segundo bug (broker IPC, kernel, driver) escapa del sandbox a privilegios del sistema.", defenses: ["Site isolation", "Sandbox estricto", "Kernel hardening"] },
+    ],
+  },
+  {
+    id: 30,
+    module: 62,
+    name: "Cadena ROP (Return-Oriented Programming)",
+    kind: "flow",
+    summary:
+      "Cómo se logra ejecución de código cuando DEP impide inyectar shellcode: reutilizando trozos del propio binario. Cada fase enfrenta una mitigación.",
+    phases: [
+      { n: 1, name: "DEP/NX bloquea el shellcode", desc: "El stack/heap no son ejecutables, así que el shellcode inyectado no puede correr — hay que reutilizar código.", defenses: ["DEP/NX (punto de partida)"] },
+      { n: 2, name: "Leak para vencer ASLR", desc: "Se filtra una dirección (de libc o del binario) para conocer dónde están los gadgets.", defenses: ["ASLR (direcciones impredecibles)", "PIE"] },
+      { n: 3, name: "Localizar gadgets", desc: "Se buscan secuencias útiles que terminan en ret/jmp (ROPgadget, ropper).", defenses: ["Binarios pequeños/strip", "Diversificación de código"] },
+      { n: 4, name: "Encadenar gadgets", desc: "Se construye la cadena en el stack para cargar registros y preparar la llamada.", defenses: ["Stack canary", "CET shadow stack"] },
+      { n: 5, name: "Llamar a mprotect/system", desc: "La cadena invoca una función/syscall (mprotect→shellcode, o system) y ejecuta.", defenses: ["CFI/IBT", "seccomp (limitar syscalls)"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

@@ -225,6 +225,20 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2015, title: "Rust", desc: "La seguridad de memoria por diseño empieza a desplazar a C/C++ en software crítico.", impact: "medium" },
     ],
   },
+  {
+    id: 18,
+    module: 59,
+    title: "La carrera de mitigaciones de explotación",
+    events: [
+      { year: 1996, title: "Smashing the Stack", desc: "El artículo de Aleph One populariza el buffer overflow; arranca la era del exploiting moderno.", impact: "high" },
+      { year: 2001, title: "Stack canaries", desc: "ProPolice/StackGuard detectan el pisado de la dirección de retorno.", impact: "medium" },
+      { year: 2004, title: "DEP / NX", desc: "El bit No-eXecute impide ejecutar el stack/heap; muere el shellcode inyectado directo.", impact: "high" },
+      { year: 2005, title: "ASLR", desc: "Aleatoriza las direcciones; obliga a los exploits a filtrar memoria primero.", impact: "high" },
+      { year: 2007, title: "ROP formalizado", desc: "Shacham formaliza el Return-Oriented Programming, la respuesta a DEP.", impact: "high" },
+      { year: 2014, title: "CFI", desc: "La integridad de flujo de control empieza a frenar el code-reuse.", impact: "medium" },
+      { year: 2020, title: "Intel CET", desc: "Shadow stack e IBT por hardware elevan el coste de ROP/JOP.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

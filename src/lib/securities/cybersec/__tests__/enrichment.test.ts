@@ -18,6 +18,7 @@ const BLUE_MODULES = [42, 43, 44];
 const CLOUD_MODULES = [45, 46, 47, 48];
 const ESPEC_MODULES = [49, 50];
 const PROG_MODULES = [51, 52, 53, 54, 55, 56, 57, 58];
+const EXPLOIT_MODULES = [59, 60, 61, 62];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -94,6 +95,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Programación (M51-M58) tiene ≥4 definiciones", () => {
     for (const m of PROG_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Exploit Dev Avanzado (M59-M62) tiene ≥4 definiciones", () => {
+    for (const m of EXPLOIT_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -190,6 +196,10 @@ describe("FRAMEWORKS", () => {
   it("M55 tiene la anatomía de un buffer overflow (flow)", () => {
     expect(frameworksByModule(55).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M61 (full chain navegador) y M62 (cadena ROP) tienen un flow", () => {
+    expect(frameworksByModule(61).some((f) => f.kind === "flow")).toBe(true);
+    expect(frameworksByModule(62).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -247,6 +257,9 @@ describe("TIMELINES", () => {
   });
   it("M51 tiene línea de tiempo (lenguajes en ciberseguridad)", () => {
     expect(timelinesByModule(51).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M59 tiene línea de tiempo (mitigaciones de explotación)", () => {
+    expect(timelinesByModule(59).length).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -4227,6 +4227,256 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Estructura HTML", "Formularios e inputs", "Evasión de filtros"],
   },
+
+  // ── M59 · Heap Exploitation ──────────────────────────────────────────────
+  {
+    id: 620,
+    module: 59,
+    term: "El heap de glibc",
+    short: "La memoria dinámica se gestiona en 'chunks' agrupados en listas (bins) para reusarlos.",
+    detail:
+      "El **heap** sirve la memoria dinámica (`malloc`/`free`). glibc la organiza en **chunks** (con cabeceras de tamaño y flags) y, al liberarlos, los guarda en listas llamadas **bins** para reutilizarlos. Entender esa estructura es lo que permite **corromperla** de forma controlada.\n" +
+      "> 💡 La metadata de los chunks vive *junto* a los datos: por eso un overflow de heap puede pisar punteros de gestión.",
+    examples: [
+      "Un overflow que sobrescribe el campo size del chunk siguiente.",
+      "Inspeccionar el heap con el comando 'heap' de pwndbg/gef.",
+    ],
+    related: ["tcache y fastbin", "Use-after-free y double free", "Gestión de memoria"],
+  },
+  {
+    id: 621,
+    module: 59,
+    term: "tcache y fastbin",
+    short: "Listas rápidas de chunks libres, simples de envenenar para lograr escritura arbitraria.",
+    detail:
+      "**tcache** (per-thread) y **fastbin** son listas enlazadas simples de chunks pequeños liberados, pensadas para velocidad — con pocas comprobaciones. El **tcache poisoning** sobrescribe el puntero `next` de un chunk libre para que el siguiente `malloc` devuelva una **dirección elegida** por el atacante.\n" +
+      "> 💡 El tcache poisoning es hoy la primitiva de heap más usada por su simplicidad.",
+    examples: [
+      "Envenenar el tcache para que malloc devuelva un puntero a __free_hook.",
+      "Un double free en fastbin para duplicar un chunk.",
+    ],
+    related: ["El heap de glibc", "Use-after-free y double free", "Técnicas 'House of'"],
+  },
+  {
+    id: 622,
+    module: 59,
+    term: "Use-after-free y double free",
+    short: "Usar o liberar memoria ya liberada corrompe el heap de forma explotable.",
+    detail:
+      "• **Use-after-free (UAF)** — se sigue usando un puntero a memoria ya liberada; si el atacante reocupa ese chunk, controla los datos (o una vtable).\n" +
+      "• **Double free** — liberar dos veces el mismo chunk corrompe los bins y permite reasignaciones solapadas.\n" +
+      "> ⚠️ Ambos son la base de la mayoría de los exploits de heap modernos (navegadores, kernel).",
+    examples: [
+      "Un UAF en un objeto C++ que permite secuestrar su vtable.",
+      "Un double free que habilita tcache poisoning.",
+    ],
+    related: ["tcache y fastbin", "El heap de glibc", "Vulnerabilidades de kernel"],
+  },
+  {
+    id: 623,
+    module: 59,
+    term: "Técnicas 'House of'",
+    short: "Familia de ataques clásicos al asignador para lograr escritura arbitraria.",
+    detail:
+      "Las técnicas **'House of …'** (Force, Spirit, Orange, Einherjar) abusan de la lógica del asignador de glibc para conseguir una **escritura casi arbitraria** o solapar chunks. Cada una explota una parte distinta (el top chunk, el unsorted bin, etc.) y va cambiando según evoluciona glibc.\n" +
+      "> 💡 'House of Orange' encadena un overflow del top chunk con el flujo de `_IO_FILE` para ejecución de código.",
+    examples: [
+      "House of Force para extender el top chunk a una dirección objetivo.",
+      "House of Orange combinando heap y file streams.",
+    ],
+    related: ["El heap de glibc", "tcache y fastbin", "La carrera de mitigaciones de explotación"],
+  },
+
+  // ── M60 · Kernel Exploitation ────────────────────────────────────────────
+  {
+    id: 630,
+    module: 60,
+    term: "Kernel vs user space",
+    short: "El kernel corre con privilegio total; explotarlo da control absoluto de la máquina.",
+    detail:
+      "El SO separa el **user space** (apps, sin privilegios) del **kernel space** (privilegio total, ring 0). Un exploit de kernel parte de un proceso sin privilegios y, abusando de un fallo en el kernel o un driver, **escala a root/SYSTEM** o ejecuta código en ring 0.\n" +
+      "> ⚠️ Un bug de kernel suele significar compromiso **total** del sistema, saltándose toda contención de user space.",
+    examples: [
+      "Escalar de usuario normal a root vía un driver vulnerable.",
+      "Un syscall que valida mal un puntero de user space.",
+    ],
+    related: ["Vulnerabilidades de kernel", "Primitivas de escalada", "Mitigaciones de kernel"],
+  },
+  {
+    id: 631,
+    module: 60,
+    term: "Vulnerabilidades de kernel",
+    short: "UAF, out-of-bounds y race conditions en el kernel y sus drivers.",
+    detail:
+      "Las clases más comunes: **use-after-free**, **out-of-bounds** (lectura/escritura), **race conditions** (TOCTOU) y confusión de tipos, a menudo en **drivers** y subsistemas (la mayor superficie). Un fallo de validación de un puntero de user space en un `ioctl` es un clásico.\n" +
+      "> 💡 La mayoría de los 0-days de kernel viven en drivers de terceros, no en el core.",
+    examples: [
+      "Un UAF en un driver gráfico explotable desde una app.",
+      "Una race condition que gana una ventana para escribir fuera de límites.",
+    ],
+    related: ["Kernel vs user space", "Primitivas de escalada", "Use-after-free y double free"],
+  },
+  {
+    id: 632,
+    module: 60,
+    term: "Primitivas de escalada",
+    short: "Objetivos clásicos en memoria de kernel que convierten un bug en root.",
+    detail:
+      "Tras lograr una escritura en kernel, se apunta a **primitivas** conocidas:\n" +
+      "• **`modprobe_path`** — sobrescribir esta cadena para ejecutar un binario propio como root.\n" +
+      "• **struct `cred`** — poner `uid=0` en las credenciales del proceso actual.\n" +
+      "• **`commit_creds(prepare_kernel_cred(0))`** — el patrón clásico para volverse root.\n" +
+      "> 💡 Estas primitivas convierten una escritura limitada en una escalada completa y fiable.",
+    examples: [
+      "Sobrescribir modprobe_path a /tmp/x para ejecutar como root.",
+      "Parchear el struct cred del proceso para uid 0.",
+    ],
+    related: ["Vulnerabilidades de kernel", "Kernel vs user space", "Mitigaciones de kernel"],
+  },
+  {
+    id: 633,
+    module: 60,
+    term: "Mitigaciones de kernel",
+    short: "SMEP, SMAP, KASLR y KPTI dificultan la explotación de kernel.",
+    detail:
+      "El kernel moderno se defiende con varias mitigaciones:\n" +
+      "| Mitigación | Qué impide |\n" +
+      "|---|---|\n" +
+      "| SMEP | Ejecutar código de user space en kernel |\n" +
+      "| SMAP | Acceder a datos de user space desde kernel |\n" +
+      "| KASLR | Direcciones de kernel predecibles |\n" +
+      "| KPTI | Fuga de direcciones (Meltdown) |\n" +
+      "El bypass suele requerir un **leak** (contra KASLR) y **ROP en kernel** (contra SMEP).",
+    examples: [
+      "Un infoleak de kernel para derrotar KASLR.",
+      "ROP en kernel para sortear SMEP.",
+    ],
+    related: ["Primitivas de escalada", "Cadena ROP", "Side-channels microarquitectónicos"],
+  },
+
+  // ── M61 · Browser Exploitation ───────────────────────────────────────────
+  {
+    id: 640,
+    module: 61,
+    term: "Arquitectura del navegador y motor JS",
+    short: "Multiproceso y sandbox: el renderer no confía en sí mismo, por eso hace falta una full chain.",
+    detail:
+      "Los navegadores son **multiproceso**: el **renderer** (que ejecuta JS y HTML no confiables) corre en un **sandbox** aislado del resto. El **motor JS** (V8, JavaScriptCore) incluye un **JIT** que compila JS a código máquina — superficie compleja y rica en bugs.\n" +
+      "> 💡 Por el sandbox, comprometer el renderer **no** es suficiente: hace falta un segundo bug para escapar (full chain).",
+    examples: [
+      "El renderer de Chrome aislado por sitio (site isolation).",
+      "El JIT optimizando una función caliente a código nativo.",
+    ],
+    related: ["Vulnerabilidades del motor JS", "Primitivas de explotación", "Sandbox escape y full chain"],
+  },
+  {
+    id: 641,
+    module: 61,
+    term: "Vulnerabilidades del motor JS",
+    short: "Type confusion y bugs del JIT son la vía clásica de entrada en un navegador.",
+    detail:
+      "Las vulnerabilidades estrella del motor JS:\n" +
+      "• **Type confusion** — el motor trata un objeto como de un tipo que no es, leyendo/escribiendo fuera de su forma real.\n" +
+      "• **Bugs del JIT** — el compilador asume invariantes incorrectas (ej. eliminación errónea de bounds checks).\n" +
+      "> 💡 Un bug de type confusion suele dar directamente una primitiva de lectura/escritura relativa muy potente.",
+    examples: [
+      "Un JIT que elimina un bounds check necesario por un side effect.",
+      "Type confusion entre dos clases con layout distinto.",
+    ],
+    related: ["Arquitectura del navegador y motor JS", "Primitivas de explotación", "Use-after-free y double free"],
+  },
+  {
+    id: 642,
+    module: 61,
+    term: "Primitivas de explotación",
+    short: "addrof/fakeobj y la lectura/escritura arbitraria: los ladrillos del exploit de navegador.",
+    detail:
+      "Desde un bug se construyen **primitivas**:\n" +
+      "• **addrof** — obtener la dirección de un objeto JS.\n" +
+      "• **fakeobj** — fabricar un objeto falso en una dirección elegida.\n" +
+      "Combinadas dan **lectura/escritura arbitraria** en el espacio del renderer, con la que se sobrescribe un puntero de función o se hace ejecutable un buffer con el shellcode.\n" +
+      "> 💡 'addrof + fakeobj → R/W arbitrario → RCE' es el esqueleto de casi todo exploit de motor JS.",
+    examples: [
+      "Construir R/W arbitrario a partir de un type confusion.",
+      "Sobrescribir el puntero de una función JIT-compileada con shellcode.",
+    ],
+    related: ["Vulnerabilidades del motor JS", "Sandbox escape y full chain", "Shellcode básico"],
+  },
+  {
+    id: 643,
+    module: 61,
+    term: "Sandbox escape y full chain",
+    short: "Encadenar el bug del renderer con otro para salir del sandbox hasta el sistema.",
+    detail:
+      "Lograr ejecución en el renderer no basta: está en un **sandbox**. La **full chain** encadena ese primer bug con un **segundo** (en el proceso broker, el kernel o un driver) para **escapar** y obtener ejecución con privilegios del sistema. Las cadenas reales (ej. de los Pwn2Own) combinan 2-3 bugs.\n" +
+      "> ⚠️ Por eso un solo bug de navegador rara vez es 'crítico' por sí mismo sin el escape.",
+    examples: [
+      "Renderer RCE + bug de kernel para SYSTEM (cadena de Pwn2Own).",
+      "Escapar vía una IPC mal validada al proceso broker.",
+    ],
+    related: ["Primitivas de explotación", "Arquitectura del navegador y motor JS", "Kernel vs user space"],
+  },
+
+  // ── M62 · ROP/JOP Avanzado y Bypass de Mitigaciones ──────────────────────
+  {
+    id: 650,
+    module: 62,
+    term: "Code-reuse attacks",
+    short: "Si no puedes inyectar código, reutiliza el que ya existe en el binario.",
+    detail:
+      "Con **DEP/NX** el stack/heap no son ejecutables, así que el shellcode inyectado no corre. La respuesta son los **code-reuse attacks**: en vez de inyectar código, se **reutiliza** el ya presente (el binario, libc) encadenando fragmentos para lograr el efecto deseado. ROP y JOP son sus formas principales.\n" +
+      "> 💡 ROP nació justamente como respuesta a DEP: no necesita ejecutar memoria 'nueva'.",
+    examples: [
+      "ret2libc llamando a system('/bin/sh') sin shellcode propio.",
+      "Reusar gadgets del binario para preparar una syscall.",
+    ],
+    related: ["Cadena ROP", "JOP y automatización", "Buffer overflow"],
+  },
+  {
+    id: 651,
+    module: 62,
+    term: "Construcción de cadenas ROP",
+    short: "Encadenar 'gadgets' (trozos que terminan en ret) para ejecutar lógica arbitraria.",
+    detail:
+      "Un **gadget** es una secuencia corta de instrucciones que termina en `ret` (ej. `pop rdi; ret`). Encadenando gadgets en el stack se controlan registros y se invocan funciones/**syscalls** — una mini-máquina virtual hecha de pedazos del binario.\n" +
+      "pop rdi; ret    ; carga el 1er argumento\n" +
+      "> 💡 Objetivo típico: llamar a `mprotect` para volver ejecutable una región y saltar al shellcode, o a `system`.",
+    examples: [
+      "Una cadena que pone los argumentos y llama a execve.",
+      "ROP a mprotect(addr, len, RWX) y luego al shellcode.",
+    ],
+    related: ["Code-reuse attacks", "JOP y automatización", "CFI e Intel CET"],
+  },
+  {
+    id: 652,
+    module: 62,
+    term: "JOP y automatización",
+    short: "Variante basada en saltos (no en ret) y herramientas para hallar gadgets.",
+    detail:
+      "El **JOP** (*Jump-Oriented Programming*) encadena gadgets que terminan en **saltos** (`jmp`) en vez de `ret`, evadiendo defensas centradas solo en `ret`. Encontrar gadgets a mano es inviable, así que se usan herramientas: **ROPgadget**, **ropper**, **angrop**.\n" +
+      "ROPgadget --binary ./vuln | grep 'pop rdi'",
+    examples: [
+      "Usar ropper para listar gadgets útiles del binario.",
+      "JOP cuando una mitigación vigila el flujo de los ret.",
+    ],
+    related: ["Construcción de cadenas ROP", "Code-reuse attacks", "CFI e Intel CET"],
+  },
+  {
+    id: 653,
+    module: 62,
+    term: "CFI e Intel CET",
+    short: "Mitigaciones que protegen el flujo de control para frenar ROP/JOP.",
+    detail:
+      "Las defensas modernas atacan la raíz del code-reuse:\n" +
+      "• **CFI** (*Control-Flow Integrity*) — valida que los saltos/llamadas indirectas van a destinos legítimos.\n" +
+      "• **Intel CET** — **shadow stack** (detecta retornos manipulados) + **IBT** (limita destinos de saltos indirectos).\n" +
+      "> ⚠️ No son perfectas: hay bypass (gadgets 'CFI-válidos', ataques a datos), pero suben mucho el coste del exploit.",
+    examples: [
+      "Una shadow stack que detecta el ROP al retornar a un gadget.",
+      "CFI que bloquea una llamada indirecta a un gadget arbitrario.",
+    ],
+    related: ["Construcción de cadenas ROP", "JOP y automatización", "La carrera de mitigaciones de explotación"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
