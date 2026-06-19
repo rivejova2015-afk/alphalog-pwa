@@ -20,8 +20,19 @@ type Props = {
   streamingContent?: string;
 };
 
-function renderMarkdown(text: string): string {
+function escapeHtml(text: string): string {
   return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// SECURITY (audit 2026-06, Área 3 — XSS): escape HTML BEFORE applying the
+// markdown regexes so user/LLM content can never inject tags or event handlers
+// (e.g. `<img onerror=...>`). The replacements below only add our own safe tags
+// on top of already-escaped text. Exported for regression testing.
+export function renderMarkdown(text: string): string {
+  return escapeHtml(text)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/^### (.+)$/gm, "<h3 class='font-semibold text-slate-200 mt-3 mb-1'>$1</h3>")

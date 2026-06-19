@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { decryptText, decryptNumeric } from "@/lib/security/encryption";
 import { asString } from "@/lib/validation/nullGuards";
+import { requireFreshStepUp } from "@/lib/security/stepUp";
 import { logError } from "@/lib/log";
 
 const CSV_HEADERS = [
@@ -50,6 +51,15 @@ export async function GET(request: NextRequest) {
 
     if (userError || !userData?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // SECURITY (audit 2026-06, Área 13): data export requires a recent MFA step-up.
+    const stepUp = await requireFreshStepUp(supabase);
+    if (!stepUp.ok) {
+      return NextResponse.json(
+        { error: "step_up_required", reason: stepUp.reason },
+        { status: stepUp.status }
+      );
     }
 
     const url = new URL(request.url);

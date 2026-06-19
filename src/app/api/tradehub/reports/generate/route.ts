@@ -216,7 +216,11 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    fetch(`${request.headers.get('origin')}/api/push/notify-user`, {
+    // SECURITY: use the app's own configured URL, never the attacker-controllable
+    // `Origin` request header — sending it there would leak INTERNAL_API_SECRET
+    // (SSRF + secret exfiltration). Mirrors every other notify-user caller.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://alphalog.io';
+    fetch(`${appUrl}/api/push/notify-user`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

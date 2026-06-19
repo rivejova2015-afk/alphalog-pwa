@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
+import { validatePassword } from "@/lib/security/passwordPolicy";
 
 export default function SetPasswordPage() {
   const [loading, setLoading] = useState(false);
@@ -34,8 +35,9 @@ export default function SetPasswordPage() {
     setError(null);
     setMessage(null);
 
-    if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.ok) {
+      setError(pwCheck.error!);
       return;
     }
     if (password !== confirmPassword) {

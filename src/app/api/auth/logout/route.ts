@@ -8,8 +8,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { logError } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
 
@@ -30,11 +31,21 @@ export async function POST() {
       }
     );
 
+    // Capture the user before signOut so we can record who logged out.
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { error } = await supabase.auth.signOut();
 
     if (error) {
       logError("Auth", { component: "auth.logout", message: error.message });
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (user) {
+      await logAuditFromRequest(
+        { userId: user.id, action: "logout", resourceType: "auth_session", status: "success" },
+        request
+      );
     }
 
     return NextResponse.json({ success: true });

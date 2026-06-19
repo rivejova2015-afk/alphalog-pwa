@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { checkAiRateLimit } from '@/lib/security/aiRateLimit';
 import { computeIntegrityHash } from '@/lib/security/integrity';
 import { encryptNumeric, encryptForDomain } from '@/lib/security/encryption';
+import { requireFreshStepUp } from '@/lib/security/stepUp';
 import { logError } from "@/lib/log";
 
 const createSchema = z.object({
@@ -53,6 +54,16 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const userId = sessionData.session.user.id;
+
+    // SECURITY (audit 2026-06, Área 13): financial write requires a recent MFA
+    // step-up, not just an old AAL2 session.
+    const stepUp = await requireFreshStepUp(supabase);
+    if (!stepUp.ok) {
+      return Response.json(
+        { success: false, error: 'step_up_required', reason: stepUp.reason },
+        { status: stepUp.status }
+      );
+    }
 
     // Rate limit: 10 payout creates per hour (prevents spam)
     const { allowed, retryAfterSeconds } = await checkAiRateLimit(userId, 'treasury-payout-create', 10);
