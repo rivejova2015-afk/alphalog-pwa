@@ -44,6 +44,9 @@ const args = process.argv.slice(2);
 const daysArg = args.find(a => a.startsWith('--days='));
 const DAYS = daysArg ? Math.max(1, Math.min(30, Number(daysArg.split('=')[1] ?? '30'))) : null;
 const STEP_MIN = 15;                              // simulate one decision per 15 minutes
+// When --json is passed, the script prints a machine-readable JSON summary on
+// stdout AFTER the human-readable logs. CI quality gate scripts read this.
+const JSON_OUTPUT = args.includes('--json');
 
 // ─── Snapshot mode (legacy default) ──────────────────────────────────────────
 
@@ -287,6 +290,33 @@ async function main(): Promise<void> {
     console.log(`\n=== AGGREGATE (${DAYS}d) ===`);
     console.log(`  Total entries:  ${totalEntries} across ${SYMBOLS.length} symbols`);
     console.log(`  Combined PnL:   ${totalPnlR.toFixed(2)}R`);
+
+    if (JSON_OUTPUT) {
+      const wins = results.reduce((s, r) => s + r.entries.filter(e => e.outcome === 'TP').length, 0);
+      const aggregateWinRate = totalEntries > 0 ? wins / totalEntries : 0;
+      // JSON shape consumed by scripts/check-backtest-threshold.ts
+      const summary = {
+        mode: 'replay' as const,
+        windowDays: DAYS,
+        mtfConfidenceMin: MTF_CONFIDENCE_MIN,
+        rrMin: RR_MIN,
+        aggregate: {
+          totalEntries,
+          totalPnlR,
+          winRate: aggregateWinRate,
+        },
+        symbols: results.map(r => ({
+          symbol: r.symbol,
+          entries: r.entries.length,
+          winRate: r.winRate,
+          totalPnlR: r.totalPnlR,
+          bestRun: r.bestRun,
+          worstRun: r.worstRun,
+          blockedBy: r.blockedBy,
+        })),
+      };
+      process.stdout.write('\n--- JSON ---\n' + JSON.stringify(summary) + '\n');
+    }
   } else {
     console.log(`Coinarb backtest snapshot — MTF_CONFIDENCE_MIN=${MTF_CONFIDENCE_MIN}, symbols=${SYMBOLS.join(',')}\n`);
     const reports: SymbolReport[] = [];
@@ -303,6 +333,18 @@ async function main(): Promise<void> {
     console.log(`\n=== SUMMARY ===`);
     console.log(`  Would enter: ${wouldEnter}/${reports.length}`);
     console.log(`  Blocked by:  ${Object.entries(blockedBy).map(([k, v]) => `${k}=${v}`).join(', ') || 'none'}`);
+
+    if (JSON_OUTPUT) {
+      const summary = {
+        mode: 'snapshot' as const,
+        mtfConfidenceMin: MTF_CONFIDENCE_MIN,
+        wouldEnter,
+        total: reports.length,
+        blockedBy,
+        symbols: reports.map(r => ({ symbol: r.symbol, wouldEnter: r.wouldEnter, blockedAt: r.blockedAt })),
+      };
+      process.stdout.write('\n--- JSON ---\n' + JSON.stringify(summary) + '\n');
+    }
   }
 }
 
