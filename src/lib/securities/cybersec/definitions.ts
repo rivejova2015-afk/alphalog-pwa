@@ -2455,6 +2455,200 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Movimiento lateral", "Defensa en profundidad", "DMZ y segmentación de red"],
   },
+
+  // ── M34 · Ingeniería Social ──────────────────────────────────────────────
+  {
+    id: 370,
+    module: 34,
+    term: "Ingeniería social",
+    short: "El 'hackeo humano': manipular a las personas para que rompan la seguridad.",
+    detail:
+      "La **ingeniería social** explota la psicología en vez de la tecnología: engaña a las personas para que revelen información, hagan clic o concedan acceso. Es el vector de **la mayoría de las brechas**, porque las personas suelen ser más fáciles de manipular que los sistemas de parchear.\n" +
+      "> 💡 Por eso la **concienciación** del personal es uno de los controles con mejor relación coste/beneficio.",
+    examples: [
+      "Una llamada haciéndose pasar por soporte técnico para pedir la contraseña.",
+      "Un correo urgente del 'CEO' pidiendo una transferencia.",
+    ],
+    related: ["Los 6 principios de Cialdini", "Pretexting", "Anatomía de un phishing"],
+  },
+  {
+    id: 371,
+    module: 34,
+    term: "Los 6 principios de Cialdini",
+    short: "Los gatillos psicológicos de la persuasión que todo ingeniero social explota.",
+    detail:
+      "Robert Cialdini identificó **6 principios** de influencia; el atacante los usa como ganchos:\n" +
+      "| Principio | Gancho que explota |\n" +
+      "|---|---|\n" +
+      "| Reciprocidad | Devolver un favor recibido |\n" +
+      "| Compromiso/coherencia | Ser consistente con lo ya dicho |\n" +
+      "| Prueba social | Hacer lo que hacen los demás |\n" +
+      "| Autoridad | Obedecer a una figura de poder |\n" +
+      "| Simpatía | Confiar en quien nos cae bien |\n" +
+      "| Escasez | Actuar por miedo a perder algo |\n" +
+      "> 💡 Ver el diagrama 'Los 6 principios de Cialdini' más abajo con la defensa de cada uno.",
+    examples: [
+      "Autoridad: un correo del 'director de IT' exigiendo acción.",
+      "Escasez: 'tu cuenta se cerrará en 24 h, verifica ya'.",
+    ],
+    related: ["Ingeniería social", "Pretexting", "Anatomía de un phishing"],
+  },
+  {
+    id: 372,
+    module: 34,
+    term: "Pretexting",
+    short: "Inventar un escenario creíble (un pretexto) para ganarse la confianza y sonsacar datos.",
+    detail:
+      "El **pretexting** construye una **historia falsa** y una identidad (soporte técnico, banco, auditor) para que la víctima coopere. A diferencia del phishing oportunista, es **dirigido y elaborado**, apoyado en OSINT previo para sonar legítimo.",
+    examples: [
+      "Hacerse pasar por el proveedor de internet para 'verificar' la red.",
+      "Fingir ser un empleado nuevo que necesita acceso 'urgente'.",
+    ],
+    related: ["Ingeniería social", "Vishing y smishing", "Los 6 principios de Cialdini"],
+  },
+  {
+    id: 373,
+    module: 34,
+    term: "Baiting, tailgating y dumpster diving",
+    short: "Técnicas que combinan cebo, acceso físico y basura para comprometer a la víctima.",
+    detail:
+      "Tres técnicas clásicas, varias con componente **físico**:\n" +
+      "• **Baiting** — dejar un cebo (un USB 'perdido' con malware) para que alguien lo conecte por curiosidad.\n" +
+      "• **Tailgating** (*piggybacking*) — colarse a una zona restringida siguiendo a alguien con acceso.\n" +
+      "• **Dumpster diving** — buscar información sensible en la basura (papeles, discos).",
+    examples: [
+      "Un USB con etiqueta 'Salarios 2024' abandonado en el parking.",
+      "Entrar tras un empleado cargando cajas para que te abra la puerta.",
+    ],
+    related: ["Ingeniería social", "Pretexting", "Reconocimiento pasivo vs activo"],
+  },
+  {
+    id: 374,
+    module: 34,
+    term: "Vishing y smishing",
+    short: "Ingeniería social por canales de voz (vishing) y SMS (smishing).",
+    detail:
+      "El engaño no vive solo en el correo:\n" +
+      "• **Vishing** — *voice phishing*: llamadas que suplantan al banco, soporte o un directivo (hoy potenciado con **clonación de voz por IA**).\n" +
+      "• **Smishing** — *SMS phishing*: mensajes con enlaces maliciosos (falsa entrega de paquete, alerta bancaria).\n" +
+      "> ⚠️ El **hackeo de Twitter (2020)** empezó con un **vishing** a empleados.",
+    examples: [
+      "Una llamada 'del banco' pidiendo el código de verificación.",
+      "Un SMS de 'tu paquete está retenido, paga aquí'.",
+    ],
+    related: ["Pretexting", "Ingeniería social", "Anatomía de un phishing"],
+  },
+  {
+    id: 375,
+    module: 34,
+    term: "SET (Social-Engineer Toolkit)",
+    short: "El framework de referencia para automatizar ataques de ingeniería social.",
+    detail:
+      "El **SET** (*Social-Engineer Toolkit*) automatiza vectores de ingeniería social: **clonado de páginas** de login para robo de credenciales, generación de payloads, campañas de spear phishing. Es una herramienta de **red team / concienciación** autorizada.\n" +
+      "> ⚠️ Como toda herramienta ofensiva: solo con autorización explícita.",
+    examples: [
+      "Clonar un portal de login para una prueba de phishing interna.",
+      "Generar un vector de ataque para una campaña de awareness.",
+    ],
+    related: ["Ingeniería social", "GoPhish y campañas controladas", "Anatomía de un phishing"],
+  },
+
+  // ── M35 · Phishing Avanzado ──────────────────────────────────────────────
+  {
+    id: 380,
+    module: 35,
+    term: "Anatomía de un phishing",
+    short: "Las señales que delatan un correo fraudulento, capa por capa.",
+    detail:
+      "Un phishing combina **pretexto + urgencia + un enlace/adjunto**. Señales de alerta:\n" +
+      "| Señal | Ejemplo |\n" +
+      "|---|---|\n" +
+      "| Remitente sospechoso | Dominio parecido pero no idéntico |\n" +
+      "| Urgencia/amenaza | 'Tu cuenta será suspendida' |\n" +
+      "| Enlace engañoso | El texto dice una URL, apunta a otra |\n" +
+      "| Adjunto inesperado | Factura.zip / .html |\n" +
+      "> 💡 Pasar el cursor sobre el enlace (sin hacer clic) revela el destino real.",
+    examples: [
+      "Un 'reset de contraseña' que enlaza a un dominio lookalike.",
+      "Un adjunto HTML que abre un portal de login falso local.",
+    ],
+    related: ["Spear phishing y whaling", "Evasión de filtros", "Los 6 principios de Cialdini"],
+  },
+  {
+    id: 381,
+    module: 35,
+    term: "Spear phishing y whaling",
+    short: "Phishing dirigido a una persona concreta (spear) o a un alto directivo (whaling).",
+    detail:
+      "Frente al phishing masivo, el **dirigido** es mucho más efectivo:\n" +
+      "• **Spear phishing** — personalizado con OSINT (nombre, rol, proyectos) para una víctima específica.\n" +
+      "• **Whaling** — *spear phishing* contra un 'pez gordo' (CEO, CFO), donde el premio es máximo.\n" +
+      "> ⚠️ El compromiso de **RSA (2011)** comenzó con un spear phishing con un Excel malicioso.",
+    examples: [
+      "Un correo al CFO que cita un trato real de la empresa (whaling).",
+      "Spear phishing a un admin de sistemas citando su última conferencia.",
+    ],
+    related: ["Anatomía de un phishing", "BEC (Business Email Compromise)", "Frameworks OSINT"],
+  },
+  {
+    id: 382,
+    module: 35,
+    term: "BEC (Business Email Compromise)",
+    short: "Fraude que suplanta a un ejecutivo o proveedor para desviar pagos.",
+    detail:
+      "El **BEC** suplanta (o compromete) la cuenta de un directivo o proveedor para ordenar **transferencias** o cambiar datos bancarios. No suele llevar malware —solo texto convincente y urgencia— lo que lo hace difícil de filtrar. Es de los fraudes **más costosos** según el FBI.",
+    examples: [
+      "Un 'CEO' pidiendo una transferencia urgente y confidencial.",
+      "Un 'proveedor' que avisa de un cambio en su número de cuenta.",
+    ],
+    related: ["Spear phishing y whaling", "Anatomía de un phishing", "Ingeniería social"],
+  },
+  {
+    id: 383,
+    module: 35,
+    term: "GoPhish y campañas controladas",
+    short: "Plataforma para lanzar simulacros de phishing y medir la concienciación.",
+    detail:
+      "**GoPhish** es un framework open source para **campañas de phishing autorizadas** (awareness/red team): diseña plantillas, envía a grupos y mide quién abrió, hizo clic o entregó credenciales. Convierte la concienciación en **métricas accionables**.\n" +
+      "> 💡 Un programa de awareness mide la tasa de clic a lo largo del tiempo para ver si baja con la formación.",
+    examples: [
+      "Un simulacro trimestral que reporta el % de clics por departamento.",
+      "Plantillas que imitan al proveedor de correo de la empresa.",
+    ],
+    related: ["SET (Social-Engineer Toolkit)", "Anatomía de un phishing", "Defensas anti-phishing"],
+  },
+  {
+    id: 384,
+    module: 35,
+    term: "Evasión de filtros",
+    short: "Trucos para que el correo malicioso llegue a la bandeja de entrada.",
+    detail:
+      "Para sortear los filtros, los atacantes usan: **dominios lookalike** (rnicrosoft.com), **typosquatting**, redirecciones y acortadores, payloads en **HTML/QR** en vez de enlaces, y abusar de servicios legítimos (Google Forms). También intentan pasar **SPF/DKIM/DMARC** usando dominios recién registrados o mal protegidos.\n" +
+      "> 💡 Defensa: **DMARC** en modo *reject* corta la suplantación de tu dominio.",
+    examples: [
+      "Usar rnicrosoft.com (rn≈m) para imitar microsoft.com.",
+      "Un QR en el cuerpo que lleva al portal falso (quishing).",
+    ],
+    related: ["Defensas anti-phishing", "Anatomía de un phishing", "DNS"],
+  },
+  {
+    id: 385,
+    module: 35,
+    term: "Defensas anti-phishing",
+    short: "Capas técnicas y humanas que reducen el éxito del phishing.",
+    detail:
+      "Ninguna capa basta sola; se combinan:\n" +
+      "• **Autenticación de correo** — SPF, DKIM y **DMARC** (reject) contra la suplantación.\n" +
+      "• **MFA** — limita el daño de una credencial robada (idealmente resistente a phishing, FIDO2).\n" +
+      "• **Filtrado** — gateways de correo, sandboxing de adjuntos, reescritura de URLs.\n" +
+      "• **Concienciación** — formación y simulacros (GoPhish).\n" +
+      "> ✅ La **MFA FIDO2/passkeys** es resistente al phishing porque está ligada al dominio.",
+    examples: [
+      "DMARC en reject + MFA en todas las cuentas.",
+      "Botón 'reportar phishing' que alimenta al SOC.",
+    ],
+    related: ["Evasión de filtros", "GoPhish y campañas controladas", "Headers de seguridad"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

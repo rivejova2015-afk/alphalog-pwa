@@ -132,6 +132,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2016, title: "BloodHound y C2 modernos", desc: "El auge de Cobalt Strike y BloodHound profesionaliza el red teaming y el movimiento lateral.", impact: "high" },
     ],
   },
+  {
+    id: 11,
+    module: 35,
+    title: "Evolución del phishing y la ingeniería social",
+    events: [
+      { year: 1995, title: "Phishing en AOL", desc: "Atacantes roban credenciales y datos de pago haciéndose pasar por personal de AOL; nace el phishing moderno.", impact: "medium" },
+      { year: 1996, title: "El término 'phishing'", desc: "Se acuña la palabra (fishing de credenciales con cebo); el concepto se populariza.", impact: "low" },
+      { year: 2011, title: "Brecha de RSA", desc: "Un spear phishing con un Excel malicioso compromete los tokens SecurID; hito del phishing dirigido.", impact: "high" },
+      { year: 2016, title: "Auge del BEC", desc: "El fraude del CEO/proveedor se vuelve uno de los más costosos según el FBI, sin necesidad de malware.", impact: "high" },
+      { year: 2020, title: "Hackeo de Twitter", desc: "Un vishing a empleados permite secuestrar cuentas de alto perfil; demuestra el poder de la ingeniería social telefónica.", impact: "high" },
+      { year: 2024, title: "Phishing con IA", desc: "Correos sin errores, clonación de voz y deepfakes elevan el realismo y la escala del engaño.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

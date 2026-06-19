@@ -243,6 +243,38 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Alcanzar el objetivo", desc: "Se llega al activo crítico (Domain Controller, base de datos) y se cumple el objetivo.", defenses: ["Tiering de AD", "Monitoreo de cuentas privilegiadas", "Backups"] },
     ],
   },
+  {
+    id: 16,
+    module: 34,
+    name: "Los 6 principios de Cialdini",
+    kind: "controls",
+    summary:
+      "Los gatillos psicológicos que todo ingeniero social explota. Reconocerlos es la mejor defensa: cada principio tiene su contramedida.",
+    phases: [
+      { n: 1, name: "Reciprocidad", desc: "Tendemos a devolver favores; el atacante da algo (ayuda, un regalo) para que sintamos que debemos corresponder.", defenses: ["Desconfiar de favores no solicitados", "Separar el favor de la petición"] },
+      { n: 2, name: "Compromiso y coherencia", desc: "Queremos ser consistentes; tras un pequeño 'sí' es más fácil que aceptemos algo mayor.", defenses: ["Reevaluar cada petición por sí sola", "No dejarse arrastrar por un 'sí' previo"] },
+      { n: 3, name: "Prueba social", desc: "Imitamos lo que hacen los demás; 'todos en tu equipo ya lo hicieron' presiona a seguir.", defenses: ["Verificar de forma independiente", "No asumir que lo común es legítimo"] },
+      { n: 4, name: "Autoridad", desc: "Obedecemos a figuras de poder; suplantan a un directivo, IT o la policía para forzar acción.", defenses: ["Verificar la identidad por un canal aparte", "Las órdenes urgentes piden más verificación, no menos"] },
+      { n: 5, name: "Simpatía", desc: "Confiamos en quien nos cae bien; el atacante crea rapport (intereses comunes, halagos).", defenses: ["Separar la simpatía de la decisión", "Aplicar el proceso igual con todos"] },
+      { n: 6, name: "Escasez", desc: "Tememos perder oportunidades; 'oferta/plazo limitado' o 'tu cuenta se cierra ya' apuran a actuar sin pensar.", defenses: ["Frenar ante la urgencia", "La presión temporal es una señal de alerta"] },
+    ],
+  },
+  {
+    id: 17,
+    module: 35,
+    name: "Anatomía de una campaña de phishing",
+    kind: "flow",
+    summary:
+      "Las fases por las que pasa una campaña de phishing dirigida, del recon al impacto. Cada etapa tiene su control defensivo.",
+    phases: [
+      { n: 1, name: "Reconocimiento (OSINT)", desc: "Se recopilan objetivos, roles y contexto (LinkedIn, web, filtraciones) para personalizar el cebo.", defenses: ["Reducir exposición pública", "Concienciación sobre OSINT"] },
+      { n: 2, name: "Pretexto y diseño del cebo", desc: "Se crea la historia y la plantilla creíble (factura, reset de contraseña, mensaje del CEO).", defenses: ["Formación en señales de phishing", "Cultura de verificar lo inesperado"] },
+      { n: 3, name: "Infraestructura", desc: "Se registra un dominio lookalike y se monta el envío y el portal falso (GoPhish, SET).", defenses: ["Monitoreo de dominios similares", "Bloqueo de dominios recién registrados"] },
+      { n: 4, name: "Envío y evasión de filtros", desc: "Se entrega el correo sorteando los filtros (SPF/DKIM/DMARC, URLs ofuscadas, QR).", defenses: ["DMARC (reject)", "Gateway + sandboxing", "Reescritura de URLs"] },
+      { n: 5, name: "Captura de credenciales", desc: "La víctima introduce sus credenciales (o MFA) en el portal del atacante.", defenses: ["MFA resistente a phishing (FIDO2)", "Botón de reportar phishing"] },
+      { n: 6, name: "Explotación / reporte", desc: "Se usan las credenciales (acceso, BEC, lateral) — o, si es un simulacro, se reportan métricas.", defenses: ["Detección de logins anómalos", "Respuesta a incidentes", "Awareness con métricas"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

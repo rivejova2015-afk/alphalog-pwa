@@ -11,6 +11,7 @@ const SISTEMAS_MODULES = [10, 11, 12, 13, 14, 15];
 const CRIPTO_MODULES = [16, 17, 18, 19];
 const WEB_MODULES = [20, 21, 22, 23, 24];
 const PENTEST_MODULES = [25, 26, 27, 28, 29, 30, 31, 32, 33];
+const SOCIAL_MODULES = [34, 35];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -52,6 +53,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Pentesting (M25-M33) tiene ≥4 definiciones", () => {
     for (const m of PENTEST_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Social Eng. (M34-M35) tiene ≥4 definiciones", () => {
+    for (const m of SOCIAL_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -109,6 +115,12 @@ describe("FRAMEWORKS", () => {
     expect(frameworksByModule(29).some((f) => f.kind === "flow")).toBe(true);
     expect(frameworksByModule(33).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M34 tiene los 6 principios de Cialdini (controls, 6) y M35 un flujo de phishing", () => {
+    const cialdini = frameworksByModule(34).find((f) => f.kind === "controls");
+    expect(cialdini).toBeDefined();
+    expect(cialdini!.phases).toHaveLength(6);
+    expect(frameworksByModule(35).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -145,6 +157,9 @@ describe("TIMELINES", () => {
   });
   it("M25 tiene línea de tiempo (historia del pentesting)", () => {
     expect(timelinesByModule(25).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M35 tiene línea de tiempo (evolución del phishing)", () => {
+    expect(timelinesByModule(35).length).toBeGreaterThanOrEqual(1);
   });
 });
 
