@@ -1,10 +1,20 @@
 "use client";
 
-import { Fragment } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock, BarChart, Play } from "lucide-react";
+import { ArrowLeft, Clock, BarChart, Play, BookMarked, Network, History, Compass, ChevronDown } from "lucide-react";
 import type { Lesson, LessonSection } from "@/lib/securities/cybersec";
-import { parseContent, tokenizeInline } from "@/lib/securities/cybersec";
+import {
+  moduleIdFromSub,
+  definitionsByModule,
+  frameworksByModule,
+  timelinesByModule,
+  branchesByModule,
+} from "@/lib/securities/cybersec";
+import { MarkdownBlocks } from "./MarkdownBlocks.client";
+import { DefinitionList } from "./DefinitionList.client";
+import { FrameworkDiagram } from "./FrameworkDiagram.client";
+import { HistoryTimeline } from "./HistoryTimeline.client";
+import { FieldBranches } from "./FieldBranches.client";
 
 interface Props {
   lesson: Lesson;
@@ -12,6 +22,12 @@ interface Props {
 }
 
 export function LessonViewer({ lesson, hasQuiz }: Props) {
+  const moduleId = moduleIdFromSub(lesson.sub);
+  const definitions = moduleId != null ? definitionsByModule(moduleId) : [];
+  const frameworks = moduleId != null ? frameworksByModule(moduleId) : [];
+  const timelines = moduleId != null ? timelinesByModule(moduleId) : [];
+  const branches = moduleId != null ? branchesByModule(moduleId) : [];
+
   return (
     <div className="space-y-6">
       <Link href="/securities/cybersec" className="inline-flex items-center gap-1.5 text-sm text-[#94a3b8] hover:text-[#22d3ee]">
@@ -33,6 +49,28 @@ export function LessonViewer({ lesson, hasQuiz }: Props) {
         ))}
       </article>
 
+      {/* ── Contenido enriquecido del módulo ── */}
+      {definitions.length > 0 && (
+        <Enrichment title="Definiciones clave" icon={<BookMarked size={15} />} count={definitions.length} defaultOpen>
+          <DefinitionList definitions={definitions} />
+        </Enrichment>
+      )}
+      {frameworks.length > 0 && (
+        <Enrichment title="Frameworks" icon={<Network size={15} />} count={frameworks.length}>
+          <FrameworkDiagram frameworks={frameworks} />
+        </Enrichment>
+      )}
+      {timelines.length > 0 && (
+        <Enrichment title="Historia y evolución" icon={<History size={15} />}>
+          <HistoryTimeline timelines={timelines} />
+        </Enrichment>
+      )}
+      {branches.length > 0 && (
+        <Enrichment title="Ramas del campo" icon={<Compass size={15} />} count={branches.length}>
+          <FieldBranches branches={branches} />
+        </Enrichment>
+      )}
+
       {hasQuiz && (
         <Link
           href={`/securities/cybersec/quizzes/${lesson.id}`}
@@ -46,41 +84,39 @@ export function LessonViewer({ lesson, hasQuiz }: Props) {
 }
 
 function Section({ section }: { section: LessonSection }) {
-  const blocks = parseContent(section.c);
   return (
     <section className="space-y-3">
       <h2 className="text-base font-bold text-[#22d3ee] font-mono">{section.h}</h2>
-      <div className="space-y-2 text-sm text-[#e2e8f0] leading-relaxed">
-        {blocks.map((block, bi) =>
-          block.type === "code" ? (
-            <pre
-              key={bi}
-              className="overflow-x-auto rounded-lg border border-[#1f2937] bg-[#05080f] px-3 py-2.5 text-[13px] font-mono text-[#7dd3fc] whitespace-pre-wrap"
-            >
-              <code>{block.lines.join("\n")}</code>
-            </pre>
-          ) : (
-            <div key={bi} className="space-y-1.5">
-              {block.lines.map((line, i) => (
-                <Fragment key={i}>
-                  <p>{renderInline(line)}</p>
-                </Fragment>
-              ))}
-            </div>
-          ),
-        )}
-      </div>
+      <MarkdownBlocks content={section.c} />
     </section>
   );
 }
 
-function renderInline(line: string) {
-  const tokens = tokenizeInline(line);
-  return tokens.map((tok, i) =>
-    tok.b ? (
-      <strong key={i} className="text-[#e2e8f0] font-bold">{tok.t}</strong>
-    ) : (
-      <Fragment key={i}>{tok.t}</Fragment>
-    ),
+// Sección colapsable de contenido enriquecido (usa <details> nativo).
+function Enrichment({
+  title,
+  icon,
+  count,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  count?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group rounded-lg border border-[#1f2937] bg-[#070b14]">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3">
+        <span className="text-[#22d3ee]">{icon}</span>
+        <span className="text-sm font-bold text-[#e2e8f0]">{title}</span>
+        {count != null && (
+          <span className="rounded-full bg-[#1f2937] px-2 py-0.5 text-[10px] font-mono text-[#94a3b8]">{count}</span>
+        )}
+        <ChevronDown size={16} className="ml-auto text-[#475569] transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-[#1f2937] px-4 py-4">{children}</div>
+    </details>
   );
 }
