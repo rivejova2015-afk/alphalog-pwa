@@ -542,6 +542,36 @@ export const FRAMEWORKS: Framework[] = [
       { n: 10, name: "LLM10 — Model Theft", desc: "Robo del modelo propietario por extracción o acceso no autorizado.", defenses: ["Control de acceso", "Rate limiting", "Watermarking"] },
     ],
   },
+  {
+    id: 35,
+    module: 71,
+    name: "Anatomía de un ataque Spectre / cache",
+    kind: "flow",
+    summary:
+      "Cómo un secreto al que el programa nunca debería acceder acaba filtrado midiendo la caché. Cada fase tiene su mitigación.",
+    phases: [
+      { n: 1, name: "Entrenar el predictor", desc: "El atacante condiciona el predictor de saltos para que la CPU especule por el camino que le interesa.", defenses: ["Barreras de especulación (lfence)", "retpoline"] },
+      { n: 2, name: "Acceso especulativo al secreto", desc: "La CPU ejecuta especulativamente un acceso a memoria prohibida usando el dato secreto como índice.", defenses: ["KPTI (aísla kernel)", "Comprobaciones no especulables"] },
+      { n: 3, name: "Huella en la caché", desc: "Aunque el resultado se descarte, el acceso dejó una línea de caché cargada según el secreto.", defenses: ["Flush de caché en cambios de contexto", "Particionado de caché"] },
+      { n: 4, name: "Medir con Flush+Reload", desc: "El atacante mide tiempos de acceso para ver qué línea quedó cacheada.", defenses: ["Temporizadores de baja resolución", "Aislamiento de núcleos"] },
+      { n: 5, name: "Recuperar el secreto", desc: "De la línea cacheada se deduce el valor del byte secreto; se repite byte a byte.", defenses: ["Reducir hyper-threading", "Microcódigo actualizado"] },
+    ],
+  },
+  {
+    id: 36,
+    module: 73,
+    name: "Cadena de arranque seguro (chain of trust)",
+    kind: "flow",
+    summary:
+      "El arranque verificado: cada etapa comprueba la firma de la siguiente antes de cederle el control, anclando la confianza en el hardware.",
+    phases: [
+      { n: 1, name: "Hardware Root of Trust", desc: "Un ancla inmutable (ROM, claves en fusibles) en el que se confía por diseño. Verifica la primera etapa.", defenses: ["Claves en eFuse", "Código en ROM no modificable"] },
+      { n: 2, name: "Boot ROM", desc: "El primer código que corre; mide y verifica la firma del bootloader/firmware.", defenses: ["Firma verificada", "BootGuard"] },
+      { n: 3, name: "Bootloader / UEFI", desc: "El firmware verifica al siguiente eslabón (gestor de arranque / kernel).", defenses: ["Secure Boot", "Protección de la flash"] },
+      { n: 4, name: "Kernel", desc: "El kernel arranca solo si su firma es válida; verifica módulos y drivers.", defenses: ["Firma de módulos", "Measured boot (TPM)"] },
+      { n: 5, name: "Sistema operativo y apps", desc: "Ya en ejecución; la integridad medida puede atestiguarse a un tercero.", defenses: ["Remote attestation", "Integridad en runtime"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

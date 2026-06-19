@@ -264,6 +264,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2024, title: "MLSecOps y regulación IA", desc: "Madura la seguridad del pipeline ML y llegan marcos (EU AI Act, NIST AI RMF).", impact: "medium" },
     ],
   },
+  {
+    id: 21,
+    module: 71,
+    title: "Ataques a hardware y microarquitectura",
+    events: [
+      { year: 2003, title: "TPM 1.2", desc: "Se estandariza el módulo de plataforma confiable; raíz de hardware para attestation y cifrado.", impact: "medium" },
+      { year: 2014, title: "Rowhammer", desc: "Acceder repetidamente a una fila de DRAM altera bits de filas vecinas; ataque físico desde software.", impact: "high" },
+      { year: 2015, title: "Intel SGX", desc: "Los enclaves por hardware popularizan el confidential computing.", impact: "medium" },
+      { year: 2018, title: "Spectre y Meltdown", desc: "La ejecución especulativa rompe el aislamiento de memoria en casi todas las CPUs.", impact: "high" },
+      { year: 2019, title: "MDS / ZombieLoad", desc: "Nuevas fugas desde buffers internos de la CPU amplían la familia de ataques transientes.", impact: "high" },
+      { year: 2022, title: "Hertzbleed", desc: "La frecuencia dinámica (DVFS) convierte cripto constant-time en un side-channel de tiempo remoto.", impact: "medium" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

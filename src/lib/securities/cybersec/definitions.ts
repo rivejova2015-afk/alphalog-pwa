@@ -4984,6 +4984,254 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Provenance e integridad", "ML supply chain", "Pipeline DevSecOps"],
   },
+
+  // ── M71 · Side-Channels Microarquitectónicos ─────────────────────────────
+  {
+    id: 740,
+    module: 71,
+    term: "Ejecución especulativa y transiente",
+    short: "La CPU adelanta trabajo que quizá no haga; ese trabajo 'especulativo' deja rastros.",
+    detail:
+      "Para ir más rápido, la CPU **ejecuta especulativamente** instrucciones antes de saber si hacían falta (predicción de saltos). Si se equivoca, **descarta** el resultado arquitectónico — pero los **efectos secundarios** (estado de la caché) **persisten**. Esa ejecución **transiente** es la base de Spectre/Meltdown.\n" +
+      "> 💡 La clave: lo descartado a nivel arquitectónico sigue siendo observable a nivel microarquitectónico.",
+    examples: [
+      "Un acceso especulativo a memoria prohibida que igual toca la caché.",
+      "Predecir mal un salto y dejar datos secretos cacheados.",
+    ],
+    related: ["Spectre y Meltdown", "Cache side-channels", "Variantes y mitigaciones"],
+  },
+  {
+    id: 741,
+    module: 71,
+    term: "Spectre y Meltdown",
+    short: "Dos fallos de 2018 que rompen el aislamiento de memoria abusando de la especulación.",
+    detail:
+      "Ambos (2018) usan ejecución especulativa para leer memoria que no deberían:\n" +
+      "• **Meltdown** — rompe la barrera usuario↔kernel; un proceso lee memoria del kernel.\n" +
+      "• **Spectre** — engaña a otro proceso (o al kernel) para que filtre sus propios datos vía especulación.\n" +
+      "> ⚠️ Afectaron a casi todas las CPUs de la década; las mitigaciones (KPTI, retpoline) tienen coste de rendimiento.",
+    examples: [
+      "Meltdown leyendo /etc/shadow desde un proceso sin privilegios.",
+      "Spectre filtrando datos a través de un sandbox de JavaScript.",
+    ],
+    related: ["Ejecución especulativa y transiente", "Cache side-channels", "Variantes y mitigaciones"],
+  },
+  {
+    id: 742,
+    module: 71,
+    term: "Cache side-channels",
+    short: "Medir tiempos de acceso a la caché revela qué datos tocó otro proceso.",
+    detail:
+      "La caché es compartida, así que los **tiempos de acceso** filtran información: un dato en caché se lee rápido; fuera, lento. Técnicas:\n" +
+      "• **Flush+Reload** — vaciar una línea, esperar, y medir si la víctima la recargó.\n" +
+      "• **Prime+Probe** — llenar la caché y ver qué evicta la víctima.\n" +
+      "> 💡 Es el 'canal de salida' que convierte la fuga especulativa de Spectre en datos legibles.",
+    examples: [
+      "Flush+Reload para recuperar bytes leídos especulativamente.",
+      "Espiar una operación de cifrado por sus accesos a tablas.",
+    ],
+    related: ["Spectre y Meltdown", "Side-channel attacks", "Variantes y mitigaciones"],
+  },
+  {
+    id: 743,
+    module: 71,
+    term: "Variantes y mitigaciones",
+    short: "El fenómeno se extendió (MDS, ZombieLoad); las defensas combinan microcódigo, SO y compilador.",
+    detail:
+      "Tras Spectre/Meltdown llegaron muchas variantes (**MDS**, **ZombieLoad**, **Foreshadow**, **RIDL**) que filtran desde buffers internos. Las mitigaciones se reparten:\n" +
+      "• **Microcódigo/CPU** — parches del fabricante, nuevas instrucciones.\n" +
+      "• **SO** — **KPTI** (aísla tablas de páginas), flush de buffers al cambiar de contexto.\n" +
+      "• **Compilador** — **retpoline** contra la inyección de objetivos de salto.\n" +
+      "> ⚠️ Casi todas tienen un **coste de rendimiento**: es un trade-off seguridad/velocidad.",
+    examples: [
+      "Desactivar hyper-threading en entornos multi-tenant sensibles.",
+      "Retpoline en el kernel para neutralizar Spectre v2.",
+    ],
+    related: ["Spectre y Meltdown", "Cache side-channels", "Mitigaciones de kernel"],
+  },
+
+  // ── M72 · Fault Injection y Hardware Attacks ─────────────────────────────
+  {
+    id: 750,
+    module: 72,
+    term: "Fault injection (glitching)",
+    short: "Provocar un fallo físico momentáneo para que el chip se 'salte' una comprobación.",
+    detail:
+      "La **inyección de fallos** perturba el chip en un instante preciso para corromper su ejecución (saltarse un `if`, una verificación de PIN, una firma). Vectores: **voltage glitching** (bajón de tensión), **clock glitching**, **EM** (pulso electromagnético) y **láser**.\n" +
+      "> 💡 Un glitch en el momento justo puede convertir un 'acceso denegado' en 'acceso concedido'.",
+    examples: [
+      "Saltarse la verificación de firma del bootloader con un glitch de voltaje.",
+      "Forzar un bypass de PIN en un chip seguro con un pulso EM.",
+    ],
+    related: ["Power/EM analysis", "Implantes y tampering", "Contramedidas de hardware"],
+  },
+  {
+    id: 751,
+    module: 72,
+    term: "Power/EM analysis",
+    short: "El consumo eléctrico y la emisión EM del chip filtran las operaciones que ejecuta.",
+    detail:
+      "El **análisis de consumo** observa cuánta energía/EM gasta el chip mientras opera:\n" +
+      "• **SPA** (simple) — leer directamente el patrón (ej. ver las rondas de RSA).\n" +
+      "• **DPA** (diferencial) — estadística sobre muchas trazas para extraer bits de clave.\n" +
+      "Son **side-channels físicos** muy potentes contra implementaciones de cripto sin proteger.\n" +
+      "> ⚠️ Recuperar una clave AES por DPA es viable con el equipo adecuado y suficientes trazas.",
+    examples: [
+      "Extraer una clave de una smartcard midiendo su consumo.",
+      "SPA revelando los exponentes de una operación RSA.",
+    ],
+    related: ["Fault injection (glitching)", "Side-channel attacks", "Contramedidas de hardware"],
+  },
+  {
+    id: 752,
+    module: 72,
+    term: "Implantes y tampering",
+    short: "Modificar físicamente el hardware: implantes, sondas y manipulación de chips.",
+    detail:
+      "El acceso físico permite **manipular** el hardware: **implantes** maliciosos en una placa o cable (ej. cables USB con chip espía), **sondas** sobre buses para leer datos (bus snooping), y **decapsulado/microprobing** de chips. Es el terreno del espionaje y los ataques de cadena de suministro de hardware.",
+    examples: [
+      "Un cable de carga con un implante que registra pulsaciones.",
+      "Sondar el bus SPI para leer el firmware mientras arranca.",
+    ],
+    related: ["Fault injection (glitching)", "Contramedidas de hardware", "ML supply chain"],
+  },
+  {
+    id: 753,
+    module: 72,
+    term: "Contramedidas de hardware",
+    short: "Sensores, blindaje, redundancia y código constant-time para resistir ataques físicos.",
+    detail:
+      "Defensas contra fault injection y side-channels físicos:\n" +
+      "• **Sensores** de voltaje/reloj/luz que detectan glitches y bloquean el chip.\n" +
+      "• **Redundancia** — ejecutar dos veces y comparar; verificaciones repetidas.\n" +
+      "• **Blindaje/mallas** anti-tampering que borran secretos si se perforan.\n" +
+      "• **Constant-time + enmascaramiento** contra el análisis de consumo.\n" +
+      "> 💡 Los **Secure Elements** y HSM integran muchas de estas defensas certificadas.",
+    examples: [
+      "Un Secure Element que borra sus claves al detectar manipulación.",
+      "Enmascaramiento de la cripto para frustrar el DPA.",
+    ],
+    related: ["Fault injection (glitching)", "Power/EM analysis", "Root of trust"],
+  },
+
+  // ── M73 · Firmware, UEFI y Secure Boot ───────────────────────────────────
+  {
+    id: 760,
+    module: 73,
+    term: "La boot chain (cadena de confianza)",
+    short: "El arranque es una cadena donde cada etapa verifica la firma de la siguiente.",
+    detail:
+      "El arranque seguro es una **cadena de confianza**: una **raíz** inmutable (ROM/hardware) verifica el bootloader, que verifica el kernel, que verifica el SO. Si un eslabón no valida al siguiente, la cadena se rompe.\n" +
+      "> 💡 La seguridad nace de un **root of trust** anclado en hardware; sin él, todo lo de arriba es falsificable. Ver el diagrama 'Cadena de arranque seguro'.",
+    examples: [
+      "Boot ROM → UEFI → bootloader → kernel, cada uno firmado.",
+      "Si el bootloader no está firmado, Secure Boot detiene el arranque.",
+    ],
+    related: ["Seguridad UEFI", "Ataques de firmware", "Root of trust"],
+  },
+  {
+    id: 761,
+    module: 73,
+    term: "Seguridad UEFI",
+    short: "El firmware moderno (UEFI) es potente y complejo: superficie de ataque privilegiada.",
+    detail:
+      "**UEFI** reemplazó a la BIOS con un firmware rico (red, drivers, shell). Esa complejidad es superficie de ataque a **nivel pre-SO**, con privilegios máximos. **SMM** (*System Management Mode*) es un modo aún más privilegiado (ring -2) y un objetivo codiciado.\n" +
+      "> ⚠️ Un compromiso de UEFI/SMM sobrevive a reinstalar el SO y es muy difícil de detectar.",
+    examples: [
+      "Un implante en SMM invisible para el sistema operativo.",
+      "Variables NVRAM de UEFI manipuladas para persistencia.",
+    ],
+    related: ["La boot chain (cadena de confianza)", "Ataques de firmware", "Defensas de firmware (chipsec)"],
+  },
+  {
+    id: 762,
+    module: 73,
+    term: "Ataques de firmware",
+    short: "Bootkits y troyanos de firmware que persisten por debajo del sistema operativo.",
+    detail:
+      "Atacar el firmware da **persistencia profunda**: un **bootkit** infecta el arranque para cargarse antes que el SO; ataques como **Thunderspy** (DMA por Thunderbolt) o implantes de UEFI (LoJax, MoonBounce) sobreviven al formateo. Son el arma de APTs por su sigilo.\n" +
+      "> ⚠️ Sobreviven a reinstalar el SO e incluso a cambiar el disco.",
+    examples: [
+      "LoJax, el primer bootkit de UEFI visto in-the-wild (APT28).",
+      "Un ataque DMA que lee la RAM por un puerto Thunderbolt.",
+    ],
+    related: ["Seguridad UEFI", "La boot chain (cadena de confianza)", "Rootkits y bootkits"],
+  },
+  {
+    id: 763,
+    module: 73,
+    term: "Defensas de firmware (chipsec)",
+    short: "Secure Boot, measured boot y herramientas para auditar el firmware.",
+    detail:
+      "Defensas clave del arranque:\n" +
+      "• **Secure Boot** — solo ejecuta componentes con firma confiable.\n" +
+      "• **Measured Boot** — mide (hashea) cada etapa en el **TPM** para attestation.\n" +
+      "• **BootGuard / protección de la flash** contra escritura no autorizada.\n" +
+      "• **chipsec** — framework para **auditar** la configuración de seguridad del firmware.\n" +
+      "> 💡 Measured boot no impide el arranque malicioso, pero lo **detecta** vía attestation.",
+    examples: [
+      "chipsec verificando que la protección de escritura de la flash está activa.",
+      "Secure Boot rechazando un bootloader sin firma válida.",
+    ],
+    related: ["Ataques de firmware", "TPM y attestation", "La boot chain (cadena de confianza)"],
+  },
+
+  // ── M74 · Trusted Execution y Roots of Trust ─────────────────────────────
+  {
+    id: 770,
+    module: 74,
+    term: "Root of trust",
+    short: "El ancla de confianza inmutable de la que depende toda la seguridad del sistema.",
+    detail:
+      "Un **root of trust (RoT)** es un componente — idealmente en **hardware** — en el que se confía por diseño, porque no se puede modificar: claves grabadas, código de arranque en ROM, un Secure Element. Toda la cadena de confianza (boot, attestation, cifrado) **cuelga** de él.\n" +
+      "> 💡 La seguridad no se crea de la nada: se **ancla** en un root of trust y se propaga hacia arriba.",
+    examples: [
+      "Una clave de fábrica en fusibles (eFuse) que no se puede leer ni cambiar.",
+      "El código de Boot ROM como raíz de la cadena de arranque.",
+    ],
+    related: ["TPM y attestation", "TEEs y confidential computing", "La boot chain (cadena de confianza)"],
+  },
+  {
+    id: 771,
+    module: 74,
+    term: "TPM y attestation",
+    short: "Un chip que custodia claves y mide el estado del sistema para probar su integridad.",
+    detail:
+      "El **TPM** (*Trusted Platform Module*) es un chip seguro que **genera/almacena claves** y guarda **mediciones** (hashes del arranque) en sus PCRs. La **attestation** usa esas mediciones, firmadas por el TPM, para **probar a un tercero** que el sistema arrancó en un estado confiable (measured boot).\n" +
+      "> 💡 Es la base de BitLocker, de la attestation remota y del arranque verificado en Windows.",
+    examples: [
+      "Remote attestation antes de dar acceso a una red corporativa.",
+      "BitLocker sellando la clave de disco al estado del TPM.",
+    ],
+    related: ["Root of trust", "Defensas de firmware (chipsec)", "TEEs y confidential computing"],
+  },
+  {
+    id: 772,
+    module: 74,
+    term: "TEEs y confidential computing",
+    short: "Enclaves aislados por hardware donde el código y los datos corren protegidos incluso del SO.",
+    detail:
+      "Un **TEE** (*Trusted Execution Environment*) crea un **enclave** cifrado y aislado por hardware donde correr código sensible, protegido incluso de un **SO o hypervisor comprometido**. Tecnologías: **Intel SGX**, **AMD SEV**, **ARM TrustZone**. Es la base del **confidential computing** (procesar datos cifrados en la nube sin que el proveedor los vea).",
+    examples: [
+      "Procesar datos médicos en un enclave SGX en un cloud no confiable.",
+      "TrustZone aislando el procesamiento de huellas en un móvil.",
+    ],
+    related: ["Root of trust", "Ataques y límites de los TEEs", "Cifrado homomórfico"],
+  },
+  {
+    id: 773,
+    module: 74,
+    term: "Ataques y límites de los TEEs",
+    short: "Los enclaves no son mágicos: caen ante side-channels y tienen un modelo de amenaza acotado.",
+    detail:
+      "Los TEEs **reducen** la superficie pero no la eliminan. Han caído ante **side-channels** (Foreshadow/L1TF contra SGX, side-channels de SEV) y **no protegen** contra bugs dentro del propio enclave. Su modelo de amenaza es **específico**: hay que entender qué garantizan y qué no.\n" +
+      "> ⚠️ Confiar ciegamente en 'está en un enclave, es seguro' es un error: el enclave también se audita.",
+    examples: [
+      "Foreshadow (L1TF) extrayendo secretos de un enclave SGX.",
+      "Un bug de memoria dentro del enclave que lo compromete igual.",
+    ],
+    related: ["TEEs y confidential computing", "Spectre y Meltdown", "Root of trust"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

@@ -21,6 +21,7 @@ const PROG_MODULES = [51, 52, 53, 54, 55, 56, 57, 58];
 const EXPLOIT_MODULES = [59, 60, 61, 62];
 const CRIPTOADV_MODULES = [63, 64, 65, 66];
 const AIML_MODULES = [67, 68, 69, 70];
+const HW_MODULES = [71, 72, 73, 74];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -112,6 +113,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de AI/ML Security (M67-M70) tiene ≥4 definiciones", () => {
     for (const m of AIML_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Hardware & Low-Level (M71-M74) tiene ≥4 definiciones", () => {
+    for (const m of HW_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -224,6 +230,10 @@ describe("FRAMEWORKS", () => {
     expect(llm!.phases).toHaveLength(10);
     expect(frameworksByModule(67).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M71 (Spectre/cache) y M73 (cadena de arranque) tienen un flow", () => {
+    expect(frameworksByModule(71).some((f) => f.kind === "flow")).toBe(true);
+    expect(frameworksByModule(73).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -290,6 +300,9 @@ describe("TIMELINES", () => {
   });
   it("M69 tiene línea de tiempo (seguridad en IA/ML)", () => {
     expect(timelinesByModule(69).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M71 tiene línea de tiempo (ataques a hardware/microarquitectura)", () => {
+    expect(timelinesByModule(71).length).toBeGreaterThanOrEqual(1);
   });
 });
 
