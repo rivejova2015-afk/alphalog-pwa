@@ -131,6 +131,35 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "AP-REQ", desc: "El cliente presenta el TGS al servicio, que lo valida y concede acceso.", defenses: ["Mínimo privilegio en SPNs", "Auditoría de accesos"] },
     ],
   },
+  {
+    id: 9,
+    module: 18,
+    name: "Cadena de confianza PKI",
+    kind: "flow",
+    summary:
+      "Cómo el navegador decide confiar en el certificado de un sitio: la firma sube eslabón a eslabón hasta una CA raíz ya confiable.",
+    phases: [
+      { n: 1, name: "CA raíz", desc: "Autoridad de máxima confianza; su certificado viene preinstalado en el SO/navegador. Su clave privada se guarda offline.", defenses: ["Clave raíz en HSM offline", "Auditorías estrictas de la CA"] },
+      { n: 2, name: "CA intermedia", desc: "Firmada por la raíz, emite los certificados del día a día para aislar y proteger la raíz.", defenses: ["Revocación (CRL/OCSP)", "Separación raíz/intermedia"] },
+      { n: 3, name: "Certificado de servidor (leaf)", desc: "El certificado del dominio, firmado por la intermedia; contiene la clave pública del sitio.", defenses: ["Vigencia corta", "Certificate Transparency"] },
+      { n: 4, name: "Validación en el cliente", desc: "El navegador verifica firmas, vigencia, revocación y que el dominio coincida, subiendo hasta la raíz.", defenses: ["Comprobar revocación", "HSTS", "Pinning donde aplique"] },
+    ],
+  },
+  {
+    id: 10,
+    module: 19,
+    name: "Handshake TLS 1.3",
+    kind: "flow",
+    summary:
+      "El saludo que establece una conexión HTTPS segura en un solo viaje (1-RTT): negocia cifrado, valida identidad y deriva claves de sesión con forward secrecy.",
+    phases: [
+      { n: 1, name: "ClientHello", desc: "El cliente propone versiones, cipher suites y envía su parte de la clave (key share ECDHE).", defenses: ["Ofrecer solo TLS 1.2+/AEAD", "Suites con forward secrecy"] },
+      { n: 2, name: "ServerHello + certificado", desc: "El servidor elige la suite, envía su key share y su certificado (cadena PKI).", defenses: ["Certificado válido y vigente", "Clave privada protegida"] },
+      { n: 3, name: "Verificación del certificado", desc: "El cliente valida la cadena de confianza, el dominio, la vigencia y la revocación.", defenses: ["Validar cadena completa", "OCSP/CRL", "Certificate Transparency"] },
+      { n: 4, name: "Derivación de claves", desc: "Ambos derivan la misma clave de sesión simétrica vía ECDHE, con forward secrecy.", defenses: ["Claves efímeras (ECDHE)", "Sin reutilización de nonce"] },
+      { n: 5, name: "Finished y datos cifrados", desc: "Se confirma el handshake y el tráfico de aplicación viaja cifrado con AES-GCM.", defenses: ["HSTS", "Cuidado con 0-RTT (replay)"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

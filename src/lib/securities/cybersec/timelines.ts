@@ -71,6 +71,30 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2016, title: "BloodHound", desc: "Grafica rutas de ataque en AD usando teoría de grafos; cambia el red teaming.", impact: "high" },
     ],
   },
+  {
+    id: 6,
+    module: 16,
+    title: "Evolución de la criptografía",
+    events: [
+      { year: 1943, title: "Enigma y Bletchley Park", desc: "El criptoanálisis aliado de la máquina Enigma (heredera del cifrado clásico tipo César) impulsa la computación moderna.", impact: "medium" },
+      { year: 1977, title: "DES", desc: "Primer estándar de cifrado simétrico ampliamente adoptado; su clave de 56 bits acabó siendo insuficiente.", impact: "medium" },
+      { year: 1977, title: "RSA", desc: "Rivest, Shamir y Adleman publican el primer esquema asimétrico práctico.", impact: "high" },
+      { year: 2001, title: "AES", desc: "El NIST estandariza Rijndael como AES; el cifrado simétrico dominante hoy.", impact: "high" },
+      { year: 2024, title: "Estándares post-cuánticos", desc: "El NIST publica los primeros algoritmos resistentes a ordenadores cuánticos (ML-KEM/Kyber).", impact: "high" },
+    ],
+  },
+  {
+    id: 7,
+    module: 19,
+    title: "Evolución de SSL/TLS",
+    events: [
+      { year: 1996, title: "SSL 3.0", desc: "Netscape consolida el cifrado web; años después se demostraría inseguro (POODLE).", impact: "medium" },
+      { year: 1999, title: "TLS 1.0", desc: "SSL se estandariza como TLS en el IETF.", impact: "medium" },
+      { year: 2008, title: "TLS 1.2", desc: "Añade AEAD (AES-GCM) y hashes modernos; dominante durante una década.", impact: "high" },
+      { year: 2014, title: "POODLE y Heartbleed", desc: "Fallos célebres aceleran el abandono de SSL/TLS antiguos y la cultura del parcheo.", impact: "high" },
+      { year: 2018, title: "TLS 1.3", desc: "Handshake de 1-RTT, solo cifrados AEAD y forward secrecy obligatorio.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

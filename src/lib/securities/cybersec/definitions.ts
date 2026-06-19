@@ -1205,6 +1205,326 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["PowerShell defensivo", "Defender, AMSI y ETW", "Ataques a Active Directory"],
   },
+
+  // ── M16 · Criptografía Simétrica ─────────────────────────────────────────
+  {
+    id: 190,
+    module: 16,
+    term: "Cifrado simétrico",
+    short: "Una única clave compartida cifra y descifra; es rápido pero hay que distribuir la clave.",
+    detail:
+      "En el **cifrado simétrico** ambas partes usan **la misma clave secreta**. Es muy **rápido y eficiente**, ideal para grandes volúmenes de datos (discos, tráfico TLS ya establecido).\n" +
+      "> ⚠️ Su talón de Aquiles es la **distribución de la clave**: ¿cómo la comparten de forma segura sin que un tercero la intercepte? Eso lo resuelve la criptografía asimétrica.",
+    examples: [
+      "AES cifrando un disco con BitLocker/LUKS.",
+      "La clave de sesión de una conexión HTTPS ya establecida.",
+    ],
+    related: ["AES vs DES/3DES", "Modos de operación", "Cifrado asimétrico y par de claves"],
+  },
+  {
+    id: 191,
+    module: 16,
+    term: "AES vs DES/3DES",
+    short: "AES es el estándar moderno; DES quedó obsoleto y 3DES es lento y en retirada.",
+    detail:
+      "| Algoritmo | Clave | Estado |\n" +
+      "|---|---|---|\n" +
+      "| DES | 56 bits | Roto (fuerza bruta) |\n" +
+      "| 3DES | 112-168 bits | Obsoleto, lento |\n" +
+      "| AES | 128/192/256 bits | Estándar actual |\n" +
+      "**AES** (*Advanced Encryption Standard*) es un cifrado **por bloques** de 128 bits, rápido en hardware y sin ataques prácticos. **DES** cayó por su clave corta; **3DES** lo aplica tres veces pero es lento y ya está siendo retirado.",
+    examples: [
+      "AES-256 para datos en reposo de alta sensibilidad.",
+      "Migrar sistemas legacy de 3DES a AES-GCM.",
+    ],
+    related: ["Cifrado simétrico", "Modos de operación", "Gestión de claves"],
+  },
+  {
+    id: 192,
+    module: 16,
+    term: "Modos de operación",
+    short: "Definen cómo un cifrado por bloques procesa datos más largos que un bloque.",
+    detail:
+      "Un cifrado por bloques (AES) cifra 128 bits a la vez; el **modo** decide cómo encadenar bloques:\n" +
+      "| Modo | Idea | Riesgo / uso |\n" +
+      "|---|---|---|\n" +
+      "| ECB | Cada bloque por separado | Inseguro: filtra patrones |\n" +
+      "| CBC | Encadena con el bloque previo + IV | Necesita IV e integridad |\n" +
+      "| GCM | Cifrado + autenticación (AEAD) | Recomendado |\n" +
+      "> 💡 **GCM** es **AEAD**: cifra y a la vez garantiza integridad/autenticidad. Es el modo preferido hoy.",
+    examples: [
+      "TLS 1.3 usa AES-GCM (AEAD) por defecto.",
+      "Nunca usar ECB para datos reales: revela estructura.",
+    ],
+    related: ["AES vs DES/3DES", "Vulnerabilidades del cifrado simétrico", "Cifrado simétrico"],
+  },
+  {
+    id: 193,
+    module: 16,
+    term: "Gestión de claves",
+    short: "El eslabón más débil: generar, distribuir, rotar y almacenar claves de forma segura.",
+    detail:
+      "El cifrado más fuerte es inútil si la clave se gestiona mal. La **gestión de claves** abarca su **generación** (aleatoriedad robusta), **distribución** (el problema que resuelve la asimétrica), **rotación** periódica y **almacenamiento** seguro (HSM, KMS, vaults).\n" +
+      "> 💡 En AlphaLog, `DATA_ENCRYPTION_KEY` (AES-256-GCM) protege notas, journal y mensajes — su custodia es crítica.",
+    examples: [
+      "Guardar claves en un HSM o en un KMS gestionado en la nube.",
+      "Rotar la clave de cifrado sin perder el acceso a los datos antiguos.",
+    ],
+    related: ["Cifrado simétrico", "PKI y autoridades de certificación", "Intercambio de claves (Diffie-Hellman)"],
+  },
+  {
+    id: 194,
+    module: 16,
+    term: "Vulnerabilidades del cifrado simétrico",
+    short: "El algoritmo suele ser sólido; los fallos vienen del modo, el IV o la clave.",
+    detail:
+      "AES no se rompe, pero su uso **incorrecto** sí:\n" +
+      "• **Modo ECB** — bloques idénticos producen cifrado idéntico, revelando patrones (el clásico 'pingüino ECB').\n" +
+      "• **Reutilización de IV/nonce** — en CBC/GCM rompe la confidencialidad (y en GCM, la integridad).\n" +
+      "• **Claves débiles o predecibles** — derivadas de poca entropía.\n" +
+      "> ⚠️ La regla: en GCM **nunca** repetir el nonce con la misma clave.",
+    examples: [
+      "La imagen del pingüino cifrada en ECB sigue siendo reconocible.",
+      "Reusar un nonce en AES-GCM permite recuperar el texto claro.",
+    ],
+    related: ["Modos de operación", "Gestión de claves", "AES vs DES/3DES"],
+  },
+
+  // ── M17 · Criptografía Asimétrica ────────────────────────────────────────
+  {
+    id: 200,
+    module: 17,
+    term: "Cifrado asimétrico y par de claves",
+    short: "Dos claves matemáticamente ligadas: una pública para cifrar, una privada para descifrar.",
+    detail:
+      "La **criptografía asimétrica** usa un **par de claves**: lo cifrado con la **pública** solo lo descifra la **privada** (y viceversa para firmar). Resuelve el problema de distribución de la simétrica: puedes publicar tu clave pública sin riesgo.\n" +
+      "> 💡 Es **lenta**, así que en la práctica se usa para **intercambiar** una clave simétrica (cifrado híbrido), no para cifrar todo el tráfico.",
+    examples: [
+      "Cifrar un correo con la clave pública del destinatario (PGP).",
+      "TLS usa asimétrica para acordar la clave de sesión, luego simétrica.",
+    ],
+    related: ["RSA", "ECC", "Firmas digitales"],
+  },
+  {
+    id: 201,
+    module: 17,
+    term: "RSA",
+    short: "El algoritmo asimétrico clásico, basado en la dificultad de factorizar números enormes.",
+    detail:
+      "**RSA** apoya su seguridad en que **factorizar** el producto de dos primos gigantes es computacionalmente inviable. Se usa para cifrado e intercambio de claves y para **firmas digitales**. Requiere claves grandes (**2048-4096 bits**) para ser seguro, lo que lo hace más pesado que ECC.",
+    examples: [
+      "Certificados TLS y llaves SSH históricamente basados en RSA-2048.",
+      "Firmar un token con una clave privada RSA.",
+    ],
+    related: ["Cifrado asimétrico y par de claves", "ECC", "Amenaza cuántica y post-quantum"],
+  },
+  {
+    id: 202,
+    module: 17,
+    term: "ECC",
+    short: "Criptografía de curva elíptica: la misma seguridad que RSA con claves mucho más cortas.",
+    detail:
+      "**ECC** (*Elliptic Curve Cryptography*) ofrece **igual seguridad con claves mucho menores**: una clave ECC de **256 bits** equivale aproximadamente a RSA de **3072 bits**. Eso significa menos cómputo y menos ancho de banda, por lo que domina en móviles, IoT y TLS moderno.",
+    examples: [
+      "Curva25519 en WireGuard y en TLS 1.3.",
+      "Firmas ECDSA en certificados modernos.",
+    ],
+    related: ["RSA", "Intercambio de claves (Diffie-Hellman)", "Cifrado asimétrico y par de claves"],
+  },
+  {
+    id: 203,
+    module: 17,
+    term: "Intercambio de claves (Diffie-Hellman)",
+    short: "Permite a dos partes acordar una clave secreta común sobre un canal inseguro.",
+    detail:
+      "**Diffie-Hellman (DH)** logra algo que parece magia: dos partes generan una **clave compartida** intercambiando solo valores públicos, sin que un observador pueda deducirla. Su variante moderna **ECDHE** añade *forward secrecy*: cada sesión usa claves efímeras, así que comprometer la clave del servidor no descifra el tráfico pasado.\n" +
+      "> 💡 *Forward secrecy* es por qué capturar tráfico hoy no permite descifrarlo aunque roben la clave mañana.",
+    examples: [
+      "ECDHE en el handshake TLS 1.3 para forward secrecy.",
+      "Acordar la clave de sesión de una VPN sin transmitirla.",
+    ],
+    related: ["ECC", "Cifrado asimétrico y par de claves", "Gestión de claves"],
+  },
+  {
+    id: 204,
+    module: 17,
+    term: "Firmas digitales",
+    short: "Cifrar un hash con la clave privada para probar autenticidad e integridad.",
+    detail:
+      "Una **firma digital** invierte el cifrado asimétrico: el emisor cifra el **hash** del mensaje con su **clave privada**; cualquiera lo verifica con su **clave pública**. Garantiza **autenticidad** (lo firmó el dueño de la clave), **integridad** (no se alteró) y **no repudio**.",
+    examples: [
+      "Firmar un certificado, un commit de Git o un binario.",
+      "Verificar que una actualización proviene del fabricante.",
+    ],
+    related: ["Cifrado asimétrico y par de claves", "Función hash", "No repudio"],
+  },
+  {
+    id: 205,
+    module: 17,
+    term: "Amenaza cuántica y post-quantum",
+    short: "Los ordenadores cuánticos romperían RSA/ECC; la criptografía post-cuántica se adelanta.",
+    detail:
+      "El algoritmo de **Shor** en un ordenador cuántico suficientemente grande **rompería RSA y ECC** (factorización y logaritmo discreto). Aún no existe ese hardware, pero el riesgo **'harvest now, decrypt later'** (capturar hoy, descifrar mañana) es real.\n" +
+      "> 💡 El **NIST** ya estandarizó algoritmos **post-cuánticos** (ej. ML-KEM/Kyber, 2024) resistentes a ataques cuánticos.",
+    examples: [
+      "Adoptar TLS híbrido clásico + post-cuántico de forma anticipada.",
+      "Datos sensibles a largo plazo cifrados pensando en la amenaza cuántica.",
+    ],
+    related: ["RSA", "ECC", "Gestión de claves"],
+  },
+
+  // ── M18 · Hashing y PKI ──────────────────────────────────────────────────
+  {
+    id: 210,
+    module: 18,
+    term: "Función hash",
+    short: "Transforma cualquier dato en una huella de tamaño fijo, irreversible y única.",
+    detail:
+      "Una **función hash** (SHA-256) produce una **huella de longitud fija** a partir de cualquier entrada. Propiedades clave:\n" +
+      "• **Unidireccional** — no se puede revertir al original.\n" +
+      "• **Efecto avalancha** — un cambio mínimo altera todo el hash.\n" +
+      "• **Resistente a colisiones** — inviable hallar dos entradas con el mismo hash.\n" +
+      "> ⚠️ **MD5** y **SHA-1** están rotos (colisiones); usar **SHA-256** o superior.",
+    examples: [
+      "Verificar la integridad de una descarga comparando su SHA-256.",
+      "Almacenar huellas de archivos como IoC.",
+    ],
+    related: ["Salting y key stretching", "Firmas digitales", "Integridad"],
+  },
+  {
+    id: 211,
+    module: 18,
+    term: "Salting y key stretching",
+    short: "Cómo almacenar contraseñas de forma segura: sal única + funciones lentas a propósito.",
+    detail:
+      "Hashear contraseñas con SHA rápido **no basta**. Se añade:\n" +
+      "• **Salt** — valor aleatorio único por contraseña; frustra las **rainbow tables** y evita que dos claves iguales den el mismo hash.\n" +
+      "• **Key stretching** — algoritmos **lentos a propósito** (bcrypt, scrypt, Argon2) que encarecen la fuerza bruta.\n" +
+      "| Función | Apta para contraseñas |\n" +
+      "|---|---|\n" +
+      "| MD5 / SHA-256 | No (demasiado rápidas) |\n" +
+      "| bcrypt / Argon2 | Sí (lentas + salt) |\n" +
+      "> ⚠️ Una **rainbow table** precomputa hashes; la **sal** la inutiliza.",
+    examples: [
+      "Guardar contraseñas con Argon2id y sal por usuario.",
+      "bcrypt con factor de coste ajustable al hardware.",
+    ],
+    related: ["Función hash", "PKI y autoridades de certificación", "Confidencialidad"],
+  },
+  {
+    id: 212,
+    module: 18,
+    term: "PKI y autoridades de certificación",
+    short: "El sistema que vincula una clave pública con una identidad mediante certificados firmados.",
+    detail:
+      "La **PKI** (*Public Key Infrastructure*) resuelve '¿esta clave pública es realmente de quien dice ser?'. Una **CA** (*Certificate Authority*) de confianza **firma** certificados que ligan una clave pública a una identidad (dominio, persona). El navegador confía en un conjunto de **CA raíz** preinstaladas.",
+    examples: [
+      "Let's Encrypt emitiendo el certificado TLS de un dominio.",
+      "El candado del navegador = certificado válido firmado por una CA confiable.",
+    ],
+    related: ["Cadena de confianza", "Firmas digitales", "Certificate transparency y pinning"],
+  },
+  {
+    id: 213,
+    module: 18,
+    term: "Cadena de confianza",
+    short: "La validación de un certificado sube desde el del servidor hasta una CA raíz de confianza.",
+    detail:
+      "Un certificado no se confía aislado: forma una **cadena**. El certificado del **servidor (leaf)** está firmado por una **CA intermedia**, firmada a su vez por una **CA raíz** en la que el sistema ya confía. Si algún eslabón falla (expirado, revocado, firma inválida), la cadena se rompe y el navegador alerta.\n" +
+      "> 💡 Ver el diagrama 'Cadena de confianza PKI' más abajo.",
+    examples: [
+      "Leaf → CA intermedia → CA raíz: el navegador valida toda la cadena.",
+      "Un certificado revocado (CRL/OCSP) rompe la confianza.",
+    ],
+    related: ["PKI y autoridades de certificación", "Certificate transparency y pinning", "Handshake TLS"],
+  },
+  {
+    id: 214,
+    module: 18,
+    term: "Certificate transparency y pinning",
+    short: "Mecanismos extra para detectar certificados fraudulentos y atar un cliente a uno concreto.",
+    detail:
+      "Dos defensas contra CA comprometidas o certificados emitidos por error:\n" +
+      "• **Certificate Transparency (CT)** — logs públicos y auditables de todos los certificados emitidos; permite detectar emisiones no autorizadas.\n" +
+      "• **Certificate pinning** — la app fija el certificado/clave esperado, rechazando cualquier otro aunque sea 'válido' para una CA.\n" +
+      "> ⚠️ El pinning mal gestionado puede romper la app al rotar certificados.",
+    examples: [
+      "Apps móviles que hacen pinning de su API contra MITM.",
+      "Detectar vía CT un certificado emitido fraudulentamente para tu dominio.",
+    ],
+    related: ["Cadena de confianza", "PKI y autoridades de certificación", "Ataques a TLS"],
+  },
+
+  // ── M19 · TLS/SSL y VPN ──────────────────────────────────────────────────
+  {
+    id: 220,
+    module: 19,
+    term: "TLS 1.2 vs 1.3",
+    short: "TLS 1.3 es más rápido y seguro: menos viajes, solo cifrados modernos.",
+    detail:
+      "**TLS** cifra el tráfico (la 'S' de HTTPS). La versión 1.3 fue una limpieza profunda:\n" +
+      "| | TLS 1.2 | TLS 1.3 |\n" +
+      "|---|---|---|\n" +
+      "| Handshake | 2 RTT | 1 RTT (0-RTT opcional) |\n" +
+      "| Cifrados | Muchos (algunos débiles) | Solo AEAD modernos |\n" +
+      "| Forward secrecy | Opcional | Siempre (ECDHE) |\n" +
+      "> ⚠️ SSL y TLS 1.0/1.1 están **obsoletos e inseguros**: deshabilitarlos.",
+    examples: [
+      "TLS 1.3 reduce la latencia del handshake a un solo viaje.",
+      "Deshabilitar TLS 1.0/1.1 en el servidor por cumplimiento.",
+    ],
+    related: ["Cipher suite", "Handshake TLS", "Ataques a TLS"],
+  },
+  {
+    id: 221,
+    module: 19,
+    term: "Cipher suite",
+    short: "El conjunto de algoritmos que cliente y servidor acuerdan para una conexión TLS.",
+    detail:
+      "Una **cipher suite** define la combinación de algoritmos de una sesión: **intercambio de claves** (ECDHE), **autenticación** (RSA/ECDSA), **cifrado simétrico** (AES-GCM) y **hash** (SHA-256). En el handshake, cliente y servidor negocian la suite más fuerte que ambos soporten.",
+    examples: [
+      "TLS_AES_256_GCM_SHA384 (una suite de TLS 1.3).",
+      "Evitar suites con RC4, 3DES o sin forward secrecy.",
+    ],
+    related: ["TLS 1.2 vs 1.3", "Handshake TLS", "Modos de operación"],
+  },
+  {
+    id: 222,
+    module: 19,
+    term: "VPN: IPSec vs WireGuard",
+    short: "Túneles cifrados entre redes; WireGuard es moderno, simple y rápido frente a IPSec.",
+    detail:
+      "Una **VPN** crea un **túnel cifrado** sobre una red insegura. Dos enfoques:\n" +
+      "| | IPSec | WireGuard |\n" +
+      "|---|---|---|\n" +
+      "| Madurez | Veterano, ubicuo | Moderno |\n" +
+      "| Complejidad | Alta | Muy baja |\n" +
+      "| Cripto | Configurable | Fija y moderna (Curve25519) |\n" +
+      "| Rendimiento | Bueno | Excelente |\n" +
+      "> 💡 WireGuard vive en el kernel y tiene una base de código diminuta, más fácil de auditar.",
+    examples: [
+      "WireGuard para una VPN personal rápida y simple.",
+      "IPSec en escenarios corporativos/legacy con equipos heterogéneos.",
+    ],
+    related: ["TLS 1.2 vs 1.3", "Intercambio de claves (Diffie-Hellman)", "Cifrado simétrico"],
+  },
+  {
+    id: 223,
+    module: 19,
+    term: "Ataques a TLS",
+    short: "La mayoría no rompen el cifrado: degradan la conexión o evitan que se cifre.",
+    detail:
+      "TLS bien configurado es sólido; los ataques apuntan a los **bordes**:\n" +
+      "• **SSL stripping** — un MITM fuerza HTTP en vez de HTTPS para leer en claro.\n" +
+      "• **Downgrade** — engaña para negociar una versión/suite débil.\n" +
+      "• **Vulnerabilidades históricas** — POODLE, Heartbleed, BEAST (de versiones/implementaciones viejas).\n" +
+      "> 💡 **HSTS** obliga al navegador a usar siempre HTTPS, frustrando el SSL stripping.",
+    examples: [
+      "Un MITM en WiFi público intentando SSL stripping.",
+      "Cabecera HSTS + precarga para evitar el primer salto en claro.",
+    ],
+    related: ["TLS 1.2 vs 1.3", "Certificate transparency y pinning", "Handshake TLS"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
