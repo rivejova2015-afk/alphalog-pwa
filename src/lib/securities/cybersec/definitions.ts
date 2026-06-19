@@ -2867,6 +2867,219 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Análisis dinámico", "Unpacking y deofuscación", "Callbacks de red (C2)"],
   },
+
+  // ── M39 · Forense Digital: Fundamentos ───────────────────────────────────
+  {
+    id: 420,
+    module: 39,
+    term: "Forense digital",
+    short: "Recolectar, preservar y analizar evidencia digital de forma que sea válida legalmente.",
+    detail:
+      "La **forense digital** (DFIR) investiga incidentes y delitos a partir de **evidencia digital**, con dos exigencias clave: **integridad** (la evidencia no se altera) y **trazabilidad** (todo está documentado). El objetivo es reconstruir qué pasó de forma **defendible ante un tribunal**.\n" +
+      "> 💡 La regla de oro: trabajar siempre sobre una **copia**, nunca sobre la evidencia original.",
+    examples: [
+      "Investigar un equipo comprometido tras un incidente.",
+      "Reconstruir la línea de tiempo de una exfiltración de datos.",
+    ],
+    related: ["Cadena de custodia", "Adquisición de imagen", "Orden de volatilidad"],
+  },
+  {
+    id: 421,
+    module: 39,
+    term: "Cadena de custodia",
+    short: "El registro documentado de quién tocó la evidencia, cuándo y por qué.",
+    detail:
+      "La **cadena de custodia** documenta cada manipulación de la evidencia desde su recolección: quién la tomó, cuándo, dónde se guardó y quién accedió. Cualquier hueco la vuelve **inadmisible** en juicio. Se apoya en **hashes** para probar que la copia no cambió.\n" +
+      "> ⚠️ Una cadena de custodia rota puede tirar abajo todo un caso, por sólida que sea la evidencia técnica.",
+    examples: [
+      "Un formulario firmado en cada transferencia de la evidencia.",
+      "Sellar y etiquetar un disco incautado con su hash.",
+    ],
+    related: ["Forense digital", "Adquisición de imagen", "Consideraciones legales"],
+  },
+  {
+    id: 422,
+    module: 39,
+    term: "Adquisición de imagen",
+    short: "Copiar bit a bit el medio original sin alterarlo, verificando con hash.",
+    detail:
+      "La **adquisición** crea una **imagen forense**: una copia **bit a bit** (incluyendo espacio sin asignar) del medio. Se usa un **write blocker** para no modificar el original y se calcula el **hash antes y después** para probar que la copia es idéntica.\n" +
+      "dd if=/dev/sda of=imagen.dd bs=4M conv=noerror,sync\n" +
+      "sha256sum /dev/sda imagen.dd\n" +
+      "> 💡 Formatos comunes: `dd` (raw) y **E01** (EnCase, con metadatos y compresión).",
+    examples: [
+      "Clonar un disco con un write blocker antes de analizarlo.",
+      "Verificar que el hash del original y la imagen coinciden.",
+    ],
+    related: ["Cadena de custodia", "Orden de volatilidad", "Imagen y análisis de disco"],
+  },
+  {
+    id: 423,
+    module: 39,
+    term: "Orden de volatilidad",
+    short: "Capturar primero lo más efímero: la RAM se pierde al apagar; el disco no.",
+    detail:
+      "La evidencia tiene distinta **vida útil**. La **RFC 3227** ordena qué recolectar primero, del más volátil al más persistente: **registros/caché → RAM → estado de red/conexiones → disco → backups**.\n" +
+      "> ⚠️ Apagar un equipo 'para preservarlo' **destruye** la RAM, que suele contener claves, procesos y malware sin tocar disco. Ver el diagrama 'Orden de volatilidad'.",
+    examples: [
+      "Volcar la RAM antes de apagar un servidor comprometido.",
+      "Capturar las conexiones de red activas antes de desconectarlo.",
+    ],
+    related: ["Adquisición de imagen", "Forense de memoria (Volatility)", "Forense digital"],
+  },
+  {
+    id: 424,
+    module: 39,
+    term: "Consideraciones legales",
+    short: "Para que la evidencia sirva, debe ser admisible: legalmente obtenida y bien documentada.",
+    detail:
+      "El mejor análisis técnico es inútil si la evidencia es **inadmisible**. Importan: la **autorización** legal (orden, consentimiento), la **cadena de custodia** intacta, la **integridad** verificable (hashes) y la capacidad del perito de **testificar** y explicar su método. El analista debe ser **imparcial** y reproducible.",
+    examples: [
+      "Obtener la evidencia con la orden o autorización adecuada.",
+      "Documentar el método para poder defenderlo en el estrado.",
+    ],
+    related: ["Cadena de custodia", "Forense digital", "Herramientas forenses"],
+  },
+  {
+    id: 425,
+    module: 39,
+    term: "Herramientas forenses",
+    short: "El instrumental del analista: imagen, análisis, memoria y red.",
+    detail:
+      "El kit forense combina suites y utilidades especializadas:\n" +
+      "| Categoría | Herramientas |\n" +
+      "|---|---|\n" +
+      "| Adquisición | dd, FTK Imager, write blocker |\n" +
+      "| Disco | Autopsy, FTK, The Sleuth Kit, EnCase |\n" +
+      "| Memoria | Volatility |\n" +
+      "| Red | Wireshark, NetworkMiner, Zeek |\n" +
+      "> 💡 Las distros **SIFT** y **CAINE** empaquetan el arsenal forense listo para usar.",
+    examples: [
+      "FTK Imager para adquirir, Autopsy para analizar.",
+      "Arrancar SIFT Workstation para una investigación.",
+    ],
+    related: ["Adquisición de imagen", "Imagen y análisis de disco", "Análisis de PCAP"],
+  },
+
+  // ── M40 · Forense: Disco y Memoria ───────────────────────────────────────
+  {
+    id: 430,
+    module: 40,
+    term: "Imagen y análisis de disco",
+    short: "Examinar la imagen del disco para hallar archivos, artefactos y rastros del usuario.",
+    detail:
+      "Sobre la imagen forense se analiza el **sistema de archivos**: archivos y metadatos (MFT en NTFS), artefactos de actividad (historial, registro, prefetch, papelera). **Autopsy** (GUI de **The Sleuth Kit**) y **FTK** automatizan la indexación, búsqueda por palabras clave y extracción de artefactos.",
+    examples: [
+      "Autopsy listando los archivos recientes y descargas del usuario.",
+      "Analizar la MFT para ver creación/modificación de archivos.",
+    ],
+    related: ["Recuperación de datos", "Análisis de timeline", "Herramientas forenses"],
+  },
+  {
+    id: 431,
+    module: 40,
+    term: "Forense de memoria (Volatility)",
+    short: "Analizar un volcado de RAM revela lo que el disco no: procesos, inyecciones y claves.",
+    detail:
+      "Un volcado de **RAM** captura el estado vivo del sistema. **Volatility** lo analiza para hallar **procesos** (incluso ocultos), conexiones de red, comandos, claves de cifrado y **código inyectado** que nunca tocó el disco.\n" +
+      "vol.py -f memoria.raw windows.pslist\n" +
+      "vol.py -f memoria.raw windows.malfind\n" +
+      "> 💡 La memoria suele contener malware ya desempaquetado y config de C2 en claro.",
+    examples: [
+      "pslist/pstree para ver el árbol de procesos del volcado.",
+      "malfind para detectar inyección de código en procesos.",
+    ],
+    related: ["Orden de volatilidad", "API hooking y forense de memoria", "Análisis de timeline"],
+  },
+  {
+    id: 432,
+    module: 40,
+    term: "Análisis de timeline",
+    short: "Ordenar todos los eventos por tiempo para reconstruir la secuencia del incidente.",
+    detail:
+      "El **análisis de timeline** fusiona marcas de tiempo de múltiples fuentes (sistema de archivos, logs, registro) en una **línea cronológica** unificada para responder *qué pasó y en qué orden*. Herramientas: **plaso/log2timeline** (super timeline), **mactime**.\n" +
+      "> ⚠️ Ojo con el **timestomping**: el malware altera marcas de tiempo para despistar.",
+    examples: [
+      "Una super timeline que ubica el momento exacto del compromiso.",
+      "Correlacionar la creación de un archivo con un login sospechoso.",
+    ],
+    related: ["Imagen y análisis de disco", "Forense de memoria (Volatility)", "Recuperación de datos"],
+  },
+  {
+    id: 433,
+    module: 40,
+    term: "Recuperación de datos",
+    short: "Rescatar archivos borrados o fragmentos mediante carving y espacio no asignado.",
+    detail:
+      "Borrar un archivo no lo elimina: el espacio queda **no asignado** hasta sobrescribirse. Técnicas de recuperación:\n" +
+      "• **File carving** — reconstruir archivos por sus **firmas** (magic bytes), sin depender del sistema de archivos (foremost, scalpel).\n" +
+      "• **Slack space** — datos residuales al final del último bloque de un archivo.\n" +
+      "> 💡 Por eso el borrado seguro requiere **sobrescribir**, no solo 'eliminar'.",
+    examples: [
+      "foremost recuperando imágenes JPG borradas por su firma.",
+      "Hallar restos de un documento en el slack space.",
+    ],
+    related: ["Imagen y análisis de disco", "Análisis de timeline", "Adquisición de imagen"],
+  },
+
+  // ── M41 · Forense de Red ─────────────────────────────────────────────────
+  {
+    id: 440,
+    module: 41,
+    term: "Análisis de PCAP",
+    short: "Examinar capturas de tráfico para reconstruir qué se comunicó por la red.",
+    detail:
+      "Un **PCAP** guarda el tráfico capturado. Su análisis (con **Wireshark/tshark**) reconstruye conversaciones, extrae archivos transferidos, credenciales en claro y patrones sospechosos. Es la evidencia central de la forense de red.\n" +
+      "tshark -r captura.pcap -Y \"http.request\"\n" +
+      "> 💡 'Follow TCP Stream' en Wireshark reconstruye una sesión completa para leerla.",
+    examples: [
+      "Extraer un archivo exfiltrado desde un PCAP.",
+      "Ver credenciales FTP en claro dentro de la captura.",
+    ],
+    related: ["NetworkMiner", "Zeek (Bro)", "Detección de C2 y exfiltración"],
+  },
+  {
+    id: 441,
+    module: 41,
+    term: "NetworkMiner",
+    short: "Herramienta que extrae automáticamente artefactos de un PCAP sin leer paquete a paquete.",
+    detail:
+      "**NetworkMiner** es una herramienta de **forense de red pasiva**: a partir de un PCAP (o captura en vivo) reconstruye **hosts, sesiones, archivos transferidos, imágenes y credenciales** de forma automática, presentándolos por entidad en vez de por paquete. Acelera muchísimo el triage.",
+    examples: [
+      "Recuperar todos los archivos transferidos de una captura.",
+      "Listar los hosts y sistemas operativos vistos en el tráfico.",
+    ],
+    related: ["Análisis de PCAP", "Zeek (Bro)", "Detección de C2 y exfiltración"],
+  },
+  {
+    id: 442,
+    module: 41,
+    term: "Zeek (Bro)",
+    short: "Motor que convierte el tráfico de red en logs estructurados ricos para análisis.",
+    detail:
+      "**Zeek** (antes **Bro**) no es un IDS de firmas: observa el tráfico y genera **logs estructurados** por protocolo (conn.log, dns.log, http.log, ssl.log). Es ideal para **hunting** y forense a escala, porque resume millones de paquetes en eventos consultables.",
+    examples: [
+      "Revisar dns.log de Zeek para hallar dominios de C2.",
+      "Usar conn.log para detectar beaconing periódico.",
+    ],
+    related: ["Análisis de PCAP", "NetworkMiner", "Detección de C2 y exfiltración"],
+  },
+  {
+    id: 443,
+    module: 41,
+    term: "Detección de C2 y exfiltración",
+    short: "Reconocer en el tráfico la comunicación con el atacante y la fuga de datos.",
+    detail:
+      "La forense de red busca dos patrones clave:\n" +
+      "• **C2 (beaconing)** — conexiones **periódicas y regulares** a un mismo destino, a veces sobre DNS o HTTPS para camuflarse.\n" +
+      "• **Exfiltración** — transferencias **grandes o sostenidas** hacia el exterior, **DNS tunneling** o subidas a servicios cloud.\n" +
+      "> 💡 El beaconing se delata por su **regularidad temporal**, aunque el contenido vaya cifrado.",
+    examples: [
+      "Detectar un beacon HTTPS cada 60 s a un dominio raro.",
+      "Identificar DNS tunneling por consultas TXT anormalmente largas.",
+    ],
+    related: ["Zeek (Bro)", "Análisis de PCAP", "Callbacks de red (C2)"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

@@ -13,6 +13,7 @@ const WEB_MODULES = [20, 21, 22, 23, 24];
 const PENTEST_MODULES = [25, 26, 27, 28, 29, 30, 31, 32, 33];
 const SOCIAL_MODULES = [34, 35];
 const MALWARE_MODULES = [36, 37, 38];
+const FORENSE_MODULES = [39, 40, 41];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -64,6 +65,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Malware (M36-M38) tiene ≥4 definiciones", () => {
     for (const m of MALWARE_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Forense (M39-M41) tiene ≥4 definiciones", () => {
+    for (const m of FORENSE_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -133,6 +139,12 @@ describe("FRAMEWORKS", () => {
     expect(pyramid!.phases).toHaveLength(6);
     expect(frameworksByModule(38).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M39 tiene el proceso forense (flow) y M40 el orden de volatilidad (layers, 5)", () => {
+    expect(frameworksByModule(39).some((f) => f.kind === "flow")).toBe(true);
+    const volat = frameworksByModule(40).find((f) => f.kind === "layers");
+    expect(volat).toBeDefined();
+    expect(volat!.phases).toHaveLength(5);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -175,6 +187,9 @@ describe("TIMELINES", () => {
   });
   it("M36 tiene línea de tiempo (evolución del malware)", () => {
     expect(timelinesByModule(36).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M39 tiene línea de tiempo (evolución de la forense digital)", () => {
+    expect(timelinesByModule(39).length).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -159,6 +159,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2021, title: "Era del RaaS y doble extorsión", desc: "El ransomware como servicio y la exfiltración previa al cifrado dominan el panorama.", impact: "high" },
     ],
   },
+  {
+    id: 13,
+    module: 39,
+    title: "Evolución de la forense digital",
+    events: [
+      { year: 1993, title: "Forense de disco temprana", desc: "Las primeras conferencias y unidades policiales formalizan la disciplina centrada en discos.", impact: "medium" },
+      { year: 1998, title: "EnCase", desc: "Se vuelve la suite forense comercial de referencia; estandariza la imagen y el análisis de disco.", impact: "high" },
+      { year: 2005, title: "The Sleuth Kit / Autopsy", desc: "El kit open source de Brian Carrier democratiza la forense de disco.", impact: "medium" },
+      { year: 2007, title: "Volatility (forense de memoria)", desc: "Consolida el análisis de RAM; lo volátil pasa a ser evidencia de primer orden.", impact: "high" },
+      { year: 2014, title: "Era anti-forense", desc: "Timestomping, cifrado y borrado seguro obligan a técnicas más profundas (memoria, red).", impact: "medium" },
+      { year: 2020, title: "Forense de cloud y móvil", desc: "La evidencia migra a la nube y a los smartphones; nuevos retos legales y técnicos.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

@@ -306,6 +306,36 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Extracción de IoCs y reporte", desc: "Documentar hashes, dominios, TTPs y reglas YARA para detección masiva. ¿Cómo lo cazamos en el parque?", defenses: ["Compartir CTI (MISP/STIX)", "Reglas de detección desplegadas"] },
     ],
   },
+  {
+    id: 20,
+    module: 39,
+    name: "Proceso forense (DFIR)",
+    kind: "flow",
+    summary:
+      "Las fases de una investigación forense, de la identificación de la evidencia a su presentación en un tribunal. Cada fase tiene una garantía que mantiene la evidencia admisible.",
+    phases: [
+      { n: 1, name: "Identificación", desc: "Reconocer qué dispositivos y datos son evidencia potencial y su orden de volatilidad.", defenses: ["Evaluar volatilidad antes de actuar", "Autorización legal"] },
+      { n: 2, name: "Adquisición / Preservación", desc: "Copiar bit a bit la evidencia sin alterar el original y verificar su integridad.", defenses: ["Write blocker", "Hash antes/después", "Trabajar sobre la copia"] },
+      { n: 3, name: "Análisis", desc: "Examinar la imagen (disco, memoria, red) para reconstruir los hechos.", defenses: ["Método reproducible", "Herramientas validadas"] },
+      { n: 4, name: "Documentación", desc: "Registrar cada paso, hallazgo y la cadena de custodia de forma trazable.", defenses: ["Cadena de custodia intacta", "Notas detalladas y fechadas"] },
+      { n: 5, name: "Presentación / Testimonio", desc: "Comunicar las conclusiones en un informe claro y, si procede, testificar.", defenses: ["Imparcialidad", "Conclusiones defendibles"] },
+    ],
+  },
+  {
+    id: 21,
+    module: 40,
+    name: "Orden de volatilidad",
+    kind: "layers",
+    summary:
+      "La evidencia digital tiene distinta vida útil (RFC 3227): se recolecta del más volátil al más persistente, porque lo efímero se pierde si se espera.",
+    phases: [
+      { n: 1, name: "Registros y caché", desc: "Lo más efímero: registros de CPU, caché. Vida de microsegundos; rara vez se captura en la práctica.", defenses: ["Asumir que es casi inalcanzable", "Priorizar la RAM"] },
+      { n: 2, name: "Memoria RAM", desc: "Procesos vivos, conexiones, claves de cifrado y malware sin tocar disco. Se pierde al apagar.", defenses: ["Volcar la RAM ANTES de apagar", "Herramientas de captura en vivo"] },
+      { n: 3, name: "Estado de red / conexiones", desc: "Conexiones activas, tablas ARP/routing, sesiones. Cambia segundo a segundo.", defenses: ["Capturar conexiones activas", "No desconectar antes de registrar"] },
+      { n: 4, name: "Disco", desc: "Sistema de archivos, logs, registro. Persistente: sobrevive al apagado.", defenses: ["Imagen bit a bit con write blocker", "Verificación por hash"] },
+      { n: 5, name: "Backups y archivo", desc: "Lo más estable: copias de seguridad, medios externos, logs remotos. Vida muy larga.", defenses: ["Recolectar al final", "Correlacionar con la evidencia viva"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {
