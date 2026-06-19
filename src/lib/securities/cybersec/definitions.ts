@@ -3298,6 +3298,281 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Consultas KQL/SPL", "Mapeo a ATT&CK", "Reglas de correlación"],
   },
+
+  // ── M45 · Cloud Security: AWS ────────────────────────────────────────────
+  {
+    id: 480,
+    module: 45,
+    term: "Modelo de responsabilidad compartida",
+    short: "El proveedor protege la nube; tú proteges lo que pones en ella.",
+    detail:
+      "En la nube la seguridad se **reparte**: el proveedor (AWS) asegura la **infraestructura** ('seguridad **de** la nube'); el cliente asegura **sus datos, identidades y configuración** ('seguridad **en** la nube').\n" +
+      "| Responsable | Ejemplos |\n" +
+      "|---|---|\n" +
+      "| Proveedor | Hardware, hipervisor, red física |\n" +
+      "| Cliente | IAM, cifrado, config de S3, parches de la VM |\n" +
+      "> ⚠️ La mayoría de las brechas cloud son por **configuración del cliente**, no por fallo del proveedor.",
+    examples: [
+      "AWS protege el datacenter; tú evitas dejar un bucket público.",
+      "El cliente gestiona los permisos IAM y el cifrado de sus datos.",
+    ],
+    related: ["IAM y políticas", "S3 security", "CloudTrail y GuardDuty"],
+  },
+  {
+    id: 481,
+    module: 45,
+    term: "IAM y políticas",
+    short: "El control de acceso de AWS: quién puede hacer qué sobre qué recurso.",
+    detail:
+      "**IAM** gestiona identidades (usuarios, **roles**) y **políticas** JSON que conceden permisos. La buena práctica es **mínimo privilegio** y usar **roles** temporales en vez de claves de larga duración.\n" +
+      "{ \"Effect\": \"Allow\", \"Action\": \"s3:GetObject\", \"Resource\": \"arn:aws:s3:::bucket/*\" }\n" +
+      "> ⚠️ Políticas con `\"Action\": \"*\"` o `\"Resource\": \"*\"` son un riesgo clásico de sobre-permiso.",
+    examples: [
+      "Un rol IAM para que una EC2 lea un bucket, sin claves embebidas.",
+      "Revisar políticas con Access Analyzer para detectar accesos amplios.",
+    ],
+    related: ["Modelo de responsabilidad compartida", "Mínimo privilegio", "S3 security"],
+  },
+  {
+    id: 482,
+    module: 45,
+    term: "S3 security",
+    short: "Los buckets de almacenamiento: privados por defecto, pero fáciles de exponer.",
+    detail:
+      "**S3** guarda objetos en *buckets*. Son privados por defecto, pero una mala política o ACL puede dejarlos **públicos** — origen de incontables filtraciones. Controles clave: **Block Public Access**, **cifrado** (SSE), políticas de bucket restrictivas y versionado.\n" +
+      "> ⚠️ 'Bucket público' es uno de los hallazgos más comunes y graves en auditorías cloud.",
+    examples: [
+      "Activar 'Block Public Access' a nivel de cuenta.",
+      "Cifrado por defecto (SSE-KMS) en todos los buckets.",
+    ],
+    related: ["IAM y políticas", "Modelo de responsabilidad compartida", "VPC y security groups"],
+  },
+  {
+    id: 483,
+    module: 45,
+    term: "VPC y security groups",
+    short: "La red privada virtual y sus firewalls a nivel de instancia.",
+    detail:
+      "Una **VPC** es tu red aislada en AWS. Dentro, los **security groups** son firewalls **stateful** a nivel de instancia (reglas de entrada/salida) y los **NACLs** filtran a nivel de subred. Segmentar (subredes públicas/privadas) limita el alcance de un compromiso.\n" +
+      "> ⚠️ Un security group con `0.0.0.0/0` en el puerto 22 (SSH) expone la instancia a todo Internet.",
+    examples: [
+      "Base de datos en subred privada, sin IP pública.",
+      "Restringir SSH al rango de IPs de la oficina, no a 0.0.0.0/0.",
+    ],
+    related: ["S3 security", "DMZ y segmentación de red", "CloudTrail y GuardDuty"],
+  },
+  {
+    id: 484,
+    module: 45,
+    term: "CloudTrail y GuardDuty",
+    short: "La auditoría (qué se hizo) y la detección de amenazas gestionada de AWS.",
+    detail:
+      "• **CloudTrail** — registra **todas las llamadas a la API** de la cuenta: quién hizo qué y cuándo. Es la base de la auditoría y la forense en AWS.\n" +
+      "• **GuardDuty** — servicio gestionado que **detecta amenazas** analizando CloudTrail, VPC Flow Logs y DNS (ej. credenciales usadas desde una IP rara, criptominería).\n" +
+      "> 💡 Sin CloudTrail habilitado, una investigación post-incidente en AWS es casi ciega.",
+    examples: [
+      "Detectar con GuardDuty el uso de credenciales IAM desde otro país.",
+      "Revisar CloudTrail para ver quién borró un recurso.",
+    ],
+    related: ["VPC y security groups", "IAM y políticas", "SIEM"],
+  },
+
+  // ── M46 · Cloud Security: Azure y GCP ────────────────────────────────────
+  {
+    id: 490,
+    module: 46,
+    term: "Azure AD / Entra ID y RBAC",
+    short: "El directorio de identidades de Azure y su control de acceso por roles.",
+    detail:
+      "**Microsoft Entra ID** (antes **Azure AD**) es el directorio de identidades de Azure/Microsoft 365. El acceso a recursos se gobierna con **RBAC** (roles asignados a un *scope*: suscripción, grupo de recursos, recurso) y se refuerza con **Conditional Access** y MFA.\n" +
+      "> 💡 Entra ID es el equivalente cloud de Active Directory y un objetivo prioritario de los atacantes.",
+    examples: [
+      "Asignar el rol 'Reader' a un grupo a nivel de suscripción.",
+      "Conditional Access que exige MFA fuera de la red corporativa.",
+    ],
+    related: ["GCP IAM", "Cloud hardening", "Active Directory: dominio, bosque y OU"],
+  },
+  {
+    id: 491,
+    module: 46,
+    term: "GCP IAM",
+    short: "El control de acceso de Google Cloud: identidades, roles y service accounts.",
+    detail:
+      "En **GCP**, IAM concede **roles** (primitivos, predefinidos o personalizados) a identidades sobre recursos organizados jerárquicamente (organización → carpeta → proyecto → recurso). Las **service accounts** son identidades para cargas de trabajo; sus claves son un objetivo sensible.\n" +
+      "> ⚠️ Las claves de service account filtradas son una vía directa de compromiso; preferir identidades sin clave (Workload Identity).",
+    examples: [
+      "Un rol predefinido 'roles/storage.objectViewer' sobre un proyecto.",
+      "Workload Identity para evitar claves de service account.",
+    ],
+    related: ["Azure AD / Entra ID y RBAC", "IAM y políticas", "Cloud hardening"],
+  },
+  {
+    id: 492,
+    module: 46,
+    term: "Cloud hardening y CSPM",
+    short: "Endurecer la configuración cloud y vigilarla de forma continua.",
+    detail:
+      "El **hardening cloud** aplica buenas prácticas (mínimo privilegio, cifrado, sin recursos públicos, logging). Como la configuración cambia rápido, se usan herramientas **CSPM** (*Cloud Security Posture Management*) que **escanean continuamente** contra benchmarks (CIS) y alertan de desviaciones (un bucket que se volvió público, un puerto abierto).",
+    examples: [
+      "Prowler/ScoutSuite auditando una cuenta contra el CIS Benchmark.",
+      "Una alerta CSPM cuando alguien expone una base de datos.",
+    ],
+    related: ["Hardening y CIS Benchmarks", "Multi-cloud", "S3 security"],
+  },
+  {
+    id: 493,
+    module: 46,
+    term: "Multi-cloud",
+    short: "Usar varios proveedores a la vez: más resiliencia, más complejidad de seguridad.",
+    detail:
+      "Una estrategia **multi-cloud** (AWS + Azure + GCP) evita el *lock-in* y mejora la resiliencia, pero **multiplica la superficie**: cada nube tiene su modelo de IAM, su jerga y sus controles. El reto es la **visibilidad y políticas unificadas**, donde el CSPM y una gestión de identidad centralizada ayudan.",
+    examples: [
+      "Cargas en AWS y backups en GCP para resiliencia.",
+      "Un CSPM único que cubre las tres nubes con una sola consola.",
+    ],
+    related: ["Cloud hardening y CSPM", "Azure AD / Entra ID y RBAC", "GCP IAM"],
+  },
+
+  // ── M47 · Container Security ──────────────────────────────────────────────
+  {
+    id: 500,
+    module: 47,
+    term: "Seguridad de Docker e imágenes",
+    short: "Las imágenes de contenedor deben ser mínimas, sin secretos y de origen confiable.",
+    detail:
+      "Una **imagen** de contenedor empaqueta app + dependencias en **capas**. Riesgos: imágenes base con vulnerabilidades, **secretos embebidos** (claves en una capa), correr como **root**. Buenas prácticas: imágenes mínimas (distroless), usuario no-root, no incluir secretos.\n" +
+      "USER 1000\n" +
+      "> ⚠️ Un secreto añadido y luego 'borrado' sigue estando en una **capa anterior** de la imagen.",
+    examples: [
+      "Usar una imagen distroless en vez de una con todo un SO.",
+      "Pasar secretos por variables/volúmenes, nunca dentro de la imagen.",
+    ],
+    related: ["Image scanning", "Kubernetes security", "Pod security"],
+  },
+  {
+    id: 501,
+    module: 47,
+    term: "Image scanning",
+    short: "Analizar las imágenes en busca de vulnerabilidades y secretos antes de desplegarlas.",
+    detail:
+      "El **image scanning** revisa cada capa contra bases de CVEs y busca secretos/malas configuraciones. Herramientas: **Trivy**, **Grype**, **Clair**. Se integra en el pipeline para **bloquear** imágenes con vulnerabilidades críticas antes del despliegue.\n" +
+      "trivy image miapp:latest\n" +
+      "> 💡 Escanear en el registro y en el CI evita que llegue a producción una imagen vulnerable.",
+    examples: [
+      "trivy bloqueando un build por una CVE crítica en la imagen base.",
+      "Escaneo programado de las imágenes del registro.",
+    ],
+    related: ["Seguridad de Docker e imágenes", "Dependency scanning (SCA)", "Pipeline DevSecOps"],
+  },
+  {
+    id: 502,
+    module: 47,
+    term: "Kubernetes security (RBAC)",
+    short: "Controlar quién y qué puede hacer cada cosa dentro del clúster.",
+    detail:
+      "**Kubernetes** orquesta contenedores y su seguridad arranca en el **RBAC** del clúster: roles que limitan qué puede hacer cada usuario/service account sobre los recursos (pods, secrets). Otros pilares: proteger el **API server** y el **etcd**, y no dar permisos de cluster-admin a la ligera.\n" +
+      "> ⚠️ Un service account con permisos excesivos montado en un pod comprometido = compromiso del clúster.",
+    examples: [
+      "Un Role que solo permite leer pods en un namespace.",
+      "Deshabilitar el automount del token de service account cuando no se usa.",
+    ],
+    related: ["Pod security", "Seguridad de Docker e imágenes", "Mínimo privilegio"],
+  },
+  {
+    id: 503,
+    module: 47,
+    term: "Pod security y network policies",
+    short: "Restringir lo que un pod puede hacer y con quién puede hablar.",
+    detail:
+      "Dos controles clave dentro del clúster:\n" +
+      "• **Pod Security** (Standards/admission) — impide pods privilegiados, root, o con acceso al host.\n" +
+      "• **Network Policies** — firewall entre pods: por defecto todo se habla con todo; una política restringe el tráfico (ej. el frontend solo habla con el backend).\n" +
+      "> 💡 Sin network policies, un pod comprometido puede moverse lateralmente a todo el clúster.",
+    examples: [
+      "Una NetworkPolicy que aísla la base de datos del resto de pods.",
+      "Bloquear pods privilegiados con Pod Security Admission.",
+    ],
+    related: ["Kubernetes security (RBAC)", "DMZ y segmentación de red", "Seguridad de Docker e imágenes"],
+  },
+
+  // ── M48 · DevSecOps y CI/CD ──────────────────────────────────────────────
+  {
+    id: 510,
+    module: 48,
+    term: "Shift-left",
+    short: "Integrar la seguridad desde el inicio del desarrollo, no al final.",
+    detail:
+      "**Shift-left** desplaza la seguridad **hacia la izquierda** del ciclo de vida: en vez de auditar al final (caro y tardío), se valida desde el **diseño y el código**. La idea: encontrar y arreglar fallos **lo antes posible**, cuando cuestan mucho menos.\n" +
+      "> 💡 Un bug de seguridad cuesta órdenes de magnitud más arreglarlo en producción que en el código.",
+    examples: [
+      "Threat modeling en la fase de diseño de una feature.",
+      "Linters de seguridad que corren en cada commit.",
+    ],
+    related: ["SAST y DAST", "Pipeline DevSecOps", "Infrastructure as Code (IaC)"],
+  },
+  {
+    id: 511,
+    module: 48,
+    term: "SAST y DAST",
+    short: "Analizar el código (estático) y la app corriendo (dinámico) en busca de fallos.",
+    detail:
+      "Dos enfoques complementarios:\n" +
+      "| | SAST | DAST |\n" +
+      "|---|---|---|\n" +
+      "| Qué analiza | El código fuente | La app en ejecución |\n" +
+      "| Cuándo | Temprano (sin ejecutar) | Más tarde (app desplegada) |\n" +
+      "| Ve | Bugs en el código | Fallos visibles desde fuera |\n" +
+      "Ejemplos: **Semgrep/SonarQube** (SAST), **OWASP ZAP** (DAST).",
+    examples: [
+      "Semgrep detectando una query SQL concatenada (SAST).",
+      "OWASP ZAP probando XSS contra el entorno de staging (DAST).",
+    ],
+    related: ["Shift-left", "Dependency scanning (SCA)", "Pipeline DevSecOps"],
+  },
+  {
+    id: 512,
+    module: 48,
+    term: "Dependency scanning (SCA)",
+    short: "Detectar vulnerabilidades conocidas en las librerías de terceros.",
+    detail:
+      "El **SCA** (*Software Composition Analysis*) inventaría las **dependencias** y las compara con bases de CVEs, ya que el grueso del código moderno es de terceros (OWASP A06). Herramientas: **Dependabot**, **Snyk**, `npm audit`. También vigila licencias.\n" +
+      "npm audit --audit-level=high\n" +
+      "> 💡 Es la defensa directa contra el riesgo 'Vulnerable and Outdated Components' del OWASP Top 10.",
+    examples: [
+      "Dependabot abriendo un PR para parchear una librería con CVE.",
+      "Bloquear el build si hay una dependencia con vuln crítica.",
+    ],
+    related: ["Vulnerable and Outdated Components", "Image scanning", "Pipeline DevSecOps"],
+  },
+  {
+    id: 513,
+    module: 48,
+    term: "Seguridad del pipeline y secretos",
+    short: "El propio CI/CD es un objetivo: protege sus credenciales y su integridad.",
+    detail:
+      "El pipeline de CI/CD tiene acceso a código, credenciales y producción, así que es un blanco (cadena de suministro). Controles: **gestión de secretos** (vaults, no en el repo), **mínimo privilegio** de los runners, **firmar artefactos** y proteger la configuración del pipeline.\n" +
+      "> ⚠️ Un secreto hardcodeado en el repo o en logs del CI es de los hallazgos más explotados.",
+    examples: [
+      "Inyectar secretos desde un vault, nunca commitearlos.",
+      "Escaneo de secretos (gitleaks) en cada push.",
+    ],
+    related: ["Software and Data Integrity Failures", "Infrastructure as Code (IaC)", "Pipeline DevSecOps"],
+  },
+  {
+    id: 514,
+    module: 48,
+    term: "Infrastructure as Code (IaC)",
+    short: "Definir la infraestructura en código permite versionarla y escanearla.",
+    detail:
+      "La **IaC** (Terraform, CloudFormation) declara la infraestructura como **código**, lo que la hace **reproducible, versionable y auditable**. Su seguridad: **escanear** las plantillas (tfsec, Checkov) para detectar malas configuraciones (un bucket público, un SG abierto) **antes** de desplegar.\n" +
+      "tfsec ./infra\n" +
+      "> 💡 Arreglar una mala config en el código IaC la corrige en todos los entornos a la vez.",
+    examples: [
+      "Checkov detectando un security group con 0.0.0.0/0 en el plan.",
+      "Revisar el plan de Terraform en el PR antes del apply.",
+    ],
+    related: ["Seguridad del pipeline y secretos", "Cloud hardening y CSPM", "Shift-left"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

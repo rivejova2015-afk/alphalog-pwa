@@ -367,6 +367,36 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Operacionalizar", desc: "Convertir un hunt fructífero en una regla de detección automática y un playbook repetible.", defenses: ["Nueva regla en el SIEM", "Hunting playbook documentado"] },
     ],
   },
+  {
+    id: 24,
+    module: 47,
+    name: "Las 4 C de la seguridad cloud-native",
+    kind: "layers",
+    summary:
+      "La seguridad de contenedores se organiza en capas concéntricas: cada capa depende de la de fuera. Si la Cloud es insegura, no hay Código que la salve.",
+    phases: [
+      { n: 1, name: "Cloud", desc: "La capa más externa: la infraestructura del proveedor y su configuración (IAM, red, cuentas).", defenses: ["IAM de mínimo privilegio", "Hardening de la cuenta", "CSPM"] },
+      { n: 2, name: "Cluster", desc: "El orquestador (Kubernetes): API server, etcd, RBAC y políticas del clúster.", defenses: ["RBAC estricto", "Proteger API server/etcd", "Network policies"] },
+      { n: 3, name: "Container", desc: "La imagen y el runtime del contenedor: vulnerabilidades, secretos, privilegios.", defenses: ["Image scanning", "Usuario no-root", "Imágenes mínimas"] },
+      { n: 4, name: "Code", desc: "La capa más interna: el código de la aplicación y sus dependencias.", defenses: ["SAST/DAST", "Dependency scanning", "Gestión de secretos"] },
+    ],
+  },
+  {
+    id: 25,
+    module: 48,
+    name: "Pipeline DevSecOps (shift-left)",
+    kind: "flow",
+    summary:
+      "La seguridad embebida en cada etapa del ciclo de entrega de software. Cada fase tiene su control automático, atrapando los fallos lo antes posible.",
+    phases: [
+      { n: 1, name: "Plan", desc: "Diseño y requisitos: se modela la amenaza antes de escribir código.", defenses: ["Threat modeling", "Requisitos de seguridad"] },
+      { n: 2, name: "Code", desc: "Desarrollo: análisis estático y detección de secretos en cada commit.", defenses: ["SAST", "Escaneo de secretos (gitleaks)", "Revisión de código"] },
+      { n: 3, name: "Build", desc: "Compilación y empaquetado: se analizan dependencias e imágenes.", defenses: ["Dependency scanning (SCA)", "Image scanning", "Firmar artefactos"] },
+      { n: 4, name: "Test", desc: "Pruebas sobre la app desplegada en staging.", defenses: ["DAST", "Pruebas de seguridad automatizadas"] },
+      { n: 5, name: "Deploy", desc: "Despliegue: se valida la infraestructura como código antes del apply.", defenses: ["IaC scanning (tfsec/Checkov)", "Gates de aprobación"] },
+      { n: 6, name: "Operate", desc: "Producción: monitoreo continuo y respuesta a lo que aparezca en runtime.", defenses: ["CSPM + runtime security", "Logging y alertas", "Parcheo continuo"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

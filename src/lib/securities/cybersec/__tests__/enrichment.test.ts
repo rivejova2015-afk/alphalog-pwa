@@ -15,6 +15,7 @@ const SOCIAL_MODULES = [34, 35];
 const MALWARE_MODULES = [36, 37, 38];
 const FORENSE_MODULES = [39, 40, 41];
 const BLUE_MODULES = [42, 43, 44];
+const CLOUD_MODULES = [45, 46, 47, 48];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -76,6 +77,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Blue Team (M42-M44) tiene ≥4 definiciones", () => {
     for (const m of BLUE_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Cloud (M45-M48) tiene ≥4 definiciones", () => {
+    for (const m of CLOUD_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -157,6 +163,12 @@ describe("FRAMEWORKS", () => {
     expect(ir!.phases).toHaveLength(6);
     expect(frameworksByModule(44).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M47 tiene las 4 C (layers, 4) y M48 el pipeline DevSecOps (flow)", () => {
+    const fourC = frameworksByModule(47).find((f) => f.kind === "layers");
+    expect(fourC).toBeDefined();
+    expect(fourC!.phases).toHaveLength(4);
+    expect(frameworksByModule(48).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -205,6 +217,9 @@ describe("TIMELINES", () => {
   });
   it("M42 tiene línea de tiempo (evolución de la defensa/SOC)", () => {
     expect(timelinesByModule(42).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M45 tiene línea de tiempo (evolución del cloud)", () => {
+    expect(timelinesByModule(45).length).toBeGreaterThanOrEqual(1);
   });
 });
 

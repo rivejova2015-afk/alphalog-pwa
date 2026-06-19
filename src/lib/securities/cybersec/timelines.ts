@@ -185,6 +185,20 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2023, title: "Hunting y detección con IA", desc: "El threat hunting proactivo y la analítica con IA se vuelven estándar frente a adversarios más rápidos.", impact: "medium" },
     ],
   },
+  {
+    id: 15,
+    module: 45,
+    title: "Evolución del cloud y su seguridad",
+    events: [
+      { year: 2006, title: "AWS", desc: "Amazon lanza S3 y EC2; nace la nube pública moderna y un nuevo modelo de responsabilidad.", impact: "high" },
+      { year: 2010, title: "Azure", desc: "Microsoft entra al cloud; comienza la era multi-proveedor empresarial.", impact: "medium" },
+      { year: 2013, title: "Docker", desc: "Populariza los contenedores; cambia cómo se empaqueta y despliega el software.", impact: "high" },
+      { year: 2014, title: "Kubernetes", desc: "Google libera el orquestador que se vuelve el estándar de facto cloud-native.", impact: "high" },
+      { year: 2017, title: "Brechas por misconfiguración", desc: "Filtraciones masivas por buckets S3 públicos consagran la config del cliente como el riesgo #1.", impact: "high" },
+      { year: 2019, title: "Capital One (SSRF a la nube)", desc: "Un SSRF roba credenciales IAM de AWS; hito de la seguridad cloud y el SSRF.", impact: "high" },
+      { year: 2022, title: "CSPM y DevSecOps", desc: "El escaneo continuo de postura y el shift-left se vuelven estándar para domar la complejidad cloud.", impact: "medium" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
