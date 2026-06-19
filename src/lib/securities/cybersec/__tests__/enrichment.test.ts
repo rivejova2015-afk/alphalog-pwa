@@ -20,6 +20,7 @@ const ESPEC_MODULES = [49, 50];
 const PROG_MODULES = [51, 52, 53, 54, 55, 56, 57, 58];
 const EXPLOIT_MODULES = [59, 60, 61, 62];
 const CRIPTOADV_MODULES = [63, 64, 65, 66];
+const AIML_MODULES = [67, 68, 69, 70];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -106,6 +107,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Cripto Avanzada (M63-M66) tiene ≥4 definiciones", () => {
     for (const m of CRIPTOADV_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de AI/ML Security (M67-M70) tiene ≥4 definiciones", () => {
+    for (const m of AIML_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -212,6 +218,12 @@ describe("FRAMEWORKS", () => {
     expect(modelos!.phases).toHaveLength(4);
     expect(frameworksByModule(64).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M69 tiene el OWASP LLM Top 10 (controls, 10) y M67 la superficie ML (flow)", () => {
+    const llm = frameworksByModule(69).find((f) => f.kind === "controls");
+    expect(llm).toBeDefined();
+    expect(llm!.phases).toHaveLength(10);
+    expect(frameworksByModule(67).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -275,6 +287,9 @@ describe("TIMELINES", () => {
   });
   it("M64 tiene línea de tiempo (hacia la cripto post-cuántica)", () => {
     expect(timelinesByModule(64).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M69 tiene línea de tiempo (seguridad en IA/ML)", () => {
+    expect(timelinesByModule(69).length).toBeGreaterThanOrEqual(1);
   });
 });
 

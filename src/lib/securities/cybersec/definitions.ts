@@ -4742,6 +4742,248 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Desafíos de performance", "Esquemas FHE", "Aplicaciones de ZKP/MPC"],
   },
+
+  // ── M67 · Adversarial Machine Learning ───────────────────────────────────
+  {
+    id: 700,
+    module: 67,
+    term: "Adversarial examples",
+    short: "Entradas con perturbaciones diminutas, imperceptibles, que engañan al modelo.",
+    detail:
+      "Un **adversarial example** es una entrada modificada con un **ruido mínimo** (invisible para un humano) calculado para que el modelo la **clasifique mal** con alta confianza. Revela que las redes neuronales no 'entienden' como nosotros.\n" +
+      "> 💡 El caso clásico: una imagen de un panda + ruido imperceptible que el modelo clasifica como 'gibón' con 99% de confianza.",
+    examples: [
+      "Una pegatina en una señal de STOP que un coche autónomo lee como '45 km/h'.",
+      "Perturbar unos píxeles para evadir un clasificador de imágenes.",
+    ],
+    related: ["Ataques de evasión", "Data poisoning y backdoors", "Defensas y robustez"],
+  },
+  {
+    id: 701,
+    module: 67,
+    term: "Ataques de evasión",
+    short: "Manipular la entrada en inferencia para que el modelo dé la salida que el atacante quiere.",
+    detail:
+      "Un **ataque de evasión** ocurre en **tiempo de inferencia**: el atacante altera la entrada (sin tocar el modelo) para **evadir** la detección o forzar una clasificación. Es la categoría más común en producción (antivirus ML, filtros de spam, detección de fraude).\n" +
+      "> 💡 Caja blanca (conoce el modelo) vs caja negra (solo observa salidas): los ataques transfieren sorprendentemente bien entre modelos.",
+    examples: [
+      "Ofuscar un malware para que el clasificador ML lo vea como benigno.",
+      "Modificar un email para saltarse el filtro de spam basado en ML.",
+    ],
+    related: ["Adversarial examples", "Defensas y robustez", "Detección de anomalías en tráfico"],
+  },
+  {
+    id: 702,
+    module: 67,
+    term: "Data poisoning y backdoors",
+    short: "Envenenar los datos de entrenamiento para corromper el modelo o instalarle una puerta trasera.",
+    detail:
+      "Atacar **antes** del despliegue, en el **entrenamiento**:\n" +
+      "• **Poisoning** — inyectar datos malos para degradar el rendimiento del modelo.\n" +
+      "• **Backdoor (trojan)** — entrenar el modelo para que se comporte normal salvo cuando ve un **trigger** secreto, ante el cual da la salida elegida por el atacante.\n" +
+      "> ⚠️ Crítico cuando se reentrena con datos públicos o se usan modelos/datasets de terceros (supply chain).",
+    examples: [
+      "Un backdoor que clasifica como 'autorizado' cualquier cara con un sticker concreto.",
+      "Envenenar un dataset público scrapeado de Internet.",
+    ],
+    related: ["Adversarial examples", "ML supply chain", "Defensas y robustez"],
+  },
+  {
+    id: 703,
+    module: 67,
+    term: "Defensas y robustez",
+    short: "Endurecer el modelo contra entradas adversariales (entrenamiento adversarial, detección).",
+    detail:
+      "No hay bala de plata, pero se combinan defensas:\n" +
+      "• **Adversarial training** — entrenar incluyendo ejemplos adversariales (la más efectiva).\n" +
+      "• **Detección** de entradas anómalas/adversariales.\n" +
+      "• **Destilación defensiva**, sanitización de datos de entrenamiento, ensembles.\n" +
+      "> ⚠️ Es una **carrera armamentista**: muchas defensas caen ante ataques adaptativos.",
+    examples: [
+      "Reentrenar con adversarial examples para subir la robustez.",
+      "Un detector que rechaza entradas fuera de la distribución.",
+    ],
+    related: ["Ataques de evasión", "Adversarial examples", "Data poisoning y backdoors"],
+  },
+
+  // ── M68 · Privacy Attacks on ML ──────────────────────────────────────────
+  {
+    id: 710,
+    module: 68,
+    term: "Model extraction",
+    short: "Robar un modelo consultándolo: reconstruir una copia funcional desde sus respuestas.",
+    detail:
+      "El **model extraction** (model stealing) reconstruye un modelo **propietario** consultándolo muchas veces (vía su API) y entrenando un sustituto con los pares entrada/salida. Roba la **propiedad intelectual** y, además, el sustituto facilita ataques de evasión en caja blanca.\n" +
+      "> ⚠️ Por eso las APIs de ML aplican rate limiting y vigilan patrones de consulta sospechosos.",
+    examples: [
+      "Clonar un clasificador de pago consultándolo masivamente.",
+      "Entrenar un sustituto local para luego generar adversarial examples.",
+    ],
+    related: ["Membership inference", "Model inversion", "Ataques de evasión"],
+  },
+  {
+    id: 711,
+    module: 68,
+    term: "Membership inference",
+    short: "Determinar si un dato concreto formó parte del entrenamiento del modelo.",
+    detail:
+      "Un ataque de **membership inference** decide si un **registro específico** estuvo en el set de entrenamiento, observando la **confianza** del modelo (suele estar más seguro con datos que ya vio). Es un problema de **privacidad** grave si el dataset es sensible.\n" +
+      "> ⚠️ Saber que la historia clínica de alguien estuvo en el entrenamiento de un modelo de cáncer ya filtra información privada.",
+    examples: [
+      "Inferir que un paciente estuvo en el dataset de un modelo médico.",
+      "El sobreajuste (overfitting) agrava la fuga: el modelo 'memoriza'.",
+    ],
+    related: ["Model inversion", "Differential privacy", "Model extraction"],
+  },
+  {
+    id: 712,
+    module: 68,
+    term: "Model inversion",
+    short: "Reconstruir datos de entrenamiento (o atributos sensibles) a partir del modelo.",
+    detail:
+      "La **model inversion** reconstruye **características de los datos de entrenamiento** explotando el modelo: por ejemplo, recuperar una cara representativa de una clase, o inferir atributos sensibles. Los LLMs pueden además **regurgitar** verbatim datos memorizados (PII, secretos).\n" +
+      "> ⚠️ Modelos entrenados con datos personales pueden filtrarlos al ser interrogados con astucia.",
+    examples: [
+      "Reconstruir una imagen reconocible de una persona del set de entrenamiento.",
+      "Un LLM que repite una clave de API vista en su corpus.",
+    ],
+    related: ["Membership inference", "Differential privacy", "Fuga de datos y output handling"],
+  },
+  {
+    id: 713,
+    module: 68,
+    term: "Differential privacy",
+    short: "Añadir ruido calibrado para que ningún individuo se pueda distinguir en los resultados.",
+    detail:
+      "La **privacidad diferencial (DP)** es la principal defensa: añade **ruido matemáticamente calibrado** de modo que la presencia o ausencia de **un individuo** no cambie apreciablemente el resultado. Da una **garantía formal** de privacidad (parámetro ε), a costa de algo de precisión.\n" +
+      "> 💡 Se aplica al entrenamiento (DP-SGD) o a las consultas agregadas.",
+    examples: [
+      "DP-SGD para entrenar un modelo con garantía de privacidad.",
+      "Estadísticas agregadas con ruido para no exponer a nadie.",
+    ],
+    related: ["Membership inference", "Model inversion", "Cifrado homomórfico"],
+  },
+
+  // ── M69 · LLM Security ───────────────────────────────────────────────────
+  {
+    id: 720,
+    module: 69,
+    term: "OWASP LLM Top 10",
+    short: "Los 10 riesgos de seguridad más críticos en aplicaciones con LLMs.",
+    detail:
+      "El **OWASP Top 10 for LLM Applications** estandariza los riesgos propios de las apps con modelos de lenguaje, encabezados por la **prompt injection**. Es la referencia para auditar chatbots, copilots y agentes.\n" +
+      "> 💡 Ver el diagrama 'OWASP LLM Top 10' con los 10 riesgos y su mitigación.",
+    examples: [
+      "Usar el OWASP LLM Top 10 como checklist al integrar un chatbot.",
+      "Mapear los hallazgos de un pentest de IA a sus categorías.",
+    ],
+    related: ["Prompt injection y jailbreaks", "Fuga de datos y output handling", "RAG y agentes"],
+  },
+  {
+    id: 721,
+    module: 69,
+    term: "Prompt injection y jailbreaks",
+    short: "Instrucciones maliciosas que secuestran al LLM para que ignore sus reglas.",
+    detail:
+      "La **prompt injection** inyecta instrucciones que el modelo obedece como si fueran legítimas:\n" +
+      "• **Directa (jailbreak)** — el usuario manipula al modelo para saltarse sus restricciones ('ignora tus instrucciones…').\n" +
+      "• **Indirecta** — el payload viene en **contenido externo** que el LLM procesa (una web, un email, un documento en un RAG).\n" +
+      "> ⚠️ La indirecta es la más peligrosa en agentes: una web envenenada puede hacer que el agente exfiltre datos o ejecute acciones.",
+    examples: [
+      "Un comentario en una web que ordena al agente 'envía los emails a X'.",
+      "Un jailbreak que extrae el system prompt o contenido prohibido.",
+    ],
+    related: ["OWASP LLM Top 10", "RAG y agentes", "Fuga de datos y output handling"],
+  },
+  {
+    id: 722,
+    module: 69,
+    term: "Fuga de datos y output handling",
+    short: "El LLM puede filtrar datos sensibles, y su salida no debe tratarse como confiable.",
+    detail:
+      "Dos riesgos ligados:\n" +
+      "• **Fuga de datos** — el modelo revela su **system prompt**, datos de entrenamiento o información de otros usuarios/contexto.\n" +
+      "• **Insecure output handling** — tratar la salida del LLM como confiable: si se inserta en HTML (XSS), en una shell (RCE) o en una query (SQLi), es inyección clásica.\n" +
+      "> ⚠️ Regla: la salida de un LLM es **entrada no confiable**; validar/escapar antes de usarla.",
+    examples: [
+      "Un chatbot que revela su system prompt con la pregunta adecuada.",
+      "Insertar la respuesta del LLM en la página sin escapar → XSS.",
+    ],
+    related: ["Prompt injection y jailbreaks", "Model inversion", "Prevención de inyección"],
+  },
+  {
+    id: 723,
+    module: 69,
+    term: "RAG y agentes",
+    short: "Darle al LLM herramientas y datos externos amplía su poder — y su superficie de ataque.",
+    detail:
+      "• **RAG** (*Retrieval-Augmented Generation*) — el LLM consulta una base de conocimiento; si esa fuente está envenenada, sufre **prompt injection indirecta**.\n" +
+      "• **Agentes** — el LLM puede **ejecutar acciones** (APIs, código, email). La **excessive agency** (demasiados permisos) convierte una inyección en daño real.\n" +
+      "> 💡 Defensa: mínimo privilegio de las herramientas, **human-in-the-loop** para acciones sensibles, y aislar/validar las fuentes del RAG.",
+    examples: [
+      "Un agente con acceso al correo que, tras una inyección, exfiltra datos.",
+      "Envenenar un documento del RAG para manipular las respuestas.",
+    ],
+    related: ["Prompt injection y jailbreaks", "OWASP LLM Top 10", "Mínimo privilegio"],
+  },
+
+  // ── M70 · MLSecOps y ML Supply Chain ─────────────────────────────────────
+  {
+    id: 730,
+    module: 70,
+    term: "ML supply chain",
+    short: "Modelos, datasets y librerías de terceros heredan (y propagan) riesgo.",
+    detail:
+      "El ML moderno reúsa **modelos pre-entrenados**, **datasets** y librerías de hubs públicos (Hugging Face, etc.). Cada pieza es un eslabón de **cadena de suministro**: un modelo con backdoor, un dataset envenenado o una dependencia comprometida infectan todo lo que los usa.\n" +
+      "> ⚠️ Descargar y ejecutar un modelo de origen desconocido es como ejecutar un binario desconocido.",
+    examples: [
+      "Un modelo popular en un hub con un backdoor oculto.",
+      "Typosquatting de un paquete de ML para colar código malicioso.",
+    ],
+    related: ["Serialización insegura", "Provenance e integridad", "Vulnerable and Outdated Components"],
+  },
+  {
+    id: 731,
+    module: 70,
+    term: "Serialización insegura",
+    short: "Cargar un modelo en formato pickle puede ejecutar código arbitrario.",
+    detail:
+      "Muchos modelos se distribuyen en **pickle** (Python), un formato que **ejecuta código** al deserializar: cargar un `.pkl`/`.pt` malicioso es **RCE directo**. Por eso se prefieren formatos seguros como **safetensors**, que solo contienen tensores sin código.\n" +
+      "> ⚠️ `torch.load`/`pickle.load` de un archivo no confiable ejecuta lo que el atacante quiera.",
+    examples: [
+      "Un checkpoint .pt que abre una reverse shell al cargarse.",
+      "Migrar a safetensors para eliminar el vector de pickle.",
+    ],
+    related: ["ML supply chain", "Provenance e integridad", "Software and Data Integrity Failures"],
+  },
+  {
+    id: 732,
+    module: 70,
+    term: "Provenance e integridad",
+    short: "Saber de dónde viene cada modelo/dato y verificar que no fue alterado.",
+    detail:
+      "Defensa de la supply chain: **provenance** (rastro verificable del origen y el proceso de creación) e **integridad** (firmas y hashes). Se materializa en **firmar modelos**, un **ML-BOM** (inventario de componentes del modelo) y verificar la procedencia antes de desplegar.\n" +
+      "> 💡 Es el equivalente, en ML, de firmar artefactos y mantener un SBOM en DevSecOps.",
+    examples: [
+      "Firmar y verificar el modelo antes de promoverlo a producción.",
+      "Un ML-BOM que lista datasets, pesos y dependencias usados.",
+    ],
+    related: ["Serialización insegura", "ML supply chain", "Seguridad del pipeline ML (MLSecOps)"],
+  },
+  {
+    id: 733,
+    module: 70,
+    term: "Seguridad del pipeline ML (MLSecOps)",
+    short: "Llevar las prácticas DevSecOps al ciclo de vida del machine learning.",
+    detail:
+      "**MLSecOps** integra seguridad en todo el pipeline de ML: datos, entrenamiento, registro de modelos, despliegue y monitoreo. Añade controles propios — **escaneo de modelos** (backdoors/pickle), validación de datos, **mínimo privilegio** del pipeline, y monitoreo de **drift** y de ataques en inferencia.\n" +
+      "> 💡 Es el shift-left aplicado a ML: atrapar el riesgo en los datos y el entrenamiento, no en producción.",
+    examples: [
+      "Escanear cada modelo en el CI antes de registrarlo.",
+      "Monitorear la inferencia para detectar evasión/abuso.",
+    ],
+    related: ["Provenance e integridad", "ML supply chain", "Pipeline DevSecOps"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

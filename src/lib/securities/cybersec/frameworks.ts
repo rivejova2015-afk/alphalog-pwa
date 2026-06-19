@@ -507,6 +507,41 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Cripto-agilidad", desc: "Diseñar para poder rotar de algoritmo sin reescribir el sistema, y monitorear.", defenses: ["Abstracción del algoritmo", "Capacidad de rotación", "Monitoreo continuo"] },
     ],
   },
+  {
+    id: 33,
+    module: 67,
+    name: "Superficie de ataque del ciclo de vida ML",
+    kind: "flow",
+    summary:
+      "Un modelo se puede atacar en cada fase de su vida, no solo en producción. Mapear la superficie por fase orienta las defensas.",
+    phases: [
+      { n: 1, name: "Recolección de datos", desc: "Las fuentes de datos pueden envenenarse (data poisoning) para sesgar o corromper el modelo.", defenses: ["Validación/sanitización de datos", "Fuentes confiables"] },
+      { n: 2, name: "Entrenamiento", desc: "Se pueden insertar backdoors (triggers) que activan un comportamiento oculto.", defenses: ["Detección de backdoors", "Datasets verificados", "Differential privacy"] },
+      { n: 3, name: "Modelo (artefacto)", desc: "El modelo en sí es un activo: robo (extraction) y supply chain (pickle, hubs).", defenses: ["Firmar modelos", "safetensors", "ML-BOM"] },
+      { n: 4, name: "Despliegue", desc: "La API expuesta permite consultas masivas (extraction) e inferencias de privacidad.", defenses: ["Rate limiting", "Monitoreo de consultas anómalas"] },
+      { n: 5, name: "Inferencia", desc: "En producción: evasión (adversarial examples), membership inference, model inversion.", defenses: ["Adversarial training", "Detección de entradas anómalas"] },
+    ],
+  },
+  {
+    id: 34,
+    module: 69,
+    name: "OWASP LLM Top 10",
+    kind: "controls",
+    summary:
+      "Los 10 riesgos más críticos de las aplicaciones con modelos de lenguaje, encabezados por la prompt injection. La referencia para auditar chatbots, copilots y agentes.",
+    phases: [
+      { n: 1, name: "LLM01 — Prompt Injection", desc: "Instrucciones maliciosas (directas o vía contenido externo) que secuestran al modelo.", defenses: ["Separar instrucciones de datos", "Validar fuentes externas", "Filtrado de entrada"] },
+      { n: 2, name: "LLM02 — Insecure Output Handling", desc: "Tratar la salida del LLM como confiable e insertarla en HTML/shell/SQL.", defenses: ["Escapar/validar la salida", "Tratarla como entrada no confiable"] },
+      { n: 3, name: "LLM03 — Training Data Poisoning", desc: "Envenenar los datos de entrenamiento o fine-tuning para sesgar o instalar backdoors.", defenses: ["Validar datasets", "Provenance de datos"] },
+      { n: 4, name: "LLM04 — Model Denial of Service", desc: "Consultas costosas que agotan recursos o disparan los costes.", defenses: ["Rate limiting", "Límites de tokens/coste"] },
+      { n: 5, name: "LLM05 — Supply Chain", desc: "Modelos, datasets o plugins de terceros comprometidos.", defenses: ["Verificar origen", "ML-BOM", "Escaneo de modelos"] },
+      { n: 6, name: "LLM06 — Sensitive Information Disclosure", desc: "El modelo filtra system prompt, PII o datos de otros usuarios.", defenses: ["Minimización de datos", "Filtrado de salida", "Aislamiento de contexto"] },
+      { n: 7, name: "LLM07 — Insecure Plugin/Tool Design", desc: "Herramientas/plugins con entradas mal validadas o permisos excesivos.", defenses: ["Validación de entradas de tools", "Mínimo privilegio"] },
+      { n: 8, name: "LLM08 — Excessive Agency", desc: "El agente tiene demasiados permisos/autonomía; una inyección causa daño real.", defenses: ["Mínimo privilegio", "Human-in-the-loop", "Acciones acotadas"] },
+      { n: 9, name: "LLM09 — Overreliance", desc: "Confiar ciegamente en una salida que puede ser incorrecta o alucinada.", defenses: ["Verificación humana", "Citar fuentes", "Comunicar incertidumbre"] },
+      { n: 10, name: "LLM10 — Model Theft", desc: "Robo del modelo propietario por extracción o acceso no autorizado.", defenses: ["Control de acceso", "Rate limiting", "Watermarking"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

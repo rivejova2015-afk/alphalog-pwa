@@ -251,6 +251,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2024, title: "Estándares NIST", desc: "Se publican ML-KEM, ML-DSA y SLH-DSA: los primeros estándares PQC oficiales.", impact: "high" },
     ],
   },
+  {
+    id: 20,
+    module: 69,
+    title: "Evolución de la seguridad en IA/ML",
+    events: [
+      { year: 2014, title: "Adversarial examples", desc: "Szegedy y Goodfellow muestran que perturbaciones imperceptibles engañan a las redes neuronales.", impact: "high" },
+      { year: 2016, title: "Chatbot Tay", desc: "El bot de Microsoft es 'envenenado' por usuarios en horas; lección temprana de data poisoning en producción.", impact: "medium" },
+      { year: 2019, title: "Auge de los deepfakes", desc: "La generación sintética realista convierte la IA en herramienta de desinformación y fraude.", impact: "high" },
+      { year: 2022, title: "ChatGPT y los LLMs", desc: "La adopción masiva de LLMs abre una superficie de ataque nueva (prompt injection, agentes).", impact: "high" },
+      { year: 2023, title: "OWASP LLM Top 10", desc: "OWASP estandariza los riesgos de las apps con LLMs; la prompt injection encabeza la lista.", impact: "high" },
+      { year: 2024, title: "MLSecOps y regulación IA", desc: "Madura la seguridad del pipeline ML y llegan marcos (EU AI Act, NIST AI RMF).", impact: "medium" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
