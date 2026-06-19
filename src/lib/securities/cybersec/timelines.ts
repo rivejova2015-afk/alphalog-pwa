@@ -291,6 +291,20 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2023, title: "BlackLotus", desc: "Primer bootkit UEFI que evade Secure Boot mediante baton drop; demuestra que la cadena UEFI sigue rompible.", impact: "high" },
     ],
   },
+  {
+    id: 23,
+    module: 79,
+    title: "Hitos del vulnerability research moderno",
+    events: [
+      { year: 1999, title: "CVE", desc: "MITRE crea el sistema CVE; nace el identificador global de vulnerabilidades.", impact: "high" },
+      { year: 2007, title: "AFL", desc: "American Fuzzy Lop populariza el fuzzing coverage-guided; cambia el panorama de descubrimiento de bugs.", impact: "high" },
+      { year: 2014, title: "Google Project Zero", desc: "Se funda el equipo que estandariza el responsible disclosure con deadline de 90 días.", impact: "high" },
+      { year: 2016, title: "oss-fuzz", desc: "Google ofrece fuzzing continuo a proyectos open source; miles de bugs encontrados antes de release.", impact: "high" },
+      { year: 2017, title: "Pwn2Own madura", desc: "El concurso de Trend Micro ZDI consolida el mercado de 0-days y exploits de cadena completa.", impact: "medium" },
+      { year: 2021, title: "Apple Security Research", desc: "Apple lanza su programa de research devices; señal del valor que las big tech dan al VR responsable.", impact: "medium" },
+      { year: 2022, title: "CISA KEV", desc: "Se estandariza la lista de vulnerabilidades explotadas conocidas, vital para priorizar parches.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

@@ -23,6 +23,7 @@ const CRIPTOADV_MODULES = [63, 64, 65, 66];
 const AIML_MODULES = [67, 68, 69, 70];
 const HW_MODULES = [71, 72, 73, 74];
 const REV_MODULES = [75, 76, 77, 78];
+const RESEARCH_MODULES = [79, 80, 81, 82];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -124,6 +125,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Reversing Avanzado (M75-M78) tiene ≥4 definiciones", () => {
     for (const m of REV_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Investigación (M79-M82) tiene ≥4 definiciones", () => {
+    for (const m of RESEARCH_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -246,6 +252,12 @@ describe("FRAMEWORKS", () => {
     expect(rk!.phases).toHaveLength(5);
     expect(frameworksByModule(78).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M79 tiene el ciclo del 0-day (flow) y M80 el Diamond Model (layers, 4)", () => {
+    expect(frameworksByModule(79).some((f) => f.kind === "flow")).toBe(true);
+    const diamond = frameworksByModule(80).find((f) => f.kind === "layers");
+    expect(diamond).toBeDefined();
+    expect(diamond!.phases).toHaveLength(4);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -318,6 +330,9 @@ describe("TIMELINES", () => {
   });
   it("M77 tiene línea de tiempo (rootkits y evasión)", () => {
     expect(timelinesByModule(77).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M79 tiene línea de tiempo (hitos del vulnerability research)", () => {
+    expect(timelinesByModule(79).length).toBeGreaterThanOrEqual(1);
   });
 });
 

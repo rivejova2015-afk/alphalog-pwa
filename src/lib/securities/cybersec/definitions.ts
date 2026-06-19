@@ -5486,6 +5486,259 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Command and Control (C2)", "Evasión de EDR", "Threat hunting"],
   },
+
+  // ── M79 · Vulnerability Research y Fuzzing ───────────────────────────────
+  {
+    id: 820,
+    module: 79,
+    term: "Vulnerability research mindset",
+    short: "Buscar bugs no es solo correr herramientas: es modelar el software y atacar sus suposiciones.",
+    detail:
+      "El **vulnerability research (VR)** combina lectura de código, **modelado de amenaza** (qué confía el software de qué) y herramientas automatizadas. El investigador busca **suposiciones implícitas** rotas: validaciones que se confunden, estados que se solapan, límites mal puestos.\n" +
+      "> 💡 La pregunta clave: ¿qué da por sentado el desarrollador que el atacante puede cambiar?",
+    examples: [
+      "Hallar un bug de parsing al leer un código auditando suposiciones.",
+      "Mapear la superficie de ataque antes de tocar fuzzing.",
+    ],
+    related: ["Fuzzing coverage-guided", "Fuzzing avanzado", "Ciclo del 0-day"],
+  },
+  {
+    id: 821,
+    module: 79,
+    term: "Fuzzing coverage-guided",
+    short: "Inyecta entradas aleatorias y se guía por la cobertura de código para descubrir caminos nuevos.",
+    detail:
+      "El **fuzzing moderno** (AFL/AFL++, libFuzzer, honggfuzz) **instrumenta** el binario para medir cobertura: cada entrada que **abre una rama nueva** se guarda y se muta. Así explora el código de forma dirigida, mucho más eficaz que el fuzzing ciego.\n" +
+      "afl-fuzz -i seeds/ -o out/ -- ./target @@\n" +
+      "> 💡 Es la técnica que destapó miles de CVEs (oss-fuzz lleva ~10.000 bugs en proyectos open source).",
+    examples: [
+      "AFL++ encontrando un crash en un parser de imágenes.",
+      "oss-fuzz integrado en proyectos open source con CI.",
+    ],
+    related: ["Vulnerability research mindset", "Fuzzing avanzado", "Concólica (DSE)"],
+  },
+  {
+    id: 822,
+    module: 79,
+    term: "Fuzzing avanzado",
+    short: "Diccionarios, harnesses, fuzzing diferencial y feedback de sanitizers para llegar más profundo.",
+    detail:
+      "Técnicas avanzadas que multiplican la efectividad:\n" +
+      "• **Diccionarios y grammars** — para formatos estructurados (JSON, ASN.1).\n" +
+      "• **Harnesses** — código que expone la API objetivo al fuzzer.\n" +
+      "• **Sanitizers** (**ASan**, **UBSan**, **MSan**) — detectan bugs invisibles al crash.\n" +
+      "• **Fuzzing diferencial** — comparar dos implementaciones del mismo protocolo.\n" +
+      "• **Snapshot/coverage-guided híbrido** + **concolic** para romper cuellos de botella.",
+    examples: [
+      "Un harness para fuzzear la librería de parsing TLS.",
+      "ASan detectando un heap UAF que el programa no crashea.",
+    ],
+    related: ["Fuzzing coverage-guided", "Vulnerability research mindset", "Triage y ciclo del 0-day"],
+  },
+  {
+    id: 823,
+    module: 79,
+    term: "Triage y ciclo del 0-day",
+    short: "Del crash al CVE: deduplicar, evaluar explotabilidad, escribir PoC, reportar y publicar.",
+    detail:
+      "Un crash no es un 0-day; hay que **triagear**: deduplicar (¿es nuevo?), **clasificar** la causa raíz (UAF/OOB/overflow), evaluar **explotabilidad**, escribir un **PoC mínimo**, hacer **disclosure responsable** al vendor y obtener un **CVE**. Solo entonces se publica.\n" +
+      "> 💡 Ver el diagrama 'Ciclo del 0-day' con cada etapa y su buena práctica.",
+    examples: [
+      "Reducir un fuzz crash de 4 MB a un PoC de 200 bytes.",
+      "90 días de embargo coordinado antes de publicar el detalle.",
+    ],
+    related: ["Fuzzing avanzado", "Responsible disclosure", "CVE y CVSS"],
+  },
+
+  // ── M80 · Threat Intelligence y APT Tracking ─────────────────────────────
+  {
+    id: 830,
+    module: 80,
+    term: "Fundamentos de CTI",
+    short: "Convertir datos crudos sobre amenazas en conocimiento que orienta decisiones de defensa.",
+    detail:
+      "La **Cyber Threat Intelligence** trabaja en 4 niveles:\n" +
+      "| Nivel | Audiencia | Contenido |\n" +
+      "|---|---|---|\n" +
+      "| Estratégico | Dirección | Tendencias, geopolítica |\n" +
+      "| Operacional | CISO/Líderes | Campañas específicas |\n" +
+      "| Táctico | SOC/IR | TTPs |\n" +
+      "| Técnico | Engineers | IoCs |\n" +
+      "> 💡 CTI sin acción es solo noticias; debe **mover** detección, parcheo o priorización.",
+    examples: [
+      "Un reporte que justifica acelerar el parcheo de una CVE.",
+      "Boletines de campañas activas contra el sector financiero.",
+    ],
+    related: ["Frameworks (Diamond, ATT&CK)", "APT tracking", "Operacionalizar (STIX/TAXII)"],
+  },
+  {
+    id: 831,
+    module: 80,
+    term: "Frameworks (Diamond, ATT&CK)",
+    short: "Modelos para describir adversarios: Diamond para atribuir, ATT&CK para mapear TTPs.",
+    detail:
+      "• **Diamond Model** — describe un evento por 4 vértices: **adversario**, **capacidad** (malware/TTP), **infraestructura** (C2/dominios) y **víctima**. Conectar eventos por vértices compartidos atribuye campañas.\n" +
+      "• **MITRE ATT&CK** — catálogo de TTPs por táctica; la lingua franca para mapear detecciones y reportes.\n" +
+      "> 💡 Diamond para narrar lo que pasó; ATT&CK para enlazarlo con detección/defensa.",
+    examples: [
+      "Mapear un IR a ATT&CK para identificar gaps de detección.",
+      "Diamond conectando dos incidentes vía la misma infraestructura.",
+    ],
+    related: ["Fundamentos de CTI", "APT tracking", "MITRE ATT&CK"],
+  },
+  {
+    id: 832,
+    module: 80,
+    term: "APT tracking",
+    short: "Seguir a grupos persistentes: TTPs, infraestructura, motivaciones — más allá del IoC.",
+    detail:
+      "Los **APT** (*Advanced Persistent Threats*) son grupos organizados (estatales o crimeware) con objetivos sostenidos. El tracking sigue sus **TTPs** (lo más difícil de cambiar — Pirámide del Dolor), su **infraestructura** y sus **víctimas/motivos**. Las atribuciones suelen tener **alias** (APT28/Fancy Bear, Lazarus) y **confianza graduada** (probable, alta).\n" +
+      "> ⚠️ Atribuir es difícil: los grupos imitan TTPs ajenos (false flags) para confundir.",
+    examples: [
+      "Atribuir una campaña a APT41 por el reuso de un loader único.",
+      "Compartir IoCs y reportes vía MISP entre equipos.",
+    ],
+    related: ["Frameworks (Diamond, ATT&CK)", "Operacionalizar (STIX/TAXII)", "Actor de amenaza"],
+  },
+  {
+    id: 833,
+    module: 80,
+    term: "Operacionalizar (STIX/TAXII)",
+    short: "Estándares para compartir CTI máquina-a-máquina: STIX (formato) + TAXII (transporte).",
+    detail:
+      "• **STIX** — formato JSON estandarizado para describir IoCs, TTPs, actores, malware, relaciones.\n" +
+      "• **TAXII** — protocolo HTTPS para distribuir feeds STIX entre organizaciones (consumir/publicar).\n" +
+      "• **MISP** — plataforma open source para crear comunidades de intercambio.\n" +
+      "> 💡 Sin estándares, cada equipo reinventa el formato; con STIX/TAXII, la CTI fluye automáticamente.",
+    examples: [
+      "Suscribirse al feed TAXII de un ISAC sectorial.",
+      "Publicar un evento MISP con IoCs y TTPs de una campaña.",
+    ],
+    related: ["Fundamentos de CTI", "APT tracking", "Indicadores de compromiso (IoC)"],
+  },
+
+  // ── M81 · Metodología de Security Research ───────────────────────────────
+  {
+    id: 840,
+    module: 81,
+    term: "Hacer investigación en seguridad",
+    short: "Una mezcla de ingeniería, ciencia y comunicación: hipótesis, experimentación, publicación.",
+    detail:
+      "La **research** seria es más que 'rompí algo': formular una **pregunta** clara, una **hipótesis** comprobable, experimentar de forma **reproducible**, **medir** y **publicar** con honestidad sobre límites. Combina ingeniería (montar el setup), ciencia (rigor) y comunicación (que se entienda).\n" +
+      "> 💡 Pregunta motora: ¿qué afirmación verificable estoy probando o refutando?",
+    examples: [
+      "Una hipótesis: 'la mitigación X no resiste el ataque Y'.",
+      "Reproducir un trabajo publicado para validar sus claims.",
+    ],
+    related: ["Responsible disclosure", "Ecosistema CVE/CVSS", "Comunicar (papers/PoCs)"],
+  },
+  {
+    id: 841,
+    module: 81,
+    term: "Responsible disclosure",
+    short: "Avisar al vendor primero, dar tiempo a parchear, publicar coordinado para minimizar daño.",
+    detail:
+      "El **responsible (coordinated) disclosure** equilibra el derecho del usuario a saber con el riesgo de armar al atacante. El estándar de facto: **90 días** (Google Project Zero) o **45/60/90** según gravedad y respuesta. Si el vendor ignora, se publica igual.\n" +
+      "> ⚠️ Lo opuesto: **full disclosure** inmediato (presiona pero pone usuarios en riesgo) o **vender** el bug (gris/negro).",
+    examples: [
+      "Reportar a security@ del vendor con PoC y deadline.",
+      "Coordinar la publicación con el día del parche.",
+    ],
+    related: ["Hacer investigación en seguridad", "Ecosistema CVE/CVSS", "Triage y ciclo del 0-day"],
+  },
+  {
+    id: 842,
+    module: 81,
+    term: "Ecosistema CVE/CVSS",
+    short: "CVE asigna un id global; CVSS lo puntúa; CNAs emiten los CVEs.",
+    detail:
+      "Cuando se reporta un bug:\n" +
+      "• Un **CNA** (*CVE Numbering Authority*: vendor, MITRE, ZDI) **asigna** un **CVE-YYYY-NNNN**.\n" +
+      "• Se calcula un **CVSS** (vector y score 0-10).\n" +
+      "• Si está siendo explotado, suele entrar en la **CISA KEV** (Known Exploited Vulnerabilities).\n" +
+      "> 💡 Pedir un CVE temprano formaliza el bug y facilita parches/comunicación.",
+    examples: [
+      "Solicitar un CVE a MITRE si el vendor no es CNA.",
+      "Una vuln en KEV pasa al top de la cola de parcheo.",
+    ],
+    related: ["CVE y CVSS", "Responsible disclosure", "Hacer investigación en seguridad"],
+  },
+  {
+    id: 843,
+    module: 81,
+    term: "Comunicar (papers, PoCs, charlas)",
+    short: "El trabajo no existe hasta que otros pueden leerlo, reproducirlo y construir encima.",
+    detail:
+      "Vehículos de difusión: **papers académicos** (USENIX, IEEE S&P), **blog posts** técnicos, **PoCs** en GitHub, **charlas** (Black Hat, DEF CON, Offensive Con). El reto es contar **suficiente** para que se entienda y se reproduzca, sin **armar** a actores oportunistas más allá de lo necesario.\n" +
+      "> 💡 Un buen writeup explica el camino mental, no solo el exploit.",
+    examples: [
+      "Un paper con setup reproducible y código publicado.",
+      "Un PoC que dispara una alerta pero no daña producción.",
+    ],
+    related: ["Hacer investigación en seguridad", "Responsible disclosure", "Portfolio y carrera"],
+  },
+
+  // ── M82 · Formal Methods y Verificación ──────────────────────────────────
+  {
+    id: 850,
+    module: 82,
+    term: "Por qué formal methods",
+    short: "Probar matemáticamente que el software cumple una propiedad — no solo testearlo.",
+    detail:
+      "Los **métodos formales** **demuestran** que un sistema cumple una propiedad (no hay overflow, dos hilos no compiten, el protocolo es seguro). Un test prueba que **un caso** funciona; una prueba formal cubre **todos**. Coste alto, pero invaluable en software crítico (kernels, blockchains, criptografía).\n" +
+      "> 💡 Donde un bug cuesta vidas o miles de millones, vale el esfuerzo formal.",
+    examples: [
+      "El microkernel seL4 con código verificado formalmente.",
+      "Demostrar que una implementación de TLS cumple su spec.",
+    ],
+    related: ["Model checking y theorem proving", "Sistemas verificados", "Límites y práctica"],
+  },
+  {
+    id: 851,
+    module: 82,
+    term: "Model checking y theorem proving",
+    short: "Dos familias: explorar exhaustivamente estados (model checking) o demostrar teoremas paso a paso.",
+    detail:
+      "• **Model checking** — modela el sistema como estados, explora **todos** y verifica una propiedad (TLA+, SPIN). Automático pero limitado por la **explosión de estados**.\n" +
+      "• **Theorem proving** — escribe el sistema y la propiedad en una lógica formal y **demuestra** el teorema con asistente (Coq, Isabelle, Lean). Más general, pero requiere experto y mucho tiempo.\n" +
+      "> 💡 Para hardware y protocolos: model checking. Para kernel/compiladores: theorem proving.",
+    examples: [
+      "Verificar un protocolo distribuido con TLA+ y descubrir un edge case.",
+      "Demostrar en Coq que un compilador preserva la semántica.",
+    ],
+    related: ["Por qué formal methods", "Sistemas verificados", "Ejecución simbólica"],
+  },
+  {
+    id: 852,
+    module: 82,
+    term: "Sistemas verificados",
+    short: "Ejemplos reales donde la verificación formal cambió el listón (seL4, CompCert, AWS).",
+    detail:
+      "Casos emblemáticos:\n" +
+      "• **seL4** — primer microkernel funcionalmente verificado (sin bugs en su código).\n" +
+      "• **CompCert** — compilador C cuya traducción está demostrada.\n" +
+      "• **AWS** — usa TLA+ y SMT para servicios como S3, DynamoDB; halló bugs profundos antes de producción.\n" +
+      "• **Blockchains** — contratos formalmente verificados para evitar pérdidas millonarias.",
+    examples: [
+      "Amazon describiendo cómo TLA+ encontró bugs en S3 antes de release.",
+      "Contratos de DeFi verificados con Certora.",
+    ],
+    related: ["Por qué formal methods", "Model checking y theorem proving", "Límites y práctica"],
+  },
+  {
+    id: 853,
+    module: 82,
+    term: "Límites y práctica",
+    short: "Coste, expertise y modelado: lo formal no escala a todo — se usa donde el riesgo lo justifica.",
+    detail:
+      "Los métodos formales tienen **límites duros**: coste de tiempo y de experto, **explosión de estados**, dependencia del **modelo** (si modelas mal, la prueba miente), y la brecha entre la **especificación** y la **implementación**. La práctica es **focalizada**: verificar el corazón crítico (cripto, kernel, protocolo) y testear el resto.\n" +
+      "> ⚠️ 'Verificado' no implica 'seguro': la spec puede tener huecos o el modelo asumir cosas falsas.",
+    examples: [
+      "Verificar solo la rutina de validación de firmas, no todo el sistema.",
+      "Un bug fuera de la spec verificada que igual causa una vuln.",
+    ],
+    related: ["Sistemas verificados", "Por qué formal methods", "Hacer investigación en seguridad"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

@@ -602,6 +602,37 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Acción sobre el objetivo", desc: "Reconocimiento interno, robo de credenciales, movimiento lateral, exfiltración.", defenses: ["Segmentación", "Detección de PsExec/PtH", "Alertas de egress"] },
     ],
   },
+  {
+    id: 39,
+    module: 79,
+    name: "Ciclo del 0-day",
+    kind: "flow",
+    summary:
+      "El camino que va de un crash de fuzzing a un CVE público, paso a paso. Cada etapa tiene una buena práctica que separa al amateur del investigador serio.",
+    phases: [
+      { n: 1, name: "Hipótesis y target", desc: "Elegir un objetivo (parser, kernel driver) y formular qué tipo de bug buscas y dónde es probable.", defenses: ["Modelado de superficie", "Pregunta de investigación clara"] },
+      { n: 2, name: "Setup de fuzzing/recon", desc: "Montar harnesses, seeds, sanitizers; o leer código si vas estático.", defenses: ["Cobertura instrumentada", "Reproducibilidad del setup"] },
+      { n: 3, name: "Crash o hallazgo", desc: "El fuzzer escupe crashes o el análisis revela un mal manejo; capturar todo.", defenses: ["Logging completo", "Guardar entradas que cruzan"] },
+      { n: 4, name: "Triage y reducción", desc: "Deduplicar, reducir a PoC mínimo, identificar causa raíz y clase de bug (UAF/OOB/...)", defenses: ["Reducción agresiva", "Causa raíz documentada"] },
+      { n: 5, name: "Evaluar explotabilidad", desc: "¿Es controlable? ¿Sortea las mitigaciones del objetivo? Esto define la severidad real.", defenses: ["CVSS realista", "Considerar mitigaciones del SO"] },
+      { n: 6, name: "Disclosure y CVE", desc: "Reportar al vendor con PoC y deadline; pedir CVE; coordinar fecha de publicación.", defenses: ["Responsible disclosure", "Embargo coordinado"] },
+      { n: 7, name: "Publicación", desc: "Writeup, blog, charla o paper. Suficiente detalle para reproducir, sin armar más de lo necesario.", defenses: ["Material reproducible", "Mitigación recomendada"] },
+    ],
+  },
+  {
+    id: 40,
+    module: 80,
+    name: "Diamond Model de Intrusion Analysis",
+    kind: "layers",
+    summary:
+      "Cada evento de intrusión se describe por 4 vértices: adversario, capacidad, infraestructura y víctima. Conectar eventos por vértices compartidos atribuye campañas.",
+    phases: [
+      { n: 1, name: "Adversario", desc: "Quién está detrás: actor, grupo, alias, motivación, geopolítica.", defenses: ["Threat intelligence", "Atribución con confianza graduada"] },
+      { n: 2, name: "Capacidad", desc: "Qué usa: malware, exploits, TTPs concretas, herramientas (Cobalt Strike, custom loaders).", defenses: ["YARA por familia", "Detección por TTPs (ATT&CK)"] },
+      { n: 3, name: "Infraestructura", desc: "Dónde se apoya: C2, dominios, certificados, hosting; suele compartirse entre campañas.", defenses: ["Pivoting sobre infraestructura", "Sinkholes y takedowns"] },
+      { n: 4, name: "Víctima", desc: "A quién apunta: sector, geografía, tipo de organización; el patrón delata motivación.", defenses: ["Información sectorial (ISACs)", "Defensa según target group"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {
