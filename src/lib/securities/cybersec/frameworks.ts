@@ -478,6 +478,35 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Llamar a mprotect/system", desc: "La cadena invoca una función/syscall (mprotect→shellcode, o system) y ejecuta.", defenses: ["CFI/IBT", "seccomp (limitar syscalls)"] },
     ],
   },
+  {
+    id: 31,
+    module: 63,
+    name: "Modelos de ataque criptográfico",
+    kind: "layers",
+    summary:
+      "Los modelos se ordenan por el poder del atacante, del más débil al más fuerte. Un cifrado serio debe resistir el modelo más fuerte (chosen-ciphertext).",
+    phases: [
+      { n: 1, name: "Ciphertext-only (COA)", desc: "El atacante solo tiene textos cifrados. El escenario más limitado.", defenses: ["Cualquier cifrado moderno lo resiste", "Sin patrones (no ECB)"] },
+      { n: 2, name: "Known-plaintext (KPA)", desc: "Conoce pares de texto claro y su cifrado correspondiente.", defenses: ["Resistencia a diferencial/lineal", "Claves robustas"] },
+      { n: 3, name: "Chosen-plaintext (CPA)", desc: "Puede cifrar textos que elija y observar el resultado.", defenses: ["Seguridad IND-CPA", "IV/nonce aleatorio por mensaje"] },
+      { n: 4, name: "Chosen-ciphertext (CCA)", desc: "Puede además pedir el descifrado de textos elegidos (oráculo). El más fuerte.", defenses: ["Seguridad IND-CCA", "AEAD (AES-GCM)", "Sin padding oracles"] },
+    ],
+  },
+  {
+    id: 32,
+    module: 64,
+    name: "Migración a la criptografía post-cuántica",
+    kind: "flow",
+    summary:
+      "Cómo una organización transita a algoritmos resistentes a lo cuántico. La meta final no es un algoritmo concreto, sino la cripto-agilidad para poder cambiarlo.",
+    phases: [
+      { n: 1, name: "Inventario (CBOM)", desc: "Descubrir dónde y cómo se usa criptografía en toda la organización.", defenses: ["Inventario completo de cripto", "Identificar algoritmos vulnerables (RSA/ECC)"] },
+      { n: 2, name: "Evaluación de riesgo", desc: "Priorizar por sensibilidad y vida útil del dato (riesgo 'harvest now, decrypt later').", defenses: ["Priorizar datos de larga vida", "Clasificación de datos"] },
+      { n: 3, name: "Selección de algoritmos", desc: "Elegir estándares NIST (ML-KEM, ML-DSA) acordes a cada caso.", defenses: ["Estándares validados", "Tamaños/rendimiento adecuados"] },
+      { n: 4, name: "Despliegue híbrido", desc: "Combinar clásico + post-cuántico para no depender de un esquema aún joven.", defenses: ["Híbrido (X25519 + ML-KEM)", "Pruebas de interoperabilidad"] },
+      { n: 5, name: "Cripto-agilidad", desc: "Diseñar para poder rotar de algoritmo sin reescribir el sistema, y monitorear.", defenses: ["Abstracción del algoritmo", "Capacidad de rotación", "Monitoreo continuo"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

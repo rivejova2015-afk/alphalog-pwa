@@ -4477,6 +4477,271 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Construcción de cadenas ROP", "JOP y automatización", "La carrera de mitigaciones de explotación"],
   },
+
+  // ── M63 · Criptoanálisis ─────────────────────────────────────────────────
+  {
+    id: 660,
+    module: 63,
+    term: "Modelos de ataque criptográfico",
+    short: "Se clasifican por cuánto puede el atacante: del solo-cifrado al texto-claro elegido.",
+    detail:
+      "La fortaleza de un cifrado se mide contra atacantes de **poder creciente**:\n" +
+      "| Modelo | El atacante tiene |\n" +
+      "|---|---|\n" +
+      "| Ciphertext-only (COA) | Solo textos cifrados |\n" +
+      "| Known-plaintext (KPA) | Pares claro/cifrado |\n" +
+      "| Chosen-plaintext (CPA) | Puede cifrar lo que elija |\n" +
+      "| Chosen-ciphertext (CCA) | Puede descifrar lo que elija |\n" +
+      "> 💡 Un cifrado serio debe resistir el modelo más fuerte (**IND-CCA**); ver el diagrama de modelos de ataque.",
+    examples: [
+      "WEP cayó en gran parte por ataques de tipo known-plaintext.",
+      "Un padding oracle es un ataque de tipo chosen-ciphertext.",
+    ],
+    related: ["Criptoanálisis diferencial y lineal", "Ataques a implementaciones", "Modos de operación"],
+  },
+  {
+    id: 661,
+    module: 63,
+    term: "Criptoanálisis diferencial y lineal",
+    short: "Las dos técnicas clásicas para atacar cifrados de bloque por sus sesgos estadísticos.",
+    detail:
+      "• **Diferencial** — estudia cómo **diferencias** en la entrada se propagan a la salida; si ciertas diferencias son más probables, se filtra información de la clave.\n" +
+      "• **Lineal** — busca **aproximaciones lineales** entre bits de entrada, salida y clave que se cumplen con sesgo.\n" +
+      "> 💡 DES fue diseñado (sin decirlo) resistente al diferencial; AES se diseñó explícitamente robusto contra ambos.",
+    examples: [
+      "Atacar un cifrado con pocas rondas mediante criptoanálisis diferencial.",
+      "Medir el sesgo lineal de una S-box débil.",
+    ],
+    related: ["Modelos de ataque criptográfico", "AES vs DES/3DES", "Ataques a implementaciones"],
+  },
+  {
+    id: 662,
+    module: 63,
+    term: "Side-channel attacks",
+    short: "Atacar la implementación física, no las matemáticas: tiempo, consumo, caché.",
+    detail:
+      "Un **canal lateral** filtra información por **cómo se ejecuta** el algoritmo, no por su diseño:\n" +
+      "• **Timing** — el tiempo de cómputo depende de bits de la clave.\n" +
+      "• **Power/EM** — el consumo eléctrico revela operaciones (DPA).\n" +
+      "• **Cache** — accesos a memoria dependientes de la clave (Flush+Reload).\n" +
+      "> ⚠️ Mitigación: implementaciones **constant-time** (sin ramas ni accesos dependientes del secreto).",
+    examples: [
+      "Recuperar una clave RSA midiendo tiempos de descifrado.",
+      "Un ataque de caché contra una tabla de AES no protegida.",
+    ],
+    related: ["Ataques a implementaciones", "Modelos de ataque criptográfico", "Side-channels microarquitectónicos"],
+  },
+  {
+    id: 663,
+    module: 63,
+    term: "Ataques a implementaciones",
+    short: "El algoritmo es sólido pero su uso/implementación filtra el secreto (padding oracle).",
+    detail:
+      "Muchos ataques reales no rompen el cifrado sino su **implementación**: el **padding oracle** (la app revela si el padding es válido) permite descifrar CBC byte a byte; **Bleichenbacher** ataca el padding de RSA PKCS#1. La lección: los **detalles** (padding, manejo de errores, nonces) son tan críticos como el algoritmo.\n" +
+      "> 💡 Usar AEAD (AES-GCM) y librerías probadas evita la mayoría de estos errores.",
+    examples: [
+      "Un padding oracle que descifra una cookie cifrada en CBC.",
+      "Bleichenbacher (ROBOT) contra TLS mal implementado.",
+    ],
+    related: ["Side-channel attacks", "Modos de operación", "Modelos de ataque criptográfico"],
+  },
+
+  // ── M64 · Criptografía Post-Cuántica ─────────────────────────────────────
+  {
+    id: 670,
+    module: 64,
+    term: "Amenaza cuántica",
+    short: "Shor rompe RSA/ECC; Grover solo debilita la cripto simétrica (mitigable subiendo claves).",
+    detail:
+      "Dos algoritmos cuánticos preocupan:\n" +
+      "• **Shor** — factoriza y resuelve el logaritmo discreto en tiempo polinómico → **rompe RSA, ECC y Diffie-Hellman**.\n" +
+      "• **Grover** — acelera la búsqueda (raíz cuadrada) → **debilita** la simétrica, pero basta **duplicar** la clave (AES-256) para neutralizarlo.\n" +
+      "> ⚠️ El riesgo **'harvest now, decrypt later'**: capturar tráfico cifrado hoy para descifrarlo cuando exista el ordenador cuántico.",
+    examples: [
+      "RSA-2048 sería trivial para un ordenador cuántico grande.",
+      "AES-256 se considera 'quantum-safe' (Grover solo lo lleva a ~128 bits).",
+    ],
+    related: ["Familias de criptografía post-cuántica", "Estándares NIST PQC", "Amenaza cuántica y post-quantum"],
+  },
+  {
+    id: 671,
+    module: 64,
+    term: "Familias de criptografía post-cuántica",
+    short: "Esquemas basados en problemas que ni un cuántico resuelve fácil: retículos, hash, códigos.",
+    detail:
+      "La **PQC** se apoya en problemas matemáticos resistentes a lo cuántico:\n" +
+      "| Familia | Base | Ejemplo |\n" +
+      "|---|---|---|\n" +
+      "| Retículos (lattice) | Problemas en retículos | Kyber, Dilithium |\n" +
+      "| Basada en hash | Seguridad de funciones hash | SPHINCS+ |\n" +
+      "| Basada en códigos | Códigos correctores | Classic McEliece |\n" +
+      "| Isogenias | Curvas elípticas isógenas | (SIKE, roto en 2022) |\n" +
+      "> 💡 Los **retículos** dominan por su buen equilibrio tamaño/velocidad.",
+    examples: [
+      "Kyber (retículos) para intercambio de claves post-cuántico.",
+      "SPHINCS+ (hash) como firma conservadora.",
+    ],
+    related: ["Amenaza cuántica", "Estándares NIST PQC", "Migración y cripto-agilidad"],
+  },
+  {
+    id: 672,
+    module: 64,
+    term: "Estándares NIST PQC",
+    short: "Los algoritmos post-cuánticos ya estandarizados tras años de competición pública.",
+    detail:
+      "Tras una competición abierta (2016-2024), el **NIST** estandarizó los primeros algoritmos PQC en 2024:\n" +
+      "• **ML-KEM** (antes Kyber) — encapsulado de claves.\n" +
+      "• **ML-DSA** (antes Dilithium) y **SLH-DSA** (SPHINCS+) — firmas.\n" +
+      "Son la base recomendada para la transición.\n" +
+      "> 💡 La caída de **SIKE** (2022) durante el proceso recordó que la PQC aún es joven; por eso se despliega en **modo híbrido** (clásico + PQC).",
+    examples: [
+      "Adoptar ML-KEM en TLS de forma híbrida con X25519.",
+      "Firmar con ML-DSA en sistemas que deben durar décadas.",
+    ],
+    related: ["Familias de criptografía post-cuántica", "Migración y cripto-agilidad", "Amenaza cuántica"],
+  },
+  {
+    id: 673,
+    module: 64,
+    term: "Migración y cripto-agilidad",
+    short: "Cambiar de algoritmo no es trivial: hay que diseñar sistemas que puedan rotarlo.",
+    detail:
+      "Migrar a PQC es un proyecto plurianual: **inventariar** dónde se usa cripto, **priorizar** por sensibilidad/vida útil del dato, desplegar **híbrido** y, sobre todo, lograr **cripto-agilidad** — que el sistema pueda **cambiar de algoritmo** sin reescribirlo. Ver el diagrama 'Migración a la criptografía post-cuántica'.\n" +
+      "> 💡 La cripto-agilidad es la lección clave: los algoritmos caducan; el diseño debe anticiparlo.",
+    examples: [
+      "Un inventario de toda la cripto de la organización (CBOM).",
+      "Abstraer el algoritmo tras una interfaz para poder rotarlo.",
+    ],
+    related: ["Estándares NIST PQC", "Familias de criptografía post-cuántica", "Gestión de claves"],
+  },
+
+  // ── M65 · Zero-Knowledge Proofs y MPC ────────────────────────────────────
+  {
+    id: 680,
+    module: 65,
+    term: "Pruebas de conocimiento cero (ZKP)",
+    short: "Probar que sabes algo sin revelar qué es.",
+    detail:
+      "Una **prueba de conocimiento cero** permite al *probador* convencer al *verificador* de que una afirmación es cierta **sin revelar** información más allá de su veracidad. Tres propiedades:\n" +
+      "• **Completitud** — si es verdad, el verificador honesto se convence.\n" +
+      "• **Solidez** — si es falso, no puede ser convencido (salvo probabilidad ínfima).\n" +
+      "• **Conocimiento cero** — no se filtra nada del secreto.\n" +
+      "> 💡 Ejemplo intuitivo: probar que conoces la contraseña sin enviarla.",
+    examples: [
+      "Autenticarte demostrando que sabes una clave sin transmitirla.",
+      "Probar que tienes ≥18 años sin revelar tu fecha de nacimiento.",
+    ],
+    related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation", "Aplicaciones de ZKP/MPC"],
+  },
+  {
+    id: 681,
+    module: 65,
+    term: "zk-SNARKs y zk-STARKs",
+    short: "Pruebas ZK sucintas y no interactivas, base de la privacidad en blockchain.",
+    detail:
+      "Construcciones ZK modernas, **sucintas** (la prueba es pequeña y rápida de verificar) y **no interactivas**:\n" +
+      "| | zk-SNARK | zk-STARK |\n" +
+      "|---|---|---|\n" +
+      "| Tamaño de prueba | Muy pequeño | Mayor |\n" +
+      "| Setup de confianza | Requiere (riesgo) | No requiere |\n" +
+      "| Post-cuántico | No | Sí (solo hash) |\n" +
+      "> ⚠️ El **trusted setup** de los SNARKs es delicado: si se filtran sus secretos, se pueden falsificar pruebas.",
+    examples: [
+      "Zcash usa zk-SNARKs para transacciones privadas.",
+      "STARKs para escalar rollups sin trusted setup.",
+    ],
+    related: ["Pruebas de conocimiento cero (ZKP)", "Aplicaciones de ZKP/MPC", "Criptografía Post-Cuántica"],
+  },
+  {
+    id: 682,
+    module: 65,
+    term: "Secure Multi-Party Computation (MPC)",
+    short: "Varias partes computan una función conjunta sin revelarse sus datos privados.",
+    detail:
+      "El **MPC** permite que N partes calculen `f(x1, x2, …)` **sin** que ninguna revele su entrada `xi`. Cada una aprende solo el **resultado**. Se construye con *secret sharing* o circuitos cifrados (garbled circuits).\n" +
+      "> 💡 Ejemplo clásico (Yao): dos millonarios averiguan quién es más rico sin decir cuánto tienen.",
+    examples: [
+      "Varios bancos detectan fraude cruzando datos sin compartirlos.",
+      "Custodia de claves con MPC (firma sin reconstruir la clave).",
+    ],
+    related: ["Pruebas de conocimiento cero (ZKP)", "Aplicaciones de ZKP/MPC", "Cifrado homomórfico"],
+  },
+  {
+    id: 683,
+    module: 65,
+    term: "Aplicaciones de ZKP/MPC",
+    short: "Privacidad verificable: blockchain, identidad, votación, cómputo colaborativo.",
+    detail:
+      "Estas técnicas habilitan **privacidad con garantías**: transacciones privadas y *rollups* en blockchain, **identidad** y credenciales selectivas (probar atributos sin revelar el documento), **votación** verificable y análisis colaborativo de datos sensibles (salud, finanzas) sin compartirlos.",
+    examples: [
+      "Credenciales que prueban 'mayor de edad' sin revelar el DNI.",
+      "ZK-rollups que escalan Ethereum manteniendo privacidad.",
+    ],
+    related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation", "Cifrado homomórfico"],
+  },
+
+  // ── M66 · Cifrado Homomórfico ────────────────────────────────────────────
+  {
+    id: 690,
+    module: 66,
+    term: "Cifrado homomórfico",
+    short: "Computar directamente sobre datos cifrados, sin descifrarlos nunca.",
+    detail:
+      "El **cifrado homomórfico** permite **operar sobre el texto cifrado** de forma que, al descifrar, se obtiene el resultado de haber operado sobre el texto claro. El dato sensible **nunca** se descifra en el servidor.\n" +
+      "> 💡 Idea: enviar datos cifrados a la nube, que los procese a ciegas y devuelva un resultado cifrado que solo tú abres.",
+    examples: [
+      "Calcular estadísticas sobre datos médicos cifrados en la nube.",
+      "Una búsqueda que el servidor resuelve sin ver la consulta.",
+    ],
+    related: ["Esquemas FHE", "Desafíos de performance", "Secure Multi-Party Computation"],
+  },
+  {
+    id: 691,
+    module: 66,
+    term: "Esquemas FHE",
+    short: "Del parcial al totalmente homomórfico: cuántas y qué operaciones se permiten.",
+    detail:
+      "Se clasifican por qué operaciones soportan:\n" +
+      "| Tipo | Operaciones |\n" +
+      "|---|---|\n" +
+      "| PHE (parcial) | Solo una (suma o producto) |\n" +
+      "| SHE (algo) | Ambas, número limitado |\n" +
+      "| FHE (total) | Ambas, ilimitadas |\n" +
+      "El gran salto fue **Gentry (2009)**, el primer esquema **FHE** viable, usando *bootstrapping* para 'refrescar' el ruido del cifrado.",
+    examples: [
+      "RSA es homomórfico parcial (para la multiplicación).",
+      "Esquemas modernos: BGV, BFV, CKKS (este último para reales).",
+    ],
+    related: ["Cifrado homomórfico", "Desafíos de performance", "Aplicaciones y límites del FHE"],
+  },
+  {
+    id: 692,
+    module: 66,
+    term: "Desafíos de performance",
+    short: "El FHE funciona, pero es órdenes de magnitud más lento y pesado.",
+    detail:
+      "El gran freno del FHE es el **coste**: cifrar añade **ruido** que crece con cada operación y obliga a *bootstrapping* (caro); los textos cifrados son **enormes** y las operaciones, **miles de veces más lentas** que en claro. La investigación (y aceleración por hardware) avanza, pero hoy limita su uso a nichos.\n" +
+      "> ⚠️ Por eso a menudo se prefiere MPC o enclaves (TEE) cuando el rendimiento importa.",
+    examples: [
+      "Una operación que en claro es instantánea puede tardar segundos en FHE.",
+      "Librerías como Microsoft SEAL u OpenFHE para experimentar.",
+    ],
+    related: ["Esquemas FHE", "Cifrado homomórfico", "Aplicaciones y límites del FHE"],
+  },
+  {
+    id: 693,
+    module: 66,
+    term: "Aplicaciones y límites del FHE",
+    short: "Cómputo en la nube que preserva la privacidad, donde el coste lo justifique.",
+    detail:
+      "El FHE brilla cuando la **confidencialidad** vale el coste: análisis de datos médicos/financieros en la nube, ML sobre datos cifrados, consultas privadas. Sus **límites** hoy: rendimiento, complejidad de uso y que no resuelve la **integridad** (hay que combinarlo con otras técnicas).\n" +
+      "> 💡 FHE, MPC y ZKP son complementarios: distintos trade-offs de privacidad, cómputo y confianza.",
+    examples: [
+      "Inferencia de un modelo ML sobre datos cifrados del cliente.",
+      "Procesar datos regulados en un cloud no confiable.",
+    ],
+    related: ["Desafíos de performance", "Esquemas FHE", "Aplicaciones de ZKP/MPC"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

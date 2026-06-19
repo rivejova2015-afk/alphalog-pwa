@@ -19,6 +19,7 @@ const CLOUD_MODULES = [45, 46, 47, 48];
 const ESPEC_MODULES = [49, 50];
 const PROG_MODULES = [51, 52, 53, 54, 55, 56, 57, 58];
 const EXPLOIT_MODULES = [59, 60, 61, 62];
+const CRIPTOADV_MODULES = [63, 64, 65, 66];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -100,6 +101,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Exploit Dev Avanzado (M59-M62) tiene ≥4 definiciones", () => {
     for (const m of EXPLOIT_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Cripto Avanzada (M63-M66) tiene ≥4 definiciones", () => {
+    for (const m of CRIPTOADV_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -200,6 +206,12 @@ describe("FRAMEWORKS", () => {
     expect(frameworksByModule(61).some((f) => f.kind === "flow")).toBe(true);
     expect(frameworksByModule(62).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M63 tiene los modelos de ataque (layers, 4) y M64 la migración PQC (flow)", () => {
+    const modelos = frameworksByModule(63).find((f) => f.kind === "layers");
+    expect(modelos).toBeDefined();
+    expect(modelos!.phases).toHaveLength(4);
+    expect(frameworksByModule(64).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -260,6 +272,9 @@ describe("TIMELINES", () => {
   });
   it("M59 tiene línea de tiempo (mitigaciones de explotación)", () => {
     expect(timelinesByModule(59).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M64 tiene línea de tiempo (hacia la cripto post-cuántica)", () => {
+    expect(timelinesByModule(64).length).toBeGreaterThanOrEqual(1);
   });
 });
 

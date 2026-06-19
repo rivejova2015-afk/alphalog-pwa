@@ -239,6 +239,18 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2020, title: "Intel CET", desc: "Shadow stack e IBT por hardware elevan el coste de ROP/JOP.", impact: "high" },
     ],
   },
+  {
+    id: 19,
+    module: 64,
+    title: "Hacia la criptografía post-cuántica",
+    events: [
+      { year: 1994, title: "Algoritmo de Shor", desc: "Demuestra que un ordenador cuántico podría romper RSA y ECC; nace la urgencia post-cuántica.", impact: "high" },
+      { year: 1996, title: "Algoritmo de Grover", desc: "Acelera la búsqueda; obliga a duplicar el tamaño de las claves simétricas.", impact: "medium" },
+      { year: 2016, title: "Competición NIST PQC", desc: "El NIST abre la convocatoria para estandarizar algoritmos resistentes a lo cuántico.", impact: "high" },
+      { year: 2022, title: "Caída de SIKE", desc: "Un esquema candidato (isogenias) se rompe en un fin de semana; recordatorio de que la PQC es joven.", impact: "medium" },
+      { year: 2024, title: "Estándares NIST", desc: "Se publican ML-KEM, ML-DSA y SLH-DSA: los primeros estándares PQC oficiales.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
