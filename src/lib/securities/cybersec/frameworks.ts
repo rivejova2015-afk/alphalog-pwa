@@ -397,6 +397,42 @@ export const FRAMEWORKS: Framework[] = [
       { n: 6, name: "Operate", desc: "Producción: monitoreo continuo y respuesta a lo que aparezca en runtime.", defenses: ["CSPM + runtime security", "Logging y alertas", "Parcheo continuo"] },
     ],
   },
+  {
+    id: 26,
+    module: 49,
+    name: "OWASP IoT Top 10",
+    kind: "controls",
+    summary:
+      "Los 10 riesgos más críticos en dispositivos IoT según OWASP. Encabeza lo más básico: contraseñas y servicios — el IoT suele fallar en lo elemental.",
+    phases: [
+      { n: 1, name: "Contraseñas débiles o por defecto", desc: "Credenciales adivinables, fijas o embebidas.", defenses: ["Forzar cambio en el primer uso", "Sin credenciales por defecto"] },
+      { n: 2, name: "Servicios de red inseguros", desc: "Puertos y servicios innecesarios o vulnerables expuestos.", defenses: ["Cerrar puertos innecesarios", "Cifrado de servicios"] },
+      { n: 3, name: "Interfaces de ecosistema inseguras", desc: "APIs, web o cloud asociadas con fallos (authn/authz, inyección).", defenses: ["Asegurar APIs y portales", "Validación de entrada"] },
+      { n: 4, name: "Falta de actualización segura", desc: "Sin mecanismo de update firmado y verificado.", defenses: ["Updates firmados", "Rollback seguro"] },
+      { n: 5, name: "Componentes inseguros/obsoletos", desc: "Librerías y SW de terceros sin parchear.", defenses: ["Inventario (SBOM)", "Actualización de componentes"] },
+      { n: 6, name: "Protección de privacidad insuficiente", desc: "Datos personales mal protegidos o recolectados de más.", defenses: ["Minimización de datos", "Cifrado de datos personales"] },
+      { n: 7, name: "Transferencia/almacenamiento inseguro", desc: "Datos sin cifrar en tránsito o en reposo.", defenses: ["TLS", "Cifrado en reposo"] },
+      { n: 8, name: "Falta de gestión de dispositivos", desc: "Sin capacidad de monitorear, actualizar o dar de baja la flota.", defenses: ["Plataforma de gestión", "Inventario y baja segura"] },
+      { n: 9, name: "Configuración por defecto insegura", desc: "Ajustes de fábrica débiles que nadie cambia.", defenses: ["Defaults seguros", "Hardening guiado"] },
+      { n: 10, name: "Falta de endurecimiento físico", desc: "Interfaces de depuración (UART/JTAG) y memoria accesibles.", defenses: ["Deshabilitar UART/JTAG en producción", "Flash cifrada"] },
+    ],
+  },
+  {
+    id: 27,
+    module: 50,
+    name: "Estructura de un reporte de pentest",
+    kind: "flow",
+    summary:
+      "Las secciones de un informe profesional, del resumen para dirección al re-test. El reporte es el entregable real: comunica riesgo y remediación, no solo técnica.",
+    phases: [
+      { n: 1, name: "Resumen ejecutivo", desc: "Para la dirección: riesgo global y conclusiones clave, sin jerga técnica.", defenses: ["Lenguaje de negocio", "Impacto y prioridad claros"] },
+      { n: 2, name: "Alcance y metodología", desc: "Qué se probó, qué no, y cómo (estándares seguidos).", defenses: ["Alcance acordado por escrito", "Metodología reproducible"] },
+      { n: 3, name: "Hallazgos", desc: "Cada vulnerabilidad con su severidad (CVSS) y descripción técnica.", defenses: ["Severidad consistente (CVSS)", "Priorización por riesgo"] },
+      { n: 4, name: "Evidencia (PoC)", desc: "Pruebas reproducibles: capturas, pasos y prueba de concepto.", defenses: ["Pasos reproducibles", "Sin dañar producción"] },
+      { n: 5, name: "Recomendaciones", desc: "Remediación concreta y priorizada para cada hallazgo.", defenses: ["Acciones accionables", "Quick wins primero"] },
+      { n: 6, name: "Re-test", desc: "Verificar que las correcciones aplicadas realmente cierran los hallazgos.", defenses: ["Validar la remediación", "Cerrar el ciclo"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

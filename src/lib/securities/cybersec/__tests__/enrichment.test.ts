@@ -16,6 +16,7 @@ const MALWARE_MODULES = [36, 37, 38];
 const FORENSE_MODULES = [39, 40, 41];
 const BLUE_MODULES = [42, 43, 44];
 const CLOUD_MODULES = [45, 46, 47, 48];
+const ESPEC_MODULES = [49, 50];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -82,6 +83,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Cloud (M45-M48) tiene ≥4 definiciones", () => {
     for (const m of CLOUD_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Especializado (M49-M50) tiene ≥4 definiciones", () => {
+    for (const m of ESPEC_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -169,6 +175,12 @@ describe("FRAMEWORKS", () => {
     expect(fourC!.phases).toHaveLength(4);
     expect(frameworksByModule(48).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M49 tiene el OWASP IoT Top 10 (controls, 10) y M50 la estructura de reporte (flow)", () => {
+    const iot = frameworksByModule(49).find((f) => f.kind === "controls");
+    expect(iot).toBeDefined();
+    expect(iot!.phases).toHaveLength(10);
+    expect(frameworksByModule(50).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -220,6 +232,9 @@ describe("TIMELINES", () => {
   });
   it("M45 tiene línea de tiempo (evolución del cloud)", () => {
     expect(timelinesByModule(45).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M49 tiene línea de tiempo (seguridad IoT/móvil)", () => {
+    expect(timelinesByModule(49).length).toBeGreaterThanOrEqual(1);
   });
 });
 

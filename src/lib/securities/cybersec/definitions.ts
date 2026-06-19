@@ -3573,6 +3573,153 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Seguridad del pipeline y secretos", "Cloud hardening y CSPM", "Shift-left"],
   },
+
+  // ── M49 · IoT y Mobile Security ──────────────────────────────────────────
+  {
+    id: 520,
+    module: 49,
+    term: "OWASP IoT Top 10",
+    short: "Los 10 riesgos más comunes en dispositivos del Internet de las Cosas.",
+    detail:
+      "El **OWASP IoT Top 10** lista las debilidades típicas del IoT, encabezadas por las **contraseñas débiles/por defecto**, **servicios de red inseguros** y la **falta de actualización segura**. El IoT combina lo peor de varios mundos: hardware barato, software sin parchear y exposición a Internet.\n" +
+      "> 💡 Ver el diagrama 'OWASP IoT Top 10' más abajo con los 10 riesgos y su mitigación.",
+    examples: [
+      "Una cámara IP con usuario/clave 'admin/admin' expuesta a Internet.",
+      "Un dispositivo sin mecanismo de actualización de firmware.",
+    ],
+    related: ["Análisis de firmware", "Seguridad Android (APK)", "BLE y hardware hacking"],
+  },
+  {
+    id: 521,
+    module: 49,
+    term: "Análisis de firmware",
+    short: "Extraer y examinar el software embebido de un dispositivo para hallar fallos y secretos.",
+    detail:
+      "El **firmware** es el software que corre en el dispositivo. Analizarlo revela **credenciales hardcodeadas**, claves, binarios vulnerables y backdoors. Se **extrae** (de la web del fabricante o leyendo la flash) y se **desempaqueta** con herramientas como **binwalk**.\n" +
+      "binwalk -e firmware.bin\n" +
+      "> ⚠️ Es habitual encontrar claves privadas o contraseñas en claro dentro del sistema de archivos del firmware.",
+    examples: [
+      "binwalk extrayendo el sistema de archivos de un router.",
+      "Hallar una clave SSH embebida en el firmware.",
+    ],
+    related: ["OWASP IoT Top 10", "BLE y hardware hacking", "Análisis estático"],
+  },
+  {
+    id: 522,
+    module: 49,
+    term: "Seguridad Android (APK)",
+    short: "Las apps Android se empaquetan en APK, decompilables para análisis de seguridad.",
+    detail:
+      "Una app **Android** es un **APK** (un ZIP con código DEX, recursos y el manifest). Se **decompila** (jadx, apktool) para revisar permisos excesivos, **secretos embebidos**, endpoints y lógica insegura. El **OWASP Mobile Top 10** guía qué buscar (almacenamiento inseguro, criptografía débil).\n" +
+      "jadx -d salida/ app.apk\n" +
+      "> ⚠️ Las API keys hardcodeadas en el APK son triviales de extraer: el cliente nunca es de confianza.",
+    examples: [
+      "Decompilar un APK con jadx y encontrar una clave de API.",
+      "Revisar AndroidManifest.xml por permisos y componentes exportados.",
+    ],
+    related: ["Seguridad iOS", "OWASP IoT Top 10", "Análisis estático"],
+  },
+  {
+    id: 523,
+    module: 49,
+    term: "Seguridad iOS",
+    short: "El modelo cerrado de iOS: sandbox fuerte, pero con sus propios vectores.",
+    detail:
+      "**iOS** tiene un modelo más cerrado: apps en **sandbox**, firma obligatoria y App Store revisada. El análisis es más difícil (suele requerir **jailbreak** o un dispositivo de pruebas). Riesgos comunes: **almacenamiento inseguro** en el Keychain mal usado, criptografía débil y fugas por logs o backups.",
+    examples: [
+      "Revisar el uso del Keychain para datos sensibles.",
+      "Analizar el tráfico de la app con un proxy y certificado propio.",
+    ],
+    related: ["Seguridad Android (APK)", "OWASP IoT Top 10", "Certificate transparency y pinning"],
+  },
+  {
+    id: 524,
+    module: 49,
+    term: "BLE y hardware hacking",
+    short: "Atacar el dispositivo por sus interfaces físicas e inalámbricas de corto alcance.",
+    detail:
+      "Más allá del software, el dispositivo se ataca por su **hardware**:\n" +
+      "• **BLE** (Bluetooth Low Energy) — sniffing y replay de la comunicación inalámbrica.\n" +
+      "• **Interfaces de depuración** — **UART**, **JTAG/SWD** dan acceso de consola o a la memoria.\n" +
+      "• **Dump de flash** — leer el chip de memoria directamente para extraer el firmware.\n" +
+      "> 💡 Un pin de UART en la placa suele dar una shell de root sin autenticación.",
+    examples: [
+      "Conectarse por UART para obtener una consola del dispositivo.",
+      "Sniffar BLE para capturar comandos entre app y dispositivo.",
+    ],
+    related: ["Análisis de firmware", "OWASP IoT Top 10", "Seguridad WiFi"],
+  },
+
+  // ── M50 · Proyecto Final y Carrera ───────────────────────────────────────
+  {
+    id: 530,
+    module: 50,
+    term: "Auditoría end-to-end",
+    short: "Aplicar todo lo aprendido en un ejercicio completo, del recon al reporte.",
+    detail:
+      "El proyecto final integra el ciclo completo: **reconocimiento → escaneo → enumeración → explotación → post-explotación → reporte**, sobre un objetivo autorizado (un laboratorio o CTF). Demuestra no solo saber usar herramientas, sino **encadenar** hallazgos y **comunicar** el impacto.\n" +
+      "> 💡 Practica en entornos legales: HackTheBox, TryHackMe, VulnHub o laboratorios propios.",
+    examples: [
+      "Comprometer una máquina de HackTheBox y documentar el proceso.",
+      "Una auditoría de caja negra de principio a fin en un lab.",
+    ],
+    related: ["Metodología de un pentest", "Reporte profesional", "Portfolio y carrera"],
+  },
+  {
+    id: 531,
+    module: 50,
+    term: "Reporte profesional",
+    short: "El entregable real de un pentest: comunica riesgo y remediación, no solo técnica.",
+    detail:
+      "El **reporte** es el producto que paga el cliente. Estructura típica: **resumen ejecutivo** (para dirección, sin jerga), **alcance y metodología**, **hallazgos** con severidad (**CVSS**) y **evidencia (PoC)**, y **recomendaciones** priorizadas.\n" +
+      "> 💡 Un hallazgo crítico mal comunicado no se arregla: saber **escribir** vale tanto como saber explotar. Ver el diagrama de estructura del reporte.",
+    examples: [
+      "Un resumen ejecutivo que un CEO entiende en 2 minutos.",
+      "Cada hallazgo con impacto, evidencia y pasos de remediación.",
+    ],
+    related: ["Auditoría end-to-end", "CVE y CVSS", "Plan de certificaciones"],
+  },
+  {
+    id: 532,
+    module: 50,
+    term: "Plan de certificaciones",
+    short: "Una ruta de certificaciones acorde a la especialización elegida.",
+    detail:
+      "Las certificaciones **estructuran el aprendizaje** y abren puertas. La ruta depende de la **rama**: ofensiva (eJPT → PNPT/OSCP), defensiva (Security+ → BTL1 → GCIH), cloud, GRC, etc. Conviene empezar por **fundamentos** (Security+) y subir según el objetivo.\n" +
+      "> 💡 Ver la sección de certificaciones de la academia: catálogo por track y nivel.",
+    examples: [
+      "Empezar con eJPT y apuntar a OSCP para pentesting.",
+      "Security+ como base transversal antes de especializarse.",
+    ],
+    related: ["Portfolio y carrera", "Reporte profesional", "Generalista / Fundamentos"],
+  },
+  {
+    id: 533,
+    module: 50,
+    term: "Portfolio y carrera",
+    short: "Demostrar habilidades con evidencia pública es tan valioso como los títulos.",
+    detail:
+      "Un **portfolio** prueba lo que sabes hacer: **writeups** de CTFs y máquinas, contribuciones open source, un blog técnico, perfil de **TryHackMe/HackTheBox**, **bug bounties**. Combinado con networking (conferencias, comunidades), suele pesar tanto como el CV formal.\n" +
+      "> 💡 'Show, don't tell': un buen writeup vale más que una línea en el currículum.",
+    examples: [
+      "Un repositorio con writeups de máquinas resueltas.",
+      "Reportes válidos en programas de bug bounty.",
+    ],
+    related: ["Plan de certificaciones", "CTF y práctica deliberada", "Auditoría end-to-end"],
+  },
+  {
+    id: 534,
+    module: 50,
+    term: "CTF y práctica deliberada",
+    short: "Los Capture The Flag entrenan habilidades reales de forma legal y gamificada.",
+    detail:
+      "Los **CTF** (*Capture The Flag*) son retos de seguridad legales y gamificados: **Jeopardy** (categorías: web, cripto, forense, pwn, reversing) o **Attack-Defense**. Son la mejor forma de **practicar deliberadamente** y mantenerse afilado; diseñar uno propio demuestra dominio.",
+    examples: [
+      "Resolver retos de pwn y web en un CTF de fin de semana.",
+      "Diseñar un CTF para enseñar a otros (nivel avanzado).",
+    ],
+    related: ["Portfolio y carrera", "Auditoría end-to-end", "Reporte profesional"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

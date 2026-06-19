@@ -199,6 +199,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2022, title: "CSPM y DevSecOps", desc: "El escaneo continuo de postura y el shift-left se vuelven estándar para domar la complejidad cloud.", impact: "medium" },
     ],
   },
+  {
+    id: 16,
+    module: 49,
+    title: "Evolución de la seguridad IoT y móvil",
+    events: [
+      { year: 2007, title: "iPhone y la era móvil", desc: "El smartphone moderno crea una superficie de ataque enorme en el bolsillo de cada usuario.", impact: "high" },
+      { year: 2008, title: "Android", desc: "El ecosistema abierto se masifica; su modelo de permisos y APKs define la seguridad móvil.", impact: "high" },
+      { year: 2015, title: "Stagefright", desc: "Vulnerabilidad en Android explotable con solo un MMS; expone la fragmentación de parches.", impact: "high" },
+      { year: 2016, title: "Botnet Mirai", desc: "Cámaras y routers IoT con claves por defecto forman una botnet récord de DDoS.", impact: "high" },
+      { year: 2021, title: "Pegasus (zero-click)", desc: "Spyware móvil que infecta iPhones sin interacción; eleva el listón del spyware comercial.", impact: "high" },
+      { year: 2023, title: "Regulación IoT", desc: "Leyes (UK PSTI, EU CRA) prohíben las contraseñas por defecto y exigen seguridad por diseño.", impact: "medium" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {
