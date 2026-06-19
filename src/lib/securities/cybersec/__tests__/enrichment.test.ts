@@ -14,6 +14,7 @@ const PENTEST_MODULES = [25, 26, 27, 28, 29, 30, 31, 32, 33];
 const SOCIAL_MODULES = [34, 35];
 const MALWARE_MODULES = [36, 37, 38];
 const FORENSE_MODULES = [39, 40, 41];
+const BLUE_MODULES = [42, 43, 44];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -70,6 +71,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Forense (M39-M41) tiene ≥4 definiciones", () => {
     for (const m of FORENSE_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Blue Team (M42-M44) tiene ≥4 definiciones", () => {
+    for (const m of BLUE_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -145,6 +151,12 @@ describe("FRAMEWORKS", () => {
     expect(volat).toBeDefined();
     expect(volat!.phases).toHaveLength(5);
   });
+  it("M43 tiene el ciclo de IR (flow, 6) y M44 el ciclo de hunting (flow)", () => {
+    const ir = frameworksByModule(43).find((f) => f.kind === "flow");
+    expect(ir).toBeDefined();
+    expect(ir!.phases).toHaveLength(6);
+    expect(frameworksByModule(44).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -190,6 +202,9 @@ describe("TIMELINES", () => {
   });
   it("M39 tiene línea de tiempo (evolución de la forense digital)", () => {
     expect(timelinesByModule(39).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M42 tiene línea de tiempo (evolución de la defensa/SOC)", () => {
+    expect(timelinesByModule(42).length).toBeGreaterThanOrEqual(1);
   });
 });
 

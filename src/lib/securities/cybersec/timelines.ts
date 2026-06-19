@@ -172,6 +172,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2020, title: "Forense de cloud y móvil", desc: "La evidencia migra a la nube y a los smartphones; nuevos retos legales y técnicos.", impact: "high" },
     ],
   },
+  {
+    id: 14,
+    module: 42,
+    title: "Evolución de la defensa (Blue Team / SOC)",
+    events: [
+      { year: 1987, title: "Antivirus por firmas", desc: "La defensa nace centrada en detectar malware conocido por su firma.", impact: "medium" },
+      { year: 2005, title: "SIEM", desc: "Se consolida la centralización y correlación de logs; nace el SOC moderno.", impact: "high" },
+      { year: 2013, title: "EDR", desc: "La detección y respuesta en el endpoint supera al antivirus tradicional con telemetría rica.", impact: "high" },
+      { year: 2015, title: "MITRE ATT&CK", desc: "Da un lenguaje común de TTPs que reorganiza la detección y el threat hunting.", impact: "high" },
+      { year: 2019, title: "SOAR y XDR", desc: "La automatización de la respuesta y la telemetría unificada aceleran y escalan el SOC.", impact: "high" },
+      { year: 2023, title: "Hunting y detección con IA", desc: "El threat hunting proactivo y la analítica con IA se vuelven estándar frente a adversarios más rápidos.", impact: "medium" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

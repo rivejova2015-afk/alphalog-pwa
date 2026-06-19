@@ -3080,6 +3080,224 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Zeek (Bro)", "Análisis de PCAP", "Callbacks de red (C2)"],
   },
+
+  // ── M42 · SIEM y Monitoreo ───────────────────────────────────────────────
+  {
+    id: 450,
+    module: 42,
+    term: "SIEM",
+    short: "Centraliza y correlaciona logs de toda la organización para detectar amenazas.",
+    detail:
+      "Un **SIEM** (*Security Information and Event Management*) **ingiere, normaliza y correlaciona** logs de endpoints, red, apps y cloud en un único lugar. Permite **detectar**, **alertar** e **investigar** desde una consola. Es el corazón de un **SOC**.\n" +
+      "> 💡 Un SIEM sin buenas fuentes de log ni reglas es solo un almacén caro: el valor está en la correlación y el tuning.",
+    examples: [
+      "Correlacionar un login fallido masivo con un acceso exitoso posterior.",
+      "Centralizar logs de firewall, AD y endpoints en una sola búsqueda.",
+    ],
+    related: ["Splunk y ELK", "Reglas de correlación", "SOAR"],
+  },
+  {
+    id: 451,
+    module: 42,
+    term: "Splunk y ELK",
+    short: "Las dos plataformas SIEM dominantes; se consultan con lenguajes propios (SPL/KQL).",
+    detail:
+      "• **Splunk** — SIEM comercial líder; se consulta con **SPL** (*Search Processing Language*).\n" +
+      "• **ELK / Elastic Stack** — open source (Elasticsearch + Logstash + Kibana); consultas **KQL**/Lucene.\n" +
+      "index=auth \"failed password\" | stats count by src_ip\n" +
+      "> 💡 Ambos siguen el patrón: ingestar → indexar → buscar → visualizar.",
+    examples: [
+      "Una búsqueda SPL que agrupa logins fallidos por IP de origen.",
+      "Un dashboard de Kibana con la actividad de autenticación.",
+    ],
+    related: ["SIEM", "Reglas de correlación", "Dashboards y alertas"],
+  },
+  {
+    id: 452,
+    module: 42,
+    term: "Reglas de correlación",
+    short: "Lógica que une varios eventos para detectar un patrón de ataque.",
+    detail:
+      "Una **regla de correlación** dispara una alerta cuando se cumple un **patrón** que un evento aislado no revelaría: ej. *5 logins fallidos seguidos de uno exitoso desde la misma IP* = posible fuerza bruta exitosa. Mapear las reglas a **MITRE ATT&CK** mide la cobertura de detección.\n" +
+      "> ⚠️ El reto es el equilibrio: pocas reglas dejan huecos; demasiadas generan **fatiga de alertas**.",
+    examples: [
+      "Regla de 'viaje imposible': dos logins desde países lejanos en minutos.",
+      "Detectar ejecución de PowerShell codificado (técnica ATT&CK).",
+    ],
+    related: ["SIEM", "Dashboards y alertas", "MITRE ATT&CK"],
+  },
+  {
+    id: 453,
+    module: 42,
+    term: "Dashboards y alertas",
+    short: "Visualizar el estado de seguridad y notificar lo accionable en tiempo real.",
+    detail:
+      "Los **dashboards** resumen visualmente la postura (logins, tráfico, alertas por severidad) para el SOC; las **alertas** notifican lo que requiere acción. La meta es **priorizar**: separar la señal del ruido y enrutar lo crítico al analista correcto.\n" +
+      "> 💡 Una alerta sin contexto ni dueño es ruido; cada alerta debería ser accionable.",
+    examples: [
+      "Un dashboard con el top de hosts ruidosos del día.",
+      "Alerta automática al detectar exfiltración hacia un dominio nuevo.",
+    ],
+    related: ["Reglas de correlación", "SIEM", "SOAR"],
+  },
+  {
+    id: 454,
+    module: 42,
+    term: "SOAR",
+    short: "Automatiza y orquesta la respuesta para que el SOC reaccione más rápido.",
+    detail:
+      "**SOAR** (*Security Orchestration, Automation and Response*) ejecuta **playbooks automáticos** ante una alerta: enriquecer con threat intel, aislar un host, bloquear una IP, abrir un ticket. Reduce el **tiempo de respuesta** y la carga repetitiva del analista.\n" +
+      "> 💡 Automatizar lo rutinario libera al analista para la investigación que requiere criterio humano.",
+    examples: [
+      "Un playbook que aísla automáticamente un endpoint con malware.",
+      "Enriquecer cada alerta con la reputación de la IP antes de mostrarla.",
+    ],
+    related: ["SIEM", "Dashboards y alertas", "Ciclo de respuesta a incidentes"],
+  },
+
+  // ── M43 · Incident Response ──────────────────────────────────────────────
+  {
+    id: 460,
+    module: 43,
+    term: "Ciclo de respuesta a incidentes",
+    short: "El marco NIST 800-61 estructura cómo manejar un incidente de principio a fin.",
+    detail:
+      "La **respuesta a incidentes (IR)** sigue un ciclo (NIST SP 800-61): **Preparación → Detección y análisis → Contención, erradicación y recuperación → Actividad post-incidente**. Es cíclico: lo aprendido realimenta la preparación.\n" +
+      "> 💡 Ver el diagrama 'Ciclo de respuesta a incidentes' con la acción clave de cada fase.",
+    examples: [
+      "Activar el plan de IR ante una alerta de ransomware.",
+      "Un equipo (CSIRT) con roles definidos antes de que ocurra el incidente.",
+    ],
+    related: ["Contención", "Erradicación y recuperación", "Lecciones aprendidas"],
+  },
+  {
+    id: 461,
+    module: 43,
+    term: "Contención",
+    short: "Frenar la propagación del incidente sin destruir la evidencia.",
+    detail:
+      "La **contención** limita el daño: aislar hosts, deshabilitar cuentas, bloquear IPs. Se distingue **a corto plazo** (parar la hemorragia ya) y **a largo plazo** (medidas sostenibles mientras se erradica).\n" +
+      "> ⚠️ Contener sin pensar en la **evidencia** (apagar de golpe) puede destruir la RAM y la trazabilidad forense.",
+    examples: [
+      "Aislar de la red el equipo infectado, pero sin apagarlo.",
+      "Deshabilitar la cuenta comprometida usada para el acceso.",
+    ],
+    related: ["Ciclo de respuesta a incidentes", "Erradicación y recuperación", "Orden de volatilidad"],
+  },
+  {
+    id: 462,
+    module: 43,
+    term: "Erradicación y recuperación",
+    short: "Eliminar la amenaza por completo y restaurar las operaciones de forma segura.",
+    detail:
+      "• **Erradicación** — eliminar la causa raíz: malware, cuentas backdoor, persistencia, vulnerabilidad explotada.\n" +
+      "• **Recuperación** — restaurar sistemas desde backups limpios, validar que están sanos y **monitorizar** de cerca por si el atacante vuelve.\n" +
+      "> ⚠️ Recuperar sin erradicar la causa raíz = reinfección. Hay que estar seguro de que el atacante ya no tiene acceso.",
+    examples: [
+      "Reconstruir un servidor desde una imagen limpia, no solo limpiar el malware.",
+      "Rotar todas las credenciales que pudieron quedar comprometidas.",
+    ],
+    related: ["Contención", "Ciclo de respuesta a incidentes", "Lecciones aprendidas"],
+  },
+  {
+    id: 463,
+    module: 43,
+    term: "Lecciones aprendidas",
+    short: "El post-mortem que convierte el incidente en mejoras concretas.",
+    detail:
+      "Tras el incidente, una reunión **post-mortem** (sin culpar a personas) responde: ¿qué pasó?, ¿qué funcionó?, ¿qué falló?, ¿cómo evitarlo? Genera **acciones concretas** (nuevas reglas, parches, formación) que realimentan la **Preparación**.\n" +
+      "> 💡 Un incidente sin lecciones aprendidas está condenado a repetirse.",
+    examples: [
+      "Crear una regla de detección nueva para el TTP que se usó.",
+      "Documentar la línea de tiempo y las decisiones tomadas.",
+    ],
+    related: ["Ciclo de respuesta a incidentes", "Playbooks y tabletops", "Erradicación y recuperación"],
+  },
+  {
+    id: 464,
+    module: 43,
+    term: "Playbooks y tabletops",
+    short: "Procedimientos predefinidos y simulacros que preparan al equipo antes del incidente real.",
+    detail:
+      "• **Playbooks de IR** — guías paso a paso por tipo de incidente (ransomware, phishing, BEC) para no improvisar bajo presión.\n" +
+      "• **Tabletop exercises** — simulacros de mesa donde el equipo 'juega' un escenario para validar el plan y los roles.\n" +
+      "> 💡 El momento de descubrir que el plan falla es en un simulacro, no en el incidente real.",
+    examples: [
+      "Un playbook de ransomware con pasos de contención y contactos.",
+      "Un tabletop anual simulando una brecha de datos.",
+    ],
+    related: ["Lecciones aprendidas", "Ciclo de respuesta a incidentes", "Contención"],
+  },
+
+  // ── M44 · Threat Hunting ─────────────────────────────────────────────────
+  {
+    id: 470,
+    module: 44,
+    term: "Threat hunting",
+    short: "Buscar proactivamente atacantes que ya eludieron las defensas automáticas.",
+    detail:
+      "El **threat hunting** asume que el atacante **ya está dentro** y lo busca de forma **proactiva**, sin esperar una alerta. Combina hipótesis, datos (logs, EDR, red) y conocimiento del adversario para encontrar lo que las reglas automáticas no vieron.\n" +
+      "> 💡 Detección = reactiva (espera la alerta); hunting = proactiva (va a buscar al intruso).",
+    examples: [
+      "Buscar señales de movimiento lateral que ninguna alerta disparó.",
+      "Rastrear el uso anómalo de una herramienta legítima (LOLBins).",
+    ],
+    related: ["Hunting basado en hipótesis", "Mapeo a ATT&CK", "Consultas KQL/SPL"],
+  },
+  {
+    id: 471,
+    module: 44,
+    term: "Hunting basado en hipótesis",
+    short: "Partir de una suposición concreta sobre cómo podría estar actuando un atacante.",
+    detail:
+      "Un buen hunt empieza con una **hipótesis** comprobable, a menudo derivada de **threat intelligence** o de una técnica ATT&CK: *'Si un atacante usara Pass-the-Hash, vería autenticaciones NTLM anómalas entre estos hosts'*. Luego se buscan los datos que la confirmen o descarten.",
+    examples: [
+      "Hipótesis: 'hay persistencia vía tareas programadas creadas de noche'.",
+      "Hipótesis basada en un informe de CTI sobre un grupo activo.",
+    ],
+    related: ["Threat hunting", "Mapeo a ATT&CK", "Threat intelligence"],
+  },
+  {
+    id: 472,
+    module: 44,
+    term: "Mapeo a ATT&CK",
+    short: "Usar la matriz MITRE ATT&CK para guiar la caza y medir la cobertura.",
+    detail:
+      "**MITRE ATT&CK** da un catálogo de **TTPs** reales que sirve de **mapa** para el hunting: elegir técnicas a cazar, priorizar por las que usan los adversarios relevantes y **medir la cobertura** de detección (¿qué técnicas vería mi SOC?). El **ATT&CK Navigator** visualiza esa cobertura.",
+    examples: [
+      "Cazar T1053 (Scheduled Task) como técnica de persistencia.",
+      "Pintar en ATT&CK Navigator qué técnicas cubren mis detecciones.",
+    ],
+    related: ["Hunting basado en hipótesis", "MITRE ATT&CK", "Hunting playbooks"],
+  },
+  {
+    id: 473,
+    module: 44,
+    term: "Consultas KQL/SPL",
+    short: "Los lenguajes para interrogar los datos durante una caza.",
+    detail:
+      "El hunting se materializa en **consultas** sobre los datos: **KQL** (Microsoft Sentinel/Defender) y **SPL** (Splunk) son los más usados. Permiten filtrar, agregar y correlacionar grandes volúmenes para confirmar o descartar la hipótesis.\n" +
+      "DeviceProcessEvents | where FileName == \"powershell.exe\" and ProcessCommandLine contains \"-enc\"\n" +
+      "> 💡 Una consulta de hunting que resulta útil se convierte en una regla de detección permanente.",
+    examples: [
+      "KQL que busca PowerShell con comandos codificados.",
+      "SPL que detecta procesos hijos anómalos de Office.",
+    ],
+    related: ["Threat hunting", "Hunting playbooks", "Splunk y ELK"],
+  },
+  {
+    id: 474,
+    module: 44,
+    term: "Hunting playbooks",
+    short: "Cazas repetibles y documentadas que se ejecutan de forma recurrente.",
+    detail:
+      "Un **hunting playbook** documenta un hunt para poder **repetirlo y automatizarlo**: la hipótesis, las fuentes de datos, las consultas y qué hacer con los hallazgos. Los hunts exitosos se **convierten en detección automática**, cerrando el ciclo entre caza proactiva y monitoreo.",
+    examples: [
+      "Un playbook mensual de caza de persistencia en Windows.",
+      "Convertir un hunt fructífero en una regla del SIEM.",
+    ],
+    related: ["Consultas KQL/SPL", "Mapeo a ATT&CK", "Reglas de correlación"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

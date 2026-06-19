@@ -336,6 +336,37 @@ export const FRAMEWORKS: Framework[] = [
       { n: 5, name: "Backups y archivo", desc: "Lo más estable: copias de seguridad, medios externos, logs remotos. Vida muy larga.", defenses: ["Recolectar al final", "Correlacionar con la evidencia viva"] },
     ],
   },
+  {
+    id: 22,
+    module: 43,
+    name: "Ciclo de respuesta a incidentes (NIST 800-61)",
+    kind: "flow",
+    summary:
+      "Las fases del manejo de un incidente según el NIST. Es un ciclo: lo aprendido al final realimenta la preparación del principio.",
+    phases: [
+      { n: 1, name: "Preparación", desc: "Antes del incidente: plan de IR, roles (CSIRT), herramientas, playbooks y formación.", defenses: ["Plan y CSIRT definidos", "Tabletops periódicos"] },
+      { n: 2, name: "Detección y análisis", desc: "Identificar que ocurre un incidente, determinar su alcance y triarlo por severidad.", defenses: ["SIEM + alertas", "Triage y priorización"] },
+      { n: 3, name: "Contención", desc: "Frenar la propagación (aislar hosts, deshabilitar cuentas) preservando la evidencia.", defenses: ["Aislar sin apagar", "Preservar la RAM/evidencia"] },
+      { n: 4, name: "Erradicación", desc: "Eliminar la causa raíz: malware, persistencia, cuentas backdoor, vulnerabilidad.", defenses: ["Encontrar la causa raíz", "Rotar credenciales"] },
+      { n: 5, name: "Recuperación", desc: "Restaurar operaciones desde backups limpios y validar con monitoreo reforzado.", defenses: ["Backups limpios", "Monitoreo post-recuperación"] },
+      { n: 6, name: "Lecciones aprendidas", desc: "Post-mortem que genera mejoras concretas y realimenta la preparación.", defenses: ["Acciones concretas", "Nuevas detecciones"] },
+    ],
+  },
+  {
+    id: 23,
+    module: 44,
+    name: "Ciclo de threat hunting",
+    kind: "flow",
+    summary:
+      "El bucle proactivo de la caza de amenazas: de una hipótesis a una nueva detección automática. Cada vuelta mejora la cobertura del SOC.",
+    phases: [
+      { n: 1, name: "Hipótesis", desc: "Formular una suposición comprobable sobre actividad maliciosa (a partir de CTI o ATT&CK).", defenses: ["Basarse en TTPs reales", "Hipótesis concreta y medible"] },
+      { n: 2, name: "Recolección de datos", desc: "Identificar y reunir las fuentes que pueden confirmar o descartar la hipótesis (logs, EDR, red).", defenses: ["Cobertura de telemetría", "Datos suficientes y fiables"] },
+      { n: 3, name: "Investigación", desc: "Consultar y analizar los datos (KQL/SPL) buscando el patrón planteado.", defenses: ["Consultas reproducibles", "Reducir falsos positivos"] },
+      { n: 4, name: "Hallazgo o descarte", desc: "Confirmar la amenaza (y pasar a respuesta) o descartar la hipótesis y refinar.", defenses: ["Escalar a respuesta a incidentes", "Documentar el resultado"] },
+      { n: 5, name: "Operacionalizar", desc: "Convertir un hunt fructífero en una regla de detección automática y un playbook repetible.", defenses: ["Nueva regla en el SIEM", "Hunting playbook documentado"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {
