@@ -923,6 +923,8 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 - `coinarb/src/core/index.ts` await `loadConfigFromDb()` antes de `buildLoop()`.
 - Lee `algorithms.parameters` (4 thresholds tunables + `arb_gap_min` jsonb) y muta `let` exports en `coinarb/src/core/config.ts`. ES module live bindings hacen que loop.ts/smc-detector.ts/etc lean el valor nuevo sin refactor.
 - `PAPER_MODE` sigue siendo env-only (`COINARB_50X_PAPER_MODE`) como safety brake.
+- **Defaults vigentes (2026-06-19):** `MTF_CONFIDENCE_MIN=0.12`, `SWEEP_CONFIRM_BODY_RATIO=0.35`. Bajados desde 0.30/0.40 para destrabar trades — el resto del filter chain (premium-discount, CHOCH, R:R≥2.0) sigue actuando como filtro de calidad. El CI quality gate (`scripts/check-backtest-threshold.ts`, `winRate≥30%`) actúa como red de regresiones.
+- **Tier `$20-testing`** (primer escalón de `PHASES`): risk 5% → $1/trade, pensado para validar el pipeline live con bankroll mínimo sin que el sizing colapse contra `baseMinSize` de Coinbase. `coinbase-spot-orders.ts:placeLimit` ahora pre-chequea el size contra `getProduct().baseMinSize` y devuelve `{ skipped: true, reason: 'below-min-notional' }` antes de POST, evitando 400s ruidosos.
 
 **Hot-rotate flow (Fase C):**
 - `PUT /api/algorithms/[id]` con `parameters` jsonb dispara `bot_commands.insert(command_type='update_parameters', payload={algorithm_id, parameters})`.

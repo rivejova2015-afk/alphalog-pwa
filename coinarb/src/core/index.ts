@@ -9,6 +9,7 @@
 import 'dotenv/config';
 import { buildLoop } from './loop.js';
 import { PAPER_MODE, loadConfigFromDb } from './config.js';
+import { warnMissingValidatorKeys } from '../ops/startup-warnings.js';
 import type { CdpCredentials } from '../trading/coinbase-cdp-auth.js';
 
 function readCdpCreds(): CdpCredentials | undefined {
@@ -23,6 +24,11 @@ async function main(): Promise<void> {
   // loop is constructed. Live ES-module bindings mean callers don't need
   // refactoring; if this throws, we keep the env-var defaults.
   await loadConfigFromDb();
+
+  // Single boot-time warning per missing optional validator key (Coinglass /
+  // CryptoQuant). The validators themselves keep their silent passthrough; this
+  // just makes the operator aware of the degraded-signal mode.
+  warnMissingValidatorKeys();
 
   const creds = readCdpCreds();
   if (!PAPER_MODE && !creds) {
