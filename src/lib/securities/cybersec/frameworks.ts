@@ -275,6 +275,37 @@ export const FRAMEWORKS: Framework[] = [
       { n: 6, name: "Explotación / reporte", desc: "Se usan las credenciales (acceso, BEC, lateral) — o, si es un simulacro, se reportan métricas.", defenses: ["Detección de logins anómalos", "Respuesta a incidentes", "Awareness con métricas"] },
     ],
   },
+  {
+    id: 18,
+    module: 36,
+    name: "Pirámide del Dolor (Pyramid of Pain)",
+    kind: "layers",
+    summary:
+      "Clasifica los indicadores por cuánto 'duele' al atacante que los detectes y bloquees. Cuanto más arriba, más difícil le resulta cambiarlos — y más valiosa es tu detección.",
+    phases: [
+      { n: 1, name: "Hash values", desc: "El hash de una muestra. Trivial de cambiar para el atacante: un byte distinto y el hash cambia.", defenses: ["Bloqueo exacto pero frágil", "Útil solo para la muestra idéntica"] },
+      { n: 2, name: "Direcciones IP", desc: "IPs de C2 o de origen. Fáciles de rotar con VPN/proxies/hosting nuevo.", defenses: ["Listas de bloqueo de IP", "Caducan rápido"] },
+      { n: 3, name: "Nombres de dominio", desc: "Dominios de C2. Algo más costosos de cambiar (registro, propagación DNS).", defenses: ["Filtrado DNS", "Bloqueo de dominios recién registrados"] },
+      { n: 4, name: "Artefactos de red/host", desc: "Patrones que deja: User-Agents, rutas, claves de registro, mutexes.", defenses: ["Reglas de detección por artefacto", "Obligan al atacante a reconfigurar"] },
+      { n: 5, name: "Herramientas", desc: "El toolkit del adversario (RATs, packers, frameworks). Cambiarlo cuesta tiempo y dinero.", defenses: ["Reglas YARA por familia", "Detección de la herramienta"] },
+      { n: 6, name: "TTPs", desc: "Su comportamiento (tácticas, técnicas y procedimientos). Lo más difícil de cambiar: es su forma de operar.", defenses: ["Detección por comportamiento (ATT&CK)", "Threat hunting"] },
+    ],
+  },
+  {
+    id: 19,
+    module: 38,
+    name: "Flujo de análisis de malware",
+    kind: "flow",
+    summary:
+      "La metodología para analizar una muestra desconocida, del triage inicial a la extracción de IoCs. Cada fase responde una pregunta distinta.",
+    phases: [
+      { n: 1, name: "Triage", desc: "Hash de la muestra, búsqueda en VirusTotal y clasificación inicial. ¿Ya se conoce?", defenses: ["Aislamiento de la muestra", "Cadena de custodia"] },
+      { n: 2, name: "Análisis estático", desc: "Strings, cabeceras PE, imports y disassembly sin ejecutar. ¿Qué podría hacer?", defenses: ["Entorno seguro de análisis", "Sin ejecución"] },
+      { n: 3, name: "Análisis dinámico", desc: "Detonar en sandbox y observar archivos, registro y procesos. ¿Qué hace en realidad?", defenses: ["VM aislada + snapshots", "Red simulada (INetSim)"] },
+      { n: 4, name: "Red y memoria", desc: "Capturar callbacks de C2 y, si hace falta, forense de memoria (Volatility). ¿Con quién habla y qué oculta?", defenses: ["Captura de tráfico controlada", "Volcado de RAM"] },
+      { n: 5, name: "Extracción de IoCs y reporte", desc: "Documentar hashes, dominios, TTPs y reglas YARA para detección masiva. ¿Cómo lo cazamos en el parque?", defenses: ["Compartir CTI (MISP/STIX)", "Reglas de detección desplegadas"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {

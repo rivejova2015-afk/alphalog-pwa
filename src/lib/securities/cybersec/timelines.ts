@@ -145,6 +145,20 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2024, title: "Phishing con IA", desc: "Correos sin errores, clonación de voz y deepfakes elevan el realismo y la escala del engaño.", impact: "high" },
     ],
   },
+  {
+    id: 12,
+    module: 36,
+    title: "Evolución del malware",
+    events: [
+      { year: 1986, title: "Brain", desc: "Primer virus de PC (sector de arranque); marca el inicio del malware en computadoras personales.", impact: "medium" },
+      { year: 1999, title: "Melissa", desc: "Macro-virus de correo que se propaga por Word/Outlook a escala masiva.", impact: "medium" },
+      { year: 2007, title: "Zeus", desc: "Troyano bancario que profesionaliza el robo de credenciales y el crimeware como servicio.", impact: "high" },
+      { year: 2010, title: "Stuxnet", desc: "Malware patrocinado por estados que sabotea sistemas industriales; inaugura la ciberguerra.", impact: "high" },
+      { year: 2013, title: "CryptoLocker", desc: "Populariza el ransomware con cifrado y pago en cripto; abre la era del ransomware.", impact: "high" },
+      { year: 2017, title: "WannaCry / NotPetya", desc: "Ransomware-gusano con EternalBlue; daños globales y foco en el parcheo.", impact: "high" },
+      { year: 2021, title: "Era del RaaS y doble extorsión", desc: "El ransomware como servicio y la exfiltración previa al cifrado dominan el panorama.", impact: "high" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

@@ -2649,6 +2649,224 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Evasión de filtros", "GoPhish y campañas controladas", "Headers de seguridad"],
   },
+
+  // ── M36 · Malware Analysis: Fundamentos ──────────────────────────────────
+  {
+    id: 390,
+    module: 36,
+    term: "Clasificación de malware",
+    short: "El malware se categoriza por cómo se propaga y qué hace.",
+    detail:
+      "**Malware** = software malicioso. Tipos principales:\n" +
+      "| Tipo | Característica |\n" +
+      "|---|---|\n" +
+      "| Virus | Se adjunta a un archivo y necesita ejecución |\n" +
+      "| Gusano (worm) | Se propaga solo por la red |\n" +
+      "| Troyano | Se disfraza de software legítimo |\n" +
+      "| Ransomware | Cifra datos y exige rescate |\n" +
+      "| RAT | Acceso remoto encubierto |\n" +
+      "| Rootkit | Se oculta a nivel profundo del SO |\n" +
+      "> 💡 Una muestra real suele combinar categorías (ej. un troyano que instala un RAT).",
+    examples: [
+      "WannaCry fue ransomware con capacidad de gusano.",
+      "Un RAT da control remoto del equipo de la víctima.",
+    ],
+    related: ["Análisis en sandbox", "Indicadores de compromiso (IoC)", "Reglas YARA"],
+  },
+  {
+    id: 391,
+    module: 36,
+    term: "Análisis en sandbox",
+    short: "Ejecutar una muestra en un entorno aislado para observar su comportamiento sin riesgo.",
+    detail:
+      "Un **sandbox** es un entorno **aislado y desechable** (VM sin red real o con red simulada) donde detonar el malware y observar qué hace: archivos creados, claves de registro, conexiones de red. Servicios como **Cuckoo**, **Any.Run** o **Joe Sandbox** automatizan el reporte.\n" +
+      "> ⚠️ El malware moderno detecta sandboxes (anti-VM/anti-análisis) y se 'duerme' para evadir el análisis.",
+    examples: [
+      "Subir una muestra a Any.Run y ver sus llamadas de red.",
+      "Un snapshot de VM para revertir tras cada ejecución.",
+    ],
+    related: ["Clasificación de malware", "Análisis dinámico", "Indicadores de compromiso (IoC)"],
+  },
+  {
+    id: 392,
+    module: 36,
+    term: "Indicadores de compromiso (IoC)",
+    short: "Artefactos observables que delatan la presencia de un malware concreto.",
+    detail:
+      "Un **IoC** es una huella que prueba una infección: **hashes** del binario, **IPs/dominios de C2**, nombres de archivos, claves de registro, mutexes. Se comparten en feeds de **threat intelligence** (MISP, STIX/TAXII) para que otros detecten la misma amenaza.\n" +
+      "> 💡 Los IoC son fáciles de cambiar para el atacante; por eso se complementan con detección por **comportamiento/TTP** (ver la Pirámide del Dolor).",
+    examples: [
+      "El hash SHA-256 de una muestra en VirusTotal.",
+      "Un dominio de C2 añadido a la lista de bloqueo del firewall.",
+    ],
+    related: ["Reglas YARA", "Threat intelligence", "Pirámide del Dolor"],
+  },
+  {
+    id: 393,
+    module: 36,
+    term: "Reglas YARA",
+    short: "El 'lenguaje de patrones' para identificar y clasificar familias de malware.",
+    detail:
+      "**YARA** describe reglas que buscan **patrones** (strings, bytes, condiciones) en archivos o memoria para detectar y **clasificar familias** de malware.\n" +
+      "rule EjemploMalware {\n" +
+      "  strings: $a = \"cmd.exe /c\" $b = { 6A 40 68 00 30 }\n" +
+      "  condition: $a and $b\n" +
+      "}\n" +
+      "> 💡 Es el puente entre el análisis de una muestra y la detección masiva en el parque.",
+    examples: [
+      "Una regla YARA que caza una familia por sus strings únicos.",
+      "Escanear memoria con YARA para hallar inyecciones.",
+    ],
+    related: ["Indicadores de compromiso (IoC)", "Análisis estático", "Threat intelligence"],
+  },
+  {
+    id: 394,
+    module: 36,
+    term: "Threat intelligence",
+    short: "Conocimiento sobre adversarios y amenazas que contextualiza la defensa.",
+    detail:
+      "La **threat intelligence** (CTI) convierte datos sueltos (IoCs, TTPs, campañas) en **conocimiento accionable**: quién ataca, cómo y qué buscar. Se mapea a **MITRE ATT&CK** y se comparte en formatos como **STIX/TAXII** o plataformas como **MISP**.",
+    examples: [
+      "Atribuir una muestra a un grupo APT por sus TTPs.",
+      "Enriquecer una alerta del SOC con contexto de CTI.",
+    ],
+    related: ["Indicadores de compromiso (IoC)", "MITRE ATT&CK", "TTP (Tácticas, Técnicas y Procedimientos)"],
+  },
+
+  // ── M37 · Malware: Análisis Estático ─────────────────────────────────────
+  {
+    id: 400,
+    module: 37,
+    term: "Análisis estático",
+    short: "Examinar el binario sin ejecutarlo, para inferir qué hace.",
+    detail:
+      "El **análisis estático** inspecciona la muestra **sin correrla**: strings, cabeceras, importaciones, disassembly. Es **seguro** (no detona) y rápido para un primer triage, aunque la ofuscación/empaquetado lo dificulta.\n" +
+      "> 💡 Se combina con el dinámico: el estático dice 'qué podría hacer', el dinámico confirma 'qué hace'.",
+    examples: [
+      "Listar las APIs importadas para inferir capacidades.",
+      "Sacar el hash y buscarlo en VirusTotal antes de nada.",
+    ],
+    related: ["Strings y hashing", "Cabeceras PE", "Ghidra e IDA"],
+  },
+  {
+    id: 401,
+    module: 37,
+    term: "Strings y hashing",
+    short: "Las cadenas de texto y el hash son el primer vistazo a una muestra.",
+    detail:
+      "• **Hashing** — `md5/sha256` identifican unívocamente la muestra y permiten buscarla en feeds (VirusTotal).\n" +
+      "• **Strings** — extraer el texto legible revela URLs, rutas, comandos, mensajes de ransomware.\n" +
+      "strings -n 8 muestra.exe\n" +
+      "> ⚠️ Pocos strings útiles suele indicar **empaquetado/ofuscación**.",
+    examples: [
+      "strings revelando un dominio de C2 hardcodeado.",
+      "Buscar el SHA-256 en VirusTotal para ver detecciones.",
+    ],
+    related: ["Análisis estático", "Cabeceras PE", "Unpacking y deofuscación"],
+  },
+  {
+    id: 402,
+    module: 37,
+    term: "Cabeceras PE",
+    short: "La estructura del ejecutable de Windows revela mucho sobre la muestra.",
+    detail:
+      "El formato **PE** (*Portable Executable*) de Windows tiene cabeceras y **secciones** (.text, .data, .rsrc) e una **tabla de importaciones (IAT)** que lista las APIs que usa. Analizarlas (con `pefile`, PE-bid, CFF Explorer) delata capacidades: red, cifrado, inyección.\n" +
+      "> 💡 Una entropía alta en una sección sugiere datos cifrados/empaquetados.",
+    examples: [
+      "Ver imports como WININET o CryptEncrypt para inferir comportamiento.",
+      "Una marca de tiempo de compilación que ayuda a la atribución.",
+    ],
+    related: ["Strings y hashing", "Análisis estático", "Unpacking y deofuscación"],
+  },
+  {
+    id: 403,
+    module: 37,
+    term: "Ghidra e IDA",
+    short: "Desensambladores/decompiladores para leer la lógica del malware.",
+    detail:
+      "Cuando los strings no bastan, se **desensambla**: **Ghidra** (gratis, de la NSA) e **IDA** convierten el binario a ensamblador y a **pseudo-C** (decompilación), permitiendo seguir la lógica real (rutinas de cifrado, C2, anti-análisis). Es la parte más técnica del análisis estático.",
+    examples: [
+      "Decompilar en Ghidra la rutina que descifra la config del C2.",
+      "Seguir en IDA el flujo de un dropper.",
+    ],
+    related: ["Cabeceras PE", "Unpacking y deofuscación", "Análisis estático"],
+  },
+  {
+    id: 404,
+    module: 37,
+    term: "Unpacking y deofuscación",
+    short: "Revertir el empaquetado/ofuscación que el malware usa para esconderse.",
+    detail:
+      "Los **packers** (UPX, Themida) comprimen/cifran el binario para evadir AV y dificultar el análisis; el malware se **desempaqueta solo** en memoria al ejecutarse. El analista debe **unpack** (a veces con `upx -d`, a veces dumpeando de memoria) y **deofuscar** strings antes de poder leer el código real.\n" +
+      "upx -d muestra.exe",
+    examples: [
+      "upx -d para un binario empaquetado con UPX estándar.",
+      "Dumpear el proceso desde memoria para obtener el código desempaquetado.",
+    ],
+    related: ["Ghidra e IDA", "Cabeceras PE", "Análisis dinámico"],
+  },
+
+  // ── M38 · Malware: Análisis Dinámico ─────────────────────────────────────
+  {
+    id: 410,
+    module: 38,
+    term: "Análisis dinámico",
+    short: "Ejecutar la muestra de forma controlada para ver su comportamiento real.",
+    detail:
+      "El **análisis dinámico** detona el malware en un entorno **monitorizado y aislado** para observar lo que el estático no muestra (por ofuscación): qué archivos toca, qué procesos crea, con quién habla. Requiere un **laboratorio seguro**: VM aislada, snapshots y, a menudo, red simulada (INetSim).\n" +
+      "> ⚠️ Nunca analizar malware en una máquina con acceso a la red real o a datos sensibles.",
+    examples: [
+      "Detonar en una VM y observar la creación de persistencia.",
+      "Usar INetSim para falsear Internet y capturar el C2.",
+    ],
+    related: ["Process Monitor y Regshot", "Callbacks de red", "Análisis en sandbox"],
+  },
+  {
+    id: 411,
+    module: 38,
+    term: "Process Monitor y Regshot",
+    short: "Herramientas que registran los cambios que el malware hace en el sistema.",
+    detail:
+      "Para capturar el comportamiento se usan:\n" +
+      "• **Process Monitor (ProcMon)** — registra en vivo accesos a archivos, registro, procesos y red.\n" +
+      "• **Regshot** — toma un snapshot del registro/archivos antes y después y **compara** (diff) para ver qué cambió.\n" +
+      "• **Procmon + Process Explorer** — para árbol de procesos y handles.\n" +
+      "> 💡 El diff de Regshot revela rápido las claves de persistencia creadas.",
+    examples: [
+      "ProcMon mostrando la clave Run que el malware añade.",
+      "Regshot diff revelando los archivos soltados.",
+    ],
+    related: ["Análisis dinámico", "Callbacks de red", "Registro de Windows"],
+  },
+  {
+    id: 412,
+    module: 38,
+    term: "Callbacks de red (C2)",
+    short: "Observar con quién se comunica el malware revela su infraestructura de control.",
+    detail:
+      "Casi todo malware **llama a casa** (C2) para recibir órdenes o exfiltrar. Capturando el tráfico (**Wireshark**, **INetSim**, **FakeNet**) se obtienen **dominios/IPs de C2**, el patrón de **beaconing** y el protocolo. Son IoCs valiosos y a menudo el objetivo del análisis.",
+    examples: [
+      "Wireshark capturando el beacon periódico al C2.",
+      "FakeNet respondiendo al malware para provocar su siguiente fase.",
+    ],
+    related: ["Análisis dinámico", "Indicadores de compromiso (IoC)", "Detección de anomalías en tráfico"],
+  },
+  {
+    id: 413,
+    module: 38,
+    term: "API hooking y forense de memoria",
+    short: "Técnicas avanzadas para observar el malware en ejecución y en la RAM.",
+    detail:
+      "Para muestras evasivas se va más profundo:\n" +
+      "• **API hooking** — interceptar las llamadas a la API de Windows que hace el malware para registrar su actividad real.\n" +
+      "• **Forense de memoria** — con **Volatility** se analiza un volcado de RAM para hallar inyecciones, procesos ocultos y código desempaquetado que no toca el disco.\n" +
+      "> 💡 La memoria suele contener el código ya desempaquetado y la config del C2 en claro.",
+    examples: [
+      "Volatility detectando una inyección de proceso (malfind).",
+      "Hooks de API que registran cada CreateFile del malware.",
+    ],
+    related: ["Análisis dinámico", "Unpacking y deofuscación", "Callbacks de red (C2)"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

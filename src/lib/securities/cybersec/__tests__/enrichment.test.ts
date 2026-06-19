@@ -12,6 +12,7 @@ const CRIPTO_MODULES = [16, 17, 18, 19];
 const WEB_MODULES = [20, 21, 22, 23, 24];
 const PENTEST_MODULES = [25, 26, 27, 28, 29, 30, 31, 32, 33];
 const SOCIAL_MODULES = [34, 35];
+const MALWARE_MODULES = [36, 37, 38];
 
 describe("DEFINITIONS", () => {
   it("ids únicos y campos no vacíos", () => {
@@ -58,6 +59,11 @@ describe("DEFINITIONS", () => {
   });
   it("cada módulo de Social Eng. (M34-M35) tiene ≥4 definiciones", () => {
     for (const m of SOCIAL_MODULES) {
+      expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
+    }
+  });
+  it("cada módulo de Malware (M36-M38) tiene ≥4 definiciones", () => {
+    for (const m of MALWARE_MODULES) {
       expect(definitionsByModule(m).length, `módulo ${m}`).toBeGreaterThanOrEqual(4);
     }
   });
@@ -121,6 +127,12 @@ describe("FRAMEWORKS", () => {
     expect(cialdini!.phases).toHaveLength(6);
     expect(frameworksByModule(35).some((f) => f.kind === "flow")).toBe(true);
   });
+  it("M36 tiene la Pirámide del Dolor (layers, 6) y M38 un flujo de análisis", () => {
+    const pyramid = frameworksByModule(36).find((f) => f.kind === "layers");
+    expect(pyramid).toBeDefined();
+    expect(pyramid!.phases).toHaveLength(6);
+    expect(frameworksByModule(38).some((f) => f.kind === "flow")).toBe(true);
+  });
 });
 
 describe("TIMELINES", () => {
@@ -160,6 +172,9 @@ describe("TIMELINES", () => {
   });
   it("M35 tiene línea de tiempo (evolución del phishing)", () => {
     expect(timelinesByModule(35).length).toBeGreaterThanOrEqual(1);
+  });
+  it("M36 tiene línea de tiempo (evolución del malware)", () => {
+    expect(timelinesByModule(36).length).toBeGreaterThanOrEqual(1);
   });
 });
 
