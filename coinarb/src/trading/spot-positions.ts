@@ -234,3 +234,20 @@ export async function getOpenPositions(): Promise<OpenPositionRow[]> {
   if (error) throw new Error(`[spot-positions] getOpen failed: ${error.message}`);
   return (data ?? []) as OpenPositionRow[];
 }
+
+/**
+ * Like getOpenPositions but scoped to one strategy. Each StrategyRunner manages
+ * only its own positions; the coordinator's symbol-mutex check uses the unscoped
+ * getOpenPositions to see ALL open positions across strategies.
+ */
+export async function getOpenPositionsByStrategy(strategyId: StrategyId): Promise<OpenPositionRow[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('coinarb_positions')
+    .select('id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at')
+    .eq('agent_id', COINARB_AGENT_ID)
+    .eq('strategy_id', strategyId)
+    .eq('status', 'OPEN');
+  if (error) throw new Error(`[spot-positions] getOpenByStrategy(${strategyId}) failed: ${error.message}`);
+  return (data ?? []) as OpenPositionRow[];
+}
