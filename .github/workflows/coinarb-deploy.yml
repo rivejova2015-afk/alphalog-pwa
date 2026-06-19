@@ -46,6 +46,26 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Unit tests
+        run: npm test -- --run
+
+      - name: Backtest quality gate (7d replay)
+        # Skippable via "[skip-backtest]" in the commit message — only for
+        # genuine emergencies (data-source outage, etc). The quality gate is
+        # intentionally lax (winRate ≥ 30%, totalPnlR ≥ 0, entries ≥ 3) to
+        # avoid blocking legitimate deploys early on; tighten as we
+        # accumulate history.
+        if: "!contains(github.event.head_commit.message, '[skip-backtest]')"
+        run: |
+          set -e
+          npx tsx scripts/backtest.ts --days=7 --json > /tmp/backtest.txt 2>&1 || {
+            echo "::warning::Backtest script failed (likely data source). Re-run with [skip-backtest] in commit message to bypass."
+            cat /tmp/backtest.txt
+            exit 1
+          }
+          tail -40 /tmp/backtest.txt
+          npx tsx scripts/check-backtest-threshold.ts --file=/tmp/backtest.txt
+
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
