@@ -74,10 +74,13 @@ export class CoinarbCoordinator {
     this.liveOrders = deps.liveOrders ?? null;
     this.paperBroker = new PaperSpotBroker(STARTING_CAPITAL);
     this.phaseManager = new PhaseManager(STARTING_CAPITAL);
-    // Fase 2: only Strategy A is wired in. Fase 3 appends Strategy B with
-    // mode='aggressive'. The runners map already supports both today.
+    // Fase 3 — two runners share the capital pool, the paper broker, the
+    // phase manager and the historical candle cache. They each own a private
+    // circuit breaker and daily tracker. Insertion order (A → B) is the
+    // deterministic priority order used by the symbol mutex.
     this.runners = new Map();
     this.runners.set('A', new StrategyRunner({ id: 'A', mode: 'smc' }));
+    this.runners.set('B', new StrategyRunner({ id: 'B', mode: 'aggressive' }));
   }
 
   start(): void {
@@ -152,6 +155,44 @@ export class CoinarbCoordinator {
       decisions: this.decisions,
       historicalCandles: this.historicalCandles,
       fearGreed,
+      getGlobalDailyEntryCount: () => {
+        let total = 0;
+        for (const runner of this.runners.values()) {
+          total += runner.dailyTracker.current.data.totalTrades;
+        }
+        return total;
+      },
+      getGlobalDailyEntryCountBySymbol: (symbol) => {
+        let total = 0;
+        for (const runner of this.runners.values()) {
+          total += runner.dailyTracker.getCountBySymbol(symbol);
+        }
+        return total;
+      },
+      isSymbolLockedByOtherStrategy: async (symbol, byStrategy) => {
+        // Permissive on infra blip: if the lookup throws we let the trade
+        // through. Better a rare duplicate symbol than blocking trades when
+        // Supabase wobbles for 5s.
+        try {
+          const supabase = getSupabase();
+          const { data, error } = await supabase
+            .from('coinarb_positions')
+            .select('strategy_id')
+            .eq('agent_id', COINARB_AGENT_ID)
+            .eq('symbol', symbol)
+            .eq('status', 'OPEN')
+            .neq('strategy_id', byStrategy)
+            .limit(1);
+          if (error) {
+            console.warn(`[loop] mutex check error for ${symbol}:`, error.message);
+            return false;
+          }
+          return (data?.length ?? 0) > 0;
+        } catch (err) {
+          console.warn(`[loop] mutex check threw for ${symbol}:`, err);
+          return false;
+        }
+      },
     };
   }
 

@@ -67,6 +67,11 @@ const SYMBOL_TO_BASE: Record<Symbol, 'BTC' | 'ETH' | 'SOL'> = {
  * Shared resources the coordinator hands off to each runner at evaluation time.
  * Owned by the coordinator (one instance per bot process); runners hold only
  * read references.
+ *
+ * The cross-runner accessors (`getGlobalDailyEntryCount`,
+ * `getGlobalDailyEntryCountBySymbol`, `isSymbolLockedByOtherStrategy`) let a
+ * runner enforce limits that span every strategy in the process: a 100/day
+ * global cap, a 33/symbol global cap, and a same-symbol mutex.
  */
 export interface EvaluationContext {
   coinbase: CoinbaseFeed;
@@ -77,6 +82,12 @@ export interface EvaluationContext {
   decisions: DecisionLogger;
   historicalCandles: Map<string, Map<Timeframe, Candle[]>>;
   fearGreed: number;
+  /** Sum of entries today across every runner (Fase 3 cap=100/day global). */
+  getGlobalDailyEntryCount(): number;
+  /** Sum of entries today across runners for one symbol (Fase 3 cap=33/sym). */
+  getGlobalDailyEntryCountBySymbol(symbol: Symbol): number;
+  /** True if any OTHER strategy currently owns an OPEN position on this symbol. */
+  isSymbolLockedByOtherStrategy(symbol: Symbol, byStrategy: StrategyId): Promise<boolean>;
 }
 
 function tierFor(confidence: number): string {
@@ -84,6 +95,55 @@ function tierFor(confidence: number): string {
   if (confidence >= 0.70) return 'B';
   if (confidence >= 0.55) return 'C';
   return 'D';
+}
+
+/**
+ * Should the runner skip this symbol because the MTF bias gate fails?
+ *
+ * Conservative ('smc'): NEUTRAL OR confidence below floor → skip.
+ * Aggressive ('aggressive'): only NEUTRAL → skip. The floor is ignored.
+ *
+ * Exported for unit testing.
+ */
+export function shouldSkipForMtfBias(
+  mode: StrategyMode,
+  bias: string,
+  confidence: number,
+  confidenceFloor: number,
+): boolean {
+  if (mode === 'aggressive') return bias === 'NEUTRAL';
+  return bias === 'NEUTRAL' || confidence < confidenceFloor;
+}
+
+/**
+ * Should the runner skip this symbol because one of the global caps was hit?
+ *
+ * The caps are shared across every runner in the process (Fase 3). Returns the
+ * specific cap that tripped so the caller can log a clear reason.
+ *
+ * Exported for unit testing.
+ */
+export function shouldSkipForGlobalCaps(
+  globalDailyCount: number,
+  globalSymbolCount: number,
+  totalCap: number,
+  symbolCap: number,
+): { skip: true; reason: 'global-daily' | 'global-symbol' } | { skip: false } {
+  if (globalDailyCount >= totalCap) return { skip: true, reason: 'global-daily' };
+  if (globalSymbolCount >= symbolCap) return { skip: true, reason: 'global-symbol' };
+  return { skip: false };
+}
+
+/**
+ * Should the runner evaluate the `liquidity-sweep` gate at all?
+ *
+ * Conservative mode requires sweep detection; aggressive skips the gate so it
+ * never single-handedly blocks an entry.
+ *
+ * Exported for unit testing.
+ */
+export function shouldEvaluateLiquiditySweep(mode: StrategyMode): boolean {
+  return mode !== 'aggressive';
 }
 
 export class StrategyRunner {
@@ -123,6 +183,36 @@ export class StrategyRunner {
       return;
     }
 
+    // Fase 3 — global cap shared across runners. Without this every strategy
+    // would get its own 100/day budget and we'd ship 200+ trades on a 2-runner
+    // process. Same for the per-symbol cap.
+    const globalEntries = ctx.getGlobalDailyEntryCount();
+    const globalSymbolEntries = ctx.getGlobalDailyEntryCountBySymbol(symbol);
+    const capCheck = shouldSkipForGlobalCaps(globalEntries, globalSymbolEntries, 100, 33);
+    if (capCheck.skip) {
+      await ctx.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: capCheck.reason === 'global-daily'
+          ? `global daily cap reached (${globalEntries}/100)`
+          : `global symbol cap reached (${globalSymbolEntries}/33)`,
+      });
+      return;
+    }
+
+    // Fase 3 — symbol mutex. If another runner already owns an OPEN position
+    // on this symbol, skip. The first runner to enter the symbol holds it
+    // until that position closes. Order of runner iteration in the coordinator
+    // is deterministic (insertion order via Map), so 'A' has natural priority.
+    if (await ctx.isSymbolLockedByOtherStrategy(symbol, this.id)) {
+      await ctx.decisions.log({
+        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
+        kind: 'SKIP', symbol, venue: 'spot',
+        reason: `symbol locked by other strategy`,
+      });
+      return;
+    }
+
     const base = SYMBOL_TO_BASE[symbol];
     const cbSamples = ctx.coinbase.getTimestampedSamples(base);
     const bnSamples = ctx.binance.getTimestampedSamples(base);
@@ -144,11 +234,13 @@ export class StrategyRunner {
     const candlesByTf = mergeWithRealtimeCandles(historicalForSymbol, realtimeCandles);
     const mtf = analyzeMtf(candlesByTf);
 
-    if (mtf.bias === 'NEUTRAL' || mtf.confidence < MTF_CONFIDENCE_MIN) {
+    if (shouldSkipForMtfBias(this.mode, mtf.bias, mtf.confidence, MTF_CONFIDENCE_MIN)) {
       await ctx.decisions.log({
         agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
         kind: 'SKIP', symbol, venue: 'spot',
-        reason: `mtf bias=${mtf.bias} conf=${mtf.confidence.toFixed(2)} (need >=${MTF_CONFIDENCE_MIN.toFixed(2)} BUY/SELL)`,
+        reason: this.mode === 'aggressive'
+          ? `mtf bias=${mtf.bias} (aggressive needs non-NEUTRAL)`
+          : `mtf bias=${mtf.bias} conf=${mtf.confidence.toFixed(2)} (need >=${MTF_CONFIDENCE_MIN.toFixed(2)} BUY/SELL)`,
         meta: { mtf: { bias: mtf.bias, confidence: mtf.confidence } },
       });
       return;
@@ -191,19 +283,25 @@ export class StrategyRunner {
       return;
     }
 
-    const sweep = detectLiquiditySweep(
-      candlesByTf.get('5M') ?? [],
-      candlesByTf.get('1M') ?? [],
-      sig5m,
-    );
-    if (!sweep.detected) {
-      await ctx.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `liquidity-sweep: not detected`,
-        meta: { bias: htfBias },
-      });
-      return;
+    // Aggressive mode bypasses the liquidity-sweep gate entirely. Sweep is the
+    // most restrictive of the 11 gates today (~80% of decisions skip here on
+    // strategy A); strategy B relies on CHOCH + confluence + arb-gap for
+    // quality instead.
+    if (shouldEvaluateLiquiditySweep(this.mode)) {
+      const sweep = detectLiquiditySweep(
+        candlesByTf.get('5M') ?? [],
+        candlesByTf.get('1M') ?? [],
+        sig5m,
+      );
+      if (!sweep.detected) {
+        await ctx.decisions.log({
+          agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
+          kind: 'SKIP', symbol, venue: 'spot',
+          reason: `liquidity-sweep: not detected`,
+          meta: { bias: htfBias },
+        });
+        return;
+      }
     }
 
     const choch = validateChochDisplacement(
