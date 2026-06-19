@@ -212,6 +212,19 @@ export const TIMELINES: HistoryTimeline[] = [
       { year: 2023, title: "Regulación IoT", desc: "Leyes (UK PSTI, EU CRA) prohíben las contraseñas por defecto y exigen seguridad por diseño.", impact: "medium" },
     ],
   },
+  {
+    id: 17,
+    module: 51,
+    title: "Lenguajes de programación en ciberseguridad",
+    events: [
+      { year: 1972, title: "C", desc: "Nace el lenguaje de los sistemas; su gestión manual de memoria define el exploiting durante décadas.", impact: "high" },
+      { year: 1987, title: "Perl", desc: "El primer 'pegamento' del scripting y el procesamiento de texto en seguridad y sysadmin.", impact: "low" },
+      { year: 1991, title: "Python", desc: "Llega el lenguaje que se volverá el estándar del tooling ofensivo y la automatización.", impact: "high" },
+      { year: 2003, title: "Ruby / Metasploit", desc: "Metasploit, escrito en Ruby, democratiza el desarrollo de exploits.", impact: "high" },
+      { year: 2009, title: "Go", desc: "Google publica Go; su binario único y concurrencia impulsan el tooling moderno (chisel, httpx).", impact: "medium" },
+      { year: 2015, title: "Rust", desc: "La seguridad de memoria por diseño empieza a desplazar a C/C++ en software crítico.", impact: "medium" },
+    ],
+  },
 ];
 
 export function timelinesByModule(moduleId: number): HistoryTimeline[] {

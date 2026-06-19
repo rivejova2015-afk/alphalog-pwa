@@ -433,6 +433,21 @@ export const FRAMEWORKS: Framework[] = [
       { n: 6, name: "Re-test", desc: "Verificar que las correcciones aplicadas realmente cierran los hallazgos.", defenses: ["Validar la remediación", "Cerrar el ciclo"] },
     ],
   },
+  {
+    id: 28,
+    module: 55,
+    name: "Anatomía de un buffer overflow",
+    kind: "flow",
+    summary:
+      "Cómo un dato demasiado largo se convierte en ejecución de código del atacante, paso a paso. Cada fase tiene una mitigación moderna que la corta.",
+    phases: [
+      { n: 1, name: "Entrada sin validar", desc: "El programa copia entrada del usuario a un buffer de tamaño fijo sin comprobar su longitud (strcpy, gets).", defenses: ["Validar longitud", "Funciones seguras (strncpy, fgets)"] },
+      { n: 2, name: "Desbordamiento del buffer", desc: "Se escriben más bytes de los que cabe, pisando la memoria contigua del stack.", defenses: ["Stack canary (detecta el pisado)", "Compilar con -fstack-protector"] },
+      { n: 3, name: "Sobrescribir la dirección de retorno", desc: "El desbordamiento alcanza la dirección de retorno guardada y la reemplaza por una elegida.", defenses: ["Stack canary", "Shadow stack / CET"] },
+      { n: 4, name: "Redirigir la ejecución", desc: "Al retornar, el flujo salta a la dirección del atacante en vez de a su origen legítimo.", defenses: ["ASLR (direcciones impredecibles)", "PIE"] },
+      { n: 5, name: "Shellcode o ROP", desc: "Se ejecuta el payload: shellcode inyectado o, si el stack no es ejecutable, una cadena ROP.", defenses: ["DEP/NX (stack no ejecutable)", "CFI"] },
+    ],
+  },
 ];
 
 export function frameworksByModule(moduleId: number): Framework[] {
