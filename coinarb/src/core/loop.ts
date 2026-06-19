@@ -612,6 +612,7 @@ export class CoinarbLoop {
       await supabase.from('coinarb_telemetry').upsert({
         user_id: COINARB_USER_ID,
         agent_id: COINARB_AGENT_ID,
+        strategy_id: 'A',
         equity_usd: this.phaseManager.capitalNow,
         available_balance_usd: this.paperBroker.balanceUsd,
         open_positions_count: (await getOpenPositions().catch(() => [])).length,
@@ -636,7 +637,7 @@ export class CoinarbLoop {
           total_cap: 100,
           per_symbol_cap: 33,
         },
-      }, { onConflict: 'agent_id' });
+      }, { onConflict: 'agent_id,strategy_id' });
       // Mirror heartbeat to coinarb_agents (legacy table still consumed by
       // /intelligence/agents dashboard). Best-effort: errors logged, not thrown.
       const agentResult = await syncAgentHeartbeat(supabase, COINARB_USER_ID, paused);

@@ -60,6 +60,7 @@ export class PhaseManager {
       await supabase.from('coinarb_phase_log').insert({
         user_id: COINARB_USER_ID,
         agent_id: COINARB_AGENT_ID,
+        strategy_id: 'A',
         from_phase: from.name,
         to_phase: to.name,
         from_risk_pct: from.riskPct,

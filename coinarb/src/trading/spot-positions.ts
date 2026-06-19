@@ -13,6 +13,8 @@
 import { COINARB_AGENT_ID, COINARB_USER_ID, type Symbol } from '../core/config.js';
 import { getSupabase } from '../supabase.js';
 
+export type StrategyId = 'A' | 'B';
+
 export interface OpenPositionInput {
   symbol: Symbol;
   direction: 'BUY' | 'SELL';
@@ -34,6 +36,8 @@ export interface OpenPositionInput {
   };
   feeUsd: number;
   externalOrderId?: string;
+  /** Strategy that opened this position. Defaults to 'A' for backwards compat. */
+  strategyId?: StrategyId;
 }
 
 export interface OpenPositionRow {
@@ -67,12 +71,14 @@ export async function openPosition(input: OpenPositionInput): Promise<OpenPositi
   const userId = ensureUserId();
   const supabase = getSupabase();
   const now = new Date().toISOString();
+  const strategyId: StrategyId = input.strategyId ?? 'A';
 
   const { data: pos, error } = await supabase
     .from('coinarb_positions')
     .insert({
       user_id: userId,
       agent_id: COINARB_AGENT_ID,
+      strategy_id: strategyId,
       symbol: input.symbol,
       direction: input.direction,
       side: input.direction,
@@ -98,6 +104,7 @@ export async function openPosition(input: OpenPositionInput): Promise<OpenPositi
   await supabase.from('coinarb_trades').insert({
     user_id: userId,
     agent_id: COINARB_AGENT_ID,
+    strategy_id: strategyId,
     position_id: pos.id,
     order_id: input.externalOrderId ?? null,
     symbol: input.symbol,
@@ -123,13 +130,14 @@ export async function closePosition(input: CloseInput): Promise<{ pnlUsd: number
 
   const { data: pos, error: posErr } = await supabase
     .from('coinarb_positions')
-    .select('id, symbol, direction, entry_price, base_qty, size_usd, opened_at, entry_reason, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry')
+    .select('id, symbol, direction, entry_price, base_qty, size_usd, opened_at, entry_reason, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry, strategy_id')
     .eq('id', input.positionId)
     .single();
 
   if (posErr || !pos) throw new Error(`[spot-positions] position ${input.positionId} not found: ${posErr?.message}`);
 
   const dir = (pos.direction ?? 'BUY') as 'BUY' | 'SELL';
+  const strategyId: StrategyId = ((pos as { strategy_id?: string }).strategy_id as StrategyId | undefined) ?? 'A';
   const grossPnl = dir === 'BUY'
     ? (input.exitPrice - pos.entry_price) * pos.base_qty
     : (pos.entry_price - input.exitPrice) * pos.base_qty;
@@ -153,6 +161,7 @@ export async function closePosition(input: CloseInput): Promise<{ pnlUsd: number
   await supabase.from('coinarb_trades').insert({
     user_id: userId,
     agent_id: COINARB_AGENT_ID,
+    strategy_id: strategyId,
     position_id: input.positionId,
     order_id: input.externalOrderId ?? null,
     symbol: pos.symbol,
