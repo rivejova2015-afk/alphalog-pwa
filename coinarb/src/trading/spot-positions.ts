@@ -13,7 +13,18 @@
 import { COINARB_AGENT_ID, COINARB_USER_ID, type Symbol } from '../core/config.js';
 import { getSupabase } from '../supabase.js';
 
-export type StrategyId = 'A' | 'B';
+/**
+ * Strategy id stamped on every position/trade/decision row this code path
+ * writes. The 4 values are also the only allowed values for the column-level
+ * CHECK constraint in migration 131; adding a new strategy here requires a
+ * follow-up migration to extend the constraint.
+ *
+ *   'A' — SMC strict (full 11-gate pipeline, default for RANGE_HIGH regime)
+ *   'B' — SMC aggressive (no liquidity-sweep, no MTF floor, TRENDING_HIGH)
+ *   'M' — Mean-reversion (BB + RSI, dispatched for RANGE_LOW regime)
+ *   'P' — Momentum-breakout (EMA + ADX + vol, dispatched for TRENDING_LOW)
+ */
+export type StrategyId = 'A' | 'B' | 'M' | 'P';
 
 export interface OpenPositionInput {
   symbol: Symbol;
@@ -28,10 +39,17 @@ export interface OpenPositionInput {
   arbGapPct: number;
   fearGreedAtEntry: number;
   phaseAtEntry: string;
+  /**
+   * Snapshot of why this entry was taken. SMC strategies populate
+   * regime/tier/validatorConfidence; mean-rev and momentum-breakout
+   * supply their own indicator snapshot (BB, RSI, ATR / EMA, ADX, vol),
+   * so these fields are optional. The extra-props index ensures any
+   * extra strategy-specific telemetry rides along for post-mortem.
+   */
   entryReason: {
-    regime: string;
-    tier: string;
-    validatorConfidence: number;
+    regime?: string;
+    tier?: string;
+    validatorConfidence?: number;
     [key: string]: unknown;
   };
   feeUsd: number;
