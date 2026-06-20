@@ -85,6 +85,25 @@ describe('buildSmcSignalRow', () => {
     expect(row.meta.swing_high).toBe(63100);
     expect(row.meta.swing_low).toBe(60800);
   });
+
+  it("defaults strategy_id to 'A' when not specified (backwards compat with single-strategy bot)", () => {
+    const row = buildSmcSignalRow({
+      userId: 'user-1', agentId: 'agent-1', symbol: 'BTC-USD', timeframe: '5M',
+      signal: makeSignal(),
+      price: 62500,
+    });
+    expect(row.strategy_id).toBe('A');
+  });
+
+  it("honors explicit strategyId override (e.g. 'B' for the aggressive variant)", () => {
+    const row = buildSmcSignalRow({
+      userId: 'user-1', agentId: 'agent-1', symbol: 'BTC-USD', timeframe: '5M',
+      signal: makeSignal(),
+      price: 62500,
+      strategyId: 'B',
+    });
+    expect(row.strategy_id).toBe('B');
+  });
 });
 
 describe('persistSmcSignal', () => {

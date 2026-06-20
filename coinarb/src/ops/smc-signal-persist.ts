@@ -16,9 +16,12 @@
 
 import type { SmcSignal } from '../analysis/smc-detector.js';
 
+export type StrategyId = 'A' | 'B';
+
 export interface SmcSignalRow {
   user_id: string;
   agent_id: string;
+  strategy_id: StrategyId;
   symbol: string;
   timeframe: string;
   signal_type: 'CHOCH' | 'BOS' | 'BIAS';
@@ -42,12 +45,14 @@ export function buildSmcSignalRow(opts: {
   signal: SmcSignal;
   price: number;
   now?: Date;
+  strategyId?: StrategyId;
 }): SmcSignalRow {
   const signalType: SmcSignalRow['signal_type'] =
     opts.signal.choch ? 'CHOCH' : opts.signal.bos ? 'BOS' : 'BIAS';
   return {
     user_id: opts.userId,
     agent_id: opts.agentId,
+    strategy_id: opts.strategyId ?? 'A',
     symbol: opts.symbol,
     timeframe: opts.timeframe,
     signal_type: signalType,

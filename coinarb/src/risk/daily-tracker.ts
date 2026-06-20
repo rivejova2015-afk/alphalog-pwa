@@ -127,6 +127,7 @@ export class DailyTracker {
         {
           user_id: COINARB_USER_ID,
           agent_id: COINARB_AGENT_ID,
+          strategy_id: 'A',
           day_utc: this.dayUtc,
           total_trades: this.snap.totalTrades,
           wins: this.snap.wins,
@@ -144,7 +145,7 @@ export class DailyTracker {
           fear_greed_avg: fgAvg,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'agent_id,day_utc' },
+        { onConflict: 'agent_id,strategy_id,day_utc' },
       );
     } catch (err) {
       console.error('[daily-tracker] flush failed:', err);

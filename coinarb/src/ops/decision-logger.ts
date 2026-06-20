@@ -9,6 +9,7 @@
 import { getSupabase } from '../supabase.js';
 
 export type DecisionKind = 'ENTER' | 'SCALP' | 'SKIP' | 'EXIT' | 'BREAKER' | 'CASCADE' | 'TICK';
+export type StrategyId = 'A' | 'B';
 
 export interface DecisionRow {
   agentId: string;
@@ -18,6 +19,12 @@ export interface DecisionRow {
   venue?: 'spot';
   reason: string;
   meta?: Record<string, unknown>;
+  /**
+   * Identifier of the parallel strategy that emitted this decision.
+   * 'A' = current SMC pipeline, 'B' = aggressive variant (Fase 2+).
+   * Optional for backwards compat — DB default is 'A'.
+   */
+  strategyId?: StrategyId;
 }
 
 const SKIP_THROTTLE_MS = 60_000;
@@ -39,6 +46,7 @@ export class DecisionLogger {
       const { error } = await supabase.from('coinarb_decisions').insert({
         user_id: row.userId,
         agent_id: row.agentId,
+        strategy_id: row.strategyId ?? 'A',
         kind: row.kind,
         symbol: row.symbol ?? null,
         venue: row.venue ?? null,
