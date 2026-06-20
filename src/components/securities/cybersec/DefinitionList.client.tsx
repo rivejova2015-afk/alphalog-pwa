@@ -18,11 +18,13 @@ export function DefinitionList({ definitions }: { definitions: ConceptDefinition
 
 function DefinitionItem({ def }: { def: ConceptDefinition }) {
   const [open, setOpen] = useState(false);
+  const panelId = `def-${def.id}-panel`;
   return (
     <div className="rounded-lg border border-[#1f2937] bg-[#0a0e1a]">
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-controls={panelId}
         className="flex w-full items-start gap-2 px-3 py-2.5 text-left"
       >
         <BookMarked size={15} className="mt-0.5 shrink-0 text-[#22d3ee]" />
@@ -34,7 +36,7 @@ function DefinitionItem({ def }: { def: ConceptDefinition }) {
       </button>
 
       {open && (
-        <div className="space-y-3 border-t border-[#1f2937] px-3 py-3">
+        <div id={panelId} className="space-y-3 border-t border-[#1f2937] px-3 py-3">
           <MarkdownBlocks content={def.detail} />
 
           {def.examples.length > 0 && (

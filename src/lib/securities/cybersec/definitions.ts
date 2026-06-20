@@ -23,7 +23,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un SOC que detecta un inicio de sesión imposible desde otro país (detección).",
       "Restaurar desde backups tras un ransomware (respuesta y recuperación).",
     ],
-    related: ["Tríada CIA", "Gestión de riesgos", "Defensa en profundidad"],
+    related: ["Gestión de riesgos", "Defensa en profundidad"],
   },
   {
     id: 2,
@@ -43,7 +43,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un servidor con RDP expuesto a Internet amplía la superficie digital.",
       "Un empleado que reutiliza contraseñas amplía la superficie humana.",
     ],
-    related: ["Vector de ataque", "Hardening", "Mínimo privilegio"],
+    related: ["Vector de ataque", "Hardening y CIS Benchmarks", "Principio de mínimo privilegio"],
   },
   {
     id: 3,
@@ -57,7 +57,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Explotar una CVE en un servicio expuesto.",
       "Inyectar código en una dependencia npm (supply chain).",
     ],
-    related: ["Superficie de ataque", "Phishing", "Exploit"],
+    related: ["Superficie de ataque", "Anatomía de un phishing", "Exploit y Payload"],
   },
   {
     id: 4,
@@ -76,7 +76,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "APT29 / Cozy Bear (estado-nación).",
       "Un empleado descontento que filtra datos (insider).",
     ],
-    related: ["APT", "Insider", "TTP"],
+    related: ["TTP (Tácticas, Técnicas y Procedimientos)"],
   },
   {
     id: 5,
@@ -90,7 +90,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "MFA + EDR + segmentación de red + backups cifrados, todo junto.",
       "Aunque caiga el firewall, el host sigue protegido por su EDR.",
     ],
-    related: ["Mínimo privilegio", "Segmentación", "Zero Trust"],
+    related: ["Principio de mínimo privilegio", "DMZ y segmentación de red", "Zero Trust Architecture"],
   },
   {
     id: 6,
@@ -103,7 +103,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Buscar subdominios y correos de una empresa antes de un pentest.",
       "Encontrar credenciales filtradas en un volcado de datos público.",
     ],
-    related: ["Reconocimiento", "Cyber Kill Chain", "Vector de ataque"],
+    related: ["Reconocimiento pasivo vs activo", "Vector de ataque"],
   },
 
   // ── M2 · Tríada CIA y Principios ─────────────────────────────────────────
@@ -119,7 +119,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "TLS protegiendo el tráfico HTTPS.",
       "Permisos que impiden que un becario lea la nómina.",
     ],
-    related: ["Cifrado", "Control de acceso", "Tríada CIA"],
+    related: ["Cifrado simétrico"],
   },
   {
     id: 21,
@@ -132,7 +132,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Comparar el hash SHA-256 de una descarga con el publicado.",
       "Una firma digital que prueba que un documento no fue modificado.",
     ],
-    related: ["Hashing", "Firma digital", "No repudio"],
+    related: ["Función hash", "No repudio"],
   },
   {
     id: 22,
@@ -145,7 +145,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Réplicas y failover automático de una base de datos.",
       "Un CDN/anti-DDoS absorbiendo un ataque volumétrico.",
     ],
-    related: ["DDoS", "Redundancia", "Backups"],
+    related: ["Confidencialidad", "Integridad"],
   },
   {
     id: 23,
@@ -164,7 +164,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un rol 'editor' que puede publicar pero no borrar (autorización).",
       "Un log que registra quién accedió a qué y cuándo (accounting).",
     ],
-    related: ["MFA", "Mínimo privilegio", "RBAC"],
+    related: ["MFA y autenticación moderna", "Principio de mínimo privilegio", "Modelos de autorización"],
   },
   {
     id: 24,
@@ -177,7 +177,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Una firma digital que vincula un contrato a una persona.",
       "Logs inmutables que prueban quién aprobó un pago.",
     ],
-    related: ["Firma digital", "Integridad", "Accounting"],
+    related: ["Integridad", "AAA (Autenticación, Autorización, Accounting)"],
   },
   {
     id: 25,
@@ -190,7 +190,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un servicio web que corre sin permisos de administrador.",
       "Acceso temporal *just-in-time* en vez de admin permanente.",
     ],
-    related: ["Zero Trust", "Defensa en profundidad", "AAA"],
+    related: ["Zero Trust Architecture", "Defensa en profundidad", "AAA (Autenticación, Autorización, Accounting)"],
   },
 
   // ── M3 · Amenazas, Ataques y Malware ─────────────────────────────────────
@@ -209,7 +209,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
     examples: [
       "Amenaza: actor de ransomware. Vulnerabilidad: RDP expuesto. Riesgo: cifrado de toda la red.",
     ],
-    related: ["CVE", "CVSS", "Gestión de riesgos"],
+    related: ["CVE y CVSS", "CVE y CVSS", "Gestión de riesgos"],
   },
   {
     id: 41,
@@ -223,7 +223,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Exploit: desbordamiento de búfer. Payload: reverse shell a la máquina del atacante.",
       "msfvenom genera payloads para un exploit de Metasploit.",
     ],
-    related: ["Vulnerabilidad", "Zero-day", "Reverse shell"],
+    related: ["Amenaza, Vulnerabilidad y Riesgo", "Zero-day"],
   },
   {
     id: 42,
@@ -236,7 +236,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Log4Shell (2021) fue explotada masivamente antes de existir parche.",
       "Cadenas de zero-days usadas en spyware como Pegasus.",
     ],
-    related: ["Exploit", "CVE", "APT"],
+    related: ["Exploit y Payload", "CVE y CVSS"],
   },
   {
     id: 43,
@@ -256,7 +256,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "CVE-2021-44228 (Log4Shell) tuvo CVSS 10.0 (crítica).",
       "Priorizar el parcheo de una CVSS 9.8 sobre una 4.2.",
     ],
-    related: ["Vulnerabilidad", "Gestión de parches", "KEV"],
+    related: ["Amenaza, Vulnerabilidad y Riesgo"],
   },
   {
     id: 44,
@@ -270,7 +270,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un hash SHA-256 de un binario de malware conocido.",
       "Una IP de comando y control (C2) en una lista de bloqueo.",
     ],
-    related: ["TTP", "YARA", "Threat hunting"],
+    related: ["TTP (Tácticas, Técnicas y Procedimientos)", "Reglas YARA", "Threat hunting"],
   },
   {
     id: 45,
@@ -286,7 +286,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
     examples: [
       "Táctica: Persistencia → Técnica: Scheduled Task → Procedimiento: tarea creada por APT específica.",
     ],
-    related: ["MITRE ATT&CK", "IoC", "Actor de amenaza"],
+    related: ["MITRE ATT&CK", "Indicadores de compromiso (IoC)", "Actor de amenaza"],
   },
   {
     id: 46,
@@ -299,7 +299,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "WannaCry (2017) se propagó con el exploit EternalBlue.",
       "LockBit / BlackCat operando como RaaS con afiliados.",
     ],
-    related: ["Malware", "Backups", "Doble extorsión"],
+    related: ["Clasificación de malware"],
   },
 
   // ── M4 · Frameworks y Estándares ─────────────────────────────────────────
@@ -315,7 +315,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Mapear los controles de la empresa a las 6 funciones del CSF.",
       "Usar el CSF para reportar madurez de seguridad al directorio.",
     ],
-    related: ["ISO 27001", "CIS Controls", "Gestión de riesgos"],
+    related: ["ISO 27001, SGSI y SoA", "CIS Controls", "Gestión de riesgos"],
   },
   {
     id: 61,
@@ -328,7 +328,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Una empresa SaaS que se certifica ISO 27001 para ganar clientes enterprise.",
       "Declaración de Aplicabilidad (SoA) justificando qué controles aplican.",
     ],
-    related: ["NIST CSF", "GRC", "Auditoría"],
+    related: ["Proceso de auditoría"],
   },
   {
     id: 62,
@@ -341,7 +341,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "IG1 como higiene básica para una PyME.",
       "Control 1 (inventario de activos) antes que defensas avanzadas.",
     ],
-    related: ["NIST CSF", "Hardening", "Gestión de vulnerabilidades"],
+    related: ["Hardening y CIS Benchmarks"],
   },
   {
     id: 63,
@@ -354,7 +354,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Mapear las alertas del SOC a técnicas ATT&CK para medir cobertura.",
       "Un Red Team emulando las TTP de un grupo APT concreto.",
     ],
-    related: ["TTP", "Threat hunting", "Cyber Kill Chain"],
+    related: ["TTP (Tácticas, Técnicas y Procedimientos)", "Threat hunting"],
   },
   {
     id: 64,
@@ -371,7 +371,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Aceptar un riesgo bajo cuyo control sería más caro que el impacto.",
       "Transferir el riesgo de fraude con un seguro cibernético.",
     ],
-    related: ["Riesgo", "NIST CSF", "ISO 27001"],
+    related: ["Gestión de riesgos", "ISO 27001, SGSI y SoA"],
   },
 
   // ── M5 · Redes: Modelo OSI ───────────────────────────────────────────────
@@ -387,7 +387,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un cable y voltajes son capa 1 (física); una IP es capa 3 (red).",
       "Aislar un fallo: si hace ping (capa 3) pero no carga la web (capa 7), el problema es de capa superior.",
     ],
-    related: ["Encapsulamiento", "TCP/IP", "Ataques por capa"],
+    related: ["Encapsulamiento y PDU", "Modelo TCP/IP", "Ataques por capa OSI"],
   },
   {
     id: 81,
@@ -427,7 +427,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un ARP spoofing (capa 2) permite un MITM en la red local.",
       "Un SYN flood (capa 4) agota la tabla de conexiones del servidor.",
     ],
-    related: ["Modelo OSI", "DDoS", "MITM"],
+    related: ["Modelo OSI"],
   },
   {
     id: 83,
@@ -440,7 +440,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Dos PCs del mismo WiFi se hablan por MAC (capa 2).",
       "Para salir a Internet, el router enruta por IP (capa 3).",
     ],
-    related: ["Encapsulamiento", "Dirección IPv4 vs IPv6", "Modelo OSI"],
+    related: ["Encapsulamiento y PDU", "Dirección IPv4 vs IPv6", "Modelo OSI"],
   },
 
   // ── M6 · TCP/IP y Protocolos ─────────────────────────────────────────────
@@ -545,7 +545,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "IPv4: 192.168.1.20 — IPv6: fe80::1ff:fe23:4567:890a.",
       "IPv4 se agotó; los ISP migran gradualmente a IPv6.",
     ],
-    related: ["IP privada vs pública", "Subnetting y CIDR", "NAT/PAT"],
+    related: ["IP privada vs pública", "Subnetting y CIDR", "NAT y PAT"],
   },
   {
     id: 101,
@@ -563,7 +563,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Tu PC en casa: privada 192.168.1.x; tu router muestra una pública al ISP.",
       "Muchos hosts privados comparten una IP pública vía NAT.",
     ],
-    related: ["NAT/PAT", "Dirección IPv4 vs IPv6", "DHCP"],
+    related: ["NAT y PAT", "Dirección IPv4 vs IPv6"],
   },
   {
     id: 102,
@@ -577,7 +577,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "192.168.1.0/24 → 254 hosts usables.",
       "Separar servidores y usuarios en subredes distintas reduce el movimiento lateral.",
     ],
-    related: ["DMZ y segmentación", "IP privada vs pública", "NAT/PAT"],
+    related: ["DMZ y segmentación de red", "IP privada vs pública", "NAT y PAT"],
   },
   {
     id: 103,
@@ -590,7 +590,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "10 dispositivos de casa navegan con una única IP pública (PAT).",
       "El NAT también oculta la topología interna (beneficio colateral de seguridad).",
     ],
-    related: ["IP privada vs pública", "DHCP", "Puertos y sockets"],
+    related: ["IP privada vs pública", "Puertos y sockets"],
   },
   {
     id: 104,
@@ -604,7 +604,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Servidor web público en la DMZ; base de datos en la red interna.",
       "Microsegmentación + Zero Trust para limitar el movimiento lateral.",
     ],
-    related: ["Subnetting y CIDR", "Defensa en profundidad", "Mínimo privilegio"],
+    related: ["Subnetting y CIDR", "Defensa en profundidad", "Principio de mínimo privilegio"],
   },
 
   // ── M8 · Análisis de Tráfico (Wireshark) ─────────────────────────────────
@@ -702,7 +702,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un AP 'WiFi_Cafe_Gratis' clonado en una cafetería captura el tráfico.",
       "Portal cautivo falso que pide la contraseña del correo.",
     ],
-    related: ["Ataque de deautenticación", "MITM", "Estándares de seguridad WiFi"],
+    related: ["Ataque de deautenticación", "Estándares de seguridad WiFi"],
   },
   {
     id: 122,
@@ -743,7 +743,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "El WiFi corporativo donde inicias sesión con tu usuario de dominio.",
       "Revocar el acceso de un empleado sin cambiar la clave de todos.",
     ],
-    related: ["Estándares de seguridad WiFi", "AAA (Autenticación, Autorización, Accounting)", "Mínimo privilegio"],
+    related: ["Estándares de seguridad WiFi", "AAA (Autenticación, Autorización, Accounting)", "Principio de mínimo privilegio"],
   },
 
   // ── M10 · Linux: Fundamentos ─────────────────────────────────────────────
@@ -823,7 +823,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "ls -la > listado.txt guarda el resultado en un archivo.",
       "cat /etc/passwd | grep root filtra solo la línea de root.",
     ],
-    related: ["La shell", "El trío grep/awk/sed", "Pipes y automatización"],
+    related: ["La shell", "Pipes y automatización"],
   },
 
   // ── M11 · Bash Scripting ─────────────────────────────────────────────────
@@ -931,7 +931,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "ls -l muestra los permisos como -rwxr-x---.",
       "chmod u+x da permiso de ejecución solo al dueño.",
     ],
-    related: ["Propietario y grupo", "Bits especiales SUID/SGID", "Hardening y CIS Benchmarks"],
+    related: ["Propietario y grupo", "Bits especiales SUID/SGID/sticky", "Hardening y CIS Benchmarks"],
   },
   {
     id: 151,
@@ -977,7 +977,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "sudo apt update ejecuta solo ese comando como root.",
       "sudo -l lista qué te permite ejecutar sudo (recon de privesc).",
     ],
-    related: ["Bits especiales SUID/SGID", "Permisos rwx", "Mínimo privilegio"],
+    related: ["Bits especiales SUID/SGID/sticky", "Permisos rwx", "Principio de mínimo privilegio"],
   },
   {
     id: 154,
@@ -990,7 +990,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Deshabilitar PermitRootLogin en sshd_config.",
       "Aplicar el CIS Benchmark de Ubuntu y auditar con Lynis.",
     ],
-    related: ["Gestión de usuarios y sudo", "Bits especiales SUID/SGID", "CIS Controls"],
+    related: ["Gestión de usuarios y sudo", "Bits especiales SUID/SGID/sticky", "CIS Controls"],
   },
 
   // ── M13 · Windows: Seguridad ─────────────────────────────────────────────
@@ -1010,7 +1010,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Revisar claves Run para detectar autostart malicioso.",
       "reg query para inspeccionar el registro desde consola.",
     ],
-    related: ["Servicios y procesos", "Event Viewer y logs", "Group Policy (GPO)"],
+    related: ["Servicios y procesos", "Group Policy (GPO)"],
   },
   {
     id: 161,
@@ -1023,7 +1023,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "tasklist y Get-Process listan los procesos en ejecución.",
       "Un servicio con ruta sin comillas explotable para escalar a SYSTEM.",
     ],
-    related: ["Registro de Windows", "Event Viewer y logs"],
+    related: ["Registro de Windows"],
   },
   {
     id: 162,
@@ -1043,7 +1043,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Correlacionar 4625 repetidos para detectar password spraying.",
       "Get-WinEvent para consultar logs desde PowerShell.",
     ],
-    related: ["Servicios y procesos", "Defender, AMSI y ETW", "Pipeline de detección en Windows"],
+    related: ["Servicios y procesos", "Defender, AMSI y ETW"],
   },
   {
     id: 163,
@@ -1073,7 +1073,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "AMSI bloquea un script de PowerShell malicioso ofuscado.",
       "Un EDR usa ETW para detectar inyección de procesos.",
     ],
-    related: ["Event Viewer y Event IDs", "PowerShell ofensivo", "Pipeline de detección en Windows"],
+    related: ["Event Viewer y Event IDs", "PowerShell ofensivo"],
   },
 
   // ── M14 · Active Directory ───────────────────────────────────────────────
@@ -1139,7 +1139,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Kerberoasting sobre una cuenta de servicio con contraseña débil.",
       "DCSync con Mimikatz para volcar todos los hashes del dominio.",
     ],
-    related: ["Kerberos", "LDAP", "Mínimo privilegio"],
+    related: ["Kerberos", "LDAP", "Principio de mínimo privilegio"],
   },
 
   // ── M15 · PowerShell para Seguridad ──────────────────────────────────────
@@ -1436,7 +1436,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Leaf → CA intermedia → CA raíz: el navegador valida toda la cadena.",
       "Un certificado revocado (CRL/OCSP) rompe la confianza.",
     ],
-    related: ["PKI y autoridades de certificación", "Certificate transparency y pinning", "Handshake TLS"],
+    related: ["PKI y autoridades de certificación", "Certificate transparency y pinning"],
   },
   {
     id: 214,
@@ -1473,7 +1473,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "TLS 1.3 reduce la latencia del handshake a un solo viaje.",
       "Deshabilitar TLS 1.0/1.1 en el servidor por cumplimiento.",
     ],
-    related: ["Cipher suite", "Handshake TLS", "Ataques a TLS"],
+    related: ["Cipher suite", "Ataques a TLS"],
   },
   {
     id: 221,
@@ -1486,7 +1486,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "TLS_AES_256_GCM_SHA384 (una suite de TLS 1.3).",
       "Evitar suites con RC4, 3DES o sin forward secrecy.",
     ],
-    related: ["TLS 1.2 vs 1.3", "Handshake TLS", "Modos de operación"],
+    related: ["TLS 1.2 vs 1.3", "Modos de operación"],
   },
   {
     id: 222,
@@ -1523,7 +1523,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un MITM en WiFi público intentando SSL stripping.",
       "Cabecera HSTS + precarga para evitar el primer salto en claro.",
     ],
-    related: ["TLS 1.2 vs 1.3", "Certificate transparency y pinning", "Handshake TLS"],
+    related: ["TLS 1.2 vs 1.3", "Certificate transparency y pinning"],
   },
 
   // ── M20 · Seguridad Web: Fundamentos ─────────────────────────────────────
@@ -1624,7 +1624,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Usar el Top 10 como base mínima en un pentest web.",
       "Mapear hallazgos a categorías A01-A10 en un reporte.",
     ],
-    related: ["Broken Access Control", "Injection", "Security Misconfiguration"],
+    related: ["Broken Access Control", "Injection", "Insecure Design y Security Misconfiguration"],
   },
   {
     id: 241,
@@ -1639,7 +1639,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Cambiar /factura/123 por /factura/124 y ver la de otro cliente.",
       "Acceder a /admin sin ser administrador (forced browsing).",
     ],
-    related: ["IDOR y referencias inseguras", "OWASP Top 10", "Mínimo privilegio"],
+    related: ["IDOR y referencias inseguras", "OWASP Top 10", "Principio de mínimo privilegio"],
   },
   {
     id: 242,
@@ -1737,7 +1737,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Logins fallidos masivos que nunca generan una alerta.",
       "Sin logs, no se puede reconstruir cómo entró el atacante.",
     ],
-    related: ["Detección de anomalías en tráfico", "Pipeline de detección en Windows", "OWASP Top 10"],
+    related: ["Detección de anomalías en tráfico", "OWASP Top 10"],
   },
   {
     id: 254,
@@ -1869,7 +1869,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Cambiar el id de un pedido en la URL y ver el de otro usuario.",
       "Descargar /docs/124.pdf siendo dueño solo del 123.",
     ],
-    related: ["Broken Access Control", "Cross-Site Request Forgery (CSRF)", "Mínimo privilegio"],
+    related: ["Broken Access Control", "Cross-Site Request Forgery (CSRF)", "Principio de mínimo privilegio"],
   },
   {
     id: 273,
@@ -2147,7 +2147,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Assessment trimestral + pentest anual como combinación típica.",
       "Un pentest demuestra el impacto encadenando vulnerabilidades.",
     ],
-    related: ["Análisis de vulnerabilidades", "Metodología de un pentest", "Red Team / Ofensiva"],
+    related: ["Análisis de vulnerabilidades"],
   },
 
   // ── M29 · Metasploit Framework ───────────────────────────────────────────
@@ -2167,7 +2167,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "search type:exploit smb para encontrar módulos.",
       "Un módulo auxiliary para hacer brute force de SSH.",
     ],
-    related: ["Payloads y Meterpreter", "Flujo de explotación con Metasploit", "Exploit y Payload"],
+    related: ["Payloads y Meterpreter", "Exploit y Payload"],
   },
   {
     id: 321,
@@ -2194,7 +2194,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Volcar hashes con hashdump tras escalar.",
       "Usar la máquina comprometida como pivote a la red interna.",
     ],
-    related: ["Payloads y Meterpreter", "Escalada de privilegios en Linux", "Pivoting y movimiento lateral"],
+    related: ["Payloads y Meterpreter", "Movimiento lateral"],
   },
   {
     id: 323,
@@ -2282,7 +2282,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Ejecutar LinPEAS y revisar lo marcado en rojo/amarillo.",
       "sudo -l para ver qué se puede correr como root.",
     ],
-    related: ["SUID/SGID abuse", "Sudo, cron y PATH hijacking", "Bits especiales SUID/SGID"],
+    related: ["SUID/SGID abuse", "Sudo, cron y PATH hijacking", "Bits especiales SUID/SGID/sticky"],
   },
   {
     id: 341,
@@ -2297,7 +2297,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un find SUID que lanza una shell de root.",
       "Consultar GTFOBins para el binario SUID hallado.",
     ],
-    related: ["Enumeración local (LinPEAS)", "Bits especiales SUID/SGID", "Sudo, cron y PATH hijacking"],
+    related: ["Enumeración local (LinPEAS)", "Bits especiales SUID/SGID/sticky", "Sudo, cron y PATH hijacking"],
   },
   {
     id: 342,
@@ -2389,7 +2389,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "sekurlsa::logonpasswords para volcar credenciales.",
       "Robar un hash NTLM para Pass-the-Hash a otra máquina.",
     ],
-    related: ["Token impersonation y Potato", "Ataques a Active Directory", "Pivoting y movimiento lateral"],
+    related: ["Token impersonation y Potato", "Ataques a Active Directory", "Movimiento lateral"],
   },
 
   // ── M33 · Pivoting y Movimiento Lateral ──────────────────────────────────
@@ -2699,7 +2699,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "El hash SHA-256 de una muestra en VirusTotal.",
       "Un dominio de C2 añadido a la lista de bloqueo del firewall.",
     ],
-    related: ["Reglas YARA", "Threat intelligence", "Pirámide del Dolor"],
+    related: ["Reglas YARA", "Threat intelligence"],
   },
   {
     id: 393,
@@ -2819,7 +2819,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Detonar en una VM y observar la creación de persistencia.",
       "Usar INetSim para falsear Internet y capturar el C2.",
     ],
-    related: ["Process Monitor y Regshot", "Callbacks de red", "Análisis en sandbox"],
+    related: ["Process Monitor y Regshot", "Callbacks de red (C2)", "Análisis en sandbox"],
   },
   {
     id: 411,
@@ -2836,7 +2836,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "ProcMon mostrando la clave Run que el malware añade.",
       "Regshot diff revelando los archivos soltados.",
     ],
-    related: ["Análisis dinámico", "Callbacks de red", "Registro de Windows"],
+    related: ["Análisis dinámico", "Callbacks de red (C2)", "Registro de Windows"],
   },
   {
     id: 412,
@@ -3331,7 +3331,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un rol IAM para que una EC2 lea un bucket, sin claves embebidas.",
       "Revisar políticas con Access Analyzer para detectar accesos amplios.",
     ],
-    related: ["Modelo de responsabilidad compartida", "Mínimo privilegio", "S3 security"],
+    related: ["Modelo de responsabilidad compartida", "Principio de mínimo privilegio", "S3 security"],
   },
   {
     id: 482,
@@ -3390,7 +3390,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Asignar el rol 'Reader' a un grupo a nivel de suscripción.",
       "Conditional Access que exige MFA fuera de la red corporativa.",
     ],
-    related: ["GCP IAM", "Cloud hardening", "Active Directory: dominio, bosque y OU"],
+    related: ["GCP IAM", "Cloud hardening y CSPM", "Active Directory: dominio, bosque y OU"],
   },
   {
     id: 491,
@@ -3404,7 +3404,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un rol predefinido 'roles/storage.objectViewer' sobre un proyecto.",
       "Workload Identity para evitar claves de service account.",
     ],
-    related: ["Azure AD / Entra ID y RBAC", "IAM y políticas", "Cloud hardening"],
+    related: ["Azure AD / Entra ID y RBAC", "IAM y políticas", "Cloud hardening y CSPM"],
   },
   {
     id: 492,
@@ -3447,7 +3447,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Usar una imagen distroless en vez de una con todo un SO.",
       "Pasar secretos por variables/volúmenes, nunca dentro de la imagen.",
     ],
-    related: ["Image scanning", "Kubernetes security", "Pod security"],
+    related: ["Image scanning", "Kubernetes security (RBAC)", "Pod security y network policies"],
   },
   {
     id: 501,
@@ -3462,7 +3462,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "trivy bloqueando un build por una CVE crítica en la imagen base.",
       "Escaneo programado de las imágenes del registro.",
     ],
-    related: ["Seguridad de Docker e imágenes", "Dependency scanning (SCA)", "Pipeline DevSecOps"],
+    related: ["Seguridad de Docker e imágenes", "Dependency scanning (SCA)"],
   },
   {
     id: 502,
@@ -3476,7 +3476,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un Role que solo permite leer pods en un namespace.",
       "Deshabilitar el automount del token de service account cuando no se usa.",
     ],
-    related: ["Pod security", "Seguridad de Docker e imágenes", "Mínimo privilegio"],
+    related: ["Pod security y network policies", "Seguridad de Docker e imágenes", "Principio de mínimo privilegio"],
   },
   {
     id: 503,
@@ -3508,7 +3508,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Threat modeling en la fase de diseño de una feature.",
       "Linters de seguridad que corren en cada commit.",
     ],
-    related: ["SAST y DAST", "Pipeline DevSecOps", "Infrastructure as Code (IaC)"],
+    related: ["SAST y DAST", "Infrastructure as Code (IaC)"],
   },
   {
     id: 511,
@@ -3527,7 +3527,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Semgrep detectando una query SQL concatenada (SAST).",
       "OWASP ZAP probando XSS contra el entorno de staging (DAST).",
     ],
-    related: ["Shift-left", "Dependency scanning (SCA)", "Pipeline DevSecOps"],
+    related: ["Shift-left", "Dependency scanning (SCA)"],
   },
   {
     id: 512,
@@ -3542,7 +3542,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Dependabot abriendo un PR para parchear una librería con CVE.",
       "Bloquear el build si hay una dependencia con vuln crítica.",
     ],
-    related: ["Vulnerable and Outdated Components", "Image scanning", "Pipeline DevSecOps"],
+    related: ["Vulnerable and Outdated Components", "Image scanning"],
   },
   {
     id: 513,
@@ -3556,7 +3556,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Inyectar secretos desde un vault, nunca commitearlos.",
       "Escaneo de secretos (gitleaks) en cada push.",
     ],
-    related: ["Software and Data Integrity Failures", "Infrastructure as Code (IaC)", "Pipeline DevSecOps"],
+    related: ["Software and Data Integrity Failures", "Infrastructure as Code (IaC)"],
   },
   {
     id: 514,
@@ -3647,7 +3647,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Conectarse por UART para obtener una consola del dispositivo.",
       "Sniffar BLE para capturar comandos entre app y dispositivo.",
     ],
-    related: ["Análisis de firmware", "OWASP IoT Top 10", "Seguridad WiFi"],
+    related: ["Análisis de firmware", "OWASP IoT Top 10", "Estándares de seguridad WiFi"],
   },
 
   // ── M50 · Proyecto Final y Carrera ───────────────────────────────────────
@@ -3663,7 +3663,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Comprometer una máquina de HackTheBox y documentar el proceso.",
       "Una auditoría de caja negra de principio a fin en un lab.",
     ],
-    related: ["Metodología de un pentest", "Reporte profesional", "Portfolio y carrera"],
+    related: ["Reporte profesional", "Portfolio y carrera"],
   },
   {
     id: 531,
@@ -3691,7 +3691,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Empezar con eJPT y apuntar a OSCP para pentesting.",
       "Security+ como base transversal antes de especializarse.",
     ],
-    related: ["Portfolio y carrera", "Reporte profesional", "Generalista / Fundamentos"],
+    related: ["Portfolio y carrera", "Reporte profesional"],
   },
   {
     id: 533,
@@ -3803,7 +3803,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un script que corre nmap, extrae puertos abiertos y lanza enumeración.",
       "Orquestar una cadena recon → escaneo → reporte.",
     ],
-    related: ["Python en seguridad", "Librerías clave de seguridad", "Metodología de un pentest"],
+    related: ["Python en seguridad", "Librerías clave de seguridad"],
   },
 
   // ── M52 · Python Avanzado para Seguridad ─────────────────────────────────
@@ -3990,7 +3990,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "La app conecta con un usuario que solo puede SELECT/INSERT lo necesario.",
       "Base de datos en subred privada, sin exposición a Internet.",
     ],
-    related: ["Prevención de inyección", "Mínimo privilegio", "DMZ y segmentación de red"],
+    related: ["Prevención de inyección", "Principio de mínimo privilegio", "DMZ y segmentación de red"],
   },
 
   // ── M55 · C/C++ y Low-Level Security ─────────────────────────────────────
@@ -4284,7 +4284,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "House of Force para extender el top chunk a una dirección objetivo.",
       "House of Orange combinando heap y file streams.",
     ],
-    related: ["El heap de glibc", "tcache y fastbin", "La carrera de mitigaciones de explotación"],
+    related: ["El heap de glibc", "tcache y fastbin"],
   },
 
   // ── M60 · Kernel Exploitation ────────────────────────────────────────────
@@ -4351,7 +4351,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un infoleak de kernel para derrotar KASLR.",
       "ROP en kernel para sortear SMEP.",
     ],
-    related: ["Primitivas de escalada", "Cadena ROP", "Side-channels microarquitectónicos"],
+    related: ["Primitivas de escalada"],
   },
 
   // ── M61 · Browser Exploitation ───────────────────────────────────────────
@@ -4430,7 +4430,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "ret2libc llamando a system('/bin/sh') sin shellcode propio.",
       "Reusar gadgets del binario para preparar una syscall.",
     ],
-    related: ["Cadena ROP", "JOP y automatización", "Buffer overflow"],
+    related: ["JOP y automatización", "Buffer overflow"],
   },
   {
     id: 651,
@@ -4475,7 +4475,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Una shadow stack que detecta el ROP al retornar a un gadget.",
       "CFI que bloquea una llamada indirecta a un gadget arbitrario.",
     ],
-    related: ["Construcción de cadenas ROP", "JOP y automatización", "La carrera de mitigaciones de explotación"],
+    related: ["Construcción de cadenas ROP", "JOP y automatización"],
   },
 
   // ── M63 · Criptoanálisis ─────────────────────────────────────────────────
@@ -4529,7 +4529,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Recuperar una clave RSA midiendo tiempos de descifrado.",
       "Un ataque de caché contra una tabla de AES no protegida.",
     ],
-    related: ["Ataques a implementaciones", "Modelos de ataque criptográfico", "Side-channels microarquitectónicos"],
+    related: ["Ataques a implementaciones", "Modelos de ataque criptográfico"],
   },
   {
     id: 663,
@@ -4631,7 +4631,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Autenticarte demostrando que sabes una clave sin transmitirla.",
       "Probar que tienes ≥18 años sin revelar tu fecha de nacimiento.",
     ],
-    related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation", "Aplicaciones de ZKP/MPC"],
+    related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation (MPC)", "Aplicaciones de ZKP/MPC"],
   },
   {
     id: 681,
@@ -4650,7 +4650,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Zcash usa zk-SNARKs para transacciones privadas.",
       "STARKs para escalar rollups sin trusted setup.",
     ],
-    related: ["Pruebas de conocimiento cero (ZKP)", "Aplicaciones de ZKP/MPC", "Criptografía Post-Cuántica"],
+    related: ["Pruebas de conocimiento cero (ZKP)", "Aplicaciones de ZKP/MPC", "Familias de criptografía post-cuántica"],
   },
   {
     id: 682,
@@ -4677,7 +4677,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Credenciales que prueban 'mayor de edad' sin revelar el DNI.",
       "ZK-rollups que escalan Ethereum manteniendo privacidad.",
     ],
-    related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation", "Cifrado homomórfico"],
+    related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation (MPC)", "Cifrado homomórfico"],
   },
 
   // ── M66 · Cifrado Homomórfico ────────────────────────────────────────────
@@ -4693,7 +4693,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Calcular estadísticas sobre datos médicos cifrados en la nube.",
       "Una búsqueda que el servidor resuelve sin ver la consulta.",
     ],
-    related: ["Esquemas FHE", "Desafíos de performance", "Secure Multi-Party Computation"],
+    related: ["Esquemas FHE", "Desafíos de performance", "Secure Multi-Party Computation (MPC)"],
   },
   {
     id: 691,
@@ -4924,7 +4924,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un agente con acceso al correo que, tras una inyección, exfiltra datos.",
       "Envenenar un documento del RAG para manipular las respuestas.",
     ],
-    related: ["Prompt injection y jailbreaks", "OWASP LLM Top 10", "Mínimo privilegio"],
+    related: ["Prompt injection y jailbreaks", "OWASP LLM Top 10", "Principio de mínimo privilegio"],
   },
 
   // ── M70 · MLSecOps y ML Supply Chain ─────────────────────────────────────
@@ -4982,7 +4982,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Escanear cada modelo en el CI antes de registrarlo.",
       "Monitorear la inferencia para detectar evasión/abuso.",
     ],
-    related: ["Provenance e integridad", "ML supply chain", "Pipeline DevSecOps"],
+    related: ["Provenance e integridad", "ML supply chain"],
   },
 
   // ── M71 · Side-Channels Microarquitectónicos ─────────────────────────────
@@ -5155,7 +5155,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "LoJax, el primer bootkit de UEFI visto in-the-wild (APT28).",
       "Un ataque DMA que lee la RAM por un puerto Thunderbolt.",
     ],
-    related: ["Seguridad UEFI", "La boot chain (cadena de confianza)", "Rootkits y bootkits"],
+    related: ["Seguridad UEFI", "La boot chain (cadena de confianza)"],
   },
   {
     id: 763,
@@ -5330,7 +5330,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "angr explorando hasta una llamada a `puts(\"win\")`.",
       "Resolver un crackme en pocas líneas de Python.",
     ],
-    related: ["Ejecución simbólica", "Concólica (DSE)", "Vulnerability research"],
+    related: ["Ejecución simbólica", "Concólica (DSE)", "Vulnerability research mindset"],
   },
   {
     id: 792,
@@ -5344,7 +5344,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un fuzzer que usa DSE para inventar entradas que cubran nuevas ramas.",
       "Explorar un binario real (con libc) sin modelar todo simbólicamente.",
     ],
-    related: ["Ejecución simbólica", "angr", "Vulnerability research"],
+    related: ["Ejecución simbólica", "angr", "Vulnerability research mindset"],
   },
   {
     id: 793,
@@ -5500,7 +5500,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Hallar un bug de parsing al leer un código auditando suposiciones.",
       "Mapear la superficie de ataque antes de tocar fuzzing.",
     ],
-    related: ["Fuzzing coverage-guided", "Fuzzing avanzado", "Ciclo del 0-day"],
+    related: ["Fuzzing coverage-guided", "Fuzzing avanzado", "Triage y ciclo del 0-day"],
   },
   {
     id: 821,
@@ -5630,7 +5630,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Una hipótesis: 'la mitigación X no resiste el ataque Y'.",
       "Reproducir un trabajo publicado para validar sus claims.",
     ],
-    related: ["Responsible disclosure", "Ecosistema CVE/CVSS", "Comunicar (papers/PoCs)"],
+    related: ["Responsible disclosure", "Ecosistema CVE/CVSS", "Comunicar (papers, PoCs, charlas)"],
   },
   {
     id: 841,
@@ -5756,7 +5756,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Provisioning automático desde RR.HH. → AD/Okta al alta.",
       "Revisión trimestral de accesos (entitlement review).",
     ],
-    related: ["AAA (Autenticación, Autorización, Accounting)", "MFA y autenticación moderna", "PAM"],
+    related: ["AAA (Autenticación, Autorización, Accounting)", "MFA y autenticación moderna", "PAM (Privileged Access Management)"],
   },
   {
     id: 861,
@@ -5808,7 +5808,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "RBAC: rol 'Editor' permite publicar pero no borrar.",
       "ABAC: 'permitir si user.dept == resource.dept y hora ∈ laboral'.",
     ],
-    related: ["Principio de mínimo privilegio", "SSO y federación", "PAM"],
+    related: ["Principio de mínimo privilegio", "SSO y federación", "PAM (Privileged Access Management)"],
   },
   {
     id: 864,
@@ -5929,7 +5929,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un comité de riesgo de TI que aprueba la matriz anual.",
       "Una política aprobada por el CEO que el CISO ejecuta.",
     ],
-    related: ["Apetito y tolerancia al riesgo", "Gestión de riesgos", "Cumplimiento normativo"],
+    related: ["Gestión de riesgos"],
   },
   {
     id: 881,
@@ -6008,7 +6008,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un SaaS B2B obteniendo el informe SOC 2 Type II.",
       "Un comercio cumpliendo PCI-DSS para procesar tarjetas.",
     ],
-    related: ["ISO/IEC 27001", "Proceso de auditoría", "Cumplimiento normativo"],
+    related: ["ISO/IEC 27001", "Proceso de auditoría"],
   },
   {
     id: 891,

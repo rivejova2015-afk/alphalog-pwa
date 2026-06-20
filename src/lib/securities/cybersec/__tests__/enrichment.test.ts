@@ -378,3 +378,19 @@ describe("BRANCHES", () => {
     expect(branchesByModule(1).length).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe("related refs integrity", () => {
+  it("toda referencia 'related' apunta a un term existente en DEFINITIONS", () => {
+    const terms = new Set(DEFINITIONS.map((d) => d.term));
+    const broken = DEFINITIONS.flatMap((d) =>
+      d.related.map((r) => ({ id: d.id, module: d.module, term: d.term, ref: r })),
+    ).filter(({ ref }) => !terms.has(ref));
+
+    // Sample para que el assert sea legible si falla
+    const sample = broken.slice(0, 10).map((b) => `def#${b.id} (M${b.module}, "${b.term}") → "${b.ref}"`);
+    expect(
+      broken,
+      `${broken.length} referencias 'related' rotas. Primeras 10:\n  ${sample.join("\n  ")}`,
+    ).toEqual([]);
+  });
+});
