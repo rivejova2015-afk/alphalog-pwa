@@ -8,8 +8,8 @@ import {
 } from "../moduleRegistry";
 
 describe("MODULE_REGISTRY catalog", () => {
-  it("incluye los 7 módulos esperados (logs, terminal, tradehub, journal, tradermap, treasury, business)", () => {
-    const expected = ["logs", "terminal", "tradehub", "journal", "tradermap", "treasury", "business"];
+  it("incluye los 6 módulos esperados (logs, terminal, tradehub, journal, treasury, business)", () => {
+    const expected = ["logs", "terminal", "tradehub", "journal", "treasury", "business"];
     for (const m of expected) {
       expect(MODULE_REGISTRY[m as keyof typeof MODULE_REGISTRY]).toBeDefined();
     }

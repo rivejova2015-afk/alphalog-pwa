@@ -4,12 +4,11 @@
  * Derived from APP_MAP.md and actual routes in /src/app/dashboard
  */
 
-export type ModuleName = 
+export type ModuleName =
   | 'logs'
   | 'terminal'
   | 'tradehub'
   | 'journal'
-  | 'tradermap'
   | 'treasury'
   | 'business';
 
@@ -116,14 +115,6 @@ export const MODULE_REGISTRY: Record<ModuleName, ModuleDefinition> = {
     route: '/dashboard/journal',
     hasSubsections: false,
     tables: ['logs'] // Reuses logs table with specific category
-  },
-  
-  tradermap: {
-    name: 'tradermap',
-    displayName: 'Trader Map',
-    route: '/dashboard/tradermap',
-    hasSubsections: false,
-    tables: ['tradermap_user_level', 'tradermap_goals', 'tradermap_quarters']
   },
   
   treasury: {

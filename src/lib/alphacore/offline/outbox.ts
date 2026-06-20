@@ -109,9 +109,25 @@ export class OutboxManager {
   }
 
   /**
-   * Sync all pending mutations
+   * Sync all pending mutations.
+   *
+   * Wrapped in a Web Lock so that when the user has the app open in multiple
+   * tabs, only one tab drains the outbox at a time. Without this, two tabs
+   * coming back online at the same instant would each fetch the same pending
+   * entries and POST them twice — duplicate trades / journal entries on the
+   * server. The lock is per-origin and the browser releases it when the
+   * holder navigates away or its tab is closed. If the API is unavailable
+   * (Safari <16, jsdom test env), we fall back to the unguarded path; the
+   * race window is real but narrow and recovery is still correct via
+   * outbox idempotency.
    */
   async syncAll(): Promise<OutboxSyncResult> {
+    const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+    if (!locks) return this.doSyncAll();
+    return locks.request('alphacore-outbox-sync', { mode: 'exclusive' }, () => this.doSyncAll());
+  }
+
+  private async doSyncAll(): Promise<OutboxSyncResult> {
     const pendingEntries = await getPendingOutboxEntries();
 
     if (pendingEntries.length === 0) {

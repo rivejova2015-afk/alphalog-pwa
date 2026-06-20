@@ -236,16 +236,6 @@ export const commonQueries = {
     detail: (id: string) => queryKeys.detail('business', 'business_sops', id)
   },
   
-  // TraderMap
-  traderMapLevel: {
-    current: () => queryKeys.detail('tradermap', 'tradermap_user_level', 'current')
-  },
-  
-  traderMapGoals: {
-    list: () => queryKeys.list('tradermap', 'tradermap_goals'),
-    detail: (id: string) => queryKeys.detail('tradermap', 'tradermap_goals', id)
-  },
-  
   // AlphaShield
   appLogs: {
     list: (filters?: Record<string, any>) =>

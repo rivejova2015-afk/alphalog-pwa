@@ -158,8 +158,4 @@ describe("commonQueries", () => {
     expect(k.filters).toMatchObject({ groupBy: "fingerprint", days: 7 });
   });
 
-  it("traderMapLevel.current es detail con entityId 'current'", () => {
-    const k = commonQueries.traderMapLevel.current();
-    expect(k.entityId).toBe("current");
-  });
 });

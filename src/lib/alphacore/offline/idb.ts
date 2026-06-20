@@ -283,33 +283,46 @@ export async function clearOutbox(): Promise<void> {
 }
 
 /**
- * Replace all occurrences of a temp ID with the real server ID across all pending outbox entries.
- * Used after a successful create sync when the server assigns a permanent ID.
+ * Replace all occurrences of a temp ID with the real server ID across all
+ * pending outbox entries. Used after a successful create sync when the server
+ * assigns a permanent ID.
+ *
+ * All puts run inside a single `readwrite` transaction. If anything throws
+ * mid-iteration, IndexedDB aborts and nothing is partially updated — callers
+ * see the failure and can retry. The match is done against the JSON-quoted
+ * form `"<tempId>"` (rather than raw substring) so that a tempId mentioned
+ * inside a free-text field can never collide with an actual id slot.
  */
 export async function replaceTempIdInPendingEntries(tempId: string, realId: string): Promise<number> {
   const db = await initDB();
-  const pending = await getPendingOutboxEntries();
-  let updated = 0;
+  const quotedTemp = JSON.stringify(tempId);
+  const quotedReal = JSON.stringify(realId);
 
-  for (const entry of pending) {
-    const serialized = JSON.stringify(entry.payload);
-    if (!serialized.includes(tempId)) continue;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([OUTBOX_STORE], 'readwrite');
+    const store = tx.objectStore(OUTBOX_STORE);
+    const index = store.index('status');
+    const cursorReq = index.openCursor(IDBKeyRange.only('pending'));
+    let updated = 0;
 
-    const updatedPayload = JSON.parse(serialized.replaceAll(tempId, realId));
-    const updatedEntry: IDBOutboxEntry = { ...entry, payload: updatedPayload };
+    cursorReq.onerror = () => reject(new Error(`Failed to iterate outbox: ${cursorReq.error}`));
+    cursorReq.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      if (!cursor) return; // iteration done; tx.oncomplete handles resolve
+      const entry = cursor.value as IDBOutboxEntry;
+      const serialized = JSON.stringify(entry.payload);
+      if (serialized.includes(quotedTemp)) {
+        const rewritten = JSON.parse(serialized.split(quotedTemp).join(quotedReal));
+        cursor.update({ ...entry, payload: rewritten });
+        updated++;
+      }
+      cursor.continue();
+    };
 
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([OUTBOX_STORE], 'readwrite');
-      const store = tx.objectStore(OUTBOX_STORE);
-      const req = store.put(updatedEntry);
-      req.onerror = () => reject(new Error(`Failed to update entry: ${req.error}`));
-      req.onsuccess = () => resolve();
-    });
-
-    updated++;
-  }
-
-  return updated;
+    tx.onabort = () => reject(new Error(`Outbox replaceTempId tx aborted: ${tx.error?.message ?? 'unknown'}`));
+    tx.onerror = () => reject(new Error(`Outbox replaceTempId tx error: ${tx.error?.message ?? 'unknown'}`));
+    tx.oncomplete = () => resolve(updated);
+  });
 }
 
 // ============================================================================
