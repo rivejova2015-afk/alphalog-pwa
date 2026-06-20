@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import UpdateManager from "@/components/pwa/UpdateManager";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
+import Enable2FaPrompt from "@/components/security/Enable2FaPrompt.client";
 import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
 import IOSInstallBanner from "@/components/push/IOSInstallBanner.client";
 import ConflictBadge from "@/components/alphacore/ConflictBadge.client";
@@ -52,6 +53,7 @@ export default function RootLayout({
         <GlobalBackButton />
         <UpdateManager />
         <CsrfBridge />
+        <Enable2FaPrompt />
         <IOSInstallBanner />
         <ConflictBadge />
         <Toaster position="bottom-right" theme="dark" richColors closeButton />

@@ -32,9 +32,16 @@ export default function StepUpPage() {
 
   useEffect(() => {
     const init = async () => {
+      const sp = new URLSearchParams(window.location.search);
+      // Proactive enrollment entry point (the "Activar 2FA" prompt): jump
+      // straight to TOTP setup instead of the verify/trust flow.
+      if (sp.get("enroll") === "1") {
+        setStage("enroll-totp");
+        return;
+      }
       // In reauth mode (per-operation step-up) always force a fresh MFA
       // challenge, so skip the "already aal2 → trust" short-circuit.
-      const reauth = new URLSearchParams(window.location.search).get("reauth") === "1";
+      const reauth = sp.get("reauth") === "1";
 
       // 1. Already stepped up this session (AAL2 — e.g. Face ID at login)?
       //    device/verify only returns 200 when the session is aal2, so success

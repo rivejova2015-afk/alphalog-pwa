@@ -66,13 +66,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // SECURITY (audit 2026-06, Área 13): never trust a device on the password
-    // session alone. Require a completed second factor (AAL2) this session —
-    // TOTP via /api/auth/mfa/verify or Supabase WebAuthn (Face ID) both upgrade
-    // the session to aal2. Without it, the caller must step up first.
-    const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aalError || aal?.currentLevel !== "aal2") {
-      return NextResponse.json({ error: "mfa_required" }, { status: 403 });
+    // SECURITY (audit 2026-06, Área 13) + lockout-safety: if the user has a
+    // verified second factor, never trust a device on the password session
+    // alone — require a completed AAL2 this session (TOTP or Supabase WebAuthn/
+    // Face ID both upgrade to aal2). If the user has NO factor enrolled yet,
+    // allow device trust (no worse than before this change) so they are not
+    // locked out; the app nudges them to enable 2FA instead.
+    const { data: factorsData } = await supabase.auth.mfa.listFactors();
+    const hasVerifiedMfa = (factorsData?.all ?? []).some((f) => f.status === "verified");
+    if (hasVerifiedMfa) {
+      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalError || aal?.currentLevel !== "aal2") {
+        return NextResponse.json({ error: "mfa_required" }, { status: 403 });
+      }
     }
 
     const userAgent = request.headers.get("user-agent") || "";
