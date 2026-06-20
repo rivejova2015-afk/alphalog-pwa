@@ -45,7 +45,7 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("weekly_reports")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", userData.user.id);
 

@@ -735,6 +735,75 @@ E2E_PASSWORD=Test@123456
 PLAYWRIGHT_BASE_URL=http://localhost:3000
 ```
 
+### Adicionales descubiertas via grep (2026-06-20 audit)
+
+Los siguientes nombres aparecen en `process.env.X` dentro de `src/` o
+`coinarb/src/` pero faltaban del listado anterior. Documentadas para que
+rotaciones de secretos las cubran:
+
+```bash
+# Cron / ops (mencionados antes en otras secciones, formalizados acá)
+OPS_CRON_SECRET=                # Bearer en /api/ops/cron/* (distinto de CRON_SECRET)
+
+# Audit + integrity
+AUDIT_CHAIN_SECRET=             # HMAC para encadenar audit_trail entries
+INTEGRITY_HMAC_SECRET=          # checks de integridad en outbound/email
+INTERNAL_API_SECRET=            # auth de service-to-service entre route handlers
+HISTORICAL_BARS_SECRET=         # token de /api/historical-bars/ingest
+
+# Cifrado por dominio (Phase B — backfill-encryption)
+DATA_ENCRYPTION_KEY_V2=         # rotación v2 de DATA_ENCRYPTION_KEY
+ENCRYPTION_KEY_TRADES=          # base64-32: trades financial fields
+ENCRYPTION_KEY_TREASURY=        # base64-32: treasury amounts
+ENCRYPTION_KEY_JOURNAL=         # base64-32: journal content/title
+ENCRYPTION_KEY_MAIL=            # base64-32: secure mail bodies
+ENCRYPTION_KEY_VERSION=v2       # cuál key activa (DATA_ENCRYPTION_KEY=v1)
+
+# Bot / market data providers (validators del Signal Engine + Coinarb)
+BOT_SIGNAL_SECRET=              # firma señales del bot al persistir en DB
+ALPHA_VANTAGE_API_KEY=          # market data fallback
+FINNHUB_API_KEY=                # market data fallback
+POLYGON_API_KEY=                # historical bars + intraday
+TWELVEDATA_API_KEY=             # market data fallback
+COINGLASS_API_KEY=              # liquidation-heatmap validator (Coinarb)
+CRYPTOQUANT_API_KEY=            # exchange-flows validator (Coinarb)
+LATTICE_API_TOKEN=              # Lattice options chain
+COINBASE_CDP_KEY_NAME=          # Coinbase Developer Platform (live spot orders)
+COINBASE_CDP_PRIVATE_KEY=       # CDP EC private key (PEM)
+
+# Coinarb runtime
+COINARB_50X_PAPER_MODE=         # 'true' = paper mode, otherwise live
+COINARB_AGENT_ID=               # UUID en coinarb_agents
+COINARB_BOT_ACCOUNT_ID=         # UUID en bot_accounts
+COINARB_BOT_ID=                 # UUID en bots
+COINARB_USER_ID=                # owner uuid (auth.users)
+COINARB_STARTING_CAPITAL=100    # USD inicial (default 100)
+COINARB_PUSH_ENABLED=           # 'true' para enviar pushes desde el bot
+MTF_CONFIDENCE_MIN=0.12         # Coinarb tunable (también en algorithms.parameters)
+SWEEP_CONFIRM_BODY_RATIO=0.35   # Coinarb tunable
+
+# Algorithms / risk
+PD_MACRO_BAND=                  # premium-discount band (macro TF)
+PD_MICRO_BAND=                  # premium-discount band (micro TF)
+SKIP_MARKET_HOURS_CHECK=        # 'true' bypassa is-market-open guard (TESTING)
+
+# Frontend exposed
+NEXT_PUBLIC_BUILD_VERSION=      # build id mostrado al user en /health
+NEXT_PUBLIC_ENABLE_SW=false     # registrar service-worker en dev (override)
+NEXT_PUBLIC_HCAPTCHA_SITE_KEY=  # hCaptcha en flows sensibles
+
+# Security alerts
+SECURITY_ALERT_USER_ID=         # auth.users.id que recibe pushes de honeypot/CSRF
+
+# Fly runtime (inyectadas por Fly, no setear manual)
+FLY_ALLOC_ID=                   # id de la VM
+FLY_MACHINE_ID=                 # id de la máquina
+
+# Legado / informativo
+SUPABASE_URL=                   # alias server-side de NEXT_PUBLIC_SUPABASE_URL
+VERCEL_ENV=                     # legado pre-Fly, ya no se setea
+```
+
 ---
 
 ## 10. Estado actual

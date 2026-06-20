@@ -456,10 +456,6 @@ function inferModuleFromTable(table: string): string {
     journal_entries: 'journal',
     journal_tags: 'journal',
     
-    // TraderMap
-    traders: 'tradermap',
-    trader_follows: 'tradermap',
-    
     // Treasury
     treasury_configs: 'treasury',
     payouts: 'treasury',
@@ -493,8 +489,6 @@ function tableToEntityName(table: string): string {
     terminal_events: 'TerminalEvent',
     journal_entries: 'JournalEntry',
     journal_tags: 'JournalTag',
-    traders: 'Trader',
-    trader_follows: 'TraderFollows',
     treasury_configs: 'TreasuryConfig',
     payouts: 'Payout',
     payout_wallet_mapping: 'PayoutWalletMapping',

@@ -17,6 +17,42 @@ export const dynamic = "force-dynamic";
 // Mínimo de observaciones para refinar el modelo (24h × 4 ventanas/h)
 const MIN_OBS_FOR_BW = 96;
 
+type BotInstanceRow = {
+  id: string;
+  bot_account_id: string;
+  status: string;
+  last_heartbeat_at: string | null;
+  bot_accounts: { label: string; user_id: string } | { label: string; user_id: string }[] | null;
+};
+
+/**
+ * The supabase JS client types the `!inner` relation as either an object or
+ * an array depending on the codegen path, so normalize. Returns undefined if
+ * the join didn't materialize (RLS denial, broken FK, etc.).
+ */
+function pickJoinedAccount(
+  bot_accounts: BotInstanceRow["bot_accounts"],
+): { label: string; user_id: string } | undefined {
+  if (!bot_accounts) return undefined;
+  return Array.isArray(bot_accounts) ? bot_accounts[0] : bot_accounts;
+}
+
+/**
+ * The HMM model is persisted into a JSONB column. We don't trust it on read:
+ * a partially-written row would crash the engine with cryptic NaN errors.
+ * If the shape doesn't match we drop it and let the caller cold-start.
+ */
+function isValidHmmModel(value: unknown): value is HMMModel {
+  if (!value || typeof value !== "object") return false;
+  const m = value as Partial<HMMModel>;
+  return (
+    Array.isArray(m.A) && m.A.length > 0 && Array.isArray(m.A[0]) &&
+    Array.isArray(m.mu) && m.mu.length > 0 && Array.isArray(m.mu[0]) &&
+    Array.isArray(m.sigma) && m.sigma.length > 0 && Array.isArray(m.sigma[0]) &&
+    Array.isArray(m.pi) && m.pi.length > 0
+  );
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -68,7 +104,20 @@ export async function POST(request: NextRequest) {
     }
 
     const botInstanceId = instance.id as string;
-    const userId = (instance as any).bot_accounts?.user_id as string;
+    const joinedAccount = pickJoinedAccount((instance as BotInstanceRow).bot_accounts);
+    if (!joinedAccount?.user_id) {
+      logError("RegimeUpdate", {
+        component: "api/bot/regime/update",
+        action: "owner_resolve",
+        message: "bot_accounts join missing user_id — refusing to insert without owner",
+        botInstanceId,
+      });
+      return NextResponse.json(
+        { ok: false, error: "Cannot resolve bot owner" },
+        { status: 500 },
+      );
+    }
+    const userId = joinedAccount.user_id;
 
     // ── 2. Obtener ticks de live_market_data (XAUUSD, últimos 1000) ───────
     // live_market_data almacena tick-level: bid, ask, last, received_at, raw_payload
@@ -106,8 +155,14 @@ export async function POST(request: NextRequest) {
       .eq("session_date", today)
       .maybeSingle();
 
-    const storedModel: HMMModel | undefined = (stateRow?.quantum_state as any)
-      ?.hmm_model;
+    const quantumState =
+      stateRow?.quantum_state && typeof stateRow.quantum_state === "object"
+        ? (stateRow.quantum_state as Record<string, unknown>)
+        : undefined;
+    const rawStoredModel = quantumState?.hmm_model;
+    const storedModel: HMMModel | undefined = isValidHmmModel(rawStoredModel)
+      ? rawStoredModel
+      : undefined;
 
     // ── 4. Clasificar régimen ──────────────────────────────────────────────
     const classification = classifyRegime(ticks, storedModel);
@@ -141,7 +196,7 @@ export async function POST(request: NextRequest) {
 
     // ── 6. INSERT en bot_regime_states ────────────────────────────────────
     const prevRegime = storedModel
-      ? (stateRow?.quantum_state as any)?.signalDirection
+      ? (quantumState?.signalDirection as string | undefined) ?? null
       : null;
     const regimeChanged = prevRegime !== classification.regime;
 
@@ -170,7 +225,7 @@ export async function POST(request: NextRequest) {
 
     // ── 7. UPDATE regime_code y hmm_model en bot_signal_engine_state ──────
     const quantumStateUpdate = {
-      ...(stateRow?.quantum_state ?? {}),
+      ...(quantumState ?? {}),
       regime_code: classification.regime,
       regime_confidence: classification.confidence,
       hmm_model: modelRefined ? refinedModel : (storedModel ?? undefined),
