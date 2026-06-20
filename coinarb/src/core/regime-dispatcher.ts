@@ -1,0 +1,42 @@
+/**
+ * Regime → strategy dispatcher (pure).
+ *
+ * Decides which runner the coordinator should fire for the current market
+ * regime. Lives in its own module so the mapping table is easy to test in
+ * isolation without spinning up the WS feeds, broker, or the loop.
+ *
+ * Mapping (Phase 2):
+ *   TRENDING_HIGH → 'B' (SMC aggressive — sweep cleanest in directional vol)
+ *   TRENDING_LOW  → 'P' (momentum-breakout — clean grind, low chop)
+ *   RANGE_HIGH    → 'A' (SMC strict — EQH/EQL well-defined by vol)
+ *   RANGE_LOW     → 'M' (mean-reversion — BB + RSI extremes work here)
+ *   DEAD          → 'pause' (no market — skip every symbol)
+ */
+
+import type { Regime } from '../analysis/regime-detector.js';
+import type { StrategyId } from '../trading/spot-positions.js';
+
+export type DispatchTarget = StrategyId | 'pause';
+
+export const REGIME_TO_STRATEGY: Record<Regime, DispatchTarget> = {
+  TRENDING_HIGH: 'B',
+  TRENDING_LOW: 'P',
+  RANGE_HIGH: 'A',
+  RANGE_LOW: 'M',
+  DEAD: 'pause',
+};
+
+export function dispatchTargetFor(regime: Regime): DispatchTarget {
+  return REGIME_TO_STRATEGY[regime];
+}
+
+/**
+ * The strategies that may run on each regime — used to scope cap counting
+ * and telemetry. Always returns at most one strategy per regime in Phase 2;
+ * a future Phase could fan-out (e.g. always run A on every regime as a
+ * baseline) by returning multiple ids here.
+ */
+export function strategiesForRegime(regime: Regime): readonly StrategyId[] {
+  const target = REGIME_TO_STRATEGY[regime];
+  return target === 'pause' ? [] : [target];
+}
