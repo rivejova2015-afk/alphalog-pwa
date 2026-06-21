@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { notifyTradeUpdate } from "@/lib/metrics/tradeUpdates";
 import { normalizeTradeDirection } from "@/lib/trade/normalize";
+import { maybeStepUpRedirect } from "@/lib/security/stepUpClient";
 import {
   enqueueOfflineMutation,
   getPendingForTable,
@@ -598,14 +599,29 @@ export default function NewTradesLog() {
           >
             Refrescar
           </button>
-          <a
-            href={`/api/tradehub/trades/export${filterAccountId ? `?accountId=${filterAccountId}` : ""}`}
-            download
+          <button
+            onClick={async () => {
+              // Fetch-based download so a step-up 403 can redirect to MFA
+              // re-auth instead of dumping a JSON error into the browser.
+              const exportUrl = `/api/tradehub/trades/export${filterAccountId ? `?accountId=${filterAccountId}` : ""}`;
+              const response = await fetch(exportUrl);
+              if (await maybeStepUpRedirect(response)) return;
+              if (!response.ok) return;
+              const blob = await response.blob();
+              const objectUrl = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = objectUrl;
+              link.download = "trades-export.csv";
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(objectUrl);
+            }}
             className="rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600"
             aria-label="Exportar trades como CSV"
           >
             Exportar CSV
-          </a>
+          </button>
           <button
             onClick={openCreate}
             className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"

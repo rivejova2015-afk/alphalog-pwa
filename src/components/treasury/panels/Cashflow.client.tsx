@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import type { TreasuryTransaction, TreasuryPayout, TreasuryBudget } from '@/lib/treasury/queries';
 import { formatCurrency, formatDate } from '@/lib/treasury/calculations';
 import { subscribeTradeUpdates } from '@/lib/metrics/tradeUpdates';
+import { maybeStepUpRedirect } from '@/lib/security/stepUpClient';
 
 interface Account {
   id: string;
@@ -87,6 +88,8 @@ export default function CashflowPanel({
         body: JSON.stringify({ accountId }),
       });
 
+      if (await maybeStepUpRedirect(response)) return;
+
       if (!response.ok) {
         const errorData = await response.json();
         setCreateError(errorData.error || 'Failed to create payout');
@@ -150,6 +153,8 @@ export default function CashflowPanel({
 
     try {
       const response = await fetch(`/api/treasury/export?month=${exportMonth}`);
+
+      if (await maybeStepUpRedirect(response)) return;
 
       if (!response.ok) {
         const errorText = await response.text();

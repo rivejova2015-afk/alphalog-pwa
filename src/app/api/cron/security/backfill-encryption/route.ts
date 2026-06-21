@@ -1,7 +1,14 @@
 /**
  * POST /api/cron/security/backfill-encryption
- * Phase B: encrypt existing plaintext financial fields in batches.
- * Processes up to 50 rows per call. Run repeatedly until complete.
+ *
+ * Phase B one-shot migration: encrypt existing plaintext financial fields in
+ * batches. Processes up to 50 rows per call. Run repeatedly until each table's
+ * `remaining` count drops to 0, then stop calling it.
+ *
+ * NOT scheduled in crontab — by design. This is an ops-driven endpoint,
+ * invoked manually (or from a one-shot Fly machine) after a deploy that adds
+ * a new encrypted field. Adding it to the recurring schedule would keep
+ * scanning fully-encrypted tables forever for no work.
  */
 
 import { NextRequest, NextResponse } from "next/server";

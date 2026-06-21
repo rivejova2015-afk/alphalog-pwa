@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/types";
 import { createClient } from "@/lib/supabase/server";
+import crypto from "crypto";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 const RP_ID = process.env.NEXT_PUBLIC_CANONICAL_HOST ?? "alphalog.io";
 const ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? `https://${RP_ID}`;
@@ -82,6 +84,27 @@ export async function POST(request: NextRequest) {
       last_used_at: new Date().toISOString(),
     })
     .eq("id", cred.id);
+
+  // SECURITY (audit 2026-06, Área 13): a verified passkey IS a valid second
+  // factor (RLS scopes webauthn_credentials to this user). Trust the device so
+  // the step-up flow completes. Fingerprint must match proxy.ts / device-verify.
+  const userAgent = request.headers.get("user-agent") || "";
+  const fingerprintHash = crypto.createHash("sha256").update(userAgent, "utf8").digest("hex");
+  await supabase.from("auth_device_sessions").upsert(
+    {
+      user_id: user.id,
+      fingerprint_hash: fingerprintHash,
+      user_agent: userAgent,
+      trusted: true,
+      last_seen: new Date().toISOString(),
+    },
+    { onConflict: "user_id,fingerprint_hash" }
+  );
+
+  await logAuditFromRequest(
+    { userId: user.id, action: "stepup", resourceType: "auth_session", status: "success" },
+    request
+  );
 
   const response = NextResponse.json({ verified: true });
   response.cookies.set("al_wn_auth_challenge", "", {

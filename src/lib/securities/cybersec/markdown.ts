@@ -58,18 +58,85 @@ export function isCodeLine(line: string): boolean {
   return CODE_KEYWORD.test(line) || CODE_ASSIGN.test(line) || CODE_HTML.test(line) || CODE_PIPE.test(line);
 }
 
-export interface ContentBlock {
-  type: "text" | "code";
-  lines: string[];
+// ── Tablas y callouts ────────────────────────────────────────────────────────
+// Sintaxis ligera, opt-in y backward-compatible (el contenido previo no usa
+// líneas que empiecen con `|` ni `>`):
+//   • Tabla: líneas tipo `| a | b |` con una fila separadora `|---|---|`.
+//   • Callout: líneas que empiezan con `> `; el emoji inicial elige la variante.
+
+export type CalloutVariant = "warning" | "tip" | "success" | "info";
+
+const TABLE_RE = /^\s*\|.*\|\s*$/;
+const CALLOUT_RE = /^\s*>\s?/;
+
+function isTableLine(line: string): boolean {
+  return TABLE_RE.test(line);
 }
 
-// Groups a section's content into consecutive text / code blocks for rendering.
+// Fila separadora del header: solo `|`, `-`, `:` y espacios (ej. `|---|:--:|`).
+function isTableSeparator(line: string): boolean {
+  return isTableLine(line) && line.replace(/[|\s:-]/g, "").length === 0;
+}
+
+function parseTableCells(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
+}
+
+function calloutVariant(text: string): CalloutVariant {
+  if (text.includes("⚠")) return "warning";
+  if (text.includes("💡")) return "tip";
+  if (text.includes("✅")) return "success";
+  return "info";
+}
+
+export interface ContentBlock {
+  type: "text" | "code" | "table" | "callout";
+  lines: string[];          // text / code / callout (callout: ya sin el prefijo `>`)
+  header?: string[];        // table
+  rows?: string[][];        // table
+  variant?: CalloutVariant; // callout
+}
+
+// Groups a section's content into consecutive text / code / table / callout blocks.
 export function parseContent(content: string): ContentBlock[] {
   const blocks: ContentBlock[] = [];
-  for (const line of splitLines(content)) {
+  const lines = splitLines(content);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Tabla: acumula líneas `|...|` consecutivas y parsea header + filas.
+    if (isTableLine(line)) {
+      const tableLines: string[] = [];
+      while (i < lines.length && isTableLine(lines[i])) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      i--; // compensa el i++ del for
+      const rows = tableLines.filter((l) => !isTableSeparator(l)).map(parseTableCells);
+      const [header = [], ...body] = rows;
+      blocks.push({ type: "table", lines: tableLines, header, rows: body });
+      continue;
+    }
+
+    // Callout: acumula líneas `>` consecutivas, quita el prefijo y elige variante.
+    if (CALLOUT_RE.test(line)) {
+      const calloutLines: string[] = [];
+      while (i < lines.length && CALLOUT_RE.test(lines[i])) {
+        calloutLines.push(lines[i].replace(CALLOUT_RE, ""));
+        i++;
+      }
+      i--;
+      blocks.push({ type: "callout", lines: calloutLines, variant: calloutVariant(calloutLines.join(" ")) });
+      continue;
+    }
+
     const isCode = isCodeLine(line);
     const last = blocks[blocks.length - 1];
-    if (last && (last.type === "code") === isCode) {
+    if (last && (last.type === "code" || last.type === "text") && (last.type === "code") === isCode) {
       last.lines.push(line);
     } else {
       blocks.push({ type: isCode ? "code" : "text", lines: [line] });

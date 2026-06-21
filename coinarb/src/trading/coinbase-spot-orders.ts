@@ -36,6 +36,16 @@ export interface OrderAck {
   raw: unknown;
 }
 
+export interface SkippedOrder {
+  skipped: true;
+  reason: 'below-min-notional';
+  productId: string;
+  computedSize: number;
+  baseMinSize: number;
+}
+
+export type PlaceLimitResult = OrderAck | SkippedOrder;
+
 export interface ProductDetails {
   productId: string;
   baseMinSize: number;
@@ -45,10 +55,41 @@ export interface ProductDetails {
   status: string;
 }
 
+// Product details rarely change. Cache for 10 minutes so the per-order
+// min-size precheck doesn't add a roundtrip on every entry.
+const PRODUCT_CACHE_TTL_MS = 10 * 60 * 1000;
+
 export class CoinbaseSpotOrders {
+  private productCache = new Map<string, { fetchedAt: number; product: ProductDetails }>();
+
   constructor(private readonly creds: CdpCredentials) {}
 
-  async placeLimit(req: LimitOrderRequest): Promise<OrderAck> {
+  async placeLimit(req: LimitOrderRequest): Promise<PlaceLimitResult> {
+    // Pre-submit min-notional guard: with the $20-testing tier the computed
+    // size can fall below Coinbase's per-product floor. Rather than POST and
+    // eat a 400, skip the order cleanly. If getProduct itself throws, proceed
+    // and let Coinbase be the source of truth.
+    const sizeNum = Number(req.baseSize);
+    if (Number.isFinite(sizeNum) && sizeNum > 0) {
+      try {
+        const product = await this.getCachedProduct(req.productId);
+        if (product.baseMinSize > 0 && sizeNum < product.baseMinSize) {
+          console.warn(
+            `[coinarb.spot.minSize] ${req.productId} computed size ${sizeNum} < baseMinSize ${product.baseMinSize}, skipping order`
+          );
+          return {
+            skipped: true,
+            reason: 'below-min-notional',
+            productId: req.productId,
+            computedSize: sizeNum,
+            baseMinSize: product.baseMinSize,
+          };
+        }
+      } catch (err) {
+        console.warn(`[coinarb.spot.minSize] getProduct(${req.productId}) failed, proceeding to Coinbase:`, err);
+      }
+    }
+
     const clientOrderId = req.clientOrderId ?? randomUUID();
     const body = {
       client_order_id: clientOrderId,
@@ -73,6 +114,16 @@ export class CoinbaseSpotOrders {
       failureReason: parsed.failure_reason,
       raw,
     };
+  }
+
+  private async getCachedProduct(productId: string): Promise<ProductDetails> {
+    const cached = this.productCache.get(productId);
+    if (cached && Date.now() - cached.fetchedAt < PRODUCT_CACHE_TTL_MS) {
+      return cached.product;
+    }
+    const product = await this.getProduct(productId);
+    this.productCache.set(productId, { fetchedAt: Date.now(), product });
+    return product;
   }
 
   async cancel(orderIds: string[]): Promise<unknown> {
@@ -102,7 +153,9 @@ export class CoinbaseSpotOrders {
     return this.signedRequest('GET', '/api/v3/brokerage/accounts');
   }
 
-  private async signedRequest(method: string, path: string, body?: unknown): Promise<unknown> {
+  // Protected (not private) so test subclasses can stub the network layer
+  // without needing module-level fetch mocks.
+  protected async signedRequest(method: string, path: string, body?: unknown): Promise<unknown> {
     const jwt = await buildCdpJwt(this.creds, method, HOST, path);
     const init: Parameters<typeof fetch>[1] = {
       method,

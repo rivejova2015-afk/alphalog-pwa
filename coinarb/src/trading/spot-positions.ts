@@ -13,6 +13,19 @@
 import { COINARB_AGENT_ID, COINARB_USER_ID, type Symbol } from '../core/config.js';
 import { getSupabase } from '../supabase.js';
 
+/**
+ * Strategy id stamped on every position/trade/decision row this code path
+ * writes. The 4 values are also the only allowed values for the column-level
+ * CHECK constraint in migration 131; adding a new strategy here requires a
+ * follow-up migration to extend the constraint.
+ *
+ *   'A' — SMC strict (full 11-gate pipeline, default for RANGE_HIGH regime)
+ *   'B' — SMC aggressive (no liquidity-sweep, no MTF floor, TRENDING_HIGH)
+ *   'M' — Mean-reversion (BB + RSI, dispatched for RANGE_LOW regime)
+ *   'P' — Momentum-breakout (EMA + ADX + vol, dispatched for TRENDING_LOW)
+ */
+export type StrategyId = 'A' | 'B' | 'M' | 'P';
+
 export interface OpenPositionInput {
   symbol: Symbol;
   direction: 'BUY' | 'SELL';
@@ -26,14 +39,23 @@ export interface OpenPositionInput {
   arbGapPct: number;
   fearGreedAtEntry: number;
   phaseAtEntry: string;
+  /**
+   * Snapshot of why this entry was taken. SMC strategies populate
+   * regime/tier/validatorConfidence; mean-rev and momentum-breakout
+   * supply their own indicator snapshot (BB, RSI, ATR / EMA, ADX, vol),
+   * so these fields are optional. The extra-props index ensures any
+   * extra strategy-specific telemetry rides along for post-mortem.
+   */
   entryReason: {
-    regime: string;
-    tier: string;
-    validatorConfidence: number;
+    regime?: string;
+    tier?: string;
+    validatorConfidence?: number;
     [key: string]: unknown;
   };
   feeUsd: number;
   externalOrderId?: string;
+  /** Strategy that opened this position. Defaults to 'A' for backwards compat. */
+  strategyId?: StrategyId;
 }
 
 export interface OpenPositionRow {
@@ -67,12 +89,14 @@ export async function openPosition(input: OpenPositionInput): Promise<OpenPositi
   const userId = ensureUserId();
   const supabase = getSupabase();
   const now = new Date().toISOString();
+  const strategyId: StrategyId = input.strategyId ?? 'A';
 
   const { data: pos, error } = await supabase
     .from('coinarb_positions')
     .insert({
       user_id: userId,
       agent_id: COINARB_AGENT_ID,
+      strategy_id: strategyId,
       symbol: input.symbol,
       direction: input.direction,
       side: input.direction,
@@ -98,6 +122,7 @@ export async function openPosition(input: OpenPositionInput): Promise<OpenPositi
   await supabase.from('coinarb_trades').insert({
     user_id: userId,
     agent_id: COINARB_AGENT_ID,
+    strategy_id: strategyId,
     position_id: pos.id,
     order_id: input.externalOrderId ?? null,
     symbol: input.symbol,
@@ -123,13 +148,14 @@ export async function closePosition(input: CloseInput): Promise<{ pnlUsd: number
 
   const { data: pos, error: posErr } = await supabase
     .from('coinarb_positions')
-    .select('id, symbol, direction, entry_price, base_qty, size_usd, opened_at, entry_reason, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry')
+    .select('id, symbol, direction, entry_price, base_qty, size_usd, opened_at, entry_reason, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry, strategy_id')
     .eq('id', input.positionId)
     .single();
 
   if (posErr || !pos) throw new Error(`[spot-positions] position ${input.positionId} not found: ${posErr?.message}`);
 
   const dir = (pos.direction ?? 'BUY') as 'BUY' | 'SELL';
+  const strategyId: StrategyId = ((pos as { strategy_id?: string }).strategy_id as StrategyId | undefined) ?? 'A';
   const grossPnl = dir === 'BUY'
     ? (input.exitPrice - pos.entry_price) * pos.base_qty
     : (pos.entry_price - input.exitPrice) * pos.base_qty;
@@ -153,6 +179,7 @@ export async function closePosition(input: CloseInput): Promise<{ pnlUsd: number
   await supabase.from('coinarb_trades').insert({
     user_id: userId,
     agent_id: COINARB_AGENT_ID,
+    strategy_id: strategyId,
     position_id: input.positionId,
     order_id: input.externalOrderId ?? null,
     symbol: pos.symbol,
@@ -223,5 +250,22 @@ export async function getOpenPositions(): Promise<OpenPositionRow[]> {
     .eq('agent_id', COINARB_AGENT_ID)
     .eq('status', 'OPEN');
   if (error) throw new Error(`[spot-positions] getOpen failed: ${error.message}`);
+  return (data ?? []) as OpenPositionRow[];
+}
+
+/**
+ * Like getOpenPositions but scoped to one strategy. Each StrategyRunner manages
+ * only its own positions; the coordinator's symbol-mutex check uses the unscoped
+ * getOpenPositions to see ALL open positions across strategies.
+ */
+export async function getOpenPositionsByStrategy(strategyId: StrategyId): Promise<OpenPositionRow[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('coinarb_positions')
+    .select('id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at')
+    .eq('agent_id', COINARB_AGENT_ID)
+    .eq('strategy_id', strategyId)
+    .eq('status', 'OPEN');
+  if (error) throw new Error(`[spot-positions] getOpenByStrategy(${strategyId}) failed: ${error.message}`);
   return (data ?? []) as OpenPositionRow[];
 }

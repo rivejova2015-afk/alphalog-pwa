@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -27,6 +28,11 @@ export async function POST(request: NextRequest) {
   if (verifyError) {
     return NextResponse.json({ error: "Invalid code", detail: verifyError.message }, { status: 401 });
   }
+
+  await logAuditFromRequest(
+    { userId: user.id, action: "stepup", resourceType: "auth_session", status: "success" },
+    request
+  );
 
   return NextResponse.json({ success: true, aal: (data as Record<string, unknown> | null)?.current_level });
 }

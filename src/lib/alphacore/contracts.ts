@@ -163,32 +163,6 @@ export interface TerminalEvidenceAttachment extends EntityContract {
 }
 
 // ============================================================================
-// TRADERMAP MODULE (008_tradermap_schema.sql)
-// ============================================================================
-
-export interface TraderMapUserLevel extends EntityContract {
-  level: number;
-  xp_total: number;
-  streak_days: number;
-  last_activity_date?: string | null;
-}
-
-export interface TraderMapGoal extends EntityContract {
-  title: string;
-  account_id?: string | null;
-  year: number;
-  // Additional fields from migration if needed
-}
-
-export interface TraderMapQuarter extends EntityContract {
-  goal_id: string;
-  quarter: number; // 1-4
-  target_amount?: number | null;
-  actual_amount?: number | null;
-  notes?: string | null;
-}
-
-// ============================================================================
 // TREASURY MODULE (010_treasury_core.sql)
 // ============================================================================
 
@@ -392,11 +366,6 @@ export type EntityContractMap = {
   terminal_events: TerminalEvent;
   terminal_evidence_reports: TerminalEvidenceReport;
   terminal_evidence_attachments: TerminalEvidenceAttachment;
-  
-  // TraderMap
-  tradermap_user_level: TraderMapUserLevel;
-  tradermap_goals: TraderMapGoal;
-  tradermap_quarters: TraderMapQuarter;
   
   // Treasury
   treasury_configs: TreasuryConfig;

@@ -135,23 +135,6 @@ export const DEDUPE_SCHEMAS: Record<string, DedupeConfig> = {
     description: 'UNIQUE(user_id, name_lower) WHERE deleted_at IS NULL',
   },
   
-  // ========== TRADERMAP MODULE ==========
-  traders: {
-    enabled: true,
-    fields: ['user_id', 'username'],
-    source: 'UNIQUE_CONSTRAINT',
-    strictMode: true,
-    description: 'UNIQUE(user_id, username)',
-  },
-  
-  trader_follows: {
-    enabled: true,
-    fields: ['user_id', 'trader_id'],
-    source: 'UNIQUE_CONSTRAINT',
-    strictMode: true,
-    description: 'UNIQUE(user_id, trader_id) - prevent duplicate follows',
-  },
-  
   // ========== TREASURY MODULE ==========
   treasury_configs: {
     enabled: true,

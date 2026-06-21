@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { logError, logWarn } from "@/lib/log";
+import { logAuditFromRequest } from "@/lib/security/auditLog";
 
 const hashFingerprint = (value: string) =>
   crypto.createHash("sha256").update(value, "utf8").digest("hex");
@@ -65,6 +66,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // SECURITY (audit 2026-06, Área 13) + lockout-safety: if the user has a
+    // verified second factor, never trust a device on the password session
+    // alone — require a completed AAL2 this session (TOTP or Supabase WebAuthn/
+    // Face ID both upgrade to aal2). If the user has NO factor enrolled yet,
+    // allow device trust (no worse than before this change) so they are not
+    // locked out; the app nudges them to enable 2FA instead.
+    const { data: factorsData } = await supabase.auth.mfa.listFactors();
+    const hasVerifiedMfa = (factorsData?.all ?? []).some((f) => f.status === "verified");
+    if (hasVerifiedMfa) {
+      const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalError || aal?.currentLevel !== "aal2") {
+        return NextResponse.json({ error: "mfa_required" }, { status: 403 });
+      }
+    }
+
     const userAgent = request.headers.get("user-agent") || "";
     // Must match the fingerprint logic in proxy.ts (userAgent only, no IP)
     const fingerprintHash = hashFingerprint(userAgent);
@@ -92,6 +108,17 @@ export async function POST(request: Request) {
       logError("Device Verify", { component: "auth.device.verify", message: "Upsert error:", error: error instanceof Error ? error.message : String(error) });
       return NextResponse.json({ error: "Failed to verify device" }, { status: 500 });
     }
+
+    await logAuditFromRequest(
+      {
+        userId: userData.user.id,
+        action: "device_trust",
+        resourceType: "device_session",
+        resourceId: data?.id,
+        status: "success",
+      },
+      request
+    );
 
     return NextResponse.json({ ok: true, device: data });
   } catch (error) {

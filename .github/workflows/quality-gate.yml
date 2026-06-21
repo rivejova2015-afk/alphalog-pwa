@@ -30,6 +30,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Security gate (audit 2026-06, Área 10): fail the build on any CRITICAL
+      # dependency vulnerability. Kept at `critical` for now because the build
+      # tree still carries `high` advisories via the unmaintained next-pwa chain
+      # (tracked for migration to Serwist). Raise to `high` once that lands.
+      - name: Security audit (fail on critical)
+        run: npm audit --audit-level=critical
+
       - name: Lint
         run: npm run lint
 

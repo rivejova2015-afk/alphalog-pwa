@@ -320,11 +320,13 @@ export async function DELETE(
       }
     }
 
+    const nowIso = new Date().toISOString();
+
     if (evidenceRows && evidenceRows.length > 0) {
       const evidenceIds = evidenceRows.map((row: { id: string }) => row.id);
       await supabase
         .from("tv_analysis_evidence")
-        .delete()
+        .update({ deleted_at: nowIso })
         .in("id", evidenceIds)
         .eq("user_id", userId);
     }
@@ -359,7 +361,7 @@ export async function DELETE(
       const reportIds = reportEvidenceRows.map((row: { id: string }) => row.id);
       await supabase
         .from("trade_evidence")
-        .delete()
+        .update({ deleted_at: nowIso })
         .in("id", reportIds)
         .eq("user_id", userId);
     }
@@ -374,7 +376,7 @@ export async function DELETE(
 
     const { error } = await supabase
       .from("trades")
-      .delete()
+      .update({ deleted_at: nowIso })
       .eq("id", id)
       .eq("user_id", userId);
 

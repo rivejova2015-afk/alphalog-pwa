@@ -293,7 +293,6 @@ export class OfflineBridge {
       instruments: 'terminal',
       terminal_news: 'terminal',
       journal_entries: 'journal',
-      traders: 'tradermap',
       treasury_configs: 'treasury',
       payouts: 'treasury',
       business_costs: 'business',

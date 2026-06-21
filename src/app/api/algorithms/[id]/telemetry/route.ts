@@ -76,6 +76,17 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     }
 
     const payload = (tele.payload ?? {}) as Record<string, unknown>;
+    // `regime` is sourced from payload so this endpoint keeps working before
+    // the Phase 5 migration adds the dedicated column. Once the column lands
+    // and the bot writes to BOTH (payload for runtime introspection, column
+    // for analytics queries), the payload read remains the source of truth
+    // for this realtime UI.
+    const regimeRaw = payload.regime;
+    const regime: string | null =
+      typeof regimeRaw === "string" &&
+      ["TRENDING_HIGH", "TRENDING_LOW", "RANGE_HIGH", "RANGE_LOW", "DEAD"].includes(regimeRaw)
+        ? regimeRaw
+        : null;
     return NextResponse.json({
       telemetry: {
         equityUsd:            num(tele.equity_usd),
@@ -98,6 +109,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         tradesBySymbol:       (payload.trades_by_symbol ?? {}) as Record<string, number>,
         totalCap:             int(payload.total_cap) ?? 100,
         perSymbolCap:         int(payload.per_symbol_cap) ?? 33,
+        regime,
       },
     }, {
       headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=30" },

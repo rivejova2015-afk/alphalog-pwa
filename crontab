@@ -46,6 +46,20 @@
 *    *    *  *  *   curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/algorithms/tradovate-poll
 0    23   *  *  1-5 curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/bars/cme-settle-fetch
 
+# CME runtime — Tradovate token refresh + equity / position / risk sync.
+# Each endpoint is a no-op (returns {synced:0}) when no `cme_connections` row
+# exists, so leaving them scheduled when CME is unused is essentially free.
+# - connection-heartbeat: token expires every ~80 min, refresh when <15 min left
+# - position-sync: every minute; keeps cme_positions table fresh
+# - equity-sync: every 5 min; powers the equity tile in /business and /dashboard
+# - risk-monitor: every minute; drives the daily-loss circuit-breaker
+# - daily-report: 21:00 UTC (16:00 ET, post-close) for the close summary push
+*    *    *  *  1-5 curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/position-sync
+*    *    *  *  1-5 curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/risk-monitor
+*/5  *    *  *  1-5 curl --fail --max-time 60  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/equity-sync
+*/10 *    *  *  1-5 curl --fail --max-time 60  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/connection-heartbeat
+0    21   *  *  1-5 curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/daily-report
+
 # Map / progress snapshots
 5    0    *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/map-hot/snapshot
 

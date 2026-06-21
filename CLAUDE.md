@@ -735,6 +735,75 @@ E2E_PASSWORD=Test@123456
 PLAYWRIGHT_BASE_URL=http://localhost:3000
 ```
 
+### Adicionales descubiertas via grep (2026-06-20 audit)
+
+Los siguientes nombres aparecen en `process.env.X` dentro de `src/` o
+`coinarb/src/` pero faltaban del listado anterior. Documentadas para que
+rotaciones de secretos las cubran:
+
+```bash
+# Cron / ops (mencionados antes en otras secciones, formalizados acá)
+OPS_CRON_SECRET=                # Bearer en /api/ops/cron/* (distinto de CRON_SECRET)
+
+# Audit + integrity
+AUDIT_CHAIN_SECRET=             # HMAC para encadenar audit_trail entries
+INTEGRITY_HMAC_SECRET=          # checks de integridad en outbound/email
+INTERNAL_API_SECRET=            # auth de service-to-service entre route handlers
+HISTORICAL_BARS_SECRET=         # token de /api/historical-bars/ingest
+
+# Cifrado por dominio (Phase B — backfill-encryption)
+DATA_ENCRYPTION_KEY_V2=         # rotación v2 de DATA_ENCRYPTION_KEY
+ENCRYPTION_KEY_TRADES=          # base64-32: trades financial fields
+ENCRYPTION_KEY_TREASURY=        # base64-32: treasury amounts
+ENCRYPTION_KEY_JOURNAL=         # base64-32: journal content/title
+ENCRYPTION_KEY_MAIL=            # base64-32: secure mail bodies
+ENCRYPTION_KEY_VERSION=v2       # cuál key activa (DATA_ENCRYPTION_KEY=v1)
+
+# Bot / market data providers (validators del Signal Engine + Coinarb)
+BOT_SIGNAL_SECRET=              # firma señales del bot al persistir en DB
+ALPHA_VANTAGE_API_KEY=          # market data fallback
+FINNHUB_API_KEY=                # market data fallback
+POLYGON_API_KEY=                # historical bars + intraday
+TWELVEDATA_API_KEY=             # market data fallback
+COINGLASS_API_KEY=              # liquidation-heatmap validator (Coinarb)
+CRYPTOQUANT_API_KEY=            # exchange-flows validator (Coinarb)
+LATTICE_API_TOKEN=              # Lattice options chain
+COINBASE_CDP_KEY_NAME=          # Coinbase Developer Platform (live spot orders)
+COINBASE_CDP_PRIVATE_KEY=       # CDP EC private key (PEM)
+
+# Coinarb runtime
+COINARB_50X_PAPER_MODE=         # 'true' = paper mode, otherwise live
+COINARB_AGENT_ID=               # UUID en coinarb_agents
+COINARB_BOT_ACCOUNT_ID=         # UUID en bot_accounts
+COINARB_BOT_ID=                 # UUID en bots
+COINARB_USER_ID=                # owner uuid (auth.users)
+COINARB_STARTING_CAPITAL=100    # USD inicial (default 100)
+COINARB_PUSH_ENABLED=           # 'true' para enviar pushes desde el bot
+MTF_CONFIDENCE_MIN=0.12         # Coinarb tunable (también en algorithms.parameters)
+SWEEP_CONFIRM_BODY_RATIO=0.35   # Coinarb tunable
+
+# Algorithms / risk
+PD_MACRO_BAND=                  # premium-discount band (macro TF)
+PD_MICRO_BAND=                  # premium-discount band (micro TF)
+SKIP_MARKET_HOURS_CHECK=        # 'true' bypassa is-market-open guard (TESTING)
+
+# Frontend exposed
+NEXT_PUBLIC_BUILD_VERSION=      # build id mostrado al user en /health
+NEXT_PUBLIC_ENABLE_SW=false     # registrar service-worker en dev (override)
+NEXT_PUBLIC_HCAPTCHA_SITE_KEY=  # hCaptcha en flows sensibles
+
+# Security alerts
+SECURITY_ALERT_USER_ID=         # auth.users.id que recibe pushes de honeypot/CSRF
+
+# Fly runtime (inyectadas por Fly, no setear manual)
+FLY_ALLOC_ID=                   # id de la VM
+FLY_MACHINE_ID=                 # id de la máquina
+
+# Legado / informativo
+SUPABASE_URL=                   # alias server-side de NEXT_PUBLIC_SUPABASE_URL
+VERCEL_ENV=                     # legado pre-Fly, ya no se setea
+```
+
 ---
 
 ## 10. Estado actual
@@ -801,6 +870,21 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 <!-- (resolved 2026-06) console.log → logError sweep cerrado: de 335 ocurrencias en 120 archivos → 60 en 10. Todo lo migrable está hecho (API routes 100%, server libs 100%, UI components, error boundaries, dashboard pages). Lo que queda es intencional: src/lib/log.ts (el logger), src/lib/toast.ts, src/lib/alphashield/* (sistema de logging client-side propio que tiene que usar console como sink final), src/lib/alphacore/testing.ts (harness), JSDoc examples, y contenido educativo XSS demo. Ver entrada en ✅ Reciente. -->
 
 ### ✅ Reciente (verificado y funcional — no es debt, solo tracking):
+- **Plan "Activar el 70% dormido" — 5 sprints + bootstrap** (2026-05-27 → 2026-05-28, branch `feat/fly-ci-cd`): cierra la brecha entre "schema en DB" y "uso real" para Map Hot, Treasury y Business hub. Auditoría previa había revelado que ~70% del schema Supabase estaba en 0 rows pese a tener migrations, RLS, lib code y UI components. Causa raíz: `src/lib/business/queries.ts` y `src/lib/treasury/queries.ts` usaban un cliente anon-key desde browser → RLS rechazaba todo silenciosamente. Plan ejecutado en 5 commits, 100% deploy a Fly:
+  - **Sprint 1** — Map Hot sidebar (commit `fd942f5`): cambio de 1 línea en `src/components/layout/Sidebar.client.tsx:62` para que la sección Map Hot arranque expandida por default. Antes 95% production-ready, ahora activable desde la nav.
+  - **Sprint 2** — Treasury data pipeline + 4 rutas API (commit `eb551da`): rewrite de `src/app/dashboard/treasury/page.tsx` a server component con `Promise.all` de 7 queries (accounts/configs/wallets/transactions/payouts/trades/budgets); extracción del layout client-side a `src/components/treasury/TreasuryShell.client.tsx` preservando sidebar+header+mobile-select; 4 rutas API nuevas (`/api/treasury/wallets` GET+POST, `/wallets/[id]` DELETE soft con guard "wallet en uso" 409, `/transactions` GET+POST con filtros walletId/accountId/from/to/limit, `/transactions/[id]` PUT+DELETE); extensión del Zod schema de `/api/treasury/configs` (acepta split_mode, withdrawal_day, wallet_id, tax_buffer_percentage, milestone_target); UI mutations en `Splits.client.tsx` (`<select>` split_mode → PUT) y `Overview.client.tsx` (banner crear wallet + nudge linkear).
+  - **Sprint 3** — Business API foundation (commit `14826b7`): 17 rutas REST autenticadas bajo `/api/business/**`:
+    - Costs (3): `costs/route.ts` GET+POST con `?month=YYYY-MM`, `costs/[id]/route.ts` PUT+DELETE soft, `cost-templates/route.ts` GET+POST (alimenta `/api/cron/business/recurring-costs`).
+    - Decisions (3): `decisions/route.ts` GET+POST, `decisions/[id]/route.ts` GET con tasks join + PUT + DELETE soft-cascade, `decisions/[id]/tasks/route.ts` GET+POST+PATCH+DELETE con `?taskId=`.
+    - SOPs (4): `sops/route.ts` GET con items inline + POST aceptando `items[]`, `sops/[id]/route.ts` PUT + DELETE cascade (items+runs+run_items), `sops/[id]/runs/route.ts` GET con items joined + POST auto-popula `business_sop_run_items` desde el SOP, `sops/runs/[runId]/items/[itemId]/route.ts` PATCH para check/uncheck/note.
+    - Milestones (2): `milestones/route.ts` GET+POST, `milestones/[id]/route.ts` PUT+DELETE.
+    - LLC (3): `llc/route.ts` GET+PUT upsert sobre `llc_info` (único por user), `llc/inbox/route.ts` GET+POST, `llc/inbox/[id]/route.ts` PUT+DELETE.
+    - Aggregates read-only (2): `kpis/route.ts` GET con `?month=YYYY-MM` que llama `calculateKPIMetrics` de `src/lib/business/metrics.ts`, `health/route.ts` GET (queda pendiente de Sprint 4 integration test).
+    - Plus 13 schemas Zod nuevos en `src/lib/validation/schemas.ts` (cost create/update, template create, milestone create/update, decision create/update, task create/patch, sop create/update, sop item create, sop run create, sop run item patch, llc upsert, llc inbox create/update) y 6 `AuditResourceType` nuevos (business_cost, business_cost_template, business_milestone, business_decision, business_sop, business_llc).
+  - **Sprint 4** — Business UI rewire (commit `5cb8cc5`): **decisión arquitectónica clave**. En vez de rewireal 13 archivos individualmente (panels + forms), refactor de `src/lib/business/queries.ts` en thin fetch wrappers sobre las 17 rutas API del Sprint 3. Las 26 funciones preservan signatures exactas → todos los callers transparentes sin cambios. Helpers nuevos: `readCsrfCookie()` (lee `al_csrf`) y `jsonHeaders()`. Plus 2 rutas API faltantes (`sops/[id]/items/route.ts` POST y `sops/items/[itemId]/route.ts` DELETE) que SOPsPanel necesitaba para añadir/eliminar items individuales. Patch a 3 components que bypassaban queries.ts e iban directo a Supabase: `DecisionsPanel.client.tsx` (handleAddTask + toggleDecisionTask), `SOPsPanel.client.tsx` (handleAddItem + handleDeleteItem + remove import de createClient), `CostForm.client.tsx` (template insert via POST `/api/business/cost-templates`). Sidebar extendido con 4 links Business nuevos (P&L, Runway, Health, LLC).
+  - **Sprint 5** — Crons + bug fix + bootstrap (commit `fa20cf6`): 3 entries nuevas en `crontab` (`10 0 1 * * → business/recurring-costs` mensual, `25 0 * * * → business/alerts` diario, `35 0 * * * → treasury/withdrawal-reminders` diario) — todas usan `-X GET` (no POST como el resto del archivo). Fix del bug 500 pre-existente en `/api/cron/treasury/withdrawal-reminders` que intentaba un join cross-schema PostgREST (`auth.users!inner(id,email)`) — el email nunca se usaba downstream, fix: select solo `user_id`. Descubrimiento crítico durante el deploy: la machine de `alphalog-cron` estaba corriendo el image de `alphalog-pwa` (Next.js, no supercronic) — probablemente un deploy mal configurado anterior. Fix: `fly deploy --app alphalog-cron --config fly.cron.toml --dockerfile Dockerfile.cron` redeploy explícito con el config correcto. **Bootstrap data**: SQL directo via Supabase MCP creó 11 `treasury_configs` (una por cuenta del owner `304a1a34-36a9-4a75-ae52-3023409932f0`) con defaults conservadores (withdrawal_day=15, split_mode=growth, anti_drawdown_active=false, anti_drawdown_threshold=20, tax_buffer_percentage=30, balance_threshold = account_size × 1.10, wallet_id=NULL pendiente UI).
+  - **Patrón canónico de las 21 rutas nuevas** (4 Sprint 2 + 17 Sprint 3): `await createClient()` de `@/lib/supabase/server`, `getUser()` (no getSession), `validatePayloadSafe` + `validationErrorResponse`, `logAuditFromRequest` en mutaciones, `recordBugFromRequest` en 5xx, `Cache-Control: private, max-age=30, stale-while-revalidate=60` en GET. Referencia: `src/app/api/tradehub/trades/route.ts`.
+  - **Pendiente del lado del owner** (~20 min UI): refresh push sub (`/dashboard/logs/pwa`), crear wallet (`/dashboard/treasury` Overview), linkear wallet a configs (UI nudge), LLC info (`/business/llc` desbloquea cron alerts), cost templates (`/business/pl` Add Cost recurring desbloquea cron recurring-costs), Map Hot goals + milestones (`/map-hot/*`).
 - **Trades offline-first edit + delete** (2026-06): cierra el caso `update`/`delete` que faltaba en `NewTradesLog`. Tres escenarios:
   - **Editar trade pending** (no drenó todavía): muta el payload del CREATE en outbox in-place via `updateOutboxPayload(outboxId, payload)`. Cuando finalmente drena, el CREATE lleva los valores finales — cero id-resolution drama. Helper nuevo en `src/lib/alphacore/offline/idb.ts`.
   - **Editar trade server-side sin red**: encola PATCH a `/api/tradehub/trades/{id}` con `bodyMode='direct'` + update optimista en `trades` local.
@@ -923,6 +1007,8 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 - `coinarb/src/core/index.ts` await `loadConfigFromDb()` antes de `buildLoop()`.
 - Lee `algorithms.parameters` (4 thresholds tunables + `arb_gap_min` jsonb) y muta `let` exports en `coinarb/src/core/config.ts`. ES module live bindings hacen que loop.ts/smc-detector.ts/etc lean el valor nuevo sin refactor.
 - `PAPER_MODE` sigue siendo env-only (`COINARB_50X_PAPER_MODE`) como safety brake.
+- **Defaults vigentes (2026-06-19):** `MTF_CONFIDENCE_MIN=0.12`, `SWEEP_CONFIRM_BODY_RATIO=0.35`. Bajados desde 0.30/0.40 para destrabar trades — el resto del filter chain (premium-discount, CHOCH, R:R≥2.0) sigue actuando como filtro de calidad. El CI quality gate (`scripts/check-backtest-threshold.ts`, `winRate≥30%`) actúa como red de regresiones.
+- **Tier `$20-testing`** (primer escalón de `PHASES`): risk 5% → $1/trade, pensado para validar el pipeline live con bankroll mínimo sin que el sizing colapse contra `baseMinSize` de Coinbase. `coinbase-spot-orders.ts:placeLimit` ahora pre-chequea el size contra `getProduct().baseMinSize` y devuelve `{ skipped: true, reason: 'below-min-notional' }` antes de POST, evitando 400s ruidosos.
 
 **Hot-rotate flow (Fase C):**
 - `PUT /api/algorithms/[id]` con `parameters` jsonb dispara `bot_commands.insert(command_type='update_parameters', payload={algorithm_id, parameters})`.

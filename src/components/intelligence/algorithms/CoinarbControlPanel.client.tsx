@@ -32,6 +32,8 @@ interface CommandLifecycle {
   ack: { status: string; message: string | null; acked_at: string | null } | null;
 }
 
+type Regime = "TRENDING_HIGH" | "TRENDING_LOW" | "RANGE_HIGH" | "RANGE_LOW" | "DEAD";
+
 interface Telemetry {
   equityUsd: number | null;
   availableBalanceUsd: number | null;
@@ -51,7 +53,66 @@ interface Telemetry {
   tradesBySymbol: Record<string, number>;
   totalCap: number;
   perSymbolCap: number;
+  regime: Regime | null;
 }
+
+/**
+ * Color + label config per regime. Kept here (vs inline) so that future
+ * additions (HMM-based regimes, sub-regimes) extend in one place.
+ *
+ * Strategy mapping shown on hover lets the operator see at a glance what
+ * the dispatch table would do — even though the actual dispatch lives in
+ * the bot (Phase 2 of multi-strategy restructure).
+ */
+const REGIME_CONFIG: Record<Regime, {
+  label: string;
+  color: string;
+  borderColor: string;
+  textColor: string;
+  strategy: string;
+  description: string;
+}> = {
+  TRENDING_HIGH: {
+    label: "Trending · High Vol",
+    color: "bg-emerald-900/40",
+    borderColor: "border-emerald-700/40",
+    textColor: "text-emerald-300",
+    strategy: "SMC aggressive",
+    description: "ADX > 25 + atrNorm > 1.4 — sweep grabs cleanest",
+  },
+  TRENDING_LOW: {
+    label: "Trending · Low Vol",
+    color: "bg-cyan-900/40",
+    borderColor: "border-cyan-700/40",
+    textColor: "text-cyan-300",
+    strategy: "Momentum breakout",
+    description: "ADX > 25 + atrNorm < 0.7 — grind direction, low chop",
+  },
+  RANGE_HIGH: {
+    label: "Range · High Vol",
+    color: "bg-amber-900/40",
+    borderColor: "border-amber-700/40",
+    textColor: "text-amber-300",
+    strategy: "SMC strict",
+    description: "ADX < 20 + atrNorm > 1.4 — EQH/EQL structural",
+  },
+  RANGE_LOW: {
+    label: "Range · Low Vol",
+    color: "bg-violet-900/40",
+    borderColor: "border-violet-700/40",
+    textColor: "text-violet-300",
+    strategy: "Mean reversion",
+    description: "ADX < 20 + atrNorm < 0.7 — BB + RSI extremes",
+  },
+  DEAD: {
+    label: "Dead",
+    color: "bg-slate-800",
+    borderColor: "border-slate-700",
+    textColor: "text-slate-400",
+    strategy: "Pause",
+    description: "atrNorm < 0.4 — no actionable market, skip all entries",
+  },
+};
 
 // ─── Local primitive helpers (copies from AlgorithmDetailsModal) ─────────────
 
@@ -102,6 +163,55 @@ function fmt$(v: number | null, signed = false): string {
   if (v === null) return "—";
   const sign = signed && v > 0 ? "+" : "";
   return `${sign}$${v.toFixed(2)}`;
+}
+
+// ─── RegimePill ──────────────────────────────────────────────────────────────
+
+/**
+ * Single-line pill showing the current market regime + which strategy the
+ * coordinator would dispatch to (once Phase 2 lands). Hover/title surfaces
+ * the threshold rationale so the operator can reason about classifier output.
+ *
+ * When `regime` is null (warmup, pre-Phase-2 bot, or detector not running),
+ * we render a muted "—" placeholder rather than hiding the slot — this keeps
+ * the layout stable so an operator never wonders "is the pill missing
+ * because it broke or because there's no data yet?".
+ */
+export function RegimePill({ regime }: { regime: Regime | null }) {
+  if (regime === null) {
+    return (
+      <div
+        className="rounded-lg border border-dashed border-[#1f2937] bg-[#0a0e1a] px-3 py-2 flex items-center justify-between"
+        title="Waiting for regime detector — first read takes ~200 1H candles after bot start."
+        data-testid="regime-pill"
+        data-regime="UNKNOWN"
+      >
+        <span className="text-[10px] uppercase tracking-wider text-slate-500">
+          Current regime
+        </span>
+        <span className="text-xs font-mono text-slate-500">— · awaiting first read</span>
+      </div>
+    );
+  }
+  const cfg = REGIME_CONFIG[regime];
+  return (
+    <div
+      className={`rounded-lg border ${cfg.borderColor} ${cfg.color} px-3 py-2 flex items-center justify-between`}
+      title={cfg.description}
+      data-testid="regime-pill"
+      data-regime={regime}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-slate-500">
+          Current regime
+        </span>
+        <span className={`text-xs font-semibold ${cfg.textColor}`}>{cfg.label}</span>
+      </div>
+      <span className={`text-[10px] font-mono ${cfg.textColor} opacity-80`}>
+        → {cfg.strategy}
+      </span>
+    </div>
+  );
 }
 
 // ─── WsTile ──────────────────────────────────────────────────────────────────
@@ -301,6 +411,9 @@ function TelemetryPanel({
         </span>
         <span className="text-[10px] text-slate-500 font-mono">refresh 15s</span>
       </div>
+
+      {/* Regime pill — Phase 7 of multi-strategy restructure */}
+      <RegimePill regime={tele.regime} />
 
       {/* Top row: heartbeat + WS */}
       <div className="grid grid-cols-3 gap-2 text-xs">

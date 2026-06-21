@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { logError, logInfo } from "@/lib/log";
+import { safeNextPath } from "@/lib/security/safeNext";
+import { validatePassword } from "@/lib/security/passwordPolicy";
 
 const REMEMBER_ME_STORAGE_KEY = "alphalog.remember_me";
 const REMEMBER_EMAIL_STORAGE_KEY = "alphalog.remember_email";
@@ -145,11 +147,15 @@ export default function AuthPage() {
 
   const redirectAfterLogin = async () => {
     const params = new URLSearchParams(window.location.search);
-    const next = params.get("next") || "/dashboard";
+    const next = safeNextPath(params.get("next"));
     const stepup = params.get("stepup") === "1";
 
+    // SECURITY (audit 2026-06, Área 13): a new/untrusted device must complete a
+    // real second factor. Route through the MFA step-up page instead of
+    // self-trusting the device on the password session alone.
     if (stepup) {
-      await fetch("/api/auth/device/verify", { method: "POST" });
+      window.location.href = `/auth/stepup?next=${encodeURIComponent(next)}`;
+      return;
     }
 
     window.location.href = next;
@@ -191,7 +197,7 @@ export default function AuthPage() {
       setError(null);
       const supabase = createClient();
       const params = new URLSearchParams(window.location.search);
-      const next = params.get("next") || "/dashboard";
+      const next = safeNextPath(params.get("next"));
       const stepup = params.get("stepup") === "1";
       const nextTarget = stepup ? `/auth/stepup?next=${encodeURIComponent(next)}` : next;
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextTarget)}`;
@@ -235,8 +241,9 @@ export default function AuthPage() {
           setLoading(false);
           return;
         }
-        if (password.length < 6) {
-          setError("La contraseña debe tener al menos 6 caracteres");
+        const pwCheck = validatePassword(password);
+        if (!pwCheck.ok) {
+          setError(pwCheck.error!);
           setLoading(false);
           return;
         }

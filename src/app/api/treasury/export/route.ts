@@ -12,6 +12,7 @@ import {
   EXPORT_CONFIG,
 } from '@/lib/security/exportHardening';
 import { logAuditEvent } from '@/lib/security/auditLog';
+import { requireFreshStepUpFromToken } from '@/lib/security/stepUp';
 import { recordBugFromRequest } from '@/lib/security/bugRecorder';
 import { asArray } from '@/lib/validation/nullGuards';
 import { logError } from "@/lib/log";
@@ -78,6 +79,16 @@ export async function GET(request: Request) {
     }
 
     const userId = user.id;
+
+    // SECURITY (audit 2026-06, Área 13): data export requires a recent MFA step-up.
+    const stepUp = requireFreshStepUpFromToken(token);
+    if (!stepUp.ok) {
+      return Response.json(
+        { error: "step_up_required", reason: stepUp.reason },
+        { status: stepUp.status }
+      );
+    }
+
     const { month: monthStr } = validation.data;
 
     // Get date range for month

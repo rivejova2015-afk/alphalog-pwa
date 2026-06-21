@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import UpdateManager from "@/components/pwa/UpdateManager";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
+import Enable2FaPrompt from "@/components/security/Enable2FaPrompt.client";
 import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
 import IOSInstallBanner from "@/components/push/IOSInstallBanner.client";
 import ConflictBadge from "@/components/alphacore/ConflictBadge.client";
@@ -54,6 +55,7 @@ export default function RootLayout({
         <ServiceWorkerRegister />
         <UpdateManager />
         <CsrfBridge />
+        <Enable2FaPrompt />
         <IOSInstallBanner />
         <ConflictBadge />
         <Toaster position="bottom-right" theme="dark" richColors closeButton />
