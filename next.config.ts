@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
-import withPWA from "next-pwa";
-import runtimeCaching from "next-pwa/cache";
+import { spawnSync } from "node:child_process";
+import withSerwistInit from "@serwist/next";
 import { withSentryConfig } from "@sentry/nextjs";
 import bundleAnalyzer from "@next/bundle-analyzer";
 
@@ -169,22 +169,31 @@ const nextConfig: NextConfig = {
   },
 };
 
-const withPWAConfig = withPWA({
-  dest: "public",
+// A revision versions the precached /offline fallback so a new build serves a
+// fresh copy instead of a stale one. Prefer the git SHA; fall back to the
+// platform commit env, then a constant.
+const swRevision =
+  (() => {
+    try {
+      return spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8" }).stdout?.trim() || null;
+    } catch {
+      return null;
+    }
+  })() ?? process.env.VERCEL_GIT_COMMIT_SHA ?? "1";
+
+const withSerwist = withSerwistInit({
+  swSrc: "src/app/sw.ts",
+  swDest: "public/sw.js",
+  // Match the previous next-pwa behaviour: no service worker in development.
   disable: process.env.NODE_ENV === "development",
-  register: true,
-  skipWaiting: true,
-  clientsClaim: true,
-  runtimeCaching,
-  fallbacks: {
-    document: "/offline",
-  },
+  // Precache the offline fallback so it works without network.
+  additionalPrecacheEntries: [{ url: "/offline", revision: swRevision }],
 });
 
 // Sentry build wrapper. Without SENTRY_AUTH_TOKEN it still works — the
 // webpack plugin warns and skips source-map upload but the build succeeds.
 // `silent: true` suppresses noise in local dev.
-export default withSentryConfig(withBundleAnalyzer(withPWAConfig(nextConfig)), {
+export default withSentryConfig(withBundleAnalyzer(withSerwist(nextConfig)), {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,

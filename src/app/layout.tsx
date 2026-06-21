@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import UpdateManager from "@/components/pwa/UpdateManager";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import CsrfBridge from "@/components/security/CsrfBridge.client";
 import Enable2FaPrompt from "@/components/security/Enable2FaPrompt.client";
 import GlobalBackButton from "@/components/navigation/GlobalBackButton.client";
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body className={`${ibmPlexMono.variable} ${instrumentSans.variable}`}>
         {children}
         <GlobalBackButton />
+        <ServiceWorkerRegister />
         <UpdateManager />
         <CsrfBridge />
         <Enable2FaPrompt />
