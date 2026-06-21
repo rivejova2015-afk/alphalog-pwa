@@ -117,6 +117,25 @@ describe('check-backtest-threshold — replay mode', () => {
     const result = run(fp, ['--min-entries=0', '--min-win-rate=0']);
     expect(result.code).toBe(0);
   });
+
+  it('does NOT fail on winRate/pnlR when entries=0 even with default 30% floor', () => {
+    // Regression for the Phase 2 deploy block: SMC strict replays 0 entries in
+    // chop regimes, collapsing winRate to 0/0 = 0%. With --min-entries=0 the
+    // 0% winRate and 0 pnlR must NOT trip the default thresholds — those
+    // metrics are meaningless on an empty sample.
+    const fp = writeFixture('zero-default-wr.json', replaySummary({ aggregate: { totalEntries: 0, totalPnlR: 0, winRate: 0 } }));
+    cleanup.push(fp);
+    const result = run(fp, ['--min-entries=0']); // default --min-win-rate=0.30, --min-total-pnl-r=0
+    expect(result.code).toBe(0);
+  });
+
+  it('still enforces winRate/pnlR when entries > 0 (guard not bypassed globally)', () => {
+    // The entries=0 escape hatch must not weaken the gate when entries exist.
+    const fp = writeFixture('some-entries-low-wr.json', replaySummary({ aggregate: { totalEntries: 5, totalPnlR: 1.0, winRate: 0.10 } }));
+    cleanup.push(fp);
+    const result = run(fp, ['--min-entries=0']);
+    expect(result.code).toBe(1);
+  });
 });
 
 describe('check-backtest-threshold — snapshot mode (informational)', () => {

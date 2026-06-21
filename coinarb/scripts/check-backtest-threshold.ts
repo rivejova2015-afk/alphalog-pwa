@@ -111,11 +111,18 @@ async function main(): Promise<void> {
     if (aggregate.totalEntries < MIN_ENTRIES) {
       failures.push(`aggregate entries ${aggregate.totalEntries} < min ${MIN_ENTRIES}`);
     }
-    if (aggregate.winRate < MIN_WIN_RATE) {
-      failures.push(`aggregate winRate ${(aggregate.winRate * 100).toFixed(1)}% < min ${(MIN_WIN_RATE * 100).toFixed(0)}%`);
-    }
-    if (aggregate.totalPnlR < MIN_TOTAL_PNLR) {
-      failures.push(`aggregate totalPnlR ${aggregate.totalPnlR.toFixed(2)} < min ${MIN_TOTAL_PNLR}`);
+    // winRate and pnlR are only meaningful when the strategy actually opened
+    // positions — 0/0 collapses to 0% which fails any positive MIN_WIN_RATE
+    // by construction. Skip those checks on zero-entry runs and rely on the
+    // MIN_ENTRIES floor to decide whether the absence of entries is itself
+    // a failure for this deploy.
+    if (aggregate.totalEntries > 0) {
+      if (aggregate.winRate < MIN_WIN_RATE) {
+        failures.push(`aggregate winRate ${(aggregate.winRate * 100).toFixed(1)}% < min ${(MIN_WIN_RATE * 100).toFixed(0)}%`);
+      }
+      if (aggregate.totalPnlR < MIN_TOTAL_PNLR) {
+        failures.push(`aggregate totalPnlR ${aggregate.totalPnlR.toFixed(2)} < min ${MIN_TOTAL_PNLR}`);
+      }
     }
     for (const s of symbols) {
       if (s.worstRun > MAX_WORST_RUN) {
