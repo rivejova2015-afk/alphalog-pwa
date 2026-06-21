@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
+import { safeNextPath } from "@/lib/security/safeNext";
 
 type Stage = "loading" | "totp" | "webauthn" | "enroll-totp" | "error" | "done";
 
@@ -26,12 +27,34 @@ export default function StepUpPage() {
 
   const getNext = () => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("next") || "/dashboard";
+    return safeNextPath(params.get("next"));
   };
 
   useEffect(() => {
     const init = async () => {
-      // Check TOTP factors
+      const sp = new URLSearchParams(window.location.search);
+      // Proactive enrollment entry point (the "Activar 2FA" prompt): jump
+      // straight to TOTP setup instead of the verify/trust flow.
+      if (sp.get("enroll") === "1") {
+        setStage("enroll-totp");
+        return;
+      }
+      // In reauth mode (per-operation step-up) always force a fresh MFA
+      // challenge, so skip the "already aal2 → trust" short-circuit.
+      const reauth = sp.get("reauth") === "1";
+
+      // 1. Already stepped up this session (AAL2 — e.g. Face ID at login)?
+      //    device/verify only returns 200 when the session is aal2, so success
+      //    here means MFA is already satisfied → trust the device and continue.
+      if (!reauth) {
+        const already = await fetch("/api/auth/device/verify", { method: "POST" });
+        if (already.ok) {
+          window.location.href = getNext();
+          return;
+        }
+      }
+
+      // 2. TOTP factors enrolled?
       const mfaRes = await fetch("/api/auth/mfa");
       if (mfaRes.ok) {
         const { factors } = await mfaRes.json();
@@ -43,7 +66,7 @@ export default function StepUpPage() {
         }
       }
 
-      // Check WebAuthn credentials
+      // 3. WebAuthn passkeys enrolled?
       const wnRes = await fetch("/api/auth/webauthn/auth-options", {
         method: "POST",
       });
@@ -56,15 +79,8 @@ export default function StepUpPage() {
         }
       }
 
-      // No MFA enrolled — fall back to device verify
-      const deviceRes = await fetch("/api/auth/device/verify", {
-        method: "POST",
-      });
-      if (deviceRes.ok) {
-        window.location.href = getNext();
-      } else {
-        setStage("enroll-totp");
-      }
+      // 4. No second factor enrolled — force enrollment (no password-only trust).
+      setStage("enroll-totp");
     };
 
     init().catch(() => setStage("error"));
@@ -103,6 +119,8 @@ export default function StepUpPage() {
         body: JSON.stringify({ factorId: selectedFactor, code }),
       });
       if (res.ok) {
+        // TOTP verified — session is now aal2. Trust this device, then continue.
+        await fetch("/api/auth/device/verify", { method: "POST" });
         window.location.href = getNext();
       } else {
         const data = await res.json().catch(() => ({}));
@@ -139,6 +157,8 @@ export default function StepUpPage() {
         body: JSON.stringify({ factorId: enrollData.factorId, code: enrollCode }),
       });
       if (res.ok) {
+        // Enrolled + verified — session is now aal2. Trust this device.
+        await fetch("/api/auth/device/verify", { method: "POST" });
         window.location.href = getNext();
       } else {
         setError("Código incorrecto. Verifica la app autenticadora.");
@@ -281,12 +301,6 @@ export default function StepUpPage() {
               </button>
             </form>
           )}
-          <button
-            onClick={() => (window.location.href = getNext())}
-            className="w-full mt-3 text-slate-500 text-sm hover:text-slate-300 transition-colors"
-          >
-            Omitir por ahora
-          </button>
         </div>
       </div>
     );

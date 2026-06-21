@@ -1,0 +1,22 @@
+# Dependabot config (audit 2026-06, Área 10 — supply chain).
+# Opens weekly PRs for dependency + GitHub Actions updates so security fixes
+# (and the next-pwa → Serwist migration) don't go unnoticed. Minor/patch bumps
+# are grouped to reduce PR noise; majors come as individual PRs.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
