@@ -16,8 +16,7 @@
 
 import type { SmcSignal } from '../analysis/smc-detector.js';
 
-/** Strategy id mirror — keep aligned with trading/spot-positions.ts. */
-export type StrategyId = 'A' | 'B' | 'M' | 'P';
+export type StrategyId = 'A' | 'B';
 
 export interface SmcSignalRow {
   user_id: string;

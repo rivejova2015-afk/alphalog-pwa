@@ -1,31 +1,24 @@
 /**
  * CoinarbCoordinator — singleton per process. Owns the shared runtime (feeds,
  * paper broker, phase manager, live orders, historical candle cache) and
- * dispatches each tick to the right runner for the current market regime
- * (Phase 2 of the regime-aware restructure).
+ * dispatches each tick to one or more StrategyRunner instances.
  *
- * Four runners instantiated at boot:
- *   'A' — SMC strict (StrategyRunner mode='smc')
- *   'B' — SMC aggressive (StrategyRunner mode='aggressive')
- *   'M' — Mean-reversion (MeanRevRunner)
- *   'P' — Momentum-breakout (MomentumRunner)
- *
- * Each tick re-classifies the regime via `classifyRegime` (cached 5min) and
- * dispatches via `dispatchTargetFor`:
- *   TRENDING_HIGH → B    TRENDING_LOW → P    RANGE_HIGH → A
- *   RANGE_LOW → M        DEAD → pause (skip every symbol)
+ * Fase 2 instantiates a single runner ('A', mode='smc') so production behavior
+ * is identical to the pre-refactor monolithic loop. Fase 3 will add the second
+ * runner ('B', mode='aggressive') along with the symbol mutex and the global
+ * 100/day cap shared across runners.
  *
  * The old `CoinarbLoop` name is re-exported as an alias so `index.ts`, tests,
  * and any external consumer keep compiling without changes.
  *
- * Per-tick pipeline:
- *   1. ensureHistoricalCandles + roll over each runner's daily tracker
- *   2. manageOpenPositions for every runner (TP/SL hits)
- *   3. classifyRegime + persist to telemetry.payload.regime
- *   4. Circuit-breaker check on dispatched runner; if tripped, log BREAKER
- *   5. evaluateSymbol for each symbol in parallel on the dispatched runner
- *   6. maybeRefreshLiquidity (5min cadence)
- *   7. flushTelemetry: one upsert per runner; mirror to coinarb_agents once
+ * Per-tick pipeline (per runner):
+ *   1. Roll over the daily tracker; record opening capital from the shared pool.
+ *   2. manageOpenPositions — close TP/SL hits for positions this runner owns.
+ *   3. Circuit-breaker check; if tripped, log BREAKER and skip evaluation.
+ *   4. evaluateSymbol for each symbol in parallel (Promise.allSettled).
+ * Then once per tick:
+ *   5. Maybe refresh liquidity map (5min cadence).
+ *   6. flushTelemetry: one upsert per runner; mirror to coinarb_agents once.
  */
 
 import { CoinbaseFeed } from '../feeds/coinbase-ws.js';
@@ -48,9 +41,6 @@ import {
   type Symbol, type Timeframe,
 } from './config.js';
 import { StrategyRunner, type EvaluationContext } from './strategy-runner.js';
-import { MeanRevRunner, MomentumRunner, type RegimeRunner } from './regime-runners.js';
-import { classifyRegime, type Regime, type RegimeResult } from '../analysis/regime-detector.js';
-import { dispatchTargetFor } from './regime-dispatcher.js';
 
 const STARTING_CAPITAL = Number(process.env.COINARB_STARTING_CAPITAL ?? '100');
 
@@ -68,7 +58,7 @@ export class CoinarbCoordinator {
   private readonly phaseManager: PhaseManager;
   private readonly decisions = new DecisionLogger();
   private readonly commandPoller = new CommandPoller();
-  private readonly runners: Map<StrategyId, RegimeRunner>;
+  private readonly runners: Map<StrategyId, StrategyRunner>;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private liquidityRefreshAt = 0;
@@ -77,19 +67,6 @@ export class CoinarbCoordinator {
   private historicalReloading = false;
   private readonly HIST_TTL_MS = 4 * 60 * 60 * 1000;
   private lastSyncedStatus: 'live' | 'paused' | null = null;
-  // Regime cache: classifyRegime is O(N) over baseline candles, no need to
-  // recompute every 15s tick — refresh every 5 min and keep the hint for
-  // hysteresis on the next read.
-  private cachedRegime: RegimeResult | null = null;
-  private regimeCachedAt = 0;
-  private readonly REGIME_CACHE_MS = 5 * 60_000;
-  // Reference symbol for regime classification — BTC sets the tone for the
-  // crypto majors we trade. Per-symbol regimes are a future refinement.
-  private readonly REGIME_SYMBOL: Symbol = 'BTC-USD';
-  // Last classified regime, persisted to telemetry.payload.regime so the
-  // /intelligence/algorithms UI pill (Phase 7) can render it without an
-  // extra round-trip to recompute.
-  private lastRegime: Regime | null = null;
 
   constructor(deps: LoopDeps) {
     this.coinbase = deps.coinbase;
@@ -97,36 +74,13 @@ export class CoinarbCoordinator {
     this.liveOrders = deps.liveOrders ?? null;
     this.paperBroker = new PaperSpotBroker(STARTING_CAPITAL);
     this.phaseManager = new PhaseManager(STARTING_CAPITAL);
-    // Phase 2 — four runners share the capital pool, paper broker, phase
-    // manager and historical candle cache. Each owns a private circuit
-    // breaker and daily tracker. Insertion order (A → B → M → P) is the
-    // deterministic priority order used by the symbol mutex when more than
-    // one runner could fire on the same regime in a future Phase.
+    // Fase 3 — two runners share the capital pool, the paper broker, the
+    // phase manager and the historical candle cache. They each own a private
+    // circuit breaker and daily tracker. Insertion order (A → B) is the
+    // deterministic priority order used by the symbol mutex.
     this.runners = new Map();
     this.runners.set('A', new StrategyRunner({ id: 'A', mode: 'smc' }));
     this.runners.set('B', new StrategyRunner({ id: 'B', mode: 'aggressive' }));
-    this.runners.set('M', new MeanRevRunner());
-    this.runners.set('P', new MomentumRunner());
-  }
-
-  /**
-   * Classify the regime from the 1H candle stream of the reference symbol,
-   * caching the result for `REGIME_CACHE_MS`. Returns null when there isn't
-   * enough warmup data yet.
-   */
-  private getCurrentRegime(now: number): RegimeResult | null {
-    if (this.cachedRegime && now - this.regimeCachedAt < this.REGIME_CACHE_MS) {
-      return this.cachedRegime;
-    }
-    const tfs = this.historicalCandles.get(this.REGIME_SYMBOL);
-    const candles1H = tfs?.get('1H') ?? [];
-    // classifyRegime returns DEAD with confidence=0 when warmup is short;
-    // we cache that too so we don't recompute the same NaN every tick.
-    const previous: Regime | undefined = this.cachedRegime?.regime;
-    const result = classifyRegime(candles1H, undefined, previous);
-    this.cachedRegime = result;
-    this.regimeCachedAt = now;
-    return result;
   }
 
   start(): void {
@@ -274,61 +228,33 @@ export class CoinarbCoordinator {
       fgValue = fg.value;
       const ctx = this.buildEvaluationContext(fgValue);
 
-      // Phase 2 — classify the regime and dispatch to the matching runner.
-      // DEAD pauses entries (we still log the SKIP for analytics + still flush
-      // telemetry in the finally block so dashboards stay fresh).
-      const regimeResult = this.getCurrentRegime(tickStart);
-      const regime: Regime = regimeResult?.regime ?? 'DEAD';
-      const target = dispatchTargetFor(regime);
-      console.log(
-        `[loop] regime=${regime} (conf=${(regimeResult?.confidence ?? 0).toFixed(2)}, ` +
-        `atrNorm=${(regimeResult?.atrNorm ?? 0).toFixed(2)}, adx=${(regimeResult?.adx ?? 0).toFixed(1)}) ` +
-        `→ ${target}`,
-      );
-
-      if (target === 'pause') {
-        for (const symbol of SYMBOLS) {
-          await this.decisions.log({
-            agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: 'A',
-            kind: 'SKIP', symbol, venue: 'spot',
-            reason: `regime=${regime} → pause (no actionable market)`,
-            meta: { regime, reason: regimeResult?.reason },
-          });
+      // Per-runner circuit-breaker + parallel symbol evaluation. Runners are
+      // independent: if A trips, B keeps trading. evaluateSymbol enforces its
+      // own daily caps internally.
+      for (const runner of this.runners.values()) {
+        const circuitDecision = runner.circuitBreaker.canTrade(tickStart);
+        if (!circuitDecision.allow) {
+          await runner.logCircuitTrip(ctx, circuitDecision.reason);
+          continue;
         }
-      } else {
-        const runner = this.runners.get(target);
-        if (!runner) {
-          console.error(`[loop] dispatch target ${target} not found in runners map`);
-        } else {
-          const circuitDecision = runner.circuitBreaker.canTrade(tickStart);
-          if (!circuitDecision.allow) {
-            await runner.logCircuitTrip(ctx, circuitDecision.reason);
-          } else {
-            const evalStart = Date.now();
-            const results = await Promise.allSettled(
-              SYMBOLS.map(symbol => runner.evaluateSymbol(symbol, ctx)),
-            );
-            const evalMs = Date.now() - evalStart;
-            const failed = results
-              .map((r, i) => r.status === 'rejected' ? { symbol: SYMBOLS[i], reason: r.reason } : null)
-              .filter((x): x is { symbol: Symbol; reason: unknown } => x !== null);
-            if (failed.length > 0) {
-              for (const f of failed) {
-                console.error(`[loop ${runner.id}] evaluateSymbol(${f.symbol}) rejected:`, f.reason);
-              }
-            }
-            const trades = runner.dailyTracker.current.data.totalTrades;
-            const counts = runner.dailyTracker.getAllCountsBySymbol();
-            const countsStr = SYMBOLS.map(s => `${s.split('-')[0]}=${counts[s] ?? 0}`).join(' ');
-            console.log(`[loop ${runner.id}] eval ${evalMs}ms | trades=${trades}/100 | ${countsStr} | failed=${failed.length}`);
+        const evalStart = Date.now();
+        const results = await Promise.allSettled(
+          SYMBOLS.map(symbol => runner.evaluateSymbol(symbol, ctx)),
+        );
+        const evalMs = Date.now() - evalStart;
+        const failed = results
+          .map((r, i) => r.status === 'rejected' ? { symbol: SYMBOLS[i], reason: r.reason } : null)
+          .filter((x): x is { symbol: Symbol; reason: unknown } => x !== null);
+        if (failed.length > 0) {
+          for (const f of failed) {
+            console.error(`[loop ${runner.id}] evaluateSymbol(${f.symbol}) rejected:`, f.reason);
           }
         }
+        const trades = runner.dailyTracker.current.data.totalTrades;
+        const counts = runner.dailyTracker.getAllCountsBySymbol();
+        const countsStr = SYMBOLS.map(s => `${s.split('-')[0]}=${counts[s] ?? 0}`).join(' ');
+        console.log(`[loop ${runner.id}] eval ${evalMs}ms | trades=${trades}/100 | ${countsStr} | failed=${failed.length}`);
       }
-
-      // Stash regime on the instance so flushTelemetry can persist it in the
-      // payload without re-classifying. Persisting NULL during warmup keeps
-      // the UI honest about whether the detector has run yet.
-      this.lastRegime = regimeResult?.regime ?? null;
 
       await this.maybeRefreshLiquidity(tickStart);
     } catch (err) {
@@ -429,12 +355,7 @@ export class CoinarbCoordinator {
             trades_by_symbol: tradesBySymbol,
             total_cap: 100,
             per_symbol_cap: 33,
-            regime: this.lastRegime,
           },
-          // Phase 5 column — same value as payload.regime, kept in a dedicated
-          // column too so analytics queries can `WHERE regime = ...` without
-          // jsonb extraction.
-          regime: this.lastRegime,
         }, { onConflict: 'agent_id,strategy_id' });
       }
       // Mirror heartbeat to coinarb_agents (legacy table still consumed by the
