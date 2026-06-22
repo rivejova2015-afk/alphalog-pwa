@@ -77,6 +77,10 @@ docs/reports/*.json
 docs/reports/*.log
 !docs/reports/.gitkeep
 
+# Status PDFs / generated reports (artifacts, delivered to user directly)
+alphalog-status-*.pdf
+*.report.pdf
+
 # Large archives (no upload)
 reference/*.zip
 *.zip
