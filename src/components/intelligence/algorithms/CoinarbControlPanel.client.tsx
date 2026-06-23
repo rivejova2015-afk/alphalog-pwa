@@ -12,6 +12,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import CoinarbMonitoringPanel from "./CoinarbMonitoringPanel.client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -571,7 +572,7 @@ export default function CoinarbControlPanel({
   const pairs = (engine.spot_pairs ?? ["BTC-USD", "ETH-USD", "SOL-USD"]) as string[];
 
   return (
-    <CoinarbSectionInner
+    <CoinarbTabsContainer
       algorithm={algorithm}
       pairs={pairs}
       engine={engine}
@@ -579,6 +580,94 @@ export default function CoinarbControlPanel({
       initialGap={initialGap}
       onSaved={handleSaved}
     />
+  );
+}
+
+// ─── Tabs container (Control vs Monitoring) ──────────────────────────────────
+
+type CoinarbTab = "control" | "monitoring";
+
+function CoinarbTabsContainer({
+  algorithm,
+  pairs,
+  engine,
+  initial,
+  initialGap,
+  onSaved,
+}: {
+  algorithm: AlgorithmRow;
+  pairs: string[];
+  engine: Record<string, unknown>;
+  initial: Record<string, unknown>;
+  initialGap: Record<string, number>;
+  onSaved: () => void;
+}) {
+  const [tab, setTab] = useState<CoinarbTab>("control");
+  return (
+    <div className="space-y-3">
+      <nav
+        className="flex gap-1 border-b border-[#1f2937]"
+        role="tablist"
+        aria-label="Coinarb panel sections"
+      >
+        <TabButton
+          active={tab === "control"}
+          onClick={() => setTab("control")}
+          testId="tab-control"
+        >
+          Control
+        </TabButton>
+        <TabButton
+          active={tab === "monitoring"}
+          onClick={() => setTab("monitoring")}
+          testId="tab-monitoring"
+        >
+          Monitoring
+        </TabButton>
+      </nav>
+
+      {tab === "control" ? (
+        <CoinarbSectionInner
+          algorithm={algorithm}
+          pairs={pairs}
+          engine={engine}
+          initial={initial}
+          initialGap={initialGap}
+          onSaved={onSaved}
+        />
+      ) : (
+        <CoinarbMonitoringPanel algorithmId={algorithm.id} />
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  testId,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  testId?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="tab"
+      aria-selected={active}
+      data-testid={testId}
+      className={`px-3 py-1.5 text-xs font-medium transition border-b-2 -mb-px ${
+        active
+          ? "text-cyan-300 border-cyan-600"
+          : "text-slate-500 border-transparent hover:text-slate-300"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
