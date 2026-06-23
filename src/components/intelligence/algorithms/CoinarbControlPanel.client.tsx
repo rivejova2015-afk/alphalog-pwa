@@ -4,14 +4,17 @@ import { useState, useEffect } from "react";
 import {
   Activity,
   Bitcoin,
+  LayoutDashboard,
   Pause,
   Play,
   RefreshCw,
   Save,
+  SlidersHorizontal,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CoinarbMonitoringPanel } from "./CoinarbMonitoringPanel.client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -511,6 +514,8 @@ function PanelSkeleton() {
 // Pass `algorithmId` (the crypto algo id from /api/algorithms/lite) and an
 // optional `onSaved` callback to react to parameter changes.
 
+type Tab = "control" | "monitoring";
+
 export default function CoinarbControlPanel({
   algorithmId,
   onSaved,
@@ -521,6 +526,10 @@ export default function CoinarbControlPanel({
   const [algorithm, setAlgorithm] = useState<AlgorithmRow | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
+  // Tab persists within this modal session — closing and reopening resets to
+  // Control. Most operators land on Control to act, then flip to Monitoring
+  // to observe; no reason to deep-link a tab.
+  const [tab, setTab] = useState<Tab>("control");
 
   async function fetchAlgorithm() {
     try {
@@ -571,14 +580,79 @@ export default function CoinarbControlPanel({
   const pairs = (engine.spot_pairs ?? ["BTC-USD", "ETH-USD", "SOL-USD"]) as string[];
 
   return (
-    <CoinarbSectionInner
-      algorithm={algorithm}
-      pairs={pairs}
-      engine={engine}
-      initial={initial}
-      initialGap={initialGap}
-      onSaved={handleSaved}
-    />
+    <div className="space-y-4" data-testid="coinarb-control-root">
+      <CoinarbTabNav tab={tab} onChange={setTab} />
+      {tab === "control" ? (
+        <CoinarbSectionInner
+          algorithm={algorithm}
+          pairs={pairs}
+          engine={engine}
+          initial={initial}
+          initialGap={initialGap}
+          onSaved={handleSaved}
+        />
+      ) : (
+        <CoinarbMonitoringPanel algorithmId={algorithm.id} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Local tab nav with 2 sections. Lives inside the Coinarb modal so it
+ * doesn't leak into the parent AlgorithmDetailsModal navigation. ARIA
+ * tablist pattern so screen readers announce both options.
+ */
+function CoinarbTabNav({ tab, onChange }: { tab: Tab; onChange: (next: Tab) => void }) {
+  return (
+    <div className="flex gap-2 border-b border-[#1f2937]" role="tablist" aria-label="Coinarb panel">
+      <TabButton
+        active={tab === "control"}
+        onClick={() => onChange("control")}
+        icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
+        label="Control"
+        testId="tab-control"
+      />
+      <TabButton
+        active={tab === "monitoring"}
+        onClick={() => onChange("monitoring")}
+        icon={<LayoutDashboard className="w-3.5 h-3.5" />}
+        label="Monitoring"
+        testId="tab-monitoring"
+      />
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  testId,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      data-testid={testId}
+      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition border-b-2 -mb-px ${
+        active
+          ? "text-cyan-300 border-cyan-600"
+          : "text-slate-500 border-transparent hover:text-slate-300"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
