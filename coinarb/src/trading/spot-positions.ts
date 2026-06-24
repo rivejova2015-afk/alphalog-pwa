@@ -19,9 +19,10 @@ import { getSupabase } from '../supabase.js';
  * CHECK constraint in migration 131; adding a new strategy here requires a
  * follow-up migration to extend the constraint.
  *
- *   'A' — SMC strict (full 11-gate pipeline, default for RANGE_HIGH regime)
+ *   'A' — SMC strict (full 11-gate pipeline; sin regime mapeado en Phase 2.1
+ *         porque sus gates rechazaban ~100% en RANGE_HIGH sin tendencia)
  *   'B' — SMC aggressive (no liquidity-sweep, no MTF floor, TRENDING_HIGH)
- *   'M' — Mean-reversion (BB + RSI, dispatched for RANGE_LOW regime)
+ *   'M' — Mean-reversion (BB + RSI, dispatched for RANGE_LOW y RANGE_HIGH)
  *   'P' — Momentum-breakout (EMA + ADX + vol, dispatched for TRENDING_LOW)
  */
 export type StrategyId = 'A' | 'B' | 'M' | 'P';

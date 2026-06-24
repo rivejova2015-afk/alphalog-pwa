@@ -5,10 +5,11 @@
  * regime. Lives in its own module so the mapping table is easy to test in
  * isolation without spinning up the WS feeds, broker, or the loop.
  *
- * Mapping (Phase 2):
+ * Mapping (Phase 2.1):
  *   TRENDING_HIGH → 'B' (SMC aggressive — sweep cleanest in directional vol)
  *   TRENDING_LOW  → 'P' (momentum-breakout — clean grind, low chop)
- *   RANGE_HIGH    → 'A' (SMC strict — EQH/EQL well-defined by vol)
+ *   RANGE_HIGH    → 'M' (mean-reversion — BB + RSI; SMC gates rechazan
+ *                        ~100% acá porque sin tendencia no se forma EQH/EQL)
  *   RANGE_LOW     → 'M' (mean-reversion — BB + RSI extremes work here)
  *   DEAD          → 'pause' (no market — skip every symbol)
  */
@@ -21,7 +22,7 @@ export type DispatchTarget = StrategyId | 'pause';
 export const REGIME_TO_STRATEGY: Record<Regime, DispatchTarget> = {
   TRENDING_HIGH: 'B',
   TRENDING_LOW: 'P',
-  RANGE_HIGH: 'A',
+  RANGE_HIGH: 'M',
   RANGE_LOW: 'M',
   DEAD: 'pause',
 };

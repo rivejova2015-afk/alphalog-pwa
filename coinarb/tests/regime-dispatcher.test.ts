@@ -22,8 +22,8 @@ describe('REGIME_TO_STRATEGY mapping', () => {
     expect(REGIME_TO_STRATEGY.TRENDING_LOW).toBe('P');
   });
 
-  it('routes RANGE_HIGH → A (SMC strict)', () => {
-    expect(REGIME_TO_STRATEGY.RANGE_HIGH).toBe('A');
+  it('routes RANGE_HIGH → M (mean-reversion; SMC gates rechazan en rango sin tendencia)', () => {
+    expect(REGIME_TO_STRATEGY.RANGE_HIGH).toBe('M');
   });
 
   it('routes RANGE_LOW → M (mean-reversion)', () => {
@@ -48,7 +48,7 @@ describe('strategiesForRegime', () => {
   it('returns the single dispatched strategy for active regimes', () => {
     expect(strategiesForRegime('TRENDING_HIGH')).toEqual(['B']);
     expect(strategiesForRegime('TRENDING_LOW')).toEqual(['P']);
-    expect(strategiesForRegime('RANGE_HIGH')).toEqual(['A']);
+    expect(strategiesForRegime('RANGE_HIGH')).toEqual(['M']);
     expect(strategiesForRegime('RANGE_LOW')).toEqual(['M']);
   });
 
