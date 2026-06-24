@@ -31,6 +31,9 @@ public/worker-*.js
 # Sentry
 .sentryclirc
 
+# Claude Code runtime state (session-specific, never commit)
+.claude/scheduled_tasks.lock
+
 # production
 /build
 
