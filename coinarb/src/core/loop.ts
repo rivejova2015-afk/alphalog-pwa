@@ -48,7 +48,7 @@ import {
   type Symbol, type Timeframe,
 } from './config.js';
 import { StrategyRunner, type EvaluationContext } from './strategy-runner.js';
-import { MeanRevRunner, MomentumRunner, type RegimeRunner } from './regime-runners.js';
+import { MeanRevRunner, MomentumRunner, DdRunner, type RegimeRunner } from './regime-runners.js';
 import { classifyRegime, type Regime, type RegimeResult } from '../analysis/regime-detector.js';
 import { dispatchTargetFor } from './regime-dispatcher.js';
 
@@ -107,6 +107,11 @@ export class CoinarbCoordinator {
     this.runners.set('B', new StrategyRunner({ id: 'B', mode: 'aggressive' }));
     this.runners.set('M', new MeanRevRunner());
     this.runners.set('P', new MomentumRunner());
+    // Strategy DD — Daily Direction Scalper (spec del owner). Mapeada a
+    // todos los regímenes operables en regime-dispatcher.ts, así que es la
+    // única que efectivamente recibe dispatch hoy. Las A/B/M/P quedan
+    // instanciadas por si se necesita revertir el mapping o hacer fan-out.
+    this.runners.set('DD', new DdRunner());
   }
 
   /**

@@ -18,7 +18,7 @@ export type DecisionKind = 'ENTER' | 'SCALP' | 'SKIP' | 'EXIT' | 'BREAKER' | 'CA
  *   'A' — SMC strict          'B' — SMC aggressive
  *   'M' — Mean-reversion      'P' — Momentum-breakout
  */
-export type StrategyId = 'A' | 'B' | 'M' | 'P';
+export type StrategyId = 'A' | 'B' | 'M' | 'P' | 'DD';
 
 export interface DecisionRow {
   agentId: string;
