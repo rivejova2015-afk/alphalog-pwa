@@ -5,13 +5,17 @@
  * regime. Lives in its own module so the mapping table is easy to test in
  * isolation without spinning up the WS feeds, broker, or the loop.
  *
- * Mapping (Phase 2.1):
- *   TRENDING_HIGH → 'B' (SMC aggressive — sweep cleanest in directional vol)
- *   TRENDING_LOW  → 'P' (momentum-breakout — clean grind, low chop)
- *   RANGE_HIGH    → 'M' (mean-reversion — BB + RSI; SMC gates rechazan
- *                        ~100% acá porque sin tendencia no se forma EQH/EQL)
- *   RANGE_LOW     → 'M' (mean-reversion — BB + RSI extremes work here)
+ * Mapping (Phase 2.2 — Strategy DD activado en todos los regímenes
+ * operables por spec del owner; ~100 ops/día target con risk real 4%):
+ *   TRENDING_HIGH → 'DD' (Daily Direction Scalper)
+ *   TRENDING_LOW  → 'DD'
+ *   RANGE_HIGH    → 'DD'
+ *   RANGE_LOW     → 'DD'
  *   DEAD          → 'pause' (no market — skip every symbol)
+ *
+ * Las strategies A/B/M/P quedan instanciadas en el coordinator (loop.ts) por
+ * si futuras iteraciones requieren revertir el mapping o agregar fan-out
+ * multi-strategy.
  */
 
 import type { Regime } from '../analysis/regime-detector.js';
@@ -20,10 +24,10 @@ import type { StrategyId } from '../trading/spot-positions.js';
 export type DispatchTarget = StrategyId | 'pause';
 
 export const REGIME_TO_STRATEGY: Record<Regime, DispatchTarget> = {
-  TRENDING_HIGH: 'B',
-  TRENDING_LOW: 'P',
-  RANGE_HIGH: 'M',
-  RANGE_LOW: 'M',
+  TRENDING_HIGH: 'DD',
+  TRENDING_LOW: 'DD',
+  RANGE_HIGH: 'DD',
+  RANGE_LOW: 'DD',
   DEAD: 'pause',
 };
 

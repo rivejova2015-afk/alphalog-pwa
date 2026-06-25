@@ -15,17 +15,20 @@ import { getSupabase } from '../supabase.js';
 
 /**
  * Strategy id stamped on every position/trade/decision row this code path
- * writes. The 4 values are also the only allowed values for the column-level
- * CHECK constraint in migration 131; adding a new strategy here requires a
- * follow-up migration to extend the constraint.
+ * writes. La columna `strategy_id` en migration 131 es `text not null
+ * default 'A'` sin CHECK constraint, así que agregar nuevos valores no
+ * requiere migración salvo para `bot_commands.target_strategy` que sí
+ * tiene CHECK (extendido en migration 132+).
  *
- *   'A' — SMC strict (full 11-gate pipeline; sin regime mapeado en Phase 2.1
- *         porque sus gates rechazaban ~100% en RANGE_HIGH sin tendencia)
- *   'B' — SMC aggressive (no liquidity-sweep, no MTF floor, TRENDING_HIGH)
- *   'M' — Mean-reversion (BB + RSI, dispatched for RANGE_LOW y RANGE_HIGH)
- *   'P' — Momentum-breakout (EMA + ADX + vol, dispatched for TRENDING_LOW)
+ *   'A'  — SMC strict (full 11-gate pipeline)
+ *   'B'  — SMC aggressive (no liquidity-sweep, no MTF floor)
+ *   'M'  — Mean-reversion (BB + RSI)
+ *   'P'  — Momentum-breakout (EMA + ADX + vol)
+ *   'DD' — Daily Direction Scalper (EMA20 1m pullback + rejection candle,
+ *          R:R 1.0, risk real 4% por trade, dispatched en todos los
+ *          regímenes excepto DEAD)
  */
-export type StrategyId = 'A' | 'B' | 'M' | 'P';
+export type StrategyId = 'A' | 'B' | 'M' | 'P' | 'DD';
 
 export interface OpenPositionInput {
   symbol: Symbol;
