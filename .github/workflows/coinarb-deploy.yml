@@ -76,7 +76,11 @@ jobs:
 
       - name: Deploy to Fly
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Separate secret from FLY_API_TOKEN (which is scoped to alphalog-pwa
+          # only). Create with:
+          #   fly tokens create deploy --app coinarb-50x --expiry 8760h
+          # then set as `FLY_API_TOKEN_COINARB` in repo secrets.
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_COINARB }}
         run: |
           flyctl deploy \
             --app coinarb-50x \
