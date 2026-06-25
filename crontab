@@ -85,3 +85,12 @@
 # redundantes conservando mejor-por-lección + ≥1 por día con actividad (maestría/XP
 # y racha quedan idénticas). Semanal (domingo 03:30 UTC), el crecimiento es lento.
 30   3    *  *  0   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/quiz-dedup
+
+# Coinarb auto-deploy — reemplaza al workflow de GitHub Actions. Cada 5 min:
+# fetch origin/main, diff coinarb/, si hay commits nuevos hace
+# `flyctl deploy --app coinarb-50x`. Token vive como Fly secret
+# FLY_API_TOKEN_COINARB en alphalog-cron.
+# Setup inicial UNA vez por owner desde laptop:
+#   fly tokens create deploy --app coinarb-50x --expiry 8760h
+#   flyctl secrets set FLY_API_TOKEN_COINARB="FlyV1 fm2_..." --app alphalog-cron
+*/5  *    *  *  *   /app/scripts/cron-coinarb-deploy.sh

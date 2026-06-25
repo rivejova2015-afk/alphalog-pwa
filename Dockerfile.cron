@@ -14,16 +14,25 @@ FROM debian:bookworm-slim
 # checksum together. The checksum below is OMITTED (verify yourself with
 # `curl -L .../supercronic-linux-amd64 | sha256sum` and pin if desired).
 ENV SUPERCRONIC_VERSION=v0.2.33
+ENV FLYCTL_VERSION=0.3.193
 
+# git → para que el deploy daemon clone/fetch el repo
+# flyctl → para que pueda correr `flyctl deploy --app coinarb-50x` sin GitHub Actions
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates tzdata \
+    && apt-get install -y --no-install-recommends curl ca-certificates tzdata git \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL -o /usr/local/bin/supercronic \
         "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
-    && chmod +x /usr/local/bin/supercronic
+    && chmod +x /usr/local/bin/supercronic \
+    && curl -fsSL "https://github.com/superfly/flyctl/releases/download/v${FLYCTL_VERSION}/flyctl_${FLYCTL_VERSION}_Linux_x86_64.tar.gz" \
+       | tar -xz -C /usr/local/bin flyctl \
+    && chmod +x /usr/local/bin/flyctl \
+    && /usr/local/bin/flyctl version
 
 WORKDIR /app
 COPY crontab /app/crontab
+COPY scripts/cron-coinarb-deploy.sh /app/scripts/cron-coinarb-deploy.sh
+RUN chmod +x /app/scripts/cron-coinarb-deploy.sh
 
 # UTC matches Vercel's cron behaviour, so we don't have to re-translate the
 # existing schedule expressions copied from vercel.json.
