@@ -62,10 +62,17 @@ export interface DdConfig {
   atrPeriod: number;
   /** ATR/price mínimo para considerar que hay vol suficiente. */
   minAtrPct: number;
-  /** Multiplicador de ATR para SL distance (= TP distance con R:R 1.0). */
+  /** Multiplicador de ATR para SL distance. */
   slAtrMult: number;
-  /** R:R floor — DD usa 1.0 por defecto. */
-  rrFloor: number;
+  /** Ratio R:R objetivo — TP distance = SL distance × rrTarget. */
+  rrTarget: number;
+  /**
+   * TP mínimo (% del precio) para que la operación sea viable después de
+   * comisiones. Coinbase spot cobra 0.6%/lado = 1.2% ida-vuelta; con TP por
+   * debajo de ~1.2% cada "ganador" pierde por fees. Ponemos 1.8% (1.5× el
+   * fee round-trip) para que el neto tras comisiones sea ≥ ~0.6%.
+   */
+  minTpPct: number;
 }
 
 export const DEFAULT_DD_CONFIG: DdConfig = {
@@ -73,8 +80,12 @@ export const DEFAULT_DD_CONFIG: DdConfig = {
   emaPeriod: 20,
   atrPeriod: 14,
   minAtrPct: 0.0005,
-  slAtrMult: 0.4,
-  rrFloor: 1.0,
+  // SL = 1× ATR (más ancho que el 0.4 original) y TP = 3× SL. Con R:R 3.0
+  // el win rate de breakeven tras fees ~1.2% cae a ~55% (alcanzable), vs el
+  // 90% imposible que exigía R:R 1.0 con targets chicos.
+  slAtrMult: 1.0,
+  rrTarget: 3.0,
+  minTpPct: 0.018,
 };
 
 /**
@@ -247,7 +258,25 @@ export function detectDdSignal(
   }
 
   const slDistance = cfg.slAtrMult * atrValue;
-  const tpDistance = cfg.slAtrMult * atrValue; // R:R = 1.0
+  const tpDistance = slDistance * cfg.rrTarget; // TP = rrTarget × SL
+
+  // Gate fee-aware: si el TP no supera el piso mínimo (para cubrir la
+  // comisión 1.2% ida-vuelta de Coinbase spot), skip. Sin esto, cada TP
+  // "ganador" pierde plata por fees. Reduce la frecuencia a solo setups
+  // con volatilidad suficiente para que valga la pena operar.
+  const tpPct = tpDistance / lastClose;
+  if (tpPct < cfg.minTpPct) {
+    return {
+      side: null,
+      entryPrice: lastClose,
+      tp: 0, sl: 0, rr: 0,
+      direction,
+      reason:
+        `TP ${(tpPct * 100).toFixed(3)}% below fee-viable floor ` +
+        `(${(cfg.minTpPct * 100).toFixed(2)}%) — atr too small to clear fees`,
+      meta,
+    };
+  }
 
   if (direction === 'BUY') {
     // BUY pullback: precio bajó a o por debajo de la EMA20 (zona de retest).

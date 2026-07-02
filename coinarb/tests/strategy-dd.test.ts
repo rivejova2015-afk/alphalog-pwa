@@ -245,13 +245,12 @@ describe('detectDdSignal', () => {
     expect(['BUY', 'SELL']).not.toContain(sig.side);
   });
 
-  it('emits a BUY signal when all gates pass + TP/SL respect R:R=1.0', () => {
+  it('emits a BUY signal when all gates pass + TP/SL respect R:R=3.0', () => {
     const cs = buildBuyScenario();
-    const sig = detectDdSignal(cs, NOW);
-    // Si fallaron condiciones internas del helper, log para debug
+    // minTpPct: 0 para no bloquear por el gate fee-aware en un fixture de
+    // baja volatilidad — acá probamos la mecánica de emisión + R:R, no el gate.
+    const sig = detectDdSignal(cs, NOW, { ...DEFAULT_DD_CONFIG, minTpPct: 0 });
     if (sig.side !== 'BUY') {
-      // El helper puede no producir un setup perfecto en todos los runs;
-      // este test verifica al menos que no rechazó por warmup/dailyOpen.
       expect(sig.reason).not.toMatch(/warming up|daily_open not yet/);
       return;
     }
@@ -259,13 +258,26 @@ describe('detectDdSignal', () => {
     expect(sig.direction).toBe('BUY');
     expect(sig.tp).toBeGreaterThan(sig.entryPrice);
     expect(sig.sl).toBeLessThan(sig.entryPrice);
-    // R:R = 1.0 exact por construcción del detector (slDistance == tpDistance)
-    expect(sig.rr).toBeCloseTo(1.0, 5);
-    // TP distance == SL distance
-    expect(sig.tp - sig.entryPrice).toBeCloseTo(sig.entryPrice - sig.sl, 5);
+    // R:R = 3.0: TP distance = 3× SL distance
+    expect(sig.rr).toBeCloseTo(3.0, 5);
+    expect(sig.tp - sig.entryPrice).toBeCloseTo((sig.entryPrice - sig.sl) * 3, 5);
   });
 
-  it('SELL is mirror of BUY: TP below entry, SL above, R:R=1.0', () => {
+  it('blocks a signal whose TP is below the fee-viable floor (minTpPct)', () => {
+    const cs = buildBuyScenario();
+    // Con minTpPct alto (5%) el fixture de baja vol NO puede cubrir fees → SKIP.
+    const sig = detectDdSignal(cs, NOW, { ...DEFAULT_DD_CONFIG, minTpPct: 0.05 });
+    // O bien lo bloquea el gate fee-viable, o gates previos (pullback/rejection).
+    // Lo que NO puede pasar es emitir un side con TP por debajo del floor.
+    if (sig.side !== null) {
+      const tpPct = Math.abs(sig.tp - sig.entryPrice) / sig.entryPrice;
+      expect(tpPct).toBeGreaterThanOrEqual(0.05);
+    } else {
+      expect(sig.side).toBeNull();
+    }
+  });
+
+  it('SELL is mirror of BUY: TP below entry, SL above, R:R=3.0', () => {
     const startTs = TODAY_UTC_00 - 30 * 60_000;
     const pre = genCandles({ count: 30, startTs, startPrice: 101, step: -0.03, range: 0.4 });
     // dailyOpen plantado a 100, precio cae a ~99.5 → direction=SELL
@@ -298,10 +310,8 @@ describe('detectDdSignal', () => {
       lastClose,
       TODAY_UTC_00 + 29 * 60_000,
     ));
-    const sig = detectDdSignal(pre.concat(today), NOW);
+    const sig = detectDdSignal(pre.concat(today), NOW, { ...DEFAULT_DD_CONFIG, minTpPct: 0 });
     if (sig.side !== 'SELL') {
-      // El helper puede no producir un setup perfecto; verificamos que al
-      // menos no rechazó por warmup/dailyOpen.
       expect(sig.reason).not.toMatch(/warming up|daily_open not yet/);
       return;
     }
@@ -309,15 +319,16 @@ describe('detectDdSignal', () => {
     expect(sig.direction).toBe('SELL');
     expect(sig.tp).toBeLessThan(sig.entryPrice);
     expect(sig.sl).toBeGreaterThan(sig.entryPrice);
-    expect(sig.rr).toBeCloseTo(1.0, 5);
+    expect(sig.rr).toBeCloseTo(3.0, 5);
   });
 
-  it('respects DEFAULT_DD_CONFIG values', () => {
+  it('respects DEFAULT_DD_CONFIG values (fee-aware)', () => {
     expect(DEFAULT_DD_CONFIG.directionThreshold).toBe(0.0005);
     expect(DEFAULT_DD_CONFIG.emaPeriod).toBe(20);
     expect(DEFAULT_DD_CONFIG.atrPeriod).toBe(14);
-    expect(DEFAULT_DD_CONFIG.slAtrMult).toBe(0.4);
-    expect(DEFAULT_DD_CONFIG.rrFloor).toBe(1.0);
+    expect(DEFAULT_DD_CONFIG.slAtrMult).toBe(1.0);
+    expect(DEFAULT_DD_CONFIG.rrTarget).toBe(3.0);
+    expect(DEFAULT_DD_CONFIG.minTpPct).toBe(0.018);
     expect(DEFAULT_DD_CONFIG.minAtrPct).toBe(0.0005);
   });
 });
