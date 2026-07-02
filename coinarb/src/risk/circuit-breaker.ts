@@ -2,7 +2,9 @@
  * Circuit breaker: pauses trading after a streak of losses, hard-stops at the
  * daily trade cap.
  *
- *   - 6 consecutive losses → 3h pause (loss streak resets on any win)
+ *   - 6 consecutive losses → pause (loss streak resets on any win)
+ *     · pauseMode 'duration' (default): 3h pause
+ *     · pauseMode 'until-utc-midnight': pausa hasta el próximo UTC 00:00
  *   - 100 trades in a UTC day → hard stop until next UTC day
  *
  * State lives in-memory (loop singleton); on restart we hydrate from
@@ -15,11 +17,25 @@ export type CircuitDecision =
   | { allow: true }
   | { allow: false; reason: 'loss-streak' | 'daily-cap'; pausedUntil?: number };
 
+export type PauseMode = 'duration' | 'until-utc-midnight';
+
+/** Próximo UTC 00:00 estrictamente después de `now`. */
+export function nextUtcMidnight(now: number): number {
+  const d = new Date(now);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime() + 86_400_000;
+}
+
 export class CircuitBreaker {
   private consecutiveLosses = 0;
   private dailyTrades = 0;
   private dailyDayUtc: string = todayUtc();
   private pausedUntil: number | null = null;
+  private readonly pauseMode: PauseMode;
+
+  constructor(opts: { pauseMode?: PauseMode } = {}) {
+    this.pauseMode = opts.pauseMode ?? 'duration';
+  }
 
   hydrate(state: { consecutiveLosses?: number; dailyTrades?: number; pausedUntil?: number | null; dayUtc?: string }): void {
     this.consecutiveLosses = state.consecutiveLosses ?? 0;
@@ -70,9 +86,11 @@ export class CircuitBreaker {
     }
     this.consecutiveLosses += 1;
     if (this.consecutiveLosses >= CIRCUIT_LOSS_LIMIT) {
-      this.pausedUntil = now + CIRCUIT_PAUSE_MS;
+      this.pausedUntil = this.pauseMode === 'until-utc-midnight'
+        ? nextUtcMidnight(now)
+        : now + CIRCUIT_PAUSE_MS;
       console.warn(
-        `[circuit-breaker] ${CIRCUIT_LOSS_LIMIT} consecutive losses — paused until ${new Date(this.pausedUntil).toISOString()}`,
+        `[circuit-breaker] ${CIRCUIT_LOSS_LIMIT} consecutive losses — paused until ${new Date(this.pausedUntil).toISOString()} (mode=${this.pauseMode})`,
       );
     }
   }

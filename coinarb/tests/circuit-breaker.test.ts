@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { CircuitBreaker } from "../src/risk/circuit-breaker.js";
+import { CircuitBreaker, nextUtcMidnight } from "../src/risk/circuit-breaker.js";
 
 describe("CircuitBreaker", () => {
   let cb: CircuitBreaker;
@@ -112,6 +112,36 @@ describe("CircuitBreaker", () => {
       expect(snap.consecutiveLosses).toBe(0);
       expect(snap.dailyTrades).toBe(0);
       expect(snap.pausedUntil).toBeNull();
+    });
+  });
+
+  describe("pauseMode 'until-utc-midnight' (usado por DD)", () => {
+    const NOON = Date.UTC(2026, 5, 26, 12, 0, 0);
+    const NEXT_MIDNIGHT = Date.UTC(2026, 5, 27, 0, 0, 0);
+
+    it("nextUtcMidnight devuelve el próximo UTC 00:00", () => {
+      expect(nextUtcMidnight(NOON)).toBe(NEXT_MIDNIGHT);
+      const late = Date.UTC(2026, 5, 26, 23, 59, 59, 999);
+      expect(nextUtcMidnight(late)).toBe(NEXT_MIDNIGHT);
+    });
+
+    it("pausa hasta el próximo UTC 00:00 tras 6 losses (no 3h)", () => {
+      const dd = new CircuitBreaker({ pauseMode: "until-utc-midnight" });
+      for (let i = 0; i < 6; i++) dd.recordClose(-10, NOON);
+      expect(dd.snapshot.pausedUntil).toBe(NEXT_MIDNIGHT);
+    });
+
+    it("default sigue siendo 'duration' (3h) sin opts", () => {
+      const base = new CircuitBreaker();
+      for (let i = 0; i < 6; i++) base.recordClose(-10, NOON);
+      expect(base.snapshot.pausedUntil).toBe(NOON + 3 * 60 * 60 * 1000);
+    });
+
+    it("bloquea durante la pausa y reanuda pasada la medianoche", () => {
+      const dd = new CircuitBreaker({ pauseMode: "until-utc-midnight" });
+      for (let i = 0; i < 6; i++) dd.recordClose(-10, NOON);
+      expect(dd.canTrade(NOON + 1000).allow).toBe(false);
+      expect(dd.canTrade(NEXT_MIDNIGHT + 1000).allow).toBe(true);
     });
   });
 });

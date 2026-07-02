@@ -22,7 +22,7 @@
  * base class.
  */
 
-import { CircuitBreaker } from '../risk/circuit-breaker.js';
+import { CircuitBreaker, type PauseMode } from '../risk/circuit-breaker.js';
 import { DailyTracker } from '../risk/daily-tracker.js';
 import { computeRiskUsd } from '../risk/phase-manager.js';
 import {
@@ -39,7 +39,6 @@ import {
   detectDdSignal,
   getDailyDirection,
   getDailyOpenFromCandles,
-  utcDayStart,
   type DdDirection,
 } from '../strategies/dd-daily-scalper.js';
 import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-alphalog.js';
@@ -74,22 +73,14 @@ export interface RegimeRunner {
  */
 abstract class BaseRegimeRunner implements RegimeRunner {
   abstract readonly id: StrategyId;
-  readonly circuitBreaker = new CircuitBreaker();
+  readonly circuitBreaker: CircuitBreaker;
   readonly dailyTracker = new DailyTracker();
 
-  abstract evaluateSymbol(symbol: Symbol, ctx: EvaluationContext): Promise<void>;
-
-  /**
-   * Hook llamado después de cada cierre exitoso (TP o SL). Por default es
-   * un no-op; runners que necesitan state extra al cierre (ej: DD trackea
-   * consecutive losses para su killswitch diario) la overridean.
-   */
-  protected async onTradeClose(
-    _ctx: EvaluationContext,
-    _info: { symbol: Symbol; pnlUsd: number; exitReason: 'TP' | 'SL' },
-  ): Promise<void> {
-    // default no-op
+  constructor(pauseMode: PauseMode = 'duration') {
+    this.circuitBreaker = new CircuitBreaker({ pauseMode });
   }
+
+  abstract evaluateSymbol(symbol: Symbol, ctx: EvaluationContext): Promise<void>;
 
   async manageOpenPositions(ctx: EvaluationContext): Promise<void> {
     let openPositions;
@@ -153,16 +144,8 @@ abstract class BaseRegimeRunner implements RegimeRunner {
             reason: exitReason, paper: PAPER_MODE,
           }),
         });
-
-        try {
-          await this.onTradeClose(ctx, {
-            symbol: pos.symbol as Symbol,
-            pnlUsd,
-            exitReason,
-          });
-        } catch (hookErr) {
-          console.error(`[regime-runner ${this.id}] onTradeClose hook threw:`, hookErr);
-        }
+        // El circuit breaker (recordClose arriba) ya trackea la racha de
+        // pérdidas y pausa al llegar al límite. No hace falta hook extra.
       } catch (err) {
         console.error(`[regime-runner ${this.id}] closePosition ${pos.id} failed:`, err);
       }
@@ -170,19 +153,24 @@ abstract class BaseRegimeRunner implements RegimeRunner {
   }
 
   async logCircuitTrip(ctx: EvaluationContext, reason: 'loss-streak' | 'daily-cap'): Promise<void> {
+    // De-spam: el coordinator llama esto cada tick (15s) mientras el breaker
+    // está pausado. Antes esto escribía una fila BREAKER por tick → ~720
+    // filas basura por pausa. Ahora logueamos (decision + notify) UNA sola
+    // vez por pausa, guardado por el flag circuitTriggered (se resetea en el
+    // rollover diario del dailyTracker).
+    if (this.dailyTracker.current.data.circuitTriggered) return;
+    this.dailyTracker.markCircuitTriggered();
+
     await ctx.decisions.log({
       agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
       kind: 'BREAKER', venue: 'spot',
       reason: `circuit:${reason}`,
       meta: this.circuitBreaker.snapshot,
     });
-    if (!this.dailyTracker.current.data.circuitTriggered) {
-      this.dailyTracker.markCircuitTriggered();
-      notify({
-        userId: COINARB_USER_ID,
-        ...formatBreaker({ kind: reason, message: `Trading paused (${reason}) — strategy ${this.id}`, paper: PAPER_MODE }),
-      });
-    }
+    notify({
+      userId: COINARB_USER_ID,
+      ...formatBreaker({ kind: reason, message: `Trading paused (${reason}) — strategy ${this.id}`, paper: PAPER_MODE }),
+    });
   }
 
   /**
@@ -443,44 +431,27 @@ export class MomentumRunner extends BaseRegimeRunner {
 export class DdRunner extends BaseRegimeRunner {
   readonly id: StrategyId = 'DD';
 
-  // Constants spec del owner (no van a config.ts porque DD se opera entera
-  // como block; ajustes runtime futuros podrían exponerlas a parameters).
+  // El killswitch de DD (6 SL consecutivos → pausa hasta UTC 00:00) vive en
+  // el circuit breaker base, construido en modo 'until-utc-midnight'. El
+  // coordinator lo chequea vía circuitBreaker.canTrade() antes de llamar
+  // evaluateSymbol, así que DD no necesita un segundo killswitch propio.
+  constructor() {
+    super('until-utc-midnight');
+  }
+
+  // Constants spec del owner.
   private static readonly RISK_PCT = 0.04;                  // 4% por trade
   private static readonly POST_TRADE_COOLDOWN_MS = 3 * 60_000;
   private static readonly FLIP_COOLDOWN_MS = 10 * 60_000;
-  private static readonly MAX_CONSECUTIVE_LOSSES = 6;
 
   private readonly lastDirection = new Map<Symbol, DdDirection>();
   private readonly flipCooldownUntil = new Map<Symbol, number>();
   private readonly postTradeCooldownUntil = new Map<Symbol, number>();
-  private consecutiveLossesToday = 0;
-  private dayKillswitchUntil: number | null = null;
-  private currentUtcDay = utcDayStart(Date.now());
-
-  private rolloverIfNewDay(now: number): void {
-    const day = utcDayStart(now);
-    if (day !== this.currentUtcDay) {
-      this.currentUtcDay = day;
-      this.consecutiveLossesToday = 0;
-      this.dayKillswitchUntil = null;
-    }
-  }
 
   async evaluateSymbol(symbol: Symbol, ctx: EvaluationContext): Promise<void> {
     if (!(await this.passesGates(symbol, ctx))) return;
 
     const now = Date.now();
-    this.rolloverIfNewDay(now);
-
-    // Killswitch del día (6 SLs consecutivos)
-    if (this.dayKillswitchUntil !== null && now < this.dayKillswitchUntil) {
-      await ctx.decisions.log({
-        agentId: COINARB_AGENT_ID, userId: COINARB_USER_ID, strategyId: this.id,
-        kind: 'SKIP', symbol, venue: 'spot',
-        reason: `dd killswitch active (${DdRunner.MAX_CONSECUTIVE_LOSSES} SL consecutivos) hasta ${new Date(this.dayKillswitchUntil).toISOString()}`,
-      });
-      return;
-    }
 
     // Cooldowns
     const flipUntil = this.flipCooldownUntil.get(symbol) ?? 0;
@@ -558,7 +529,13 @@ export class DdRunner extends BaseRegimeRunner {
       return;
     }
     const riskUsd = equity * DdRunner.RISK_PCT;
-    const sizeUsd = riskUsd / slDistancePct;
+    // Cap a 1× equity: Coinbase spot no da margin, la posición no puede
+    // superar el capital disponible. Sin este cap, riskUsd/slDistancePct con
+    // SL chico (~0.2%) daba posiciones de 44× el capital → una pérdida
+    // slippeada borraba 1/3 de la cuenta. El cap acota el daño real por SL
+    // al slDistancePct del equity.
+    const rawSizeUsd = riskUsd / slDistancePct;
+    const sizeUsd = Math.min(rawSizeUsd, equity);
 
     const opened = await this.openRegimePosition(
       symbol, signal.side, signal.entryPrice, signal.tp, signal.sl, ctx,
@@ -638,31 +615,6 @@ export class DdRunner extends BaseRegimeRunner {
       } catch (err) {
         console.error(`[regime-runner ${this.id}] flip-close ${pos.id} failed:`, err);
       }
-    }
-  }
-
-  /**
-   * Hook llamado por BaseRegimeRunner.manageOpenPositions tras cada cierre
-   * de TP o SL. DD trackea consecutive losses para el killswitch diario.
-   */
-  protected async onTradeClose(
-    _ctx: EvaluationContext,
-    info: { symbol: Symbol; pnlUsd: number; exitReason: 'TP' | 'SL' },
-  ): Promise<void> {
-    if (info.exitReason === 'TP') {
-      this.consecutiveLossesToday = 0;
-      return;
-    }
-    // SL: incrementar streak; si llega al cap, pausar hasta UTC 00:00 del
-    // día siguiente.
-    this.consecutiveLossesToday += 1;
-    if (this.consecutiveLossesToday >= DdRunner.MAX_CONSECUTIVE_LOSSES) {
-      const nextDay = utcDayStart(Date.now()) + 86_400_000;
-      this.dayKillswitchUntil = nextDay;
-      console.log(
-        `[regime-runner ${this.id}] killswitch armed: ${this.consecutiveLossesToday} SLs ` +
-        `consecutivos → pausa hasta ${new Date(nextDay).toISOString()}`,
-      );
     }
   }
 }
