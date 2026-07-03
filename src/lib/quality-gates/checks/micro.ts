@@ -44,6 +44,12 @@ export const costsIncluded: CheckFn = (ctx: CheckContext) => {
 
 export const latencyP99: CheckFn = (ctx: CheckContext) => {
   const key = 'latency_p99';
+  if (!ctx.telemetry.latency_applicable) {
+    return {
+      gate_key: key, passed: true, applicable: false, value_observed: null,
+      reason: 'No aplica — mercado sin telemetría de latencia de ejecución wireada aún',
+    };
+  }
   const v = ctx.telemetry.execution_latency_p99_ms;
   if (v === null) return fail(key, 'Sin telemetría de ejecución (correr el bot primero)');
   return { gate_key: key, passed: v <= 250, value_observed: v, reason: v <= 250 ? null : `p99=${v}ms > 250ms` };

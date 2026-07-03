@@ -63,6 +63,35 @@ export async function POST(request: NextRequest) {
     logError("BotSLOAlert", { component: "ops.bot-slo-alert", message: error instanceof Error ? error.message : String(error) });
   }
 
+  // S1/S2 alerts are serious enough that Sentry alone risks going unseen —
+  // push a notification too. Best-effort: a push failure must never fail
+  // the alert ingestion itself.
+  if (severity === "S1" || severity === "S2") {
+    try {
+      const ownerId = process.env.BOT_OPS_USER_ID;
+      if (ownerId) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://alphalog.io";
+        await fetch(`${appUrl}/api/push/notify-user`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.INTERNAL_API_SECRET}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: ownerId,
+            title: `Bot SLO ${severity}: ${status}`,
+            body: `Monitor de bot reportó ${status}/${severity}${payload.generatedAt ? ` @ ${payload.generatedAt}` : ""}`,
+            tag: `bot-slo-${severity}`,
+          }),
+        });
+      } else {
+        logError("BotSLOAlert", { component: "ops.bot-slo-alert.push", message: "BOT_OPS_USER_ID not configured — push skipped" });
+      }
+    } catch (error) {
+      logError("BotSLOAlert", { component: "ops.bot-slo-alert.push", message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   if (process.env.NODE_ENV !== "production") {
     logInfo("BotSloAlert", "ingested", { component: "ops.bot-slo-alert.context", context: context as unknown as Record<string, unknown> });
   }

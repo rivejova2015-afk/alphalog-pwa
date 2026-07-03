@@ -136,13 +136,13 @@ describe("/api/algorithms/[id]/promote-to-live — handler", () => {
     expect(body.score.must_failed).toBe(2);
   });
 
-  it("returns 403 when gates_passed < 20 even if must_failed == 0", async () => {
+  it("returns 403 when gates_passed < gates_total even if must_failed == 0", async () => {
     setupAuth();
     fromMock.mockReturnValue(makeAwaitableChain({
       data: { id: "algo-1", name: "x", status: "approved" }, error: null,
     }));
     computeGatesMock.mockResolvedValue({
-      score:   { gates_passed: 19, must_failed: 0, tier: "tier-1" },
+      score:   { gates_passed: 19, gates_total: 20, must_failed: 0, tier: "tier-1" },
       results: [{ gate_key: "should_diversity", passed: false, reason: "single instrument" }],
     });
     const res = await POST(makeRequest(), CTX);

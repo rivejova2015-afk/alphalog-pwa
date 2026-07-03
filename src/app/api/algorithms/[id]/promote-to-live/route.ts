@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     // Recompute fresh para evitar evaluar contra estado viejo
     const { score, results } = await computeGates(supabase, id, user.id);
 
-    if (score.must_failed > 0 || score.gates_passed < 20) {
+    if (score.must_failed > 0 || score.gates_passed < score.gates_total) {
       const failed = results.filter((r) => !r.passed).map((r) => ({
         gate_key: r.gate_key,
         reason:   r.reason,

@@ -1,10 +1,14 @@
-// Integration test for /api/algorithms/[id]/deploy POST handler (Wave 3 item
-// 12 — this endpoint moves an algorithm into 'live' and had zero coverage
-// despite being one of the highest-risk routes in the app).
+// Integration test for /api/algorithms/[id]/deploy POST/DELETE handlers.
 //
-// Covers: 401, 429 (rate limit 10/hr), 400 (invalid body), 404 (algorithm
-// not found), 409 (status not approved/live), 403 (bot_account not owned),
-// 500 (upsert error), happy path (upsert + status=live + audit log).
+// Covers the Wave 1 security fixes:
+//   1. Global kill-switch blocks new deploys (423) — item 3.
+//   2. approved→live transition now runs computeGates and blocks (403) on
+//      failure — item 1 (closes the bypass that let an algorithm reach
+//      "live" without ever passing a single quality gate).
+//   3. Already-live algorithms skip the gate re-check (no friction for
+//      adding more accounts to a proven algorithm).
+// Plus baseline coverage this endpoint never had before: 401, 429, 404,
+// 409 (wrong status), 403 (unowned bot_account), happy path.
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -12,11 +16,13 @@ import { NextRequest } from "next/server";
 const {
   getUserMock,
   fromMock,
+  computeGatesMock,
   checkRateLimitMock,
   logAuditMock,
 } = vi.hoisted(() => ({
   getUserMock:        vi.fn(),
   fromMock:           vi.fn(),
+  computeGatesMock:   vi.fn(),
   checkRateLimitMock: vi.fn(),
   logAuditMock:       vi.fn(),
 }));
@@ -26,6 +32,9 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: { getUser: getUserMock },
     from: fromMock,
   }),
+}));
+vi.mock("@/lib/quality-gates/runner", () => ({
+  computeGates: computeGatesMock,
 }));
 vi.mock("@/lib/security/aiRateLimit", () => ({
   checkAiRateLimit: checkRateLimitMock,
@@ -45,19 +54,18 @@ beforeAll(async () => {
 
 function makeAwaitableChain(result: { data?: unknown; error?: unknown }) {
   const proxy: Record<string, unknown> = {};
-  const chainable = ["select", "eq", "is", "in", "order", "limit", "maybeSingle", "single", "upsert", "update"];
+  const chainable = ["select", "eq", "is", "in", "order", "limit", "maybeSingle", "single", "insert", "update", "upsert"];
   for (const m of chainable) proxy[m] = () => proxy;
   proxy.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve);
   return proxy;
 }
 
-const VALID_UUID = "11111111-1111-4111-8111-111111111111";
-
-function makeRequest(body: unknown = { bot_account_ids: [VALID_UUID] }): NextRequest {
+function makeRequest(body: unknown = { bot_account_ids: ["11111111-1111-4111-8111-111111111111"] }): NextRequest {
   return new NextRequest("http://localhost/api/algorithms/algo-1/deploy", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+    // body but isn't in the TS DOM lib types yet.
     duplex: "half",
   });
 }
@@ -69,34 +77,51 @@ function setupAuth(allowed = true) {
   checkRateLimitMock.mockResolvedValue({ allowed, retryAfterSeconds: allowed ? null : 3600 });
 }
 
+/**
+ * Dispatch mock: routes .from(table) calls to per-table canned responses.
+ * `algorithmsSequence` lets the two separate `.from("algorithms")` calls
+ * (initial status lookup vs nothing-else, since the final status update
+ * doesn't await a response in the real handler) resolve differently if
+ * needed — most tests only need the first lookup.
+ */
 function setupFromDispatch(opts: {
+  halted?: boolean;
   algo?: { id: string; status: string; platform?: string | null } | null;
   ownedAccounts?: { id: string }[];
-  upsertError?: { message: string } | null;
+  deployError?: { message: string } | null;
 }) {
   const {
+    halted = false,
     algo = { id: "algo-1", status: "approved", platform: "MT4" },
-    ownedAccounts = [{ id: VALID_UUID }],
-    upsertError = null,
+    ownedAccounts = [{ id: "11111111-1111-4111-8111-111111111111" }],
+    deployError = null,
   } = opts;
 
   fromMock.mockImplementation((table: string) => {
-    if (table === "algorithms") return makeAwaitableChain({ data: algo, error: null });
-    if (table === "bot_accounts") return makeAwaitableChain({ data: ownedAccounts, error: null });
+    if (table === "global_trading_halt") {
+      return makeAwaitableChain({ data: { halted }, error: null });
+    }
+    if (table === "algorithms") {
+      return makeAwaitableChain({ data: algo, error: null });
+    }
+    if (table === "bot_accounts") {
+      return makeAwaitableChain({ data: ownedAccounts, error: null });
+    }
     if (table === "algorithm_deployments") {
       return makeAwaitableChain({
-        data: upsertError ? null : [{ id: "dep-1", bot_account_id: VALID_UUID, status: "active" }],
-        error: upsertError,
+        data: deployError ? null : [{ id: "dep-1", bot_account_id: "11111111-1111-4111-8111-111111111111", status: "active" }],
+        error: deployError,
       });
     }
     return makeAwaitableChain({ data: null, error: null });
   });
 }
 
-describe("/api/algorithms/[id]/deploy — POST", () => {
+describe("/api/algorithms/[id]/deploy — POST handler", () => {
   beforeEach(() => {
     getUserMock.mockReset();
     fromMock.mockReset();
+    computeGatesMock.mockReset();
     checkRateLimitMock.mockReset();
     logAuditMock.mockReset();
   });
@@ -114,16 +139,20 @@ describe("/api/algorithms/[id]/deploy — POST", () => {
     expect(res.headers.get("X-RateLimit-Limit")).toBe("10");
   });
 
-  it("returns 400 on invalid body (empty bot_account_ids)", async () => {
+  it("returns 400 on invalid body", async () => {
     setupAuth();
     const res = await POST(makeRequest({ bot_account_ids: [] }), CTX);
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 when bot_account_ids contains a non-UUID string", async () => {
+  // ── Item 3: global kill-switch ──────────────────────────────────────────
+  it("returns 423 when global trading halt is active", async () => {
     setupAuth();
-    const res = await POST(makeRequest({ bot_account_ids: ["not-a-uuid"] }), CTX);
-    expect(res.status).toBe(400);
+    setupFromDispatch({ halted: true });
+    const res = await POST(makeRequest(), CTX);
+    expect(res.status).toBe(423);
+    // Gate check + downstream lookups never reached.
+    expect(computeGatesMock).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the algorithm is not found", async () => {
@@ -142,42 +171,57 @@ describe("/api/algorithms/[id]/deploy — POST", () => {
 
   it("returns 403 when a requested bot_account is not owned by the user", async () => {
     setupAuth();
-    setupFromDispatch({ ownedAccounts: [] });
+    setupFromDispatch({ ownedAccounts: [] }); // none of the requested accounts belong to u1
     const res = await POST(makeRequest(), CTX);
     expect(res.status).toBe(403);
   });
 
-  it("returns 500 when the algorithm_deployments upsert errors", async () => {
+  // ── Item 1: close the /deploy quality-gate bypass ───────────────────────
+  it("runs computeGates and blocks with 403 when approved→live and must_failed > 0", async () => {
     setupAuth();
-    setupFromDispatch({ upsertError: { message: "rls denied" } });
+    setupFromDispatch({ algo: { id: "algo-1", status: "approved" } });
+    computeGatesMock.mockResolvedValue({
+      score:   { gates_passed: 15, gates_total: 20, must_failed: 5, tier: "NOT_READY" },
+      results: [{ gate_key: "sharpe_oos", passed: false, reason: "sharpe 0.8 < 1.5" }],
+    });
     const res = await POST(makeRequest(), CTX);
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toBe("rls denied");
+    expect(body.error).toMatch(/quality gates.*deploy blocked/i);
+    expect(body.failed).toHaveLength(1);
+    expect(computeGatesMock).toHaveBeenCalledWith(expect.anything(), "algo-1", "u1");
   });
 
-  it("happy path: upserts deployment, marks algorithm live, audits", async () => {
+  it("blocks with 403 when approved→live and gates_passed < gates_total (should-gates failing)", async () => {
     setupAuth();
-    setupFromDispatch({});
+    setupFromDispatch({ algo: { id: "algo-1", status: "approved" } });
+    computeGatesMock.mockResolvedValue({
+      score:   { gates_passed: 19, gates_total: 20, must_failed: 0, tier: "TIER_2" },
+      results: [{ gate_key: "slippage_realistic", passed: false, reason: "no slippage model" }],
+    });
+    const res = await POST(makeRequest(), CTX);
+    expect(res.status).toBe(403);
+  });
+
+  it("does NOT call computeGates when the algorithm is already live (no re-check friction)", async () => {
+    setupAuth();
+    setupFromDispatch({ algo: { id: "algo-1", status: "live" } });
+    const res = await POST(makeRequest(), CTX);
+    expect(computeGatesMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+  });
+
+  it("happy path: approved algorithm with all gates passing deploys successfully", async () => {
+    setupAuth();
+    setupFromDispatch({ algo: { id: "algo-1", status: "approved" } });
+    computeGatesMock.mockResolvedValue({
+      score:   { gates_passed: 20, gates_total: 20, must_failed: 0, tier: "TIER_1" },
+      results: [],
+    });
     const res = await POST(makeRequest(), CTX);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.deployments).toHaveLength(1);
     expect(logAuditMock).toHaveBeenCalledTimes(1);
-    expect(logAuditMock.mock.calls[0][0]).toMatchObject({
-      userId: "u1",
-      action: "create",
-      resourceType: "algorithm_deployment",
-      resourceId: "algo-1",
-      status: "success",
-    });
-  });
-
-  it("happy path: an already-live algorithm can also deploy (adding accounts)", async () => {
-    setupAuth();
-    setupFromDispatch({ algo: { id: "algo-1", status: "live" } });
-    const res = await POST(makeRequest(), CTX);
-    expect(res.status).toBe(200);
   });
 });

@@ -7,6 +7,12 @@
 #   bash .fly-secrets.example.sh                # sets on alphalog-pwa
 #   bash .fly-secrets.example.sh alphalog-cron  # sets on the cron sidecar
 #
+# Only covers the `alphalog-pwa` and `alphalog-cron` Fly apps. The separate
+# `coinarb-50x` app (its own deploy, its own secrets store) is documented at
+# the bottom of this file for traceability only — those secrets are NOT set
+# by this script, since every `fly secrets set --app` call below targets one
+# of the two apps above.
+#
 # WARNING: do NOT commit this file with real values. After running it once,
 # either delete it or `git restore` it. It's already in .gitignore.
 # -----------------------------------------------------------------------------
@@ -57,3 +63,25 @@ fly secrets set --app "${APP}" --stage \
 
 echo "Staged. Deploy will pick them up."
 echo "  fly deploy --app ${APP}"
+
+# -----------------------------------------------------------------------------
+# coinarb-50x (separate Fly app — crypto trading bot, NOT set by this script)
+# -----------------------------------------------------------------------------
+# These are configured out-of-band directly on the `coinarb-50x` app. Listed
+# here purely for traceability (Wave 2 item 8 — "which secrets exist where").
+# To set them for real, run against that app explicitly, e.g.:
+#
+#   fly secrets set --app coinarb-50x --stage \
+#     COINBASE_CDP_KEY_NAME="REPLACE_ME" \
+#     COINBASE_CDP_PRIVATE_KEY="REPLACE_ME_PEM"
+#
+#   COINBASE_CDP_KEY_NAME        Coinbase Developer Platform API key name.
+#   COINBASE_CDP_PRIVATE_KEY     CDP EC private key (PEM) — signs live spot orders.
+#   COINARB_50X_PAPER_MODE       'true' = paper mode (default), 'false' = live money.
+#   COINARB_AGENT_ID             UUID in coinarb_agents.
+#   COINARB_BOT_ACCOUNT_ID       UUID in bot_accounts.
+#   COINARB_BOT_ID               UUID in bots.
+#   COINARB_USER_ID              Owner UUID (auth.users) — same as BOT_OPS_USER_ID above.
+#   COINARB_STARTING_CAPITAL     USD initial capital (default 100).
+#   COINARB_PUSH_ENABLED         'true' to send pushes from the bot process itself.
+#   FLY_API_TOKEN_COINARB        Deploy-scoped token, lives on alphalog-cron (auto-deploy).

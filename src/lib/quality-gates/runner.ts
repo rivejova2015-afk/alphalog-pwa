@@ -32,7 +32,7 @@ const ALL_CHECKS = [...edgeChecks, ...capitalChecks, ...microChecks, ...opsCheck
 async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: string): Promise<AlgorithmRow> {
   const { data, error } = await sb
     .from('algorithms')
-    .select('id,user_id,name,status,parameters,risk_percent,max_drawdown_pct,linked_bot_account_id,scan_config,deployments:algorithm_deployments(bot_account_id,status)')
+    .select('id,user_id,name,status,market_type,parameters,risk_percent,max_drawdown_pct,linked_bot_account_id,scan_config,deployments:algorithm_deployments(bot_account_id,status)')
     .eq('id', algorithmId)
     .eq('user_id', userId)
     .is('deleted_at', null)
@@ -51,6 +51,7 @@ async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: st
     user_id:               data.user_id as string,
     name:                  data.name as string,
     status:                data.status as string,
+    market_type:           (data.market_type as string | null) ?? 'forex',
     risk_percent:          num(data.risk_percent),
     max_drawdown_pct:      num(data.max_drawdown_pct),
     linked_bot_account_id: (data.linked_bot_account_id as string | null) ?? activeDep?.bot_account_id ?? null,
@@ -87,8 +88,44 @@ async function loadLatestBacktest(sb: SupabaseClient, algorithmId: string, userI
 }
 
 async function loadTelemetry(sb: SupabaseClient, algo: AlgorithmRow): Promise<TelemetrySnapshot> {
+  // Crypto (coinarb) escribe a coinarb_telemetry, no a bot_telemetry — no
+  // está atado a linked_bot_account_id sino al user_id del owner del bot.
+  // No trackea execution_latency_ms hoy, así que ese gate queda N/A.
+  if (algo.market_type === 'crypto') {
+    const { data: latest } = await sb
+      .from('coinarb_telemetry')
+      .select('last_heartbeat_at')
+      .eq('user_id', algo.user_id)
+      .order('last_heartbeat_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return {
+      last_heartbeat_ts: (latest?.last_heartbeat_at as string | null) ?? null,
+      execution_latency_p99_ms: null,
+      heartbeat_applicable: true,
+      latency_applicable: false,
+    };
+  }
+
+  // CME (futures) no tiene una fuente de heartbeat/latencia wireada todavía
+  // (ver auditoría 2026-07) — ambos gates quedan N/A hasta que se implemente.
+  if (algo.market_type === 'futures') {
+    return {
+      last_heartbeat_ts: null,
+      execution_latency_p99_ms: null,
+      heartbeat_applicable: false,
+      latency_applicable: false,
+    };
+  }
+
+  // forex (MT5) — comportamiento original, vía bot_telemetry.
   if (!algo.linked_bot_account_id) {
-    return { last_heartbeat_ts: null, execution_latency_p99_ms: null };
+    return {
+      last_heartbeat_ts: null,
+      execution_latency_p99_ms: null,
+      heartbeat_applicable: true,
+      latency_applicable: true,
+    };
   }
   const { data: latest } = await sb
     .from('bot_telemetry')
@@ -125,6 +162,8 @@ async function loadTelemetry(sb: SupabaseClient, algo: AlgorithmRow): Promise<Te
   return {
     last_heartbeat_ts: (latest?.last_heartbeat_ts as string | null) ?? null,
     execution_latency_p99_ms: p99,
+    heartbeat_applicable: true,
+    latency_applicable: true,
   };
 }
 
@@ -202,7 +241,14 @@ export async function computeGates(
   const ctx = await buildContext(sb, algorithmId, userId);
   const results = evaluateAll(ctx);
 
-  const rows: Omit<GateRow, 'id' | 'computed_at'>[] = results.map((r) => ({
+  // Gates marcados applicable:false (ej: heartbeat/latency en mercados sin
+  // esa telemetría wireada) no se insertan — así no cuentan en gates_total
+  // ni pueden bloquear TIER_1 (ver migration 133). `results` completo
+  // (incluyendo no-aplicables) se devuelve igual para que la UI pueda
+  // mostrarlos como "N/A" en vez de simplemente omitirlos.
+  const applicableResults = results.filter((r) => r.applicable !== false);
+
+  const rows: Omit<GateRow, 'id' | 'computed_at'>[] = applicableResults.map((r) => ({
     algorithm_id:   algorithmId,
     user_id:        userId,
     gate_key:       r.gate_key,
@@ -225,8 +271,8 @@ export async function computeGates(
     ? (scoreRow as GateScore)
     : {
         algorithm_id: algorithmId,
-        gates_total: results.length,
-        gates_passed: results.filter((r) => r.passed).length,
+        gates_total: applicableResults.length,
+        gates_passed: applicableResults.filter((r) => r.passed).length,
         must_failed: 0,
         should_failed: 0,
         last_computed_at: new Date().toISOString(),
