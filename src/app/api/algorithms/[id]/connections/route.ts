@@ -37,9 +37,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "Algorithm not found" }, { status: 404 });
     }
 
-    const marketType = (["forex", "futures", "options"].includes(algo.market_type)
+    const marketType = (["forex", "futures", "crypto", "options"].includes(algo.market_type)
       ? algo.market_type
-      : "forex") as "forex" | "futures" | "options";
+      : "forex") as "forex" | "futures" | "crypto" | "options";
 
     const response: {
       algorithm: { id: string; name: string; market_type: string; instrument: string; platform: 'MT4' | 'MT5' };
@@ -68,6 +68,14 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         max_trailing_dd: number | null;
         is_paper: boolean | null;
       } | null;
+      crypto: {
+        agent_id: string;
+        paired: boolean;
+        ws_coinbase_connected: boolean | null;
+        ws_binance_connected: boolean | null;
+        last_heartbeat_at: string | null;
+        connection_status: "live" | "stale" | "synced" | "pending";
+      } | null;
       options: { available: boolean } | null;
     } = {
       algorithm: {
@@ -81,6 +89,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       },
       mt5: null,
       cme: null,
+      crypto: null,
       options: null,
     };
 
@@ -183,6 +192,24 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       }
 
       response.cme = cmeBlock;
+    } else if (marketType === "crypto") {
+      const { data: tele } = await supabase
+        .from("coinarb_telemetry")
+        .select("ws_coinbase_connected, ws_binance_connected, last_heartbeat_at")
+        .eq("agent_id", id)
+        .order("last_heartbeat_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const paired = Boolean(tele);
+      response.crypto = {
+        agent_id: id,
+        paired,
+        ws_coinbase_connected: typeof tele?.ws_coinbase_connected === "boolean" ? tele.ws_coinbase_connected : null,
+        ws_binance_connected: typeof tele?.ws_binance_connected === "boolean" ? tele.ws_binance_connected : null,
+        last_heartbeat_at: tele?.last_heartbeat_at ?? null,
+        connection_status: heartbeatStatus(tele?.last_heartbeat_at ?? null, paired),
+      };
     } else {
       response.options = { available: false };
     }

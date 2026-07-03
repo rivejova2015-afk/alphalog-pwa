@@ -12,8 +12,11 @@
 //      (status='DEGRADED', severity='S2').
 //   8. captureException throws → handler NO 500ea (logError swallow).
 //   9. receivedAt es ISO timestamp en la response.
+//  10. Wave 2 item 6: S1/S2 también dispara push a /api/push/notify-user
+//      cuando BOT_OPS_USER_ID está configurado; se omite en S3/NONE; una
+//      falla del fetch no rompe la ingesta (best-effort).
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const { captureExceptionMock, captureMessageMock } = vi.hoisted(() => ({
@@ -29,11 +32,20 @@ vi.mock("@/lib/log", () => ({
   logError: vi.fn(), logInfo: vi.fn(), logWarn: vi.fn(),
 }));
 
+const fetchMock = vi.fn();
+
 let POST: (req: NextRequest) => Promise<Response>;
 beforeAll(async () => {
   process.env.OPS_ALERT_TOKEN = "ops-alert-secret";
+  vi.stubGlobal("fetch", fetchMock);
   const mod = await import("../route");
   POST = mod.POST;
+});
+
+afterEach(() => {
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+  delete process.env.BOT_OPS_USER_ID;
 });
 
 function makeRequest(token: string, body: unknown | "INVALID_JSON" = {}): NextRequest {
@@ -131,5 +143,46 @@ describe("/api/ops/bot-slo-alert — handler", () => {
     const res = await POST(makeRequest("ops-alert-secret", { status: "PASS", severity: "NONE" }));
     const body = await res.json();
     expect(body.receivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+
+  describe("push notification (S1/S2)", () => {
+    it("severity='S1' dispara push a /api/push/notify-user cuando BOT_OPS_USER_ID está seteado", async () => {
+      process.env.BOT_OPS_USER_ID = "owner-uuid";
+      const res = await POST(makeRequest("ops-alert-secret", { status: "FAIL", severity: "S1" }));
+      expect(res.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(String(url)).toMatch(/\/api\/push\/notify-user$/);
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body).toMatchObject({ userId: "owner-uuid", tag: "bot-slo-S1" });
+    });
+
+    it("severity='S2' también dispara push", async () => {
+      process.env.BOT_OPS_USER_ID = "owner-uuid";
+      await POST(makeRequest("ops-alert-secret", { status: "DEGRADED", severity: "S2" }));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("severity='S3'/'NONE' NO dispara push", async () => {
+      process.env.BOT_OPS_USER_ID = "owner-uuid";
+      await POST(makeRequest("ops-alert-secret", { status: "PASS", severity: "NONE" }));
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("sin BOT_OPS_USER_ID configurado, omite el push sin fallar la ingesta", async () => {
+      delete process.env.BOT_OPS_USER_ID;
+      const res = await POST(makeRequest("ops-alert-secret", { status: "FAIL", severity: "S1" }));
+      expect(res.status).toBe(200);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("una falla del fetch de push no rompe la ingesta (best-effort)", async () => {
+      process.env.BOT_OPS_USER_ID = "owner-uuid";
+      fetchMock.mockRejectedValue(new Error("network down"));
+      const res = await POST(makeRequest("ops-alert-secret", { status: "FAIL", severity: "S1" }));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+    });
   });
 });

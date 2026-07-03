@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/log";
 import { logAuditFromRequest } from "@/lib/security/auditLog";
+import { checkAiRateLimit } from "@/lib/security/aiRateLimit";
 import { EngineConfigSchema, CoinarbParametersSchema } from "@/lib/validations/engine-config";
 
 export const runtime = "nodejs";
@@ -56,6 +57,14 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
     const supabase = await createClient();
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const rl = await checkAiRateLimit(user.id, "algo-update", 30);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSeconds ?? 3600), "X-RateLimit-Limit": "30" },
+      });
+    }
 
     let body: unknown;
     try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
@@ -137,6 +146,11 @@ export async function PUT(request: NextRequest, { params }: Ctx) {
         }
       } catch { /* non-critical — bot may not be connected */ }
     }
+
+    await logAuditFromRequest(
+      { userId: user.id, action: "update", resourceType: "algorithm", resourceId: id, status: "success", changes: payload },
+      request
+    );
 
     return NextResponse.json({ algorithm: data });
   } catch (err) {
