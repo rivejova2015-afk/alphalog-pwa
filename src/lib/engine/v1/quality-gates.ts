@@ -5,6 +5,15 @@
 // proves itself on historical data.
 //
 // "must" gates are required for promotion; "should" gates are advisory only.
+//
+// Ephemeral/in-memory: computed on a just-run backtest's metrics, returned in
+// the API response, never persisted to a table. This is ONE of three
+// independent "quality gate" systems in this repo (Wave 3 item 9 audit,
+// 2026-07) — the other two are src/lib/quality-gates/runner.ts (the
+// DB-persisted deploy-time Tier-1 gates) and
+// coinarb/scripts/check-backtest-threshold.ts (manual/local regression
+// script for coinarb). None of the three call or read from each other —
+// intentional, each gates a different lifecycle stage.
 
 import type { BacktestMetrics } from "@/types/backtest";
 

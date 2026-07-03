@@ -4,53 +4,31 @@
 //   slTicks = ATR × sl_atr_mult / tickSize
 //   tpTicks = ATR × tp_atr_mult / tickSize
 //
-// Implementation: standard Wilder ATR.
-//   TR_i = max( high_i - low_i,
-//               |high_i - close_{i-1}|,
-//               |low_i  - close_{i-1}| )
-//   ATR_p = simple mean of first `period` TRs (seed)
-//   ATR_i = (ATR_{i-1} * (period - 1) + TR_i) / period  (subsequent)
+// Delegates the actual Wilder ATR math to src/lib/backtest/indicators.ts's
+// `atr()` (Wave 3 item 10 — this file used to reimplement the same Wilder
+// formula independently; deduped since the two were mathematically
+// identical, just different input/output shapes: indicators.ts returns the
+// full per-bar series, this wrapper only needs the last value).
 //
 // Pure function, no I/O.
 
 import type { Bar } from "@/types/backtest";
+import { atr as atrSeries } from "@/lib/backtest/indicators";
 
 /**
  * Compute Wilder ATR over `bars`. Returns ATR in price units (NOT ticks).
- * Returns null when there aren't enough bars to seed (`bars.length <= period`).
+ * Returns null when there aren't enough bars to seed (`bars.length <= period`),
+ * when `period` is invalid, or when the computed value is non-finite/non-positive
+ * (e.g. a corrupted bar produced a NaN TR).
  *
- * The result reflects the LAST bar's ATR — the most recent state. For
- * historical ATR series, use computeAtrSeries.
+ * The result reflects the LAST bar's ATR — the most recent state. For the
+ * full historical series, call `atr()` from lib/backtest/indicators.ts directly.
  */
 export function computeAtrFromBars(bars: Bar[], period = 14): number | null {
   if (period <= 0 || !Number.isFinite(period)) return null;
   if (!Array.isArray(bars) || bars.length <= period) return null;
 
-  // Step 1: build the TR series (length = bars.length - 1; first bar has no
-  // previous close so its TR is undefined).
-  const tr: number[] = [];
-  for (let i = 1; i < bars.length; i++) {
-    const cur  = bars[i];
-    const prev = bars[i - 1];
-    if (!cur || !prev) continue;
-    const a = cur.high - cur.low;
-    const b = Math.abs(cur.high - prev.close);
-    const c = Math.abs(cur.low  - prev.close);
-    const t = Math.max(a, b, c);
-    if (!Number.isFinite(t)) return null;
-    tr.push(t);
-  }
-  if (tr.length < period) return null;
-
-  // Step 2: seed ATR = simple mean of first `period` TR values.
-  let atr = 0;
-  for (let i = 0; i < period; i++) atr += tr[i];
-  atr /= period;
-
-  // Step 3: Wilder smoothing over the remaining TRs.
-  for (let i = period; i < tr.length; i++) {
-    atr = (atr * (period - 1) + tr[i]) / period;
-  }
-
-  return Number.isFinite(atr) && atr > 0 ? atr : null;
+  const series = atrSeries(bars, period);
+  const last = series[series.length - 1];
+  return Number.isFinite(last) && last > 0 ? last : null;
 }

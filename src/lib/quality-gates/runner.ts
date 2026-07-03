@@ -3,6 +3,19 @@
 // Carga el snapshot completo (algorithm + último backtest + telemetría + ops)
 // y aplica las 20 funciones de check. Inserta los resultados en
 // algorithm_quality_gate_results y devuelve el score.
+//
+// Deploy-time gate: triggered by POST /promote-to-live and
+// /quality-gates/recompute, DB-persisted (algorithm_quality_gate_results +
+// algorithm_quality_gate_definitions + algorithm_quality_score view). This is
+// ONE of three independent "quality gate" systems in this repo (Wave 3 item
+// 9 audit, 2026-07) — the other two are src/lib/engine/v1/quality-gates.ts
+// (ephemeral in-memory draft→paper gates for the Engine v1 simulator) and
+// coinarb/scripts/check-backtest-threshold.ts (manual/local regression
+// script for the coinarb sub-project, not CI-wired). None of the three call
+// or read from each other — that's intentional, not an oversight, since
+// each gates a genuinely different lifecycle. Do not merge without reading
+// all three first; they were audited together and found to serve distinct
+// purposes despite the similar name.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { edgeChecks } from './checks/edge';
