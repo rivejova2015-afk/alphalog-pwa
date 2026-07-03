@@ -44,7 +44,7 @@
 | IndexedDB | idb 8.0.3 |
 | Testing unit | Vitest 4.1.0 + @vitest/coverage-v8 |
 | Testing E2E | Playwright 1.57 |
-| Deploy | Vercel (Node 24.x, region iad1) |
+| Deploy | Fly.io (Node 24-slim, region iad) |
 | CI/CD | GitHub Actions (quality-gate, bot-maintenance) |
 | React Compiler | babel-plugin-react-compiler 1.0.0 |
 
@@ -563,9 +563,9 @@ replicada (decisión documentada en `docs/research/map-hot-xp-v2.md`).
 ### Ops / Cron
 
 **Naming convention** (no migrar — la inconsistencia es semántica):
-- `/api/ops/cron/*` — crons que monitorean **bots** (heartbeat, SLO, recovery, daily verify). Auth: `Authorization: Bearer ${OPS_CRON_SECRET}`.
+- `/api/ops/cron/*` — crons que monitorean **bots** (heartbeat, SLO, recovery, daily verify). Auth: mayoría `Authorization: Bearer ${OPS_CRON_SECRET}` — **excepción documentada**: `bot-heartbeat-monitor` valida contra `CRON_SECRET` pese a vivir bajo `/ops/cron/*` (solo `coinarb-heartbeat`, `polyarb-heartbeat` y `polyarb-daily-report` usan `OPS_CRON_SECRET` de verdad).
 - `/api/cron/*` — crons de **dominio de negocio** (business alerts, treasury reminders, terminal fetchers). Auth: `x-cron-secret` header con `CRON_SECRET`.
-- Vercel schedule en `vercel.json`.
+- Schedule real en `crontab` (supercronic, corre en la app Fly `alphalog-cron`, ver sección 14). `vercel.json` es legado de la era Vercel (pre 2026-05-25) — `crontab` fue "ported from vercel.json" y es la fuente de verdad actual; `vercel.json` queda sin uso en producción.
 
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
@@ -950,7 +950,7 @@ VERCEL_ENV=                     # legado pre-Fly, ya no se setea
   - `src/lib/cme/__tests__/` — market-hours, tradovate (fetch mocks), vault (RPC mocks), risk-manager (chain mocks), order-executor (vault+tradovate+DB orchestration). ~95% del módulo cubierto.
   - `coinarb/tests/` — circuit-breaker (12) y daily-tracker (14) sumados a los 35 ya existentes.
   - UI: `/dashboard/copy-groups` lista + detalle creados (sprint 3) — los 6 endpoints `/api/copy-groups/*` ahora son consumidos por la UI.
-  - Quality-gates table fix crítico: runner.ts + promote-to-live + quality-gates route ahora leen de `trading_algorithms` (sprint 2).
+  - Quality-gates table fix crítico: runner.ts + promote-to-live + quality-gates route ahora leen de `algorithms` (nombre real de la tabla — `trading_algorithms` nunca existió en el código; era doc-drift) (sprint 2).
 - **Sprint 5-8 (2026-05-03): higiene final, cobertura wide, audit batch** — de 623 → 929 tests verde (root 789 + coinarb 140):
   - Sprint 5: validation tests (68), rl-engine (28), heston-pricer (15), CLAUDE.md sync, Copy Groups quick link.
   - Sprint 6: intelligence refactor (extrae 14 helpers a `src/lib/intelligence/helpers.ts` + 59 tests), coinarb segunda capa (analysis + validators + phase-manager, 79 tests), capital-algorithm (22 tests).
@@ -1023,7 +1023,7 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 |---|---|---|
 | `/api/algorithms/[id]/control` | POST | `{action:'pause'\|'resume'}` → bot_commands |
 | `/api/algorithms/[id]/telemetry` | GET | Latest `coinarb_telemetry` row (crypto-only) |
-| `/api/ops/cron/coinarb-heartbeat` | POST | Cron Vercel cada minuto, dedup 30min via app_logs.fingerprint, push si heartbeat >5min stale |
+| `/api/ops/cron/coinarb-heartbeat` | POST | Cron cada minuto (supercronic en `alphalog-cron`), dedup 30min via app_logs.fingerprint, push si heartbeat >5min stale |
 
 **Componentes nuevos:**
 - `AlgorithmDetailsModal.client.tsx` → `CoinarbSection` con 3 paneles: status+ControlButton, TelemetryPanel (refresh 15s), Tunables form (4 scalars + 3 per-symbol arb gaps).
