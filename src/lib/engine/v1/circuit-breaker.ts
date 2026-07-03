@@ -42,8 +42,15 @@ export async function checkBreaker(
     .limit(100);
 
   if (error || !data) {
-    // Fail-open: don't trip the breaker on infra errors.
-    return { tripped: false, reason: "breaker_query_failed" };
+    // Fail-closed by default: trip the breaker on infra errors instead of
+    // silently letting new entries through exactly when risk controls are
+    // most needed. `fail_open_on_error: true` restores the old behavior
+    // for callers that explicitly opt into it.
+    const failOpen = cfg.fail_open_on_error === true;
+    return {
+      tripped: !failOpen,
+      reason: failOpen ? "breaker_query_failed_fail_open" : "breaker_query_failed_fail_closed",
+    };
   }
 
   const trades = data as TradeRow[];

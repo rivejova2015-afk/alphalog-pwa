@@ -67,6 +67,27 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       return NextResponse.json({ error: "Algorithm not found" }, { status: 404 });
     }
 
+    // Global kill-switch — if the user halted all trading (see
+    // /api/algorithms/global-halt), no algorithm may receive an actionable
+    // signal regardless of its own status. Checked before the platform
+    // guard so it short-circuits everything, including MT4/MT5 EAs.
+    const { data: halt } = await supabase
+      .from("global_trading_halt")
+      .select("halted")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (halt?.halted) {
+      return NextResponse.json({
+        action: "HOLD",
+        lots: 0,
+        confidence: 0,
+        signalId: "",
+        reason: "global_trading_halt_active",
+        modules: [],
+        algorithm: { id: algo.id, name: algo.name, status: algo.status },
+      }, { status: 200, headers: { "Cache-Control": "private, no-store" } });
+    }
+
     // Platform guard — this endpoint is the EA polling path for MT4/MT5 only.
     // Tradovate/IBKR algos are dispatched server-side via cron (see
     // /api/cron/algorithms/tradovate-poll). Returning HOLD here prevents a

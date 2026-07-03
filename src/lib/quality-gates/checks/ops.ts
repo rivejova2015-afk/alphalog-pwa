@@ -2,6 +2,12 @@ import type { CheckContext, CheckFn } from '../types';
 
 export const heartbeatActive: CheckFn = (ctx: CheckContext) => {
   const key = 'heartbeat_active';
+  if (!ctx.telemetry.heartbeat_applicable) {
+    return {
+      gate_key: key, passed: true, applicable: false, value_observed: null,
+      reason: 'No aplica — mercado sin telemetría de heartbeat wireada aún',
+    };
+  }
   const ts = ctx.telemetry.last_heartbeat_ts;
   if (!ts) return { gate_key: key, passed: false, value_observed: null, reason: 'Sin heartbeat — bot no conectado' };
   const ageSec = (Date.now() - new Date(ts).getTime()) / 1000;

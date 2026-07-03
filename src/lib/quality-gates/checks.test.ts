@@ -14,6 +14,7 @@ function baseCtx(overrides: Partial<CheckContext> = {}): CheckContext {
       user_id: "user-1",
       name: "TestAlgo",
       status: "paper",
+      market_type: "forex",
       risk_percent: null,
       max_drawdown_pct: null,
       linked_bot_account_id: null,
@@ -21,7 +22,10 @@ function baseCtx(overrides: Partial<CheckContext> = {}): CheckContext {
       scan_config: null,
     },
     backtest: null,
-    telemetry: { last_heartbeat_ts: null, execution_latency_p99_ms: null },
+    telemetry: {
+      last_heartbeat_ts: null, execution_latency_p99_ms: null,
+      heartbeat_applicable: true, latency_applicable: true,
+    },
     ops: { last_kill_ack_ms: null, paper_trades_30d: 0, audit_trail_complete: false },
     ...overrides,
   };
@@ -291,13 +295,29 @@ describe("microChecks", () => {
   describe("latencyP99", () => {
     it("pasa con p99 <= 250ms", () => {
       const ctx = baseCtx();
-      ctx.telemetry = { last_heartbeat_ts: null, execution_latency_p99_ms: 200 };
+      ctx.telemetry = {
+        last_heartbeat_ts: null, execution_latency_p99_ms: 200,
+        heartbeat_applicable: true, latency_applicable: true,
+      };
       expect(latencyP99(ctx).passed).toBe(true);
     });
     it("falla con p99 > 250ms", () => {
       const ctx = baseCtx();
-      ctx.telemetry = { last_heartbeat_ts: null, execution_latency_p99_ms: 300 };
+      ctx.telemetry = {
+        last_heartbeat_ts: null, execution_latency_p99_ms: 300,
+        heartbeat_applicable: true, latency_applicable: true,
+      };
       expect(latencyP99(ctx).passed).toBe(false);
+    });
+    it("no aplica cuando el mercado no tiene telemetría de latencia wireada", () => {
+      const ctx = baseCtx();
+      ctx.telemetry = {
+        last_heartbeat_ts: null, execution_latency_p99_ms: null,
+        heartbeat_applicable: true, latency_applicable: false,
+      };
+      const result = latencyP99(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.applicable).toBe(false);
     });
     it("falla sin telemetría", () => {
       expect(latencyP99(baseCtx()).passed).toBe(false);
@@ -337,6 +357,13 @@ describe("opsChecks", () => {
     });
     it("falla sin heartbeat", () => {
       expect(heartbeatActive(baseCtx()).passed).toBe(false);
+    });
+    it("no aplica cuando el mercado no tiene telemetría de heartbeat wireada", () => {
+      const ctx = baseCtx();
+      ctx.telemetry.heartbeat_applicable = false;
+      const result = heartbeatActive(ctx);
+      expect(result.passed).toBe(true);
+      expect(result.applicable).toBe(false);
     });
   });
 
