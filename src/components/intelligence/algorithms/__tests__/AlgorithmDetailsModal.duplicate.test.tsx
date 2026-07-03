@@ -16,6 +16,7 @@ import AlgorithmDetailsModal from "../AlgorithmDetailsModal.client";
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../QualityGatesPanel.client", () => ({ default: () => null }));
+vi.mock("../AuditTrailTimeline.client", () => ({ default: () => null }));
 vi.mock("../AlgorithmShadowInbox", () => ({ AlgorithmShadowInbox: () => null }));
 vi.mock("../TradovateConnectModal.client", () => ({ default: () => null }));
 vi.mock("@/components/tradehub/PairingInstructionsModal.client", () => ({ default: () => null }));

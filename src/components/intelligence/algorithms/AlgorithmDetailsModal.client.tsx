@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Key, Copy, Check, RefreshCw, Cloud, AlertCircle, Save, Play, Inbox, Radio, Files } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, AlertCircle, Save, Play, Inbox, Radio, Files, Download } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
+import AuditTrailTimeline from "./AuditTrailTimeline.client";
 import { AlgorithmShadowInbox } from "./AlgorithmShadowInbox.client";
 import TradovateConnectModal from "./TradovateConnectModal.client";
 import { InfoBanner } from "./InfoBanner.client";
@@ -223,6 +224,16 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
               >
                 <Files size={16} />
               </button>
+              {algorithm && algorithm.market_type !== "options" && (
+                <a
+                  href={`/api/algorithms/${algorithmId}/trades/export`}
+                  className="text-slate-500 hover:text-cyan-400 transition p-1 rounded"
+                  aria-label="Exportar trades (CSV)"
+                  title="Exportar historial de trades como CSV"
+                >
+                  <Download size={16} />
+                </a>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -308,6 +319,11 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                     Si una gate falla, el cron de promoción la deja en paper y loggea la causa.
                   </InfoBanner>
                   <QualityGatesPanel algorithmId={algorithmId} />
+                </div>
+
+                <div className="mt-6 pt-5 border-t border-[#1f2937] space-y-3">
+                  <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium">Historial de actividad</h3>
+                  <AuditTrailTimeline algorithmId={algorithmId} />
                 </div>
               </>
             )}
