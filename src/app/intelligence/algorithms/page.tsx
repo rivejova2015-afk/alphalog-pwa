@@ -6,6 +6,7 @@ import CmeAlgoTabs from "@/components/intelligence/algorithms/CmeAlgoTabs.client
 import { DispatchModeChip } from "@/components/intelligence/algorithms/DispatchModeChip.client";
 import { DispatchModeBanner } from "@/components/intelligence/algorithms/DispatchModeBanner.client";
 import { GlobexStatusBanner } from "@/components/intelligence/algorithms/GlobexStatusBanner";
+import { PortfolioAllocationPanel } from "@/components/intelligence/algorithms/PortfolioAllocationPanel.client";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -113,6 +114,12 @@ export default async function AlgorithmsPage() {
         </div>
       ) : (
         <AlgoAccordion algos={algos} />
+      )}
+
+      {algos.length > 0 && (
+        <div className="mt-6">
+          <PortfolioAllocationPanel />
+        </div>
       )}
 
       <div className="mt-8">

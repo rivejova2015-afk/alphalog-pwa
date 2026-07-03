@@ -89,6 +89,13 @@
 # y racha quedan idénticas). Semanal (domingo 03:30 UTC), el crecimiento es lento.
 30   3    *  *  0   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/quiz-dedup
 
+# Portfolio HRP — recalcula pesos entre algoritmos activos (paper/live) vía
+# Hierarchical Risk Parity sobre sus retornos diarios reales (60 días).
+# Semanal (domingo 04:00 UTC) — el capital no necesita reasignarse más
+# seguido. Aborta sin tocar la asignación vigente si quedan <2 algos con
+# ≥10 días de actividad real.
+0    4    *  *  0   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/portfolio/rebalance
+
 # Coinarb auto-deploy — reemplaza al workflow de GitHub Actions. Cada 5 min:
 # fetch origin/main, diff coinarb/, si hay commits nuevos hace
 # `flyctl deploy --app coinarb-50x`. Token vive como Fly secret
