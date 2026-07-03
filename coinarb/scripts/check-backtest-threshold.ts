@@ -1,10 +1,26 @@
 #!/usr/bin/env tsx
 /**
- * check-backtest-threshold — CI quality gate for the Coinarb backtest.
+ * check-backtest-threshold — manual/local regression gate for the Coinarb
+ * backtest.
+ *
+ * NOT wired to CI (Wave 3 item 9 audit, 2026-07): coinarb's GitHub Actions
+ * workflow was removed on purpose (see `crontab`'s "Coinarb auto-deploy"
+ * comment / CLAUDE.md §14 — deploys are Fly-cron-driven, not GitHub-driven).
+ * This script has no invoking `.github/workflows/*.yml` and no npm script
+ * entry — it's a standalone tool you run by hand before a manual
+ * `flyctl deploy --app coinarb-50x` to sanity-check a strategy change
+ * against recent history. It is ONE of three independent "quality gate"
+ * systems in this repo (see `src/lib/quality-gates/runner.ts` for the
+ * deploy-time Tier-1 gates on the `algorithms` framework, and
+ * `src/lib/engine/v1/quality-gates.ts` for Engine v1's draft→paper
+ * auto-promotion gates) — none of the three call or read from each other;
+ * that's intentional, not an oversight, since each gates a genuinely
+ * different lifecycle (CI/local regression check vs deploy-time DB-audited
+ * gates vs ephemeral in-memory backtest gates).
  *
  * Reads a JSON summary from stdin (or from --file=path) emitted by
  * `scripts/backtest.ts --json`. Asserts thresholds and exits 1 on
- * any failure so CI fails the deploy.
+ * any failure.
  *
  * Thresholds are intentionally LAX to start (we have no historical
  * baseline yet). Tighten as data accumulates.
@@ -17,10 +33,7 @@
  * Override path:
  *   --file=/tmp/backtest.json
  *
- * Skip gate (emergency):
- *   echo "[skip-backtest]" in commit message — handled in workflow yaml.
- *
- * Usage in CI:
+ * Usage (manual, pre-deploy):
  *   tsx scripts/backtest.ts --days=7 --json > /tmp/result.txt
  *   tsx scripts/check-backtest-threshold.ts --file=/tmp/result.txt
  */

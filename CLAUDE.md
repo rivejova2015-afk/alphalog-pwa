@@ -573,8 +573,8 @@ replicada (decisión documentada en `docs/research/map-hot-xp-v2.md`).
 | `GET /api/ops/bot-daily-report/history` | GET | Histórico de reportes |
 | `POST /api/ops/bot-slo-alert` | POST | Alerta SLO (autenticado por token) |
 | `POST /api/ops/cron/bot-slo-monitor` | POST | Monitor SLO programado |
-| `POST /api/ops/cron/bot-auto-recovery` | POST | Auto-recuperación del bot |
-| `POST /api/ops/cron/bot-daily-verify` | POST | Verificación diaria del bot |
+| `POST /api/ops/cron/bot-auto-recovery` | POST | Auto-recuperación del bot — **MT5-only**: dispatcha `bot_commands.RESTART_LOGIC`, que solo el EA MT4/MT5 polea. Coinarb no tiene canal de restart remoto wireado (su command-poller solo entiende pause/resume/update_parameters) — su staleness se cubre solo con alerta (`coinarb-heartbeat`), sin auto-remediación (Wave 3 item 7, decisión explícita para no fabricar un comando sin consumidor) |
+| `POST /api/ops/cron/bot-daily-verify` | POST | Verificación diaria del bot — cubre MT5 (`bot_instances`) y crypto (`coinarb_telemetry`, agregado en Wave 3 item 7; identifica bots crypto vía `algorithms.market_type='crypto'`, no por nombre) |
 | `POST /api/ops/cron/polyarb-heartbeat` | POST | Polyarb heartbeat stale → push |
 | `POST /api/ops/cron/coinarb-heartbeat` | POST | Coinarb heartbeat stale → push (dedup 30min vía app_logs.fingerprint) |
 | `POST /api/cron/business/alerts` | POST | Alertas de negocio (recurring costs, LLC) |
@@ -1007,7 +1007,7 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 - `coinarb/src/core/index.ts` await `loadConfigFromDb()` antes de `buildLoop()`.
 - Lee `algorithms.parameters` (4 thresholds tunables + `arb_gap_min` jsonb) y muta `let` exports en `coinarb/src/core/config.ts`. ES module live bindings hacen que loop.ts/smc-detector.ts/etc lean el valor nuevo sin refactor.
 - `PAPER_MODE` sigue siendo env-only (`COINARB_50X_PAPER_MODE`) como safety brake.
-- **Defaults vigentes (2026-06-19):** `MTF_CONFIDENCE_MIN=0.12`, `SWEEP_CONFIRM_BODY_RATIO=0.35`. Bajados desde 0.30/0.40 para destrabar trades — el resto del filter chain (premium-discount, CHOCH, R:R≥2.0) sigue actuando como filtro de calidad. El CI quality gate (`scripts/check-backtest-threshold.ts`, `winRate≥30%`) actúa como red de regresiones.
+- **Defaults vigentes (2026-06-19):** `MTF_CONFIDENCE_MIN=0.12`, `SWEEP_CONFIRM_BODY_RATIO=0.35`. Bajados desde 0.30/0.40 para destrabar trades — el resto del filter chain (premium-discount, CHOCH, R:R≥2.0) sigue actuando como filtro de calidad. `scripts/check-backtest-threshold.ts` (`winRate≥30%`) actúa como red de regresiones **manual/local** — corregido en Wave 3 item 9 (2026-07): NO está wireado a ningún workflow de CI (el workflow de GitHub Actions de coinarb fue eliminado a propósito, ver §14 — deploys son vía Fly-cron), se corre a mano antes de un deploy manual.
 - **Tier `$20-testing`** (primer escalón de `PHASES`): risk 5% → $1/trade, pensado para validar el pipeline live con bankroll mínimo sin que el sizing colapse contra `baseMinSize` de Coinbase. `coinbase-spot-orders.ts:placeLimit` ahora pre-chequea el size contra `getProduct().baseMinSize` y devuelve `{ skipped: true, reason: 'below-min-notional' }` antes de POST, evitando 400s ruidosos.
 
 **Hot-rotate flow (Fase C):**
@@ -1048,6 +1048,53 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 2. **autoFix** — corrige valores inválidos comunes antes de validar
 3. **contractGuard** — verifica que la respuesta cumple el schema antes de devolverla al cliente
 4. **nullGuards** — helpers para castear `unknown` a string/number de forma segura
+
+### Quality gates — 3 sistemas independientes (intencional, no deuda técnica)
+
+Auditado a fondo en Wave 3 item 9 (2026-07). Hay 3 sistemas con "quality gate"
+en el nombre que **no se llaman ni se leen entre sí** — verificado por grep
+cruzado de sus identificadores. No es duplicación accidental: cada uno gatea
+una etapa de vida completamente distinta, y consolidarlos sería un rewrite
+grande y riesgoso sin beneficio claro. Se documentan acá para que sesiones
+futuras no las re-descubran como "deuda" y traten de fusionarlas sin leer
+primero:
+
+| Sistema | Trigger | Persistencia | Gatea |
+|---|---|---|---|
+| `src/lib/quality-gates/runner.ts` (`computeGates`) | `POST /promote-to-live`, `POST /quality-gates/recompute` | DB: `algorithm_quality_gate_results` + `algorithm_quality_gate_definitions` + vista `algorithm_quality_score` | Deploy-time, 20 checks Tier-1, framework `algorithms` (MT5/CME/crypto) |
+| `src/lib/engine/v1/quality-gates.ts` (`ENGINE_V1_GATES`) | Solo `POST /api/algorithms/[id]/engine-backtest` | Ninguna — efímero, vive en la respuesta JSON de ese request | Auto-promoción draft→paper del simulador Engine v1 (in-memory, sobre backtest recién corrido) |
+| `coinarb/scripts/check-backtest-threshold.ts` | Manual/local únicamente — **no está wireado a CI** (el workflow de GitHub Actions de coinarb fue eliminado, ver §14) | Ninguna — exit code + stdout | Red de regresión manual antes de un `flyctl deploy --app coinarb-50x` a mano |
+
+### Backtest engines — 2 motores, coexistencia intencional (no deuda técnica)
+
+Auditado en Wave 3 item 10 (2026-07). `src/lib/backtest/` (genérico, async,
+job-based vía `backtest_jobs`) y `src/lib/engine/v1/backtest.ts` (Engine v1,
+sync/in-memory, SMC-funnel) **no son silos aislados** — `engine/v1/backtest.ts`
+importa directamente `computeMetrics`/`atr`/`runMonteCarlo` desde
+`lib/backtest` (dependencia unidireccional: `engine/v1` → `lib/backtest`,
+nunca al revés), y el endpoint sync `engine-backtest` reusa `bars-loader.ts`,
+`options-overlay.ts` y `orchestrator.ts` (`runAdvancedPipeline`) del motor
+genérico. La lógica realmente distinta y no-fusionable es pequeña: el
+SMC-funnel de Engine v1 (`entry.ts`, `structure.ts`, `bos.ts`, `sessions.ts`)
+frente a las condiciones rule-based/portfolio/multi-símbolo del motor
+genérico — Engine v1 opta por diseño por NO usar el pipeline async de
+`backtest_jobs` (portfolio legs, polling) porque es un simulador
+single-request de baja latencia para la EA.
+
+**Consolidado en Wave 3 item 10:** ATR duplicado — `dispatchers/atr.ts`
+reimplementaba el mismo Wilder ATR que `lib/backtest/indicators.ts:atr()`;
+ahora delega (misma matemática, solo difieren en shape: serie completa vs
+último valor).
+
+**Deliberadamente NO consolidado** (rewrite grande, sin beneficio claro
+frente al riesgo):
+- **Walk-forward**: `lib/backtest/walk-forward.ts` (`runWalkForward`) vs
+  `engine/v1/backtest.ts` (`runEngineV1WalkForward`) — el de Engine v1 es
+  TF-aware alrededor de un concepto de "driver TF" que el genérico no tiene.
+- **Bar loading**: `lib/backtest/bars-loader.ts` (377 líneas, multi-source)
+  vs `lib/engine/v1/bar-loader.ts` (106 líneas, cache propio) — implementaciones
+  distintas para un problema similar; fusionar toca el hot path de la EA
+  (`/signal`), mayor riesgo que beneficio para esta ronda.
 
 ### Feature Flags
 Solo 3 flags públicos (via `NEXT_PUBLIC_*`):

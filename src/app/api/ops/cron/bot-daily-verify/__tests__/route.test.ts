@@ -11,6 +11,9 @@
 //   7. Bots sin profile match son ignorados.
 //   8. Recommendations array refleja severity (S1 → 'Intervención...', PASS
 //      → 'Sistema operando normalmente').
+//   9. Wave 3 item 7: bots crypto (coinarb) se identifican vía
+//      algorithms.market_type='crypto' (no por nombre) y su heartbeat se lee
+//      de coinarb_telemetry en vez de bot_instances.
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -46,12 +49,16 @@ interface BotRow      { id: string; name: string; user_id: string }
 interface BotAccRow   { id: string; bot_id: string }
 interface InstanceRow { id: string; bot_account_id: string; status: string; last_heartbeat_at: string | null }
 interface CmdStatusRow { id: string; bot_account_id: string; status: string; created_at: string }
+interface CryptoAlgoRow { id: string; linked_bot_account_id: string | null }
+interface TelemetryRow { last_heartbeat_at: string | null }
 
 function setupSupabase({
   bots = [], botAccounts = [], instances = [], pendingCmds = [],
+  cryptoAlgos = [], telemetryByAgentId = {},
   insertEventError,
 }: {
   bots?: BotRow[]; botAccounts?: BotAccRow[]; instances?: InstanceRow[]; pendingCmds?: CmdStatusRow[];
+  cryptoAlgos?: CryptoAlgoRow[]; telemetryByAgentId?: Record<string, TelemetryRow | null>;
   insertEventError?: { message: string } | null;
 }) {
   createClientMock.mockReturnValue({
@@ -78,6 +85,19 @@ function setupSupabase({
       if (table === "bot_command_status") {
         proxy.then = (resolve: (v: unknown) => unknown) =>
           Promise.resolve({ data: pendingCmds, error: null }).then(resolve);
+        return proxy;
+      }
+      if (table === "algorithms") {
+        proxy.then = (resolve: (v: unknown) => unknown) =>
+          Promise.resolve({ data: cryptoAlgos, error: null }).then(resolve);
+        return proxy;
+      }
+      if (table === "coinarb_telemetry") {
+        // eq() captures the agent_id filter so maybeSingle() can look it up.
+        let agentId: string | undefined;
+        proxy.eq = (col: string, val: string) => { if (col === "agent_id") agentId = val; return proxy; };
+        proxy.maybeSingle = () =>
+          Promise.resolve({ data: agentId ? (telemetryByAgentId[agentId] ?? null) : null, error: null });
         return proxy;
       }
       if (table === "bot_events") {
@@ -187,5 +207,59 @@ describe("/api/ops/cron/bot-daily-verify — handler", () => {
     const body = await res.json();
     expect(body.results).toBe(0);
     expect(body.saved.success).toBe(0);
+  });
+
+  describe("crypto (coinarb) bots — identified via algorithms.market_type, not name", () => {
+    it("healthy crypto bot (coinarb-50x, no forex/futuros keyword) is still verified via coinarb_telemetry", async () => {
+      setupSupabase({
+        bots: [{ id: "b1", name: "coinarb-50x", user_id: "u1" }],
+        botAccounts: [{ id: "ba1", bot_id: "b1" }],
+        instances: [], // coinarb never populates bot_instances
+        cryptoAlgos: [{ id: "algo-1", linked_bot_account_id: "ba1" }],
+        telemetryByAgentId: { "algo-1": { last_heartbeat_at: new Date().toISOString() } },
+      });
+      const res = await POST(makeRequest());
+      const body = await res.json();
+      expect(body.results).toBe(1);
+      expect(body.saved.success).toBe(1);
+    });
+
+    it("stale crypto heartbeat is detected via coinarb_telemetry", async () => {
+      const oldIso = new Date(Date.now() - 600 * 1000).toISOString();
+      setupSupabase({
+        bots: [{ id: "b1", name: "coinarb-50x", user_id: "u1" }],
+        botAccounts: [{ id: "ba1", bot_id: "b1" }],
+        cryptoAlgos: [{ id: "algo-1", linked_bot_account_id: "ba1" }],
+        telemetryByAgentId: { "algo-1": { last_heartbeat_at: oldIso } },
+      });
+      const res = await POST(makeRequest());
+      const body = await res.json();
+      expect(body.results).toBe(1);
+      expect(body.saved.success).toBe(1);
+    });
+
+    it("crypto bot with no telemetry row yet still verifies (NO_HEARTBEAT, no crash)", async () => {
+      setupSupabase({
+        bots: [{ id: "b1", name: "coinarb-50x", user_id: "u1" }],
+        botAccounts: [{ id: "ba1", bot_id: "b1" }],
+        cryptoAlgos: [{ id: "algo-1", linked_bot_account_id: "ba1" }],
+        telemetryByAgentId: {},
+      });
+      const res = await POST(makeRequest());
+      const body = await res.json();
+      expect(body.results).toBe(1);
+      expect(body.saved.success).toBe(1);
+    });
+
+    it("a bot with no linked crypto algorithm and no forex/futuros name is still filtered out", async () => {
+      setupSupabase({
+        bots: [{ id: "b1", name: "Random other bot", user_id: "u1" }],
+        botAccounts: [{ id: "ba1", bot_id: "b1" }],
+        cryptoAlgos: [], // no crypto algorithm linked to ba1
+      });
+      const res = await POST(makeRequest());
+      const body = await res.json();
+      expect(body.results).toBe(0);
+    });
   });
 });
