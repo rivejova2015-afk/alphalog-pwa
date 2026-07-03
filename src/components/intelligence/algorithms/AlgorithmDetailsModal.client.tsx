@@ -271,6 +271,9 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                 {data.algorithm.market_type === "futures" && algorithm && (
                   <KellySection algorithm={algorithm} onSaved={fetchAll} />
                 )}
+                {data.algorithm.market_type === "futures" && algorithm && (
+                  <ExecutionAlgoSection algorithm={algorithm} onSaved={fetchAll} />
+                )}
                 {data.algorithm.market_type === "options" && (
                   <OptionsSection />
                 )}
@@ -705,6 +708,107 @@ function KellySection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved
           >
             <Save size={11} />
             {saving ? "Guardando…" : "Guardar Kelly config"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Execution algos section (TWAP/VWAP/IS) — futures only ─────────────────
+//
+// Cuando execution_algo está seteado (y en live mode), dispatchTradovate
+// divide la quantity en slices vía src/lib/cme/execution-slices.ts en vez de
+// una sola orden. La primera slice se coloca de inmediato; el resto las
+// coloca el cron execution-tick a medida que llega su scheduled_at.
+function ExecutionAlgoSection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved: () => void }) {
+  const params = (algorithm.parameters ?? {}) as Record<string, unknown>;
+
+  const initialAlgo = typeof params.execution_algo === "string" ? params.execution_algo : "";
+  const [algo, setAlgo]           = useState<string>(initialAlgo);
+  const [duration, setDuration]   = useState<string>(num(params.execution_duration_minutes, 20));
+  const [sliceCount, setSliceCount] = useState<string>(num(params.execution_slice_count, 5));
+  const [saving, setSaving]       = useState(false);
+
+  async function save() {
+    const durationNum = Math.max(1, Math.round(Number(duration)));
+    const sliceCountNum = Math.max(1, Math.round(Number(sliceCount)));
+    if (!Number.isFinite(durationNum) || !Number.isFinite(sliceCountNum)) {
+      toast.error("Duración y cantidad de slices deben ser números válidos.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const merged: Record<string, unknown> = {
+        ...params,
+        execution_algo: algo || null,
+        execution_duration_minutes: durationNum,
+        execution_slice_count: sliceCountNum,
+      };
+      const res = await fetch(`/api/algorithms/${algorithm.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parameters: merged }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error ?? `Error ${res.status}`);
+        return;
+      }
+      toast.success(algo
+        ? `Ejecución por slices activada (${algo.toUpperCase()}, ${sliceCountNum} slices en ${durationNum}min)`
+        : "Ejecución por slices desactivada — el dispatcher usa una sola orden por señal.");
+      onSaved();
+    } catch (e) {
+      toast.error(`Error: ${e instanceof Error ? e.message : "desconocido"}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 pt-5 border-t border-[#1f2937] space-y-3">
+      <h3 className="text-xs uppercase tracking-wider text-slate-500 font-medium">Ejecución — TWAP / VWAP / Implementation Shortfall</h3>
+      <InfoBanner>
+        Divide la orden en slices distribuidas en el tiempo en vez de colocar todo de una — reduce impacto de
+        mercado en tamaños grandes. La primera slice se coloca de inmediato; el resto las coloca el cron
+        <code className="text-slate-300"> execution-tick</code> cada minuto. VWAP sin perfil de volumen real
+        cae automáticamente a distribución uniforme (TWAP).
+      </InfoBanner>
+
+      <div className="rounded-lg bg-[#151b28] border border-[#1f2937] p-4 space-y-3">
+        <label className="block">
+          <span className="block text-[10px] uppercase tracking-wider text-slate-500 mb-1">Algoritmo de ejecución</span>
+          <select
+            value={algo}
+            onChange={(e) => setAlgo(e.target.value)}
+            disabled={saving}
+            className="w-full px-2 py-1.5 rounded bg-[#0a0e1a] border border-[#1f2937] text-slate-100 text-sm focus:border-cyan-700 focus:outline-none"
+          >
+            <option value="">Desactivado — una sola orden por señal</option>
+            <option value="twap">TWAP — slices uniformes en el tiempo</option>
+            <option value="vwap">VWAP — proporcional al perfil de volumen</option>
+            <option value="is">Implementation Shortfall — front-loaded</option>
+          </select>
+        </label>
+
+        {algo && (
+          <div className="grid grid-cols-2 gap-3">
+            <NumField label="Duración (min)" value={duration} onChange={setDuration} step="1" hint="Ventana total del plan" />
+            <NumField label="Cantidad de slices" value={sliceCount} onChange={setSliceCount} step="1" hint="Se clampea al quantity total" />
+          </div>
+        )}
+
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-40 flex items-center gap-1.5"
+          >
+            <Save size={11} />
+            {saving ? "Guardando…" : "Guardar ejecución"}
           </button>
         </div>
       </div>

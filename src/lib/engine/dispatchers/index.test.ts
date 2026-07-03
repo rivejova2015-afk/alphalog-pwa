@@ -45,6 +45,18 @@ vi.mock("@/lib/cme/risk-manager", () => ({
   checkOrderRisk: (...args: unknown[]) => checkOrderRiskMock(...args),
 }));
 
+// Mock execution-slices (TWAP/VWAP/IS) — tested independently in
+// execution-slices.test.ts. Here we only verify dispatchTradovate calls it
+// with the right args and branches on its result correctly.
+const buildSlicePlanMock = vi.fn();
+const insertExecutionSlicesMock = vi.fn();
+const finalizeParentIfDoneMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/lib/cme/execution-slices", () => ({
+  buildSlicePlan: (...args: unknown[]) => buildSlicePlanMock(...args),
+  insertExecutionSlices: (...args: unknown[]) => insertExecutionSlicesMock(...args),
+  finalizeParentIfDone: (...args: unknown[]) => finalizeParentIfDoneMock(...args),
+}));
+
 // Mock the logger so tests don't pollute output.
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(),
@@ -125,6 +137,9 @@ beforeEach(() => {
   });
   loadHistoricalBarsMock.mockReset().mockResolvedValue([]);
   checkOrderRiskMock.mockReset().mockResolvedValue({ allowed: true });
+  buildSlicePlanMock.mockReset();
+  insertExecutionSlicesMock.mockReset();
+  finalizeParentIfDoneMock.mockReset().mockResolvedValue(undefined);
   updateCalls.length = 0;
   delete behavior.insertReturn;
   delete behavior.updateError;
@@ -312,6 +327,111 @@ describe("dispatchSignal — Tradovate", () => {
     // Updated to rejected with prefix-noting the throw.
     const rejection = updateCalls.find((u) => u.payload.status === "rejected");
     expect(rejection?.payload.reject_reason).toContain("executor_threw");
+  });
+
+  describe("execution algos (TWAP/VWAP/IS)", () => {
+    function slicedPlan(overrides: Partial<{ algo: string; totalQuantity: number }> = {}) {
+      return {
+        algo: overrides.algo ?? "twap",
+        totalQuantity: overrides.totalQuantity ?? 2,
+        totalSlices: 3,
+        durationMinutes: 20,
+        slices: [
+          { scheduledAt: "2026-05-17T10:00:00.000Z", quantity: 1, sliceIndex: 0 },
+          { scheduledAt: "2026-05-17T10:10:00.000Z", quantity: 1, sliceIndex: 1 },
+        ],
+      };
+    }
+
+    it("shadow mode: execution_algo seteado NO activa slicing (usa el flujo single-row de siempre)", async () => {
+      const svc = makeSupabaseMock();
+      await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "twap" } } }),
+        svc,
+      );
+      expect(buildSlicePlanMock).not.toHaveBeenCalled();
+      expect(insertExecutionSlicesMock).not.toHaveBeenCalled();
+    });
+
+    it("live mode + execution_algo='twap': arma el plan, inserta slices, ejecuta solo la primera", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan());
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 555 });
+      const svc = makeSupabaseMock();
+
+      const res = await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "twap" } } }),
+        svc,
+      );
+
+      expect(res.ok).toBe(true);
+      expect(res.action).toBe("placed");
+      expect(res.cmeSignalId).toBe("parent_1");
+      expect(buildSlicePlanMock).toHaveBeenCalledWith(
+        expect.objectContaining({ algo: "twap", totalQuantity: 2 }),
+      );
+      expect(insertExecutionSlicesMock).toHaveBeenCalledTimes(1);
+      // Only the FIRST slice is executed now — quantity=1, not the total (2).
+      expect(executeSignalMock).toHaveBeenCalledTimes(1);
+      expect(executeSignalMock.mock.calls[0][0]).toMatchObject({ id: "slice_0", quantity: 1 });
+      expect(finalizeParentIfDoneMock).toHaveBeenCalledWith(svc, "parent_1");
+    });
+
+    it("live mode + execution_algo: checkOrderRisk deniega la primera slice → rejected, no llama executeSignal", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan());
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      checkOrderRiskMock.mockResolvedValueOnce({ allowed: false, reason: "propfirm_overnight_cutoff" });
+      const svc = makeSupabaseMock();
+
+      const res = await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", execution_algo: "twap" } } }),
+        svc,
+      );
+
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("propfirm_overnight_cutoff");
+      expect(executeSignalMock).not.toHaveBeenCalled();
+      expect(finalizeParentIfDoneMock).toHaveBeenCalledWith(svc, "parent_1");
+    });
+
+    it("reversal (posición opuesta abierta) IGNORA execution_algo — usa una sola orden de flatten+flip", async () => {
+      process.env.DISPATCH_MODE = "live";
+      getPositionsMock.mockResolvedValueOnce([{ netPos: -1 }]); // net short, signal BUY → reversal
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+      const svc = makeSupabaseMock();
+
+      await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "twap" } } }),
+        svc,
+      );
+
+      expect(buildSlicePlanMock).not.toHaveBeenCalled();
+      expect(insertExecutionSlicesMock).not.toHaveBeenCalled();
+    });
+
+    it("execution_algo con valor inválido ('scalp') → ignora slicing, flujo normal", async () => {
+      process.env.DISPATCH_MODE = "live";
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+      const svc = makeSupabaseMock();
+
+      const res = await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "scalp" } } }),
+        svc,
+      );
+
+      expect(res.action).toBe("placed");
+      expect(buildSlicePlanMock).not.toHaveBeenCalled();
+    });
   });
 
   it("missing cme_account_id in parameters → failed/no_cme_account, no insert attempted", async () => {

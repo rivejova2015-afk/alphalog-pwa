@@ -54,11 +54,14 @@
 # - equity-sync: every 5 min; powers the equity tile in /business and /dashboard
 # - risk-monitor: every minute; drives the daily-loss circuit-breaker
 # - daily-report: 21:00 UTC (16:00 ET, post-close) for the close summary push
+# - execution-tick: every minute; coloca slices TWAP/VWAP/IS vencidas
+#   (scheduled_at <= now) en cme_signals. No-op si no hay slices pendientes.
 *    *    *  *  1-5 curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/position-sync
 *    *    *  *  1-5 curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/risk-monitor
 */5  *    *  *  1-5 curl --fail --max-time 60  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/equity-sync
 */10 *    *  *  1-5 curl --fail --max-time 60  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/connection-heartbeat
 0    21   *  *  1-5 curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/daily-report
+*    *    *  *  1-5 curl --fail --max-time 30  -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/cme/execution-tick
 
 # Map / progress snapshots
 5    0    *  *  *   curl --fail --max-time 60 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/map-hot/snapshot

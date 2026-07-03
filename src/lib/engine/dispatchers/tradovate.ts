@@ -16,6 +16,13 @@
 //   position + market hours + propfirm rules) right before handing off to
 //   executeSignal() — blocks the order instead of just producing an audit row.
 //
+// Execution algos (TWAP/VWAP/IS):
+//   Cuando algo.parameters.execution_algo está seteado (y no es un reversal),
+//   la quantity se divide en slices vía buildSlicePlan()/insertExecutionSlices()
+//   (src/lib/cme/execution-slices.ts) en vez de una sola orden. La primera
+//   slice se coloca ahora; el resto las coloca el cron execution-tick a medida
+//   que llega su scheduled_at. Ver ese cron para el resto del ciclo de vida.
+//
 // All failure paths return a structured DispatchResult — never throw. The
 // cron caller depends on this to keep processing other algos after one fails.
 
@@ -28,6 +35,7 @@ import { tickValueFor } from "@/lib/cme/tick-values";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { computeAtrFromBars } from "./atr";
 import { computeKellyContracts } from "../position-sizing/kelly";
+import { buildSlicePlan, insertExecutionSlices, finalizeParentIfDone, type InsertedSlices } from "@/lib/cme/execution-slices";
 import { checkOrderRisk } from "@/lib/cme/risk-manager";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import { getDispatchMode, type DispatchInput, type DispatchResult } from "./types";
@@ -348,6 +356,109 @@ export async function dispatchTradovate(
     }
   }
 
+  const mode = getDispatchMode();
+  const reversalTag = isReversal ? ` reverse_from_netPos=${priorNetPos}` : "";
+
+  // Execution algos (TWAP/VWAP/IS) — solo en live mode y solo para entradas
+  // normales (no reversals, que ya son una orden única de flatten+flip).
+  // En shadow mode cae al flujo single-row de siempre: no tiene sentido
+  // simular N slices cuando nada se coloca igual.
+  const executionAlgo = str(params.execution_algo) as "twap" | "vwap" | "is" | null;
+  const useSlicing =
+    mode === "live" && !isReversal &&
+    (executionAlgo === "twap" || executionAlgo === "vwap" || executionAlgo === "is");
+
+  if (useSlicing) {
+    const durationMinutes = num(params.execution_duration_minutes, 20);
+    const sliceCount = Math.max(1, Math.round(num(params.execution_slice_count, 5)));
+    const plan = buildSlicePlan({
+      algo: executionAlgo!,
+      totalQuantity: quantity,
+      durationMinutes,
+      sliceCount,
+    });
+
+    let inserted: InsertedSlices;
+    try {
+      inserted = await insertExecutionSlices(svc, {
+        userId: algo.user_id,
+        algorithmId: algo.id,
+        cmeAccountId,
+        contract,
+        direction: signal.action,
+        stopLossTicks: slTicks,
+        takeProfitTicks: tpTicks,
+        plan,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logError("DispatchTradovate", {
+        component: "insertExecutionSlices",
+        message: msg,
+        meta: { algoId: algo.id },
+      });
+      return { ok: false, action: "failed", reason: "persist_failed", error: msg };
+    }
+
+    // Risk-check + place the first slice now — el resto lo recoge el cron
+    // execution-tick a medida que llega su scheduled_at.
+    const sliceRisk = await checkOrderRisk({
+      userId: algo.user_id,
+      cmeAccountId,
+      direction: signal.action,
+      quantity: inserted.firstSlice.quantity,
+    });
+    if (!sliceRisk.allowed) {
+      const reason = sliceRisk.reason ?? "risk_denied";
+      await svc.from("cme_signals").update({ status: "rejected", reject_reason: reason }).eq("id", inserted.firstSlice.id);
+      await finalizeParentIfDone(svc, inserted.parentSignalId);
+      logInfo("DispatchTradovate", `${plan.algo} slice-0 risk denied ${signal.action} ${contract} reason=${reason} (algo=${algo.id})`);
+      return { ok: false, action: "failed", cmeSignalId: inserted.parentSignalId, reason };
+    }
+
+    const sliceSignal: CmeSignal = {
+      id:                inserted.firstSlice.id,
+      userId:            algo.user_id,
+      cmeAccountId,
+      contract,
+      direction:         signal.action,
+      quantity:          inserted.firstSlice.quantity,
+      stopLossTicks:     slTicks,
+      takeProfitTicks:   tpTicks,
+      algorithmId:       algo.id,
+    };
+
+    try {
+      const result = await executeSignal(sliceSignal, svc);
+      if (result.success) {
+        logInfo(
+          "DispatchTradovate",
+          `${plan.algo} slice-0 placed ${signal.action} ${contract} x${inserted.firstSlice.quantity}/${plan.totalQuantity} orderId=${result.orderId} SL=${slTicks}t TP=${tpTicks}t (remaining=${inserted.remainingCount} slices, algo=${algo.id})`,
+        );
+        await finalizeParentIfDone(svc, inserted.parentSignalId);
+        return { ok: true, action: "placed", cmeSignalId: inserted.parentSignalId, externalOrderId: result.orderId };
+      }
+      await svc.from("cme_signals").update({ status: "rejected", reject_reason: result.error ?? "executor_failed" }).eq("id", inserted.firstSlice.id);
+      await finalizeParentIfDone(svc, inserted.parentSignalId);
+      return {
+        ok: false, action: "failed",
+        cmeSignalId: inserted.parentSignalId,
+        reason: result.error ?? "executor_failed",
+        error: result.error,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logError("DispatchTradovate", {
+        component: "executeSignal threw (slice-0)",
+        message: msg,
+        meta: { algoId: algo.id },
+      });
+      await svc.from("cme_signals").update({ status: "rejected", reject_reason: `executor_threw: ${msg}` }).eq("id", inserted.firstSlice.id);
+      await finalizeParentIfDone(svc, inserted.parentSignalId);
+      return { ok: false, action: "failed", cmeSignalId: inserted.parentSignalId, reason: "executor_threw", error: msg };
+    }
+  }
+
   // Step 1: insert a pending signal row. This is the audit trail entry. It
   // exists for every dispatch attempt, including shadow + failed ones.
   const { data: inserted, error: insErr } = await svc
@@ -380,9 +491,6 @@ export async function dispatchTradovate(
     };
   }
   const cmeSignalId = inserted.id as string;
-
-  const mode = getDispatchMode();
-  const reversalTag = isReversal ? ` reverse_from_netPos=${priorNetPos}` : "";
 
   if (mode === "shadow") {
     // For reversals, surface that fact in the Shadow Inbox so the user can
