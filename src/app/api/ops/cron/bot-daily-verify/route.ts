@@ -51,20 +51,32 @@ export async function POST(request: NextRequest) {
       { data: botAccounts, error: accountsErr },
       { data: instances, error: instancesErr },
       { data: pendingCmds, error: cmdsErr },
+      { data: cryptoAlgos, error: cryptoAlgosErr },
     ] = await Promise.all([
       supabase.from("bots").select("id,name,user_id"),
       supabase.from("bot_accounts").select("id,bot_id"),
       supabase.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
       supabase.from("bot_command_status").select("id,bot_account_id,status,created_at").eq("status", "PENDING"),
+      // Crypto bots (coinarb) don't populate bot_instances and their bot name
+      // ('coinarb-50x') doesn't match resolveProfile()'s forex/futuros keywords —
+      // identify them via algorithms.market_type='crypto' instead.
+      supabase.from("algorithms").select("id,linked_bot_account_id").eq("market_type", "crypto").is("deleted_at", null),
     ]);
 
     if (botsErr) throw botsErr;
     if (accountsErr) throw accountsErr;
     if (instancesErr) throw instancesErr;
     if (cmdsErr) throw cmdsErr;
+    if (cryptoAlgosErr) throw cryptoAlgosErr;
+
+    const cryptoAlgoByBotAccountId = new Map(
+      (cryptoAlgos ?? [])
+        .filter((a): a is { id: string; linked_bot_account_id: string } => Boolean(a.linked_bot_account_id))
+        .map((a) => [a.linked_bot_account_id, a.id]),
+    );
 
     const results: {
-      profile: "forex" | "futuros";
+      profile: "forex" | "futuros" | "crypto";
       botId: string;
       userId: string;
       overallStatus: string;
@@ -74,31 +86,52 @@ export async function POST(request: NextRequest) {
     }[] = [];
 
     for (const bot of bots ?? []) {
-      const profile = resolveProfile(bot.name);
+      const accountIds = (botAccounts ?? []).filter((a) => a.bot_id === bot.id).map((a) => a.id);
+      const cryptoAlgoId = accountIds.map((id) => cryptoAlgoByBotAccountId.get(id)).find(Boolean) ?? null;
+      const profile = cryptoAlgoId ? "crypto" : resolveProfile(bot.name);
       if (!profile) continue;
 
-      const accountIds = (botAccounts ?? []).filter((a) => a.bot_id === bot.id).map((a) => a.id);
       const botInstances = (instances ?? []).filter((i) => accountIds.includes(i.bot_account_id));
       const botPendingCmds = (pendingCmds ?? []).filter((c) => accountIds.includes(c.bot_account_id));
 
       const checks: { code: string; severity: string; detail: string }[] = [];
 
-      // Health: heartbeat
-      for (const inst of botInstances) {
-        if (!inst.last_heartbeat_at) {
-          checks.push({ code: "NO_HEARTBEAT", severity: "S2", detail: `Instance ${inst.id} never sent heartbeat` });
+      if (profile === "crypto") {
+        // Heartbeat lives in coinarb_telemetry (keyed by algorithm id), not bot_instances.
+        const { data: tele } = await supabase
+          .from("coinarb_telemetry")
+          .select("last_heartbeat_at")
+          .eq("agent_id", cryptoAlgoId as string)
+          .order("last_heartbeat_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!tele?.last_heartbeat_at) {
+          checks.push({ code: "NO_HEARTBEAT", severity: "S2", detail: `Agent ${cryptoAlgoId} never sent heartbeat` });
         } else {
-          const ageSec = (nowMs - new Date(inst.last_heartbeat_at).getTime()) / 1000;
+          const ageSec = (nowMs - new Date(tele.last_heartbeat_at).getTime()) / 1000;
           if (ageSec > HEARTBEAT_THRESHOLD_SEC) {
-            checks.push({ code: "STALE_HEARTBEAT", severity: ageSec > 300 ? "S1" : "S2", detail: `Instance stale for ${Math.round(ageSec)}s` });
+            checks.push({ code: "STALE_HEARTBEAT", severity: ageSec > 300 ? "S1" : "S2", detail: `Heartbeat stale for ${Math.round(ageSec)}s` });
           }
         }
-        if (inst.status !== "ACTIVE") {
-          checks.push({ code: "NOT_ACTIVE", severity: "S3", detail: `Instance status is ${inst.status}` });
+      } else {
+        // Health: heartbeat (MT5 — bot_instances)
+        for (const inst of botInstances) {
+          if (!inst.last_heartbeat_at) {
+            checks.push({ code: "NO_HEARTBEAT", severity: "S2", detail: `Instance ${inst.id} never sent heartbeat` });
+          } else {
+            const ageSec = (nowMs - new Date(inst.last_heartbeat_at).getTime()) / 1000;
+            if (ageSec > HEARTBEAT_THRESHOLD_SEC) {
+              checks.push({ code: "STALE_HEARTBEAT", severity: ageSec > 300 ? "S1" : "S2", detail: `Instance stale for ${Math.round(ageSec)}s` });
+            }
+          }
+          if (inst.status !== "ACTIVE") {
+            checks.push({ code: "NOT_ACTIVE", severity: "S3", detail: `Instance status is ${inst.status}` });
+          }
         }
       }
 
-      // SLO: pending commands
+      // SLO: pending commands (bot_command_status — applies to both MT5 and crypto)
       for (const cmd of botPendingCmds) {
         const ageSec = (nowMs - new Date(cmd.created_at).getTime()) / 1000;
         if (ageSec > ACK_THRESHOLD_SEC) {

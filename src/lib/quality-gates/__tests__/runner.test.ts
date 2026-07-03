@@ -25,6 +25,7 @@ const emptyContext: CheckContext = {
     user_id:               "u1",
     name:                  "x",
     status:                "approved",
+    market_type:           "forex",
     risk_percent:          1,
     max_drawdown_pct:      5,
     linked_bot_account_id: "ba-1",
@@ -32,7 +33,10 @@ const emptyContext: CheckContext = {
     scan_config:           null,
   },
   backtest: null,
-  telemetry: { last_heartbeat_ts: null, execution_latency_p99_ms: null },
+  telemetry: {
+    last_heartbeat_ts: null, execution_latency_p99_ms: null,
+    heartbeat_applicable: true, latency_applicable: true,
+  },
   ops:       { last_kill_ack_ms: null, paper_trades_30d: 0, audit_trail_complete: false },
 };
 

@@ -24,6 +24,12 @@ export const EngineConfigSchema = z.object({
       consecutive_losses: z.number().int().min(1).max(20).default(5),
       daily_dd_pct: z.number().min(1).max(20).default(5),
       weekly_dd_pct: z.number().min(1).max(30).default(10),
+      // Default false = fail-closed: si la query de trades falla (ej. infra
+      // de Supabase caída), el breaker DISPARA y bloquea nuevas entradas —
+      // justo cuando más protección hace falta. true = comportamiento
+      // legacy fail-open, solo para casos de uso que lo necesiten
+      // explícitamente.
+      fail_open_on_error: z.boolean().default(false),
     }),
     cascade_probability: z.object({
       enabled: z.boolean().default(false),
@@ -128,6 +134,7 @@ export const ENGINE_CONFIG_DEFAULT: EngineConfig = {
       consecutive_losses: 5,
       daily_dd_pct: 5,
       weekly_dd_pct: 10,
+      fail_open_on_error: false,
     },
     cascade_probability: {
       enabled: false,

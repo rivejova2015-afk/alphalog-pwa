@@ -417,7 +417,7 @@ function TelemetryPanel({
       <RegimePill regime={tele.regime} />
 
       {/* Top row: heartbeat + WS */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
         <div className="bg-[#0a0e1a] rounded p-2">
           <div className="text-[10px] text-slate-500 mb-0.5">Heartbeat</div>
           <div
@@ -474,7 +474,7 @@ function TelemetryPanel({
       </div>
 
       {/* Equity + positions + phase */}
-      <dl className="grid grid-cols-2 gap-y-2 text-xs pt-2 border-t border-[#1f2937]">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 text-xs pt-2 border-t border-[#1f2937]">
         <Row label="Equity" value={fmt$(tele.equityUsd)} mono />
         <Row label="Open positions" value={String(tele.openPositionsCount ?? 0)} mono />
         <Row label="Pnl hoy" value={fmt$(tele.totalPnlUsd, true)} mono />
@@ -752,7 +752,7 @@ function CoinarbSectionInner({
             {algorithm.status}
           </span>
         </div>
-        <dl className="grid grid-cols-2 gap-y-2 text-xs">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 text-xs">
           <Row label="Pares" value={pairs.join(", ")} />
           <Row label="Tick (ms)" value={String(engine.tick_ms ?? "—")} mono />
           <Row
@@ -784,7 +784,7 @@ function CoinarbSectionInner({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <NumField
             label="MTF confidence min"
             value={mtfMin}
@@ -819,7 +819,7 @@ function CoinarbSectionInner({
           <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">
             Arb gap min (Coinbase vs Binance)
           </p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <NumField label="BTC-USD" value={gapBtc} onChange={setGapBtc} step="0.0001" mono />
             <NumField label="ETH-USD" value={gapEth} onChange={setGapEth} step="0.0001" mono />
             <NumField label="SOL-USD" value={gapSol} onChange={setGapSol} step="0.0001" mono />

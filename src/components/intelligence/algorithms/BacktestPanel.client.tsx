@@ -247,6 +247,12 @@ export function BacktestPanel({
       <div className="flex items-center justify-between">
         <p className="text-xs text-[#475569] uppercase tracking-wider font-medium flex items-center gap-2">
           <BarChart3 size={12} /> Backtest & Validation
+          <span
+            title="Motor async job-based: corre en background (backtest_jobs), soporta ML/Multi-TF/Portfolio (multi-símbolo). Tarda más pero es más completo."
+            className="normal-case tracking-normal font-normal text-[9px] px-1.5 py-0.5 rounded bg-[#06b6d4]/10 text-[#06b6d4] border border-[#06b6d4]/30"
+          >
+            Async · Completo
+          </span>
         </p>
         <button
           onClick={() => setShowForm((s) => !s)}

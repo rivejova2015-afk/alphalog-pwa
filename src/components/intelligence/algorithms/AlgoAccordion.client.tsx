@@ -13,6 +13,7 @@ import { OpenPositionsPanel } from './OpenPositionsPanel.client';
 import { BacktestPanel } from './BacktestPanel.client';
 import { EngineBacktestPanel } from './EngineBacktestPanel.client';
 import { BacktestSandboxPanel } from './BacktestSandboxPanel.client';
+import { InfoBanner } from './InfoBanner.client';
 import { Badge } from '@/components/ui/badge';
 import AlgorithmDetailsModal from './AlgorithmDetailsModal.client';
 
@@ -275,6 +276,16 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   linkedBotAccountId={algo.linkedBotAccountId ?? null}
                   defaultBacktestBalance={algo.defaultBacktestBalance ?? null}
                 />
+
+                {/* Wave 4 item 18: brief explainer so the two panels above/below
+                    aren't confused for duplicates — each panel also carries its
+                    own "Async · Completo" / "Sync · Rápido" badge in its header. */}
+                <InfoBanner>
+                  Dos motores de backtest, propósitos distintos: <strong>Backtest &amp; Validation</strong> (arriba) corre
+                  async en background y soporta ML/Multi-TF/Portfolio (multi-símbolo) — úsalo para validación completa.
+                  <strong> Engine v1 — Backtest Validator</strong> (abajo) corre sync en un solo request usando el mismo
+                  SMC-funnel que opera en vivo — úsalo para iterar rápido sobre un símbolo.
+                </InfoBanner>
 
                 {/* Engine v1 backtest — direct evaluator + ATR-sized trades */}
                 <EngineBacktestPanel

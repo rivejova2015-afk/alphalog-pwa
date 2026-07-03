@@ -24,6 +24,18 @@ function getServiceClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
+// Intentionally MT5-only (forex/futuros). Crypto (coinarb-50x) bots never
+// match here \u2014 and that's deliberate, not an oversight (Wave 3 item 7):
+// the remediation this endpoint performs is `bot_commands` with
+// command_type='RESTART_LOGIC', which only the MT5 EA polls for. Coinarb's
+// command-poller only handles pause/resume/update_parameters \u2014 there is no
+// wired mechanism to remote-restart a Fly-hosted bot process today (that
+// would require a Fly Machines API integration, out of scope here). Faking
+// a RESTART_LOGIC dispatch for coinarb would silently no-op and give false
+// confidence that recovery was attempted. Crypto staleness detection today
+// is alert-only, via /api/ops/cron/coinarb-heartbeat (push notification,
+// no auto-remediation) \u2014 see also bot-daily-verify, which DOES audit crypto
+// heartbeat (read-only, no restart action needed for that).
 function resolveProfile(name: string): "forex" | "futuros" | null {
   const n = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (n.includes("forex")) return "forex";

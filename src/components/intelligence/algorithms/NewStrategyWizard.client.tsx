@@ -25,7 +25,13 @@ interface CmeAccount {
   max_trailing_dd: number | null;
 }
 
-type MarketType = 'forex' | 'futures' | 'options';
+// 'options' removed from user-facing selection (Wave 4 item 16 — no real
+// IBKR options backend exists yet; hidden until one does, per owner
+// decision 2026-07). 'crypto' added (Wave 4 item 14) — research-mode only,
+// no bot linking (the real coinarb-50x bot is a Fly singleton, see
+// CLAUDE.md §"Coinarb ↔ Algorithms unification"); this just registers a
+// backtestable algorithm row.
+type MarketType = 'forex' | 'futures' | 'crypto';
 type Direction  = 'long'  | 'short'  | 'both';
 
 // FOREX_INSTRUMENT_GROUPS removed — instruments now come from /api/instruments
@@ -44,17 +50,7 @@ const FUTURES_CONTRACTS = [
 ];
 
 // OPTIONS_UNDERLYINGS removed — instruments now come from /api/instruments.
-
-const OPTIONS_STRATEGIES = [
-  { value: 'vertical_spread',   label: 'Vertical Spread',    desc: 'Debit/credit con 2 strikes' },
-  { value: 'iron_condor',       label: 'Iron Condor',        desc: 'Vende call spread + put spread OTM' },
-  { value: 'straddle',          label: 'Straddle',           desc: 'Compra/vende ATM call + put mismo strike' },
-  { value: 'strangle',          label: 'Strangle',           desc: 'OTM call + OTM put diferente strike' },
-  { value: 'butterfly',         label: 'Butterfly',          desc: '3 strikes, riesgo definido' },
-  { value: 'calendar_spread',   label: 'Calendar Spread',    desc: 'Mismo strike, diferente vencimiento' },
-  { value: 'covered_call',      label: 'Covered Call',       desc: 'Largo subyacente + call vendida' },
-  { value: 'cash_secured_put',  label: 'Cash-Secured Put',   desc: 'Put vendida cubierta con cash' },
-];
+// OPTIONS_STRATEGIES removed (Wave 4 item 16 — options hidden, no backend yet).
 
 const PROPFIRM_PROVIDERS = [
   'TopstepX', 'Apex', 'Earn2Trade', 'Topstep',
@@ -88,16 +84,6 @@ function NumInput({ value, onChange, step = 'any', min = '0', placeholder = '' }
 }) {
   return (
     <input type="number" value={value} step={step} min={min} placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
-  );
-}
-
-function TextInput({ value, onChange, placeholder = '' }: {
-  value: string; onChange: (v: string) => void; placeholder?: string;
-}) {
-  return (
-    <input type="text" value={value} placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
   );
@@ -477,7 +463,7 @@ function StepFutures({
               <div className="space-y-2">
                 <div className="h-px bg-[#1f2937]" />
                 <p className="text-[10px] text-[#f59e0b]">Parámetros de la cuenta fondada</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <p className="text-[10px] text-[#475569] mb-1">Fondeo ($)</p>
                     <input type="number" value={newCmeFunded} onChange={(e) => setNewCmeFunded(e.target.value)}
@@ -530,70 +516,47 @@ function StepFutures({
   );
 }
 
-// ─── Step 1: Options ──────────────────────────────────────────────────────────
+// ─── Step 1: Crypto ───────────────────────────────────────────────────────────
+//
+// Wave 4 item 14. Crypto (coinarb) is architecturally different from
+// forex/futures: there's exactly one real bot deployment (coinarb-50x, a
+// Fly.io singleton — see CLAUDE.md §"Coinarb ↔ Algorithms unification"),
+// not a pool of user-connectable broker accounts. Creating a crypto
+// algorithm here always lands in research mode (no linked_bot_account_id),
+// same as the existing forex/futures "sin vincular" path — it's for
+// backtesting/tuning, not deploying a second live bot. Tunables that
+// actually drive a live bot (mtf_confidence_min, sweep_confirm_body_ratio,
+// etc.) are edited later from the algorithm detail modal's Coinarb section,
+// not here.
 
-type OptionsDirection = 'bullish' | 'bearish' | 'neutral' | 'both';
-
-function StepOptions({ name, setName, underlying: _underlying, setUnderlying: _setUnderlying,
-  instruments, setInstruments, instrumentsError,
-  strategy, setStrategy,
-  direction, setDirection, ibkrAccount, setIbkrAccount }: {
+function StepCrypto({ name, setName,
+  instruments, setInstruments, instrumentsError }: {
   name: string; setName: (v: string) => void;
-  underlying: string; setUnderlying: (v: string) => void;
   instruments: string[]; setInstruments: (v: string[]) => void; instrumentsError: string;
-  strategy: string; setStrategy: (v: string) => void;
-  direction: OptionsDirection; setDirection: (v: OptionsDirection) => void;
-  ibkrAccount: string; setIbkrAccount: (v: string) => void;
 }) {
-  const selectedStrat = OPTIONS_STRATEGIES.find((s) => s.value === strategy);
-
   return (
     <div className="space-y-4">
       <InfoBanner tone="amber">
-        Estrategias de opciones vía IBKR. La ejecución real está en desarrollo — por ahora el engine
-        evalúa y los signals quedan en shadow (auditables en el Shadow Inbox del modal).
+        Crypto corre sobre Coinbase spot vía Fly.io (coinarb-50x). Este wizard registra el
+        algoritmo en modo research (sin bot vinculado) para backtesting — no despliega un bot nuevo.
+        Los parámetros de trading en vivo se ajustan después desde el detalle del algoritmo.
       </InfoBanner>
 
       <Field label="Nombre de la estrategia *" hint="Cómo querés identificar esta estrategia en tu dashboard. No afecta el comportamiento.">
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="SPX Iron Condor v1"
+          placeholder="Coinarb research v2"
           className="w-full rounded-lg bg-[#0a0e1a] border border-[#1f2937] text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-[#475569] placeholder:text-[#2d3748]" />
       </Field>
 
-      <Field label="Subyacentes *" hint="Hasta 10 simbolos. El primero se usa como referencia.">
+      <Field label="Símbolos *" hint="Hasta 10 símbolos spot (ej. BTC-USD, ETH-USD, SOL-USD). El primero se usa como referencia.">
         <InstrumentMultiSelect value={instruments} onChange={setInstruments} error={instrumentsError} />
       </Field>
-      <Field label="Estrategia" hint="Define la estructura del spread (iron condor, vertical, straddle…). Cada estrategia tiene perfil de riesgo distinto.">
-        <Select value={strategy} onChange={setStrategy}>
-          {OPTIONS_STRATEGIES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </Select>
-      </Field>
 
-      {selectedStrat && (
-        <p className="text-[10px] text-[#475569] -mt-1">{selectedStrat.desc}</p>
-      )}
-
-      <Field label="Dirección / Bias" hint="Bullish = solo entradas BUY del subyacente. Bearish = solo SELL. Neutral = espera mean-reversion. Both = el engine decide.">
-        <DirectionChips value={direction} onChange={(v) => setDirection(v as OptionsDirection)}
-          options={[
-            { value: 'bullish', label: 'Bullish'  },
-            { value: 'neutral', label: 'Neutral ✓'},
-            { value: 'bearish', label: 'Bearish'  },
-            { value: 'both',    label: 'Both'     },
-          ]} />
-      </Field>
-
-      <Field label="Cuenta IBKR" hint="Formato: U1234567">
-        <TextInput value={ibkrAccount} onChange={setIbkrAccount} placeholder="U1234567" />
-      </Field>
-
-      {/* Execution platform badge — options always route through IBKR */}
-      <div className="flex items-center gap-2 rounded-lg border border-[#a78bfa]/20 bg-[#a78bfa]/5 px-3 py-2">
+      {/* Execution platform badge — crypto always routes through Fly/coinarb */}
+      <div className="flex items-center gap-2 rounded-lg border border-[#f59e0b]/20 bg-[#f59e0b]/5 px-3 py-2">
         <span className="text-[10px] text-[#475569] uppercase tracking-wider">Plataforma de ejecución</span>
-        <span className="text-xs font-bold text-[#a78bfa] font-mono">IBKR</span>
-        <span className="text-[10px] text-[#2d3748] ml-auto">Auto-seleccionada por mercado=options</span>
+        <span className="text-xs font-bold text-[#f59e0b] font-mono">Fly.io (Coinbase spot)</span>
+        <span className="text-[10px] text-[#2d3748] ml-auto">Auto-seleccionada por mercado=crypto</span>
       </div>
     </div>
   );
@@ -645,7 +608,7 @@ export function StepLatencyArbPairing({
         <p className="text-[10px] text-[#f87171]">El broker fast y slow no pueden ser la misma cuenta.</p>
       )}
 
-      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#1f2937]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#1f2937]">
         <Field label="Max skew (pts)" hint="Threshold de divergencia">
           <NumInput value={cfg.max_skew_points} onChange={(v) => setCfg('max_skew_points', v)}
             step="1" min="1" placeholder="30" />
@@ -674,9 +637,9 @@ export function StepLatencyArbPairing({
 // ─── Market type selector chips ───────────────────────────────────────────────
 
 const MARKET_CHIPS: { value: MarketType; label: string; color: string }[] = [
-  { value: 'forex',   label: 'Forex / MT',    color: '#34d399' },
-  { value: 'futures', label: 'Futures CME',   color: '#f59e0b' },
-  { value: 'options', label: 'Options IBKR',  color: '#a78bfa' },
+  { value: 'forex',   label: 'Forex / MT',            color: '#34d399' },
+  { value: 'futures', label: 'Futures CME',           color: '#f59e0b' },
+  { value: 'crypto',  label: 'Crypto (Coinbase)',     color: '#f59e0b' },
 ];
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
@@ -690,9 +653,10 @@ const FUTURES_OVERRIDES_INIT: Record<string, string> = {
   // Empty → dispatcher uses sensible defaults (1.5 / 3.0).
   sl_atr_mult: '', tp_atr_mult: '',
 };
-const OPTIONS_OVERRIDES_INIT: Record<string, string> = {
-  target_delta: '', min_iv_rank: '', min_dte: '', max_dte: '', max_contracts: '', max_premium_usd: '',
-};
+// Crypto has no wizard-time overrides — live tunables (mtf_confidence_min,
+// sweep_confirm_body_ratio, etc.) are edited later from the algorithm
+// detail modal's Coinarb section, not at creation time.
+const CRYPTO_OVERRIDES_INIT: Record<string, string> = {};
 
 export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [stepIdx,     setStepIdx]     = useState(0);
@@ -748,16 +712,10 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const [hedgeEnabled,  setHedgeEnabled]  = useState(false);
   const [hedgeContract, setHedgeContract] = useState('NQ');
 
-  // Options-specific
-  const [underlying,       setUnderlying]       = useState('SPX');
-  const [optionsStrategy,  setOptionsStrategy]  = useState('iron_condor');
-  const [optionsDirection, setOptionsDirection] = useState<OptionsDirection>('neutral');
-  const [ibkrAccount,      setIbkrAccount]      = useState('');
-
   // Overrides (per market type)
   const [forexOvr,   setForexOvr]   = useState<Record<string, string>>(FOREX_OVERRIDES_INIT);
   const [futuresOvr, setFuturesOvr] = useState<Record<string, string>>(FUTURES_OVERRIDES_INIT);
-  const [optionsOvr, setOptionsOvr] = useState<Record<string, string>>(OPTIONS_OVERRIDES_INIT);
+  const [cryptoOvr,  setCryptoOvr]  = useState<Record<string, string>>(CRYPTO_OVERRIDES_INIT);
 
   // Engine config (Base Engine v1 + modules + overlays)
   const [engineConfig, setEngineConfig] = useState<EngineConfig>(ENGINE_CONFIG_DEFAULT);
@@ -769,7 +727,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   const setOvr = (market: MarketType) => (k: string, v: string) => {
     if (market === 'forex')   setForexOvr((o)   => ({ ...o, [k]: v }));
     if (market === 'futures') setFuturesOvr((o) => ({ ...o, [k]: v }));
-    if (market === 'options') setOptionsOvr((o) => ({ ...o, [k]: v }));
+    if (market === 'crypto')  setCryptoOvr((o)  => ({ ...o, [k]: v }));
   };
 
   useEffect(() => {
@@ -916,7 +874,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
       if (!user) { toast.error('No autenticado'); return; }
 
       // Build engine overrides — only non-empty values
-      const ovr = marketType === 'forex' ? forexOvr : marketType === 'futures' ? futuresOvr : optionsOvr;
+      const ovr = marketType === 'forex' ? forexOvr : marketType === 'futures' ? futuresOvr : cryptoOvr;
       const engineOverrides: Record<string, number> = {};
       Object.entries(ovr).forEach(([k, v]) => { if (v !== '') engineOverrides[k] = Number(v); });
 
@@ -952,30 +910,32 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
           parameters.cme_type        = selectedCme.account_type;
         }
       } else {
-        parameters.underlying        = primary;
-        parameters.options_strategy  = optionsStrategy;
-        parameters.ibkr_account      = ibkrAccount || null;
-        parameters.options_direction = optionsDirection;
+        // crypto — no template-driven fields; live tunables are edited later
+        // from the algorithm detail modal's Coinarb section, not here.
+        parameters.symbols = instruments;
       }
 
-      // Normalize direction for DB (options 4-value → 3-value DB enum)
-      const dbDirection: Direction =
-        marketType === 'options'
-          ? optionsDirection === 'bullish' ? 'long' : optionsDirection === 'bearish' ? 'short' : 'both'
-          : direction;
+      // Crypto has no directional bias picker (the daily-direction detector
+      // decides BUY/SELL/HOLD at runtime, not at creation time) — always 'both'.
+      const dbDirection: Direction = marketType === 'crypto' ? 'both' : direction;
 
-      // Map DB columns by market type
+      // Map DB columns by market type. Crypto values are cosmetic — this
+      // creates a research-mode row (no linked bot), so lot_size/max_trades/
+      // risk_percent aren't consumed by any live runtime; the real coinarb
+      // bot reads its own thresholds from `algorithms.parameters` (edited
+      // post-creation), not from these columns.
       const lotSize =
         marketType === 'forex'   ? (engineOverrides.lot_per_leg      ?? 0.01) :
         marketType === 'futures' ? (engineOverrides.contracts_per_trade ?? 1)  :
-                                   (engineOverrides.max_contracts     ?? 5);
+                                   0.01;
       const maxTrades =
         marketType === 'forex'   ? (engineOverrides.max_concurrent    ?? 5) :
-                                   (engineOverrides.contracts_per_trade ?? 1);
+        marketType === 'futures' ? (engineOverrides.contracts_per_trade ?? 1) :
+                                   3;
       const riskPercent =
         marketType === 'forex'   ? (engineOverrides.max_daily_loss_pct ?? 3.0)  :
         marketType === 'futures' ? (engineOverrides.max_daily_loss_usd ?? 500)  :
-                                   (engineOverrides.max_premium_usd   ?? 200);
+                                   5.0;
 
       const isLatencyArb = selectedTemplateKey === 'latency_arb_mt5';
 
@@ -990,13 +950,13 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
 
       // Auto-bind execution platform from market_type. Futures propfirm =
       // Tradovate (only venue that interfaces with the major prop firms);
-      // options = IBKR; forex respects the user's MT4/MT5 choice. Without
+      // crypto = fly (matches the coinarb-50x singleton's platform value,
+      // migration 099); forex respects the user's MT4/MT5 choice. Without
       // this the algorithm dispatcher has no way to know where to route.
-      const resolvedPlatform: 'MT4' | 'MT5' | 'Tradovate' | 'IBKR' =
+      const resolvedPlatform: 'MT4' | 'MT5' | 'Tradovate' | 'fly' =
         marketType === 'forex'   ? selectedPlatform :
         marketType === 'futures' ? 'Tradovate' :
-        marketType === 'options' ? 'IBKR' :
-                                   'MT5';
+                                   'fly';
 
       const { data: created, error } = await supabase.from('algorithms').insert({
         user_id:               user.id,
@@ -1044,12 +1004,12 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-md rounded-2xl border border-[#1f2937] bg-[#0d1117] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="w-full max-w-md rounded-2xl border border-[#1f2937] bg-[#0d1117] shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f2937] flex-shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-[#1f2937] flex-shrink-0">
           <div>
             <h2 className="text-sm font-bold text-[#e2e8f0] font-mono">Nueva estrategia</h2>
             <p className="text-[10px] text-[#475569] mt-0.5">Paso {stepIdx + 1} de {STEPS.length} — {STEPS[stepIdx]}</p>
@@ -1066,7 +1026,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Body */}
-        <div className="p-5 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1">
           {/* Market type selector — always visible on Step 1 */}
           {stepIdx === 0 && (
             <div className="flex gap-2 mb-5">
@@ -1146,14 +1106,10 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
               addingCmeAccount={addingCmeAccount} handleAddCmeAccount={handleAddCmeAccount}
             />
           )}
-          {stepIdx === 0 && marketType === 'options' && (
-            <StepOptions
+          {stepIdx === 0 && marketType === 'crypto' && (
+            <StepCrypto
               name={name} setName={setName}
-              underlying={underlying} setUnderlying={setUnderlying}
               instruments={instruments} setInstruments={setInstruments} instrumentsError={instrumentsError}
-              strategy={optionsStrategy} setStrategy={setOptionsStrategy}
-              direction={optionsDirection} setDirection={setOptionsDirection}
-              ibkrAccount={ibkrAccount} setIbkrAccount={setIbkrAccount}
             />
           )}
 
@@ -1162,7 +1118,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
             <AlgorithmWizardStep2
               value={engineConfig}
               onChange={setEngineConfig}
-              overrides={marketType === 'forex' ? forexOvr : marketType === 'futures' ? futuresOvr : optionsOvr}
+              overrides={marketType === 'forex' ? forexOvr : marketType === 'futures' ? futuresOvr : cryptoOvr}
               onOverridesChange={setOvr(marketType)}
               marketType={marketType}
             />
@@ -1170,7 +1126,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-[#1f2937] flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-t border-[#1f2937] flex-shrink-0">
           <button
             onClick={isFirst ? onClose : () => setStepIdx((i) => i - 1)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#1f2937] text-[#94a3b8] text-sm hover:border-[#475569] transition-all">
