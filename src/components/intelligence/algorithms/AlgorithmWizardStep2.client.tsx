@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import type { EngineConfig } from "@/lib/validations/engine-config";
 import { ENGINE_CONFIG_DEFAULT } from "@/lib/validations/engine-config";
 
-type MarketType = "forex" | "futures" | "options";
+type MarketType = "forex" | "futures" | "crypto";
 
 interface Props {
   value?: EngineConfig;
@@ -112,7 +112,7 @@ function BaseEngineCard() {
           Siempre activo
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 pt-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
         {BASE_TIMEFRAMES.map((t) => (
           <div key={t.tf} className="rounded-lg bg-[#0a0e1a]/80 border border-[#1f2937] px-3 py-2">
             <div className="flex items-center justify-between">
@@ -157,7 +157,7 @@ function ModuleRow({
 
 function OverridesForex({ overrides, set }: { overrides: Record<string, string>; set: (k: string, v: string) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <Field label="Límite de ops por día" hint="Engine default: 1,200 ops">
         <NumInput value={overrides.daily_op_limit ?? ""} onChange={(v) => set("daily_op_limit", v)} step="100" min="100" placeholder="1200" />
       </Field>
@@ -176,7 +176,7 @@ function OverridesForex({ overrides, set }: { overrides: Record<string, string>;
 
 function OverridesFutures({ overrides, set }: { overrides: Record<string, string>; set: (k: string, v: string) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <Field label="Contratos por operación" hint="Engine default: 1">
         <NumInput value={overrides.contracts_per_trade ?? ""} onChange={(v) => set("contracts_per_trade", v)} step="1" min="1" placeholder="1" />
       </Field>
@@ -202,28 +202,17 @@ function OverridesFutures({ overrides, set }: { overrides: Record<string, string
   );
 }
 
-function OverridesOptions({ overrides, set }: { overrides: Record<string, string>; set: (k: string, v: string) => void }) {
+// Crypto has no wizard-time overrides — live tunables (mtf_confidence_min,
+// sweep_confirm_body_ratio, arb_gap_min per symbol, etc.) are edited later
+// from the algorithm detail modal's Coinarb section, not at creation time
+// (Wave 4 item 14).
+function OverridesCrypto() {
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <Field label="Delta objetivo" hint="Strike selection (default: 0.30)">
-        <NumInput value={overrides.target_delta ?? ""} onChange={(v) => set("target_delta", v)} step="0.05" min="0.05" placeholder="0.30" />
-      </Field>
-      <Field label="IV Rank mínimo (%)" hint="Solo entrar si IV rank >= X (default: 30)">
-        <NumInput value={overrides.min_iv_rank ?? ""} onChange={(v) => set("min_iv_rank", v)} step="5" min="5" placeholder="30" />
-      </Field>
-      <Field label="DTE mínimo" hint="Días a vencimiento mínimo (default: 21)">
-        <NumInput value={overrides.min_dte ?? ""} onChange={(v) => set("min_dte", v)} step="1" min="1" placeholder="21" />
-      </Field>
-      <Field label="DTE máximo" hint="Días a vencimiento máximo (default: 45)">
-        <NumInput value={overrides.max_dte ?? ""} onChange={(v) => set("max_dte", v)} step="1" min="1" placeholder="45" />
-      </Field>
-      <Field label="Contratos máx. por posición" hint="Engine default: 5">
-        <NumInput value={overrides.max_contracts ?? ""} onChange={(v) => set("max_contracts", v)} step="1" min="1" placeholder="5" />
-      </Field>
-      <Field label="Prima máx. $ por contrato" hint="Límite de debit/credit (default: $200)">
-        <NumInput value={overrides.max_premium_usd ?? ""} onChange={(v) => set("max_premium_usd", v)} step="25" min="25" placeholder="200" />
-      </Field>
-    </div>
+    <p className="text-[11px] text-[#475569] leading-relaxed">
+      Los parámetros de trading en vivo (confianza mínima, ratio de sweep, gaps de arbitraje
+      por símbolo) se configuran después de crear la estrategia, desde el panel Coinarb en el
+      detalle del algoritmo.
+    </p>
   );
 }
 
@@ -272,7 +261,7 @@ export function AlgorithmWizardStep2(props: Props) {
           enabled={m.capital_phases.enabled}
           onToggle={(b) => setModule("capital_phases", { enabled: b })}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Fases" hint="1–11 (default 11)">
               <NumInput value={m.capital_phases.phases} onChange={(v) => setModule("capital_phases", { phases: parseInt(v || "0", 10) })} step="1" min="1" />
             </Field>
@@ -294,7 +283,7 @@ export function AlgorithmWizardStep2(props: Props) {
           enabled={m.circuit_breaker.enabled}
           onToggle={(b) => setModule("circuit_breaker", { enabled: b })}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Pérdidas consecutivas" hint="default 5">
               <NumInput value={m.circuit_breaker.consecutive_losses} onChange={(v) => setModule("circuit_breaker", { consecutive_losses: parseInt(v || "0", 10) })} step="1" min="1" />
             </Field>
@@ -313,7 +302,7 @@ export function AlgorithmWizardStep2(props: Props) {
           enabled={m.cascade_probability.enabled}
           onToggle={(b) => setModule("cascade_probability", { enabled: b })}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Bias score mínimo" hint="0–100, default 60">
               <NumInput value={m.cascade_probability.min_bias_score} onChange={(v) => setModule("cascade_probability", { min_bias_score: Number(v || "0") })} step="1" min="0" />
             </Field>
@@ -334,7 +323,7 @@ export function AlgorithmWizardStep2(props: Props) {
           enabled={o.decision_engine.enabled}
           onToggle={(b) => setOverlay("decision_engine", { enabled: b })}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Score mínimo de entrada" hint="default 60">
               <NumInput value={o.decision_engine.decision_score_min} onChange={(v) => setOverlay("decision_engine", { decision_score_min: Number(v || "0") })} step="1" min="0" />
             </Field>
@@ -350,7 +339,7 @@ export function AlgorithmWizardStep2(props: Props) {
           enabled={o.order_flow.enabled}
           onToggle={(b) => setOverlay("order_flow", { enabled: b })}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Lookback bars" hint="default 10">
               <NumInput value={o.order_flow.sweep_lookback_bars} onChange={(v) => setOverlay("order_flow", { sweep_lookback_bars: parseInt(v || "0", 10) })} step="1" min="1" />
             </Field>
@@ -366,7 +355,7 @@ export function AlgorithmWizardStep2(props: Props) {
           enabled={o.range_gate.enabled}
           onToggle={(b) => setOverlay("range_gate", { enabled: b })}
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Modo" hint="RANGE_POINTS o RANGE_ATR">
               <SelectInput value={o.range_gate.range_gate_mode} onChange={(v) => setOverlay("range_gate", { range_gate_mode: v as "RANGE_POINTS" | "RANGE_ATR" })}>
                 <option value="RANGE_POINTS">RANGE_POINTS</option>
@@ -390,7 +379,7 @@ export function AlgorithmWizardStep2(props: Props) {
         </ModuleRow>
 
         <ModuleRow label="Pulse Engine" enabled={o.pulse_engine.enabled} onToggle={(b) => setOverlay("pulse_engine", { enabled: b })}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Ventana (ms)" hint="default 800">
               <NumInput value={o.pulse_engine.pulse_window_ms} onChange={(v) => setOverlay("pulse_engine", { pulse_window_ms: parseInt(v || "0", 10) })} step="100" min="100" />
             </Field>
@@ -409,7 +398,7 @@ export function AlgorithmWizardStep2(props: Props) {
         <SectionHeader title="Overrides" subtitle="Los campos vacíos usan los defaults del engine" />
         {props.marketType === "forex"   && <OverridesForex   overrides={props.overrides} set={props.onOverridesChange} />}
         {props.marketType === "futures" && <OverridesFutures overrides={props.overrides} set={props.onOverridesChange} />}
-        {props.marketType === "options" && <OverridesOptions overrides={props.overrides} set={props.onOverridesChange} />}
+        {props.marketType === "crypto"  && <OverridesCrypto />}
       </section>
     </div>
   );

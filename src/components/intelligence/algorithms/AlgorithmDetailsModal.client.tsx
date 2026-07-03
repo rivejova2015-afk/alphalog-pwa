@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Key, Copy, Check, RefreshCw, Cloud, Lock, AlertCircle, Save, Play, Inbox, Radio, Files } from "lucide-react";
+import { X, Key, Copy, Check, RefreshCw, Cloud, AlertCircle, Save, Play, Inbox, Radio, Files } from "lucide-react";
 import { toast } from "sonner";
 import PairingInstructionsModal from "@/components/tradehub/PairingInstructionsModal.client";
 import QualityGatesPanel from "./QualityGatesPanel.client";
@@ -39,6 +39,14 @@ interface BotAccountOption {
   id: string;
   label: string;
   account_id: string;
+}
+
+interface CmeAccountOption {
+  id: string;
+  account_type: "propfirm" | "broker";
+  provider_name: string;
+  account_number: string;
+  label: string | null;
 }
 
 interface ConnectionsResponse {
@@ -186,7 +194,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
           className="w-full max-w-2xl rounded-lg bg-[#0a0e1a] border border-[#1f2937] shadow-2xl max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-5 border-b border-[#1f2937]">
+          <div className="flex items-center justify-between gap-2 flex-wrap p-4 sm:p-5 border-b border-[#1f2937]">
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-cyan-400" />
               <h2 className="text-base font-semibold text-slate-100">Detalles de conexión</h2>
@@ -226,7 +234,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
             </div>
           </div>
 
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             {loading && <SkeletonBlock />}
 
             {error && !loading && (
@@ -237,13 +245,21 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
             )}
 
             {/* Research mode banner: surfaces "Deploy to account" when a forex
-                algorithm has no cuenta vinculada. Only forex is wired in this
-                first iteration because the deploy endpoint expects bot_account
-                ids. Futures (CME) y options usan algo_cme_accounts / IBKR
-                account fields que viven en parameters jsonb — un sprint
-                separado puede extender este banner para ese flujo. */}
+                algorithm has no cuenta vinculada. */}
             {!loading && !error && algorithm && algorithm.market_type === "forex" && !algorithm.linked_bot_account_id && (
               <DeployToAccountSection
+                algorithmId={algorithmId}
+                currentStatus={algorithm.status}
+                onDeployed={fetchAll}
+              />
+            )}
+
+            {/* CME equivalent (Wave 4 item 15) — links parameters.cme_account_id
+                instead of linked_bot_account_id, since CME has no
+                algorithm_deployments-based deploy path. IBKR/options has no
+                equivalent (options hidden — Wave 4 item 16, no real backend). */}
+            {!loading && !error && algorithm && algorithm.market_type === "futures" && !(algorithm.parameters as Record<string, unknown> | null)?.cme_account_id && (
+              <CmeDeployToAccountSection
                 algorithmId={algorithmId}
                 currentStatus={algorithm.status}
                 onDeployed={fetchAll}
@@ -271,9 +287,10 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
                 {data.algorithm.market_type === "futures" && algorithm && (
                   <KellySection algorithm={algorithm} onSaved={fetchAll} />
                 )}
-                {data.algorithm.market_type === "options" && (
-                  <OptionsSection />
-                )}
+                {/* 'options' market_type has no display section — hidden
+                    (Wave 4 item 16, owner decision 2026-07): OptionsSection
+                    was a static "coming soon" banner with no real backend.
+                    Restorable from git history once IBKR execution exists. */}
 
                 {/* Sprint E — server-side dispatcher panel. Visible only for
                     Tradovate/IBKR algos (futures/options) since those are the
@@ -397,7 +414,7 @@ function Mt5Section({
             <span className="text-sm font-semibold text-slate-100">Cuenta vinculada</span>
             <StatusBadge status={data.connection_status} />
           </div>
-          <dl className="grid grid-cols-2 gap-y-2 text-xs">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-x-4 text-xs">
             <Row label="Etiqueta"        value={data.label ?? "—"} />
             <Row label="Cuenta MT5/MT4"  value={isPending ? "Pendiente de pairing" : (data.account_id ?? "—")} mono />
             <Row label="Plataforma"      value={data.platform ?? "—"} />
@@ -511,7 +528,7 @@ function CmeSection({ data, onRefresh }: { data: NonNullable<ConnectionsResponse
               </span>
             </div>
           </div>
-          <dl className="grid grid-cols-2 gap-y-2 text-xs">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-x-4 text-xs">
             <Row label="Número de cuenta"     value={data.account_number ?? "—"} mono />
             <Row label="Broker"               value={data.broker_type ?? "—"} />
             <Row label="Estado conexión"      value={data.connection_status ?? "no conectado"} />
@@ -659,7 +676,7 @@ function KellySection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved
         </div>
 
         {hasStats ? (
-          <dl className="grid grid-cols-3 gap-y-2 text-xs">
+          <dl className="grid grid-cols-1 sm:grid-cols-3 gap-y-2 text-xs">
             <Row label="Win rate"   value={`${(autoWinRate! * 100).toFixed(1)}%`} />
             <Row label="Avg win"    value={`$${autoAvgWin!.toFixed(2)}`} />
             <Row label="Avg loss"   value={`$${autoAvgLoss!.toFixed(2)}`} />
@@ -690,7 +707,7 @@ function KellySection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved
           />
         </label>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <NumField label="Fractional Kelly" value={fraction} onChange={setFraction} step="0.05" hint="0.5 = half-Kelly (recomendado)" />
           <NumField label="Min contratos"    value={minK}     onChange={setMinK}     step="1"    hint="Default 1" />
           <NumField label="Max contratos"    value={maxK}     onChange={setMaxK}     step="1"    hint="Default 10" />
@@ -712,45 +729,8 @@ function KellySection({ algorithm, onSaved }: { algorithm: AlgorithmRow; onSaved
   );
 }
 
-// ─── Options section (placeholder) ──────────────────────────────────────────
-function OptionsSection() {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-slate-500 font-medium">
-        <Cloud className="w-3 h-3" />
-        Plataforma · Opciones
-      </div>
-
-      {/* Options are always in research mode: no real execution path exists yet
-          (IBKR integration pending). Purely informational — no CTA because
-          there's nothing to link to. */}
-      <ResearchModeBanner
-        title="Modo research — ejecución vía IBKR próximamente"
-        description={
-          <>
-            Las estrategias de opciones están en modo research permanente por ahora: el engine evalúa los signals
-            y los registra en el Shadow Inbox, pero no hay ejecución real. La integración con Interactive Brokers
-            (IBKR) está en desarrollo — cuando esté disponible vas a poder vincular una cuenta y operar en vivo.
-          </>
-        }
-      />
-
-      <InfoBanner tone="amber">
-        La ejecución real para opciones está en desarrollo. Por ahora el engine evalúa los signals y los
-        deja en estado <span className="font-mono">shadow_logged</span> — los podés auditar abajo en el Shadow Inbox.
-      </InfoBanner>
-
-      <div className="rounded-lg bg-[#151b28] border border-violet-900/40 p-6 text-center">
-        <Lock className="w-8 h-8 text-violet-400 mx-auto mb-3" />
-        <p className="text-sm font-semibold text-slate-100 mb-1">Próximamente</p>
-        <p className="text-xs text-slate-500 leading-relaxed">
-          La integración con Interactive Brokers (IBKR) está en desarrollo. Las estrategias de opciones
-          podrán conectarse vía API cuando esté disponible.
-        </p>
-      </div>
-    </div>
-  );
-}
+// OptionsSection (placeholder) removed — Wave 4 item 16, owner decision
+// 2026-07. Restorable from git history once IBKR execution exists.
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: ConnectionStatus }) {
@@ -1037,6 +1017,145 @@ function DeployToAccountSection({
             className="w-full py-2.5 rounded-lg bg-[#a78bfa] hover:bg-[#c4b5fd] text-[#0a0e1a] text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {deploying ? "Vinculando…" : "Deploy to account"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── CME deploy-to-account (Wave 4 item 15) ─────────────────────────────────
+//
+// Renders when a futures algorithm has no CME account linked. Unlike forex,
+// there's no /deploy endpoint for CME — CME/Tradovate dispatch is a
+// server-side cron reading live algos with parameters.cme_account_id set
+// (see /api/cron/algorithms/tradovate-poll), not an algorithm_deployments
+// row. So this section's job is narrower: link an existing algo_cme_accounts
+// row into parameters (same shape the wizard writes) and promote
+// draft/paper → approved. The subsequent approved → live promotion is
+// handled uniformly for every algorithm by the existing QualityGatesPanel
+// (rendered below regardless of market_type) — no need to duplicate that
+// logic here.
+function CmeDeployToAccountSection({
+  algorithmId,
+  currentStatus,
+  onDeployed,
+}: {
+  algorithmId: string;
+  currentStatus: string;
+  onDeployed: () => void;
+}) {
+  const [accounts, setAccounts]       = useState<CmeAccountOption[]>([]);
+  const [loadingAccs, setLoadingAccs] = useState(true);
+  const [selectedId, setSelectedId]   = useState("");
+  const [linking, setLinking]         = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/browser");
+        const sb = createClient();
+        const { data } = await sb
+          .from("algo_cme_accounts")
+          .select("id, account_type, provider_name, account_number, label")
+          .is("deleted_at", null);
+        if (!cancelled) setAccounts((data ?? []) as CmeAccountOption[]);
+      } finally {
+        if (!cancelled) setLoadingAccs(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleLink() {
+    const selected = accounts.find((a) => a.id === selectedId);
+    if (!selected) { toast.error("Elegí una cuenta CME"); return; }
+    setLinking(true);
+    try {
+      // Mirrors the shape NewStrategyWizard writes for a linked CME account
+      // (handleCreate's futures branch) — the connections/quality-gates
+      // endpoints read cme_account_num from parameters to resolve the row.
+      const putRes = await fetch(`/api/algorithms/${algorithmId}`, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          parameters: {
+            cme_account_id:  selected.id,
+            cme_provider:    selected.provider_name,
+            cme_account_num: selected.account_number,
+            cme_type:        selected.account_type,
+          },
+        }),
+      });
+      if (!putRes.ok) {
+        const body = await putRes.json().catch(() => ({}));
+        toast.error(`No se pudo vincular la cuenta: ${body.error ?? putRes.status}`);
+        return;
+      }
+
+      if (currentStatus === "draft" || currentStatus === "paper") {
+        const approveRes = await fetch(`/api/algorithms/${algorithmId}/approve`, { method: "POST" });
+        if (!approveRes.ok) {
+          const body = await approveRes.json().catch(() => ({}));
+          toast.error(`Cuenta vinculada, pero approve falló: ${body.error ?? approveRes.status}`);
+          return;
+        }
+      }
+
+      toast.success("Cuenta CME vinculada");
+      onDeployed();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error de conexión");
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-amber-400 font-mono uppercase tracking-wider flex items-center gap-2">
+          <Cloud className="w-4 h-4" />
+          Vincular cuenta CME
+        </h3>
+        <p className="text-xs text-[#94a3b8] mt-1 leading-relaxed">
+          Elegí una cuenta CME existente para vincularla a esta estrategia. Internamente guarda
+          la referencia y promueve a Aprobado si estaba en draft/paper.
+        </p>
+      </div>
+
+      {loadingAccs ? (
+        <div className="h-20 bg-slate-800/40 rounded animate-pulse" />
+      ) : accounts.length === 0 ? (
+        <div className="text-xs text-[#94a3b8] py-3 px-4 rounded-lg border border-[#1f2937] bg-[#0a0e1a]">
+          No tenés cuentas CME cargadas todavía. Creá una desde el wizard de nueva estrategia.
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className="text-[10px] text-[#475569] uppercase tracking-wider block mb-1.5">Cuenta destino</label>
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="w-full rounded-lg bg-[#0a0e1a] border border-amber-500/40 text-[#e2e8f0] text-sm px-3 py-2 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">— Elegí una cuenta —</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label ?? a.provider_name} ({a.account_number}) — {a.account_type === "propfirm" ? "Propfirm" : "Broker"}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLink}
+            disabled={linking || !selectedId}
+            className="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#0a0e1a] text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {linking ? "Vinculando…" : "Vincular cuenta"}
           </button>
         </>
       )}

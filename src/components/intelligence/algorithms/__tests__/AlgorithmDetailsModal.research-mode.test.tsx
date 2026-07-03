@@ -1,33 +1,52 @@
 // @vitest-environment jsdom
 //
-// Research-mode banner extension to futures + options in the algorithm
-// details modal. Validates:
-//   - Futures with no cuenta CME vinculada → banner appears with CTA to wizard.
-//   - Futures WITH a cuenta CME vinculada  → banner does NOT appear.
-//   - Options                              → banner always appears (informational).
+// Research-mode banner extension to futures in the algorithm details modal.
+// Validates:
+//   - Futures with no cuenta CME vinculada → research banner + the new
+//     CmeDeployToAccountSection (Wave 4 item 15) both appear, and linking an
+//     account PUTs parameters.cme_account_id + calls /approve.
+//   - Futures WITH a cuenta CME vinculada  → neither appears.
+//   - Options is hidden entirely (Wave 4 item 16 — no real IBKR backend,
+//     owner decision 2026-07): no market-specific section renders for it.
 //
 // We mock everything beyond the network fetch — the modal pulls heavy children
 // (Coinarb section, dispatcher panel, quality gates, etc.) we don't care about
 // here, so they get replaced with cheap stubs.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import AlgorithmDetailsModal from "../AlgorithmDetailsModal.client";
 
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() } }));
+const { cmeAccountsMock, toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
+  cmeAccountsMock: vi.fn(() => Promise.resolve({ data: [] as unknown[] })),
+  toastSuccessMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({ toast: { error: toastErrorMock, success: toastSuccessMock, message: vi.fn() } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../QualityGatesPanel.client", () => ({ default: () => null }));
 vi.mock("../AlgorithmShadowInbox.client", () => ({ AlgorithmShadowInbox: () => null }));
 vi.mock("../TradovateConnectModal.client", () => ({ default: () => null }));
 vi.mock("@/components/tradehub/PairingInstructionsModal.client", () => ({ default: () => null }));
 vi.mock("@/lib/supabase/browser", () => ({
-  createClient: () => ({ from: () => ({ select: async () => ({ data: [] }) }) }),
+  createClient: () => ({
+    from: (table: string) => {
+      const chain: Record<string, unknown> = {};
+      chain.is = () => chain;
+      chain.eq = () => chain;
+      chain.then = (resolve: (v: unknown) => unknown) =>
+        (table === "algo_cme_accounts" ? cmeAccountsMock() : Promise.resolve({ data: [] })).then(resolve);
+      return { select: () => chain };
+    },
+  }),
 }));
 
 type AlgoOverrides = Partial<{
-  market_type: "forex" | "futures" | "options";
+  market_type: "forex" | "futures";
   status: string;
   linked_bot_account_id: string | null;
+  parameters: Record<string, unknown>;
 }>;
 
 const cmeLinked = {
@@ -61,11 +80,17 @@ const cmeUnlinked = {
 };
 
 function buildFetchMock(opts: {
-  marketType: "forex" | "futures" | "options";
+  marketType: "forex" | "futures";
   cme?: typeof cmeLinked | typeof cmeUnlinked | null;
   algoOverrides?: AlgoOverrides;
 }) {
-  return vi.fn(async (url: string) => {
+  const calls: { url: string; method: string; body?: unknown }[] = [];
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    let body: unknown;
+    if (init?.body) { try { body = JSON.parse(init.body as string); } catch { /* ignore */ } }
+    calls.push({ url, method, body });
+
     if (url.includes("/connections")) {
       return {
         ok: true,
@@ -73,11 +98,11 @@ function buildFetchMock(opts: {
           algorithm: { id: "algo-1", name: "Test algo", market_type: opts.marketType, instrument: "X", platform: "MT5" },
           mt5: null,
           cme: opts.cme ?? null,
-          options: opts.marketType === "options" ? { available: false } : null,
+          options: null,
         }),
       } as Response;
     }
-    if (url === "/api/algorithms/algo-1") {
+    if (url === "/api/algorithms/algo-1" && method === "GET") {
       return {
         ok: true,
         json: async () => ({
@@ -95,13 +120,24 @@ function buildFetchMock(opts: {
         }),
       } as Response;
     }
+    if (url === "/api/algorithms/algo-1" && method === "PUT") {
+      return { ok: true, json: async () => ({ algorithm: { id: "algo-1" } }) } as Response;
+    }
+    if (url === "/api/algorithms/algo-1/approve" && method === "POST") {
+      return { ok: true, json: async () => ({ algorithm: { id: "algo-1", status: "approved" } }) } as Response;
+    }
     return { ok: true, json: async () => ({}) } as Response;
   });
+  return Object.assign(fn, { calls });
 }
 
-describe("AlgorithmDetailsModal — research-mode banner (futures + options)", () => {
+describe("AlgorithmDetailsModal — research-mode banner + CME deploy-to-account (futures)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    cmeAccountsMock.mockReset();
+    cmeAccountsMock.mockResolvedValue({ data: [] });
+    toastSuccessMock.mockReset();
+    toastErrorMock.mockReset();
   });
 
   it("shows the research banner for a futures algo with NO cuenta CME vinculada", async () => {
@@ -117,23 +153,59 @@ describe("AlgorithmDetailsModal — research-mode banner (futures + options)", (
   });
 
   it("does NOT show the research banner for a futures algo WITH a cuenta CME vinculada", async () => {
-    globalThis.fetch = buildFetchMock({ marketType: "futures", cme: cmeLinked }) as unknown as typeof fetch;
+    globalThis.fetch = buildFetchMock({
+      marketType: "futures", cme: cmeLinked, algoOverrides: { parameters: { cme_account_id: "cme-acc-1" } },
+    }) as unknown as typeof fetch;
     render(<AlgorithmDetailsModal algorithmId="algo-1" algorithmName="Test algo" onClose={vi.fn()} />);
 
     // Wait for the CME section to render (the linked account number is shown).
     await screen.findByText(/TV-12345/);
     expect(screen.queryByText(/Modo research — sin cuenta vinculada/i)).toBeNull();
+    // The deploy-to-account section only renders when parameters.cme_account_id is absent.
+    expect(screen.queryByText(/Vincular cuenta CME/i)).toBeNull();
   });
 
-  it("shows the informational research banner for an options algo", async () => {
-    globalThis.fetch = buildFetchMock({ marketType: "options" }) as unknown as typeof fetch;
+  it("Wave 4 item 16: no options-specific section renders (hidden, no backend)", async () => {
+    globalThis.fetch = buildFetchMock({ marketType: "futures", cme: cmeUnlinked }) as unknown as typeof fetch;
+    render(<AlgorithmDetailsModal algorithmId="algo-1" algorithmName="Test algo" onClose={vi.fn()} />);
+    await screen.findByText(/Modo research — sin cuenta vinculada/i);
+    expect(screen.queryByText(/ejecución vía IBKR/i)).toBeNull();
+  });
+
+  it("Wave 4 item 15: shows CmeDeployToAccountSection with existing accounts and links one on submit", async () => {
+    cmeAccountsMock.mockResolvedValue({
+      data: [{ id: "cme-acc-9", account_type: "propfirm", provider_name: "TopstepX", account_number: "TSX-777", label: "Topstep 50K" }],
+    });
+    const fetchMock = buildFetchMock({ marketType: "futures", cme: cmeUnlinked, algoOverrides: { status: "paper" } });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
     render(<AlgorithmDetailsModal algorithmId="algo-1" algorithmName="Test algo" onClose={vi.fn()} />);
 
-    const banner = await screen.findByText(/Modo research — ejecución vía IBKR próximamente/i);
-    expect(banner).toBeDefined();
-    // Options banner is purely informational — no "wizard" CTA.
+    await screen.findByText(/Vincular cuenta CME/i);
+    const select = await screen.findByDisplayValue(/Elegí una cuenta/i);
+    fireEvent.change(select, { target: { value: "cme-acc-9" } });
+
+    const linkBtn = screen.getByRole("button", { name: /Vincular cuenta/i });
+    fireEvent.click(linkBtn);
+
     await waitFor(() => {
-      expect(screen.queryByText(/Crear cuenta CME en el wizard/i)).toBeNull();
+      expect(toastSuccessMock).toHaveBeenCalledWith("Cuenta CME vinculada");
     });
+
+    const putCall = fetchMock.calls.find((c) => c.url === "/api/algorithms/algo-1" && c.method === "PUT");
+    expect(putCall?.body).toMatchObject({
+      parameters: { cme_account_id: "cme-acc-9", cme_provider: "TopstepX", cme_account_num: "TSX-777", cme_type: "propfirm" },
+    });
+    // status was 'paper' → approve should have been called too.
+    const approveCall = fetchMock.calls.find((c) => c.url === "/api/algorithms/algo-1/approve" && c.method === "POST");
+    expect(approveCall).toBeDefined();
+  });
+
+  it("Wave 4 item 15: shows the empty-state message when the user has no CME accounts yet", async () => {
+    cmeAccountsMock.mockResolvedValue({ data: [] });
+    globalThis.fetch = buildFetchMock({ marketType: "futures", cme: cmeUnlinked }) as unknown as typeof fetch;
+    render(<AlgorithmDetailsModal algorithmId="algo-1" algorithmName="Test algo" onClose={vi.fn()} />);
+
+    await screen.findByText(/Vincular cuenta CME/i);
+    expect(await screen.findByText(/No tenés cuentas CME cargadas todavía/i)).toBeDefined();
   });
 });

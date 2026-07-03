@@ -24,7 +24,15 @@ vi.mock("../AlgorithmShadowInbox", () => ({ AlgorithmShadowInbox: () => null }))
 vi.mock("../TradovateConnectModal.client", () => ({ default: () => null }));
 vi.mock("@/components/tradehub/PairingInstructionsModal.client", () => ({ default: () => null }));
 vi.mock("@/lib/supabase/browser", () => ({
-  createClient: () => ({ from: () => ({ select: async () => ({ data: [] }) }) }),
+  createClient: () => ({
+    from: () => {
+      const chain: Record<string, unknown> = {};
+      chain.is = () => chain;
+      chain.eq = () => chain;
+      chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: [] }).then(resolve);
+      return { select: () => chain };
+    },
+  }),
 }));
 
 type StatusFixture = "paused" | "draft" | "paper" | "live";
