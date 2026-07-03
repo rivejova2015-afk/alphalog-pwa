@@ -7,6 +7,8 @@ import CmePositionsPanel from './CmePositionsPanel.client';
 import CmeEquityCurve from './CmeEquityCurve.client';
 import CmeRiskConfigPanel from './CmeRiskConfigPanel.client';
 import CmeTradesTable from './CmeTradesTable.client';
+import CmeShadowSignalsPanel from './CmeShadowSignalsPanel.client';
+import CmePropfirmRulesPanel from './CmePropfirmRulesPanel.client';
 
 interface AlgoCmeAccount {
   id: string;
@@ -34,6 +36,12 @@ interface ConnectForm {
   accountId: string;
   username: string;
   password: string;
+  // OAuth credentials (opcionales — Tradovate los exige para producción).
+  // Demo cuentas funcionan sin ellos.
+  cid: string;
+  sec: string;
+  appId: string;
+  appVersion: string;
 }
 
 export default function CmePropFirmWorkspace() {
@@ -44,7 +52,16 @@ export default function CmePropFirmWorkspace() {
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [killSwitching, setKillSwitching] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [form, setForm] = useState<ConnectForm>({ accountId: '', username: '', password: '' });
+  const [form, setForm] = useState<ConnectForm>({
+    accountId: '',
+    username: '',
+    password: '',
+    cid: '',
+    sec: '',
+    appId: 'AlphaLog',
+    appVersion: '1.0.0',
+  });
+  const [showOauth, setShowOauth] = useState(false);
 
   const fetchData = useCallback(async () => {
     const [connRes, acctRes] = await Promise.all([
@@ -82,6 +99,7 @@ export default function CmePropFirmWorkspace() {
     }
     setConnecting(true);
     try {
+      const cidNum = form.cid ? Number(form.cid) : 0;
       const res = await fetch('/api/cme/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,6 +107,10 @@ export default function CmePropFirmWorkspace() {
           cmeAccountId: form.accountId,
           tradovateUsername: form.username,
           tradovatePassword: form.password,
+          appId: form.appId || 'AlphaLog',
+          appVersion: form.appVersion || '1.0.0',
+          cid: Number.isFinite(cidNum) ? cidNum : 0,
+          sec: form.sec,
         }),
       });
       const data = await res.json();
@@ -97,7 +119,15 @@ export default function CmePropFirmWorkspace() {
         return;
       }
       toast.success('Connected to Tradovate');
-      setForm({ accountId: '', username: '', password: '' });
+      setForm({
+        accountId: '',
+        username: '',
+        password: '',
+        cid: '',
+        sec: '',
+        appId: 'AlphaLog',
+        appVersion: '1.0.0',
+      });
       fetchData();
     } finally {
       setConnecting(false);
@@ -238,6 +268,16 @@ export default function CmePropFirmWorkspace() {
                     </div>
 
                     <div>
+                      <h4 className="text-xs text-white/40 uppercase tracking-wider mb-2">PropFirm Rules</h4>
+                      <CmePropfirmRulesPanel cmeAccountId={conn.cme_account_id} />
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs text-white/40 uppercase tracking-wider mb-2">Signals (shadow + rejected)</h4>
+                      <CmeShadowSignalsPanel cmeAccountId={conn.cme_account_id} />
+                    </div>
+
+                    <div>
                       <h4 className="text-xs text-white/40 uppercase tracking-wider mb-2">Trade History</h4>
                       <CmeTradesTable cmeAccountId={conn.cme_account_id} tableType="propfirm" />
                     </div>
@@ -293,6 +333,68 @@ export default function CmePropFirmWorkspace() {
             </div>
 
             <p className="text-xs text-white/30">Password is used only for authentication and never stored.</p>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setShowOauth(s => !s)}
+                className="text-xs text-white/40 hover:text-white/70 inline-flex items-center gap-1"
+              >
+                {showOauth ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                OAuth credentials (required for production Tradovate)
+              </button>
+
+              {showOauth && (
+                <div className="space-y-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/50">cid</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={form.cid}
+                        onChange={e => setForm(f => ({ ...f, cid: e.target.value }))}
+                        placeholder="0 (demo)"
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-white/30 placeholder:text-white/20"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/50">sec</label>
+                      <input
+                        type="text"
+                        value={form.sec}
+                        onChange={e => setForm(f => ({ ...f, sec: e.target.value }))}
+                        placeholder="(demo: dejar vacio)"
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-white/30 placeholder:text-white/20"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/50">appId</label>
+                      <input
+                        type="text"
+                        value={form.appId}
+                        onChange={e => setForm(f => ({ ...f, appId: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-white/30"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/50">appVersion</label>
+                      <input
+                        type="text"
+                        value={form.appVersion}
+                        onChange={e => setForm(f => ({ ...f, appVersion: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-white/30"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-white/30">
+                    Get cid/sec at <span className="text-white/50">https://api.tradovate.com/register</span> for live trading.
+                  </p>
+                </div>
+              )}
+            </div>
 
             <button
               type="submit"

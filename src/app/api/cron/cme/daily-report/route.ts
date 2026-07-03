@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { safeCompareTokens } from '@/lib/security/timing';
-import { isMarketHours } from '@/lib/cme/market-hours';
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-cron-secret') ?? '';
@@ -72,3 +71,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ sent });
 }
+
+// Vercel Cron puede invocar GET o POST según config — alias para soportar ambos.
+export const GET = POST;

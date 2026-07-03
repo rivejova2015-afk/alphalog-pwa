@@ -63,6 +63,10 @@
       "schedule": "0 */3 * * *"
     },
     {
+      "path": "/api/cron/cme/health-monitor",
+      "schedule": "0 */2 * * *"
+    },
+    {
       "path": "/api/cron/bars/cme-settle-fetch",
       "schedule": "0 23 * * 1-5"
     },

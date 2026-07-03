@@ -957,6 +957,7 @@ VERCEL_ENV=                     # legado pre-Fly, ya no se setea
   - Sprint 7: `runSkillLearningCycle(instrument, userId)` ya no hardcodea owner UUID; llm-rules tests (10); Cache-Control batch en 6 GET routes (copy-groups graph, coinarb agents/trades, algorithms backtest, polyarb agents).
   - Sprint 8: 11 audit log sites nuevos en 12 rutas mutadoras críticas (accounts CRUD, categories, agents create/update, algo control/pairing-token, CME signal/risk-config, treasury configs). `AuditResourceType` extendido con 7 tipos nuevos.
 - **Sprint 9 — `shared/` consolidado** (2026-05-03): `src/components/shared/` eliminado por completo. Los 2 archivos finales (`Button.tsx`, `Card.tsx`) eran código muerto sin importadores en `src/`. Única ubicación canónica ahora: `src/components/ui/`.
+- **Audit `isMarketHours` vs `isGlobexOpen`** (2026-06-17, actualizado 2026-06-22 al reconciliar con la migración a Fly): migración a la versión ETH-aware verificada **completa**. Único consumer en producción (`src/lib/cme/risk-manager.ts`) ya migrado a `isGlobexOpen` (la función ETH-aware ya existente en `market-hours.ts` desde la migración a Fly — se descartó una función duplicada `isCmeFuturesMarketHours` creada en paralelo en otra rama). Forex (`src/lib/bot/signal-engine/session-guard.ts`) usa lógica de sesiones UTC propia, y coinarb opera 24/7 — ambos correctamente aislados de los helpers CME. Crones CME (`heartbeat`, `position-sync`, `propfirm-rules`, `daily-report`) corren independientes del horario. **1 cleanup aplicado**: unused import de `isMarketHours` removido en `src/app/api/cron/cme/daily-report/route.ts` (el comentario "Only run near market close" del handler describe la responsabilidad de la cron schedule, no un guard runtime). `isMarketHours` (RTH-only) se mantiene exportada por compat — 8 tests siguen validando su contrato.
 - **Sprint 10 — Operations dashboard** (2026-05-03): `/business/operations` pasó de nav-hub (40% madurez) a mini-dashboard con 6 tiles: decisions pendientes, SOPs por correr, milestones, costos del mes, P&L del mes, runway. Backend en `src/lib/business/operationsDashboard.ts` (helper puro `buildOperationsDashboard` + async loader). 18 unit tests para el helper. Reusa `calculatePLMetrics` + `calculateRunwayMetrics` de `lib/business/metrics.ts`.
 - **Map Hot module completo end-to-end** (2026-05): pasó de UI con mock data (~35% madurez) a 95% funcional.
   - Schema: migration `109_map_hot_schema.sql` con 3 tablas (`map_hot_goals`, `map_hot_goal_links`, `map_hot_milestones`), RLS owner-only, soft-delete, indexes parciales.
@@ -1135,6 +1136,24 @@ npm run ops:bot-slo-monitor     # Monitor SLO del bot
 npm run ops:bot-auto-recovery   # Auto-recovery del bot
 npm run ops:bot-daily-summary   # Resumen diario ops
 npm run ops:bot-daily-verify    # Verificación diaria
+
+# Smoke tests end-to-end (sintéticos contra producción)
+npm run smoke:algo-pipeline     # Pipeline algo trading + RL data flow
+                                # Crea algo temporal en paper, inserta
+                                # algo_signal_log, POST al webhook con
+                                # signalId, verifica linkeo, simula query
+                                # del skill-manager, cleanup completo.
+                                # Requiere: SUPABASE_SERVICE_ROLE_KEY,
+                                # MT5_WEBHOOK_SECRET, BOT_OPS_USER_ID.
+
+npm run smoke:tradovate-pipeline  # Pipeline Tradovate (dispatcher → cme_signals)
+                                  # Crea algo_cme_accounts + cme_connections +
+                                  # cme_risk_configs + algoritmo Tradovate +
+                                  # signals (1 pending, 1 rejected via
+                                  # kill-switch simulation), verifica tally,
+                                  # cleanup. NO toca Tradovate real.
+                                  # Requiere: SUPABASE_SERVICE_ROLE_KEY,
+                                  # BOT_OPS_USER_ID.
 
 # Seguridad / auditoría
 npm run security:check-rls       # Verifica cobertura RLS
