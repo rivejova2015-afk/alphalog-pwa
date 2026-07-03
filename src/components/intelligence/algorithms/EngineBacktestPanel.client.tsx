@@ -636,6 +636,12 @@ export function EngineBacktestPanel({
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-[#a78bfa]" />
           <p className="text-xs text-[#475569] uppercase tracking-wider font-medium">Engine v1 — Backtest Validator</p>
+          <span
+            title="Motor sync in-memory: respuesta en un solo request (streaming), SMC-funnel del engine que corre en vivo en /signal. Más rápido pero solo ML como feature avanzada — sin Multi-TF/Portfolio (ya integrados en el funnel / requieren el flujo async)."
+            className="normal-case tracking-normal font-normal text-[9px] px-1.5 py-0.5 rounded bg-[#a78bfa]/10 text-[#a78bfa] border border-[#a78bfa]/30"
+          >
+            Sync · Rápido
+          </span>
         </div>
         <div className="flex items-center gap-3">
           {history.length > 0 && (
