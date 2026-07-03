@@ -5,17 +5,22 @@
  * regime. Lives in its own module so the mapping table is easy to test in
  * isolation without spinning up the WS feeds, broker, or the loop.
  *
- * Mapping (Phase 2.2 — Strategy DD activado en todos los regímenes
- * operables por spec del owner; ~100 ops/día target con risk real 4%):
- *   TRENDING_HIGH → 'DD' (Daily Direction Scalper)
- *   TRENDING_LOW  → 'DD'
- *   RANGE_HIGH    → 'DD'
- *   RANGE_LOW     → 'DD'
+ * Mapping (Phase 2.3 — DD descartada; backtest sobre datos reales de
+ * Coinbase (1m/5m/15m, múltiples configs) mostró que la señal de entrada
+ * de DD — pullback EMA20 + rejection candle + sesgo de dirección diaria —
+ * no tiene ventaja direccional demostrable en ningún timeframe probado
+ * (win rate converge a ~23% con muestra grande, muy por debajo del ~55%
+ * necesario para R:R 3:1). Revertido al mapping pre-DD, que usa las
+ * strategies con lógica SMC/mean-rev/momentum más elaborada:
+ *   TRENDING_HIGH → 'B' (SMC aggressive — sweep cleanest in directional vol)
+ *   TRENDING_LOW  → 'P' (momentum-breakout — clean grind, low chop)
+ *   RANGE_HIGH    → 'M' (mean-reversion — BB + RSI; SMC gates rechazan
+ *                        ~100% acá porque sin tendencia no se forma EQH/EQL)
+ *   RANGE_LOW     → 'M' (mean-reversion — BB + RSI extremes work here)
  *   DEAD          → 'pause' (no market — skip every symbol)
  *
- * Las strategies A/B/M/P quedan instanciadas en el coordinator (loop.ts) por
- * si futuras iteraciones requieren revertir el mapping o agregar fan-out
- * multi-strategy.
+ * DD queda instanciada en el coordinator (loop.ts) + su código intacto por
+ * si una futura iteración quiere rediseñar la lógica de entrada.
  */
 
 import type { Regime } from '../analysis/regime-detector.js';
@@ -24,10 +29,10 @@ import type { StrategyId } from '../trading/spot-positions.js';
 export type DispatchTarget = StrategyId | 'pause';
 
 export const REGIME_TO_STRATEGY: Record<Regime, DispatchTarget> = {
-  TRENDING_HIGH: 'DD',
-  TRENDING_LOW: 'DD',
-  RANGE_HIGH: 'DD',
-  RANGE_LOW: 'DD',
+  TRENDING_HIGH: 'B',
+  TRENDING_LOW: 'P',
+  RANGE_HIGH: 'M',
+  RANGE_LOW: 'M',
   DEAD: 'pause',
 };
 

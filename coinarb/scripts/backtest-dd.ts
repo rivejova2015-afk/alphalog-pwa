@@ -11,10 +11,11 @@
  * Uso:
  *   cd coinarb && npx tsx scripts/backtest-dd.ts --days=7
  *   cd coinarb && npx tsx scripts/backtest-dd.ts --days=7 --json
+ *   cd coinarb && npx tsx scripts/backtest-dd.ts --days=30 --timeframe=5M --horizonHours=12
  */
 
 import 'dotenv/config';
-import { SYMBOLS, type Symbol } from '../src/core/config.js';
+import { SYMBOLS, type Symbol, type Timeframe } from '../src/core/config.js';
 import { loadHistoricalCandlesForDays, type Candle } from '../src/analysis/candle-builder.js';
 import {
   DEFAULT_DD_CONFIG,
@@ -25,9 +26,29 @@ import {
 } from '../src/strategies/dd-daily-scalper.js';
 
 const args = process.argv.slice(2);
+
+// Fase A (rediseño de timeframe): detectDdSignal es agnóstico al timeframe
+// — solo depende de la forma de las candles, no de su granularidad. Permite
+// testear 1M/5M/15M sin tocar el detector, solo cambiando qué TF le pasamos.
+const timeframeArg = args.find((a) => a.startsWith('--timeframe='));
+const TIMEFRAME: Timeframe = (timeframeArg?.split('=')[1] as Timeframe) ?? '1M';
+// loadHistoricalCandlesForDays cappea 1M a 7d (rate limits); en TFs más
+// anchos (5M/15M) hay margen para ventanas más largas.
+const MAX_DAYS = TIMEFRAME === '1M' ? 7 : 30;
 const daysArg = args.find((a) => a.startsWith('--days='));
-const DAYS = daysArg ? Math.max(1, Math.min(7, Number(daysArg.split('=')[1] ?? '7'))) : 7;
+const DAYS = daysArg ? Math.max(1, Math.min(MAX_DAYS, Number(daysArg.split('=')[1] ?? String(MAX_DAYS)))) : (TIMEFRAME === '1M' ? 7 : 14);
 const JSON_OUTPUT = args.includes('--json');
+// Cooldowns escalan con el timeframe: en 1m, 3min post-trade = 3 velas; en
+// 5m eso sería <1 vela (inútil), así que expresamos los cooldowns como
+// múltiplos de N velas del TF elegido, no como minutos fijos.
+const TF_MS: Record<Timeframe, number> = {
+  '1D': 86_400_000, '4H': 14_400_000, '1H': 3_600_000,
+  '30M': 1_800_000, '15M': 900_000, '5M': 300_000, '1M': 60_000,
+};
+const POST_TRADE_COOLDOWN_CANDLES = 3;
+const FLIP_COOLDOWN_CANDLES = 10;
+const horizonHoursArg = args.find((a) => a.startsWith('--horizonHours='));
+const HORIZON_HOURS = horizonHoursArg ? Number(horizonHoursArg.split('=')[1]) : 4;
 
 // Overrides para iteración rápida de tuning (Fase 2b) sin editar el archivo.
 const directionThresholdArg = args.find((a) => a.startsWith('--directionThreshold='));
@@ -44,8 +65,8 @@ if (slAtrMultArg) CFG_OVERRIDES.slAtrMult = Number(slAtrMultArg.split('=')[1]);
 const CFG = { ...DEFAULT_DD_CONFIG, ...CFG_OVERRIDES };
 
 const TAKER_FEE_BPS = 60; // 0.60%/lado, igual que paper-spot-broker.ts
-const POST_TRADE_COOLDOWN_MS = 3 * 60_000;
-const FLIP_COOLDOWN_MS = 10 * 60_000;
+const POST_TRADE_COOLDOWN_MS = POST_TRADE_COOLDOWN_CANDLES * TF_MS[TIMEFRAME];
+const FLIP_COOLDOWN_MS = FLIP_COOLDOWN_CANDLES * TF_MS[TIMEFRAME];
 
 interface Trade {
   ts: number;
@@ -76,8 +97,8 @@ function computeSizeUsd(equity: number, entryPrice: number, slPrice: number): nu
 }
 
 async function backtestSymbol(symbol: Symbol, startingEquity: number): Promise<SymbolResult> {
-  const hist = await loadHistoricalCandlesForDays(symbol, ['1M'], DAYS);
-  const candles1m = hist.get('1M') ?? [];
+  const hist = await loadHistoricalCandlesForDays(symbol, [TIMEFRAME], DAYS);
+  const candles1m = hist.get(TIMEFRAME) ?? [];
 
   const skippedByReason: Record<string, number> = {};
   const trades: Trade[] = [];
@@ -132,8 +153,10 @@ async function backtestSymbol(symbol: Symbol, startingEquity: number): Promise<S
       continue;
     }
 
-    // Forward-walk desde i+1 buscando TP/SL. Horizonte: 4h de velas 1m (240).
-    const HORIZON = 240;
+    // Forward-walk desde i+1 buscando TP/SL. Horizonte fijo en horas
+    // (no en cantidad de velas) para que sea comparable entre timeframes:
+    // 4h en 1m son 240 velas, en 5m son 48, en 15m son 16.
+    const HORIZON = Math.ceil((HORIZON_HOURS * 3_600_000) / TF_MS[TIMEFRAME]);
     const lastIdx = Math.min(candles1m.length - 1, i + HORIZON);
     let exitPrice = candles1m[lastIdx].close;
     let exitReason: 'TP' | 'SL' | 'TIMEOUT' = 'TIMEOUT';
