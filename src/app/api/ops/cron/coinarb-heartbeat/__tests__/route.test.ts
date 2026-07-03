@@ -14,6 +14,10 @@
 //   8. No telemetry row → ageSec=Infinity → notify con mensaje "nunca ha
 //      enviado heartbeat" + age_seconds=null en meta.
 //   9. Push fetch failure non-blocking → log + response sigue ok.
+//  10. Wave 5 item 22: umbral per-user desde algorithm_alert_preferences
+//      reemplaza el default — un heartbeat que sería "healthy" con el
+//      default (300s) puede marcarse stale con un umbral más estricto, y
+//      viceversa.
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -61,16 +65,26 @@ function setupSupabase({
   algoError,
   telemetryByAlgo = {},
   dedupByAlgo = {},
+  alertPrefs = [],
 }: {
   algos?:           AlgoRow[];
   algoError?:       { message: string };
   telemetryByAlgo?: Record<string, TeleRow | null>;
   dedupByAlgo?:     Record<string, DedupRow | null>;
+  alertPrefs?:      { user_id: string; coinarb_heartbeat_stale_sec: number; coinarb_heartbeat_dedup_minutes: number }[];
 }) {
   const appLogInserts: AppLogInsert[] = [];
 
   createClientMock.mockReturnValue({
     from: (table: string) => {
+      if (table === "algorithm_alert_preferences") {
+        const proxy: Record<string, unknown> = {};
+        proxy.select = () => proxy;
+        proxy.in     = () => proxy;
+        proxy.then = (resolve: (v: unknown) => unknown) =>
+          Promise.resolve({ data: alertPrefs, error: null }).then(resolve);
+        return proxy;
+      }
       if (table === "algorithms") {
         const proxy: Record<string, unknown> = {};
         proxy.select = () => proxy;
@@ -259,5 +273,36 @@ describe("/api/ops/cron/coinarb-heartbeat — handler", () => {
     expect(body.ok).toBe(true);
     // Log still happens even when push fetch throws.
     expect(appLogInserts).toHaveLength(1);
+  });
+
+  it("Wave 5 item 22: a user-configured stricter threshold marks a heartbeat stale that the default would treat as healthy", async () => {
+    const ageIso = new Date(Date.now() - 120_000).toISOString(); // 2min ago — healthy under the 300s default
+    const { appLogInserts } = setupSupabase({
+      algos: [{ id: "a1", user_id: "u1", name: "Coinarb" }],
+      telemetryByAlgo: { a1: { last_heartbeat_at: ageIso } },
+      dedupByAlgo: { a1: null },
+      alertPrefs: [{ user_id: "u1", coinarb_heartbeat_stale_sec: 60, coinarb_heartbeat_dedup_minutes: 30 }],
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await POST(makeRequest());
+    const body = await res.json();
+    expect(body.stale).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(appLogInserts).toHaveLength(1);
+  });
+
+  it("Wave 5 item 22: a user with no preferences row still uses the module defaults (unaffected)", async () => {
+    const ageIso = new Date(Date.now() - 120_000).toISOString(); // 2min ago — healthy under the 300s default
+    const { appLogInserts } = setupSupabase({
+      algos: [{ id: "a1", user_id: "u1", name: "Coinarb" }],
+      telemetryByAlgo: { a1: { last_heartbeat_at: ageIso } },
+      alertPrefs: [], // no row for u1
+    });
+    const res = await POST(makeRequest());
+    const body = await res.json();
+    expect(body.stale).toBe(0);
+    expect(appLogInserts).toHaveLength(0);
   });
 });

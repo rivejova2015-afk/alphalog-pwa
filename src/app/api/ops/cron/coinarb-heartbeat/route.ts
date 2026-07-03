@@ -3,10 +3,13 @@
  * Schedule: every 1 minute (vercel.json)
  *
  * For every crypto algorithm with an active deployment, checks the latest
- * `coinarb_telemetry.last_heartbeat_at`. If older than STALE_THRESHOLD_SEC,
+ * `coinarb_telemetry.last_heartbeat_at`. If older than the stale threshold,
  * fires a push notification to the algorithm's owner — but only if the same
- * algorithm hasn't already triggered a stale alert in the last 30 minutes
+ * algorithm hasn't already triggered a stale alert within the dedup window
  * (dedup via app_logs.fingerprint), so a dead bot doesn't spam the user.
+ * Threshold + dedup window are per-user configurable via
+ * algorithm_alert_preferences (Wave 5 item 22) — falls back to the
+ * DEFAULT_* constants below when no row exists for that user.
  *
  * Status-blind by design: a stale heartbeat means the bot process is dead
  * regardless of whether the trader paused trading or the circuit breaker
@@ -20,8 +23,10 @@ import { validateBearerToken } from '@/lib/security/timing';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const STALE_THRESHOLD_SEC = 300;          // 5 min = 20 missed 15s ticks → definitely dead
-const DEDUP_WINDOW_MINUTES = 30;          // suppress duplicate push within this window
+// Defaults — used when the user hasn't configured algorithm_alert_preferences
+// (Wave 5 item 22). 5 min = 20 missed 15s ticks → definitely dead.
+const DEFAULT_STALE_THRESHOLD_SEC = 300;
+const DEFAULT_DEDUP_WINDOW_MINUTES = 30;
 
 function validateCronSecret(request: NextRequest) {
   return validateBearerToken(
@@ -54,10 +59,24 @@ export async function POST(request: NextRequest) {
   if (algoErr) return NextResponse.json({ error: algoErr.message }, { status: 500 });
   if (!algos || algos.length === 0) return NextResponse.json({ ok: true, checked: 0 });
 
+  // Per-user thresholds (Wave 5 item 22) — one query for every distinct
+  // owner among the crypto algos found above. Missing rows fall back to
+  // the module defaults, so this table is purely additive/opt-in.
+  const userIds = [...new Set(algos.map((a) => a.user_id))];
+  const { data: prefs } = await supabase
+    .from('algorithm_alert_preferences')
+    .select('user_id, coinarb_heartbeat_stale_sec, coinarb_heartbeat_dedup_minutes')
+    .in('user_id', userIds);
+  const prefsByUser = new Map((prefs ?? []).map((p) => [p.user_id, p]));
+
   const now = Date.now();
   const alerts: { id: string; name: string; ageSec: number; notified: boolean }[] = [];
 
   for (const algo of algos) {
+    const userPrefs = prefsByUser.get(algo.user_id);
+    const STALE_THRESHOLD_SEC = userPrefs?.coinarb_heartbeat_stale_sec ?? DEFAULT_STALE_THRESHOLD_SEC;
+    const DEDUP_WINDOW_MINUTES = userPrefs?.coinarb_heartbeat_dedup_minutes ?? DEFAULT_DEDUP_WINDOW_MINUTES;
+
     const { data: tele } = await supabase
       .from('coinarb_telemetry')
       .select('last_heartbeat_at')

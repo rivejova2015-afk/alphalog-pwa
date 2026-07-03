@@ -6,6 +6,8 @@ import CmeAlgoTabs from "@/components/intelligence/algorithms/CmeAlgoTabs.client
 import { DispatchModeChip } from "@/components/intelligence/algorithms/DispatchModeChip.client";
 import { DispatchModeBanner } from "@/components/intelligence/algorithms/DispatchModeBanner.client";
 import { GlobexStatusBanner } from "@/components/intelligence/algorithms/GlobexStatusBanner";
+import { CrossMarketOverviewStats } from "@/components/intelligence/algorithms/CrossMarketOverviewStats.client";
+import { AlertPreferencesPanel } from "@/components/intelligence/algorithms/AlertPreferencesPanel.client";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -69,13 +71,6 @@ export default async function AlgorithmsPage() {
     };
   });
 
-  const stats = [
-    { label: "Active Strategies", value: active.length.toString(), color: "#34d399", hint: "Algoritmos en status running o live." },
-    { label: "P&L Today",         value: "+$0.00",                 color: "#34d399", hint: "Suma de trades cerrados hoy en las cuentas vinculadas." },
-    { label: "Avg Win Rate",      value: "—",                      color: "#22d3ee", hint: "Promedio ponderado del win_rate de las estrategias activas." },
-    { label: "Total Trades",      value: "0",                      color: "#94a3b8", hint: "Trades acumulados de todas las estrategias del usuario." },
-  ];
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -93,17 +88,10 @@ export default async function AlgorithmsPage() {
       <div className="mb-4 space-y-2">
         <GlobexStatusBanner />
         <DispatchModeBanner />
+        <AlertPreferencesPanel />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {stats.map((stat) => (
-          <div key={stat.label} className="bg-[#151b28] border border-[#1f2937] rounded-lg p-3">
-            <div className="text-xs text-[#475569] mb-1">{stat.label}</div>
-            <div className="text-lg font-bold font-mono" style={{ color: stat.color }}>{stat.value}</div>
-            <p className="text-[10px] text-[#2d3748] mt-1 leading-snug">{stat.hint}</p>
-          </div>
-        ))}
-      </div>
+      <CrossMarketOverviewStats activeStrategies={active.length} />
 
       {algos.length === 0 ? (
         <div className="text-center py-20">

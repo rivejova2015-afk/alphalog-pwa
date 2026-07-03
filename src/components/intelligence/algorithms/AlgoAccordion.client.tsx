@@ -12,6 +12,7 @@ import { QuantModelsPanel } from './QuantModelsPanel';
 import { OpenPositionsPanel } from './OpenPositionsPanel.client';
 import { BacktestPanel } from './BacktestPanel.client';
 import { EngineBacktestPanel } from './EngineBacktestPanel.client';
+import { BacktestSandboxPanel } from './BacktestSandboxPanel.client';
 import { Badge } from '@/components/ui/badge';
 import AlgorithmDetailsModal from './AlgorithmDetailsModal.client';
 
@@ -282,6 +283,9 @@ export function AlgoAccordion({ algos }: AlgoAccordionProps) {
                   linkedBotAccountId={algo.linkedBotAccountId ?? null}
                   defaultBacktestBalance={algo.defaultBacktestBalance ?? null}
                 />
+
+                {/* Multi-config sandbox (Wave 5 item 25) */}
+                <BacktestSandboxPanel algorithmId={algo.id} defaultSymbol={algo.instrument[0] ?? 'XAUUSD'} />
 
                 {/* Recent trades */}
                 <div className="bg-[#0a0e1a] border border-[#1f2937] rounded-lg p-4">

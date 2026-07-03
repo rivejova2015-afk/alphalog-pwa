@@ -22,6 +22,7 @@ const { toastSuccess, toastError } = vi.hoisted(() => ({
 vi.mock("sonner", () => ({ toast: { error: toastError, success: toastSuccess, message: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("../QualityGatesPanel.client", () => ({ default: () => null }));
+vi.mock("../AuditTrailTimeline.client", () => ({ default: () => null }));
 vi.mock("../AlgorithmShadowInbox", () => ({ AlgorithmShadowInbox: () => null }));
 vi.mock("../TradovateConnectModal.client", () => ({ default: () => null }));
 vi.mock("@/components/tradehub/PairingInstructionsModal.client", () => ({ default: () => null }));
