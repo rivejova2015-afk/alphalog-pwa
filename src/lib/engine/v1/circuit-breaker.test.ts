@@ -20,6 +20,7 @@ type BreakerCfg = {
   consecutive_losses: number;
   daily_dd_pct: number;
   weekly_dd_pct: number;
+  fail_open_on_error: boolean;
 };
 
 function cfg(over: Partial<BreakerCfg> = {}): BreakerCfg {
@@ -28,6 +29,7 @@ function cfg(over: Partial<BreakerCfg> = {}): BreakerCfg {
     consecutive_losses: 3,
     daily_dd_pct: 2,
     weekly_dd_pct: 5,
+    fail_open_on_error: false,
     ...over,
   };
 }
@@ -56,15 +58,26 @@ describe("checkBreaker", () => {
     expect(result).toEqual({ tripped: false });
   });
 
-  it("returns tripped=false (fail-open) when supabase query errors", async () => {
+  it("returns tripped=true (fail-closed, default) when supabase query errors", async () => {
     const result = await checkBreaker(
       mockSupabase([], { message: "PGRST: temporary" }),
       "algo-1",
       cfg(),
       10_000,
     );
+    expect(result.tripped).toBe(true);
+    expect(result.reason).toBe("breaker_query_failed_fail_closed");
+  });
+
+  it("returns tripped=false (fail-open) when explicitly opted in via config", async () => {
+    const result = await checkBreaker(
+      mockSupabase([], { message: "PGRST: temporary" }),
+      "algo-1",
+      cfg({ fail_open_on_error: true }),
+      10_000,
+    );
     expect(result.tripped).toBe(false);
-    expect(result.reason).toBe("breaker_query_failed");
+    expect(result.reason).toBe("breaker_query_failed_fail_open");
   });
 
   it("trips on N consecutive losses (most recent first)", async () => {

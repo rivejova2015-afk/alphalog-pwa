@@ -37,6 +37,17 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const parsed = deploySchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
 
+    // Global kill-switch — no new deployments while the user has halted
+    // all trading (see /api/algorithms/global-halt).
+    const { data: halt } = await supabase
+      .from("global_trading_halt")
+      .select("halted")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (halt?.halted) {
+      return NextResponse.json({ error: "Global trading halt active — deploy blocked" }, { status: 423 });
+    }
+
     // Algorithm must be approved or live
     const { data: algo } = await supabase
       .from("algorithms")
@@ -62,6 +73,26 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const unauthorized = parsed.data.bot_account_ids.filter((id) => !ownedIds.has(id));
     if (unauthorized.length > 0) {
       return NextResponse.json({ error: "Una o más cuentas no pertenecen al usuario" }, { status: 403 });
+    }
+
+    // Gate the approved→live transition behind the same Tier-1 quality
+    // gates that /promote-to-live enforces. Without this, an algorithm
+    // could reach "approved" (which does not itself check gates) and then
+    // jump straight to "live" via this endpoint, bypassing the safety net
+    // entirely. Already-live algorithms skip this (adding more accounts to
+    // a proven algorithm shouldn't require re-passing gates every time).
+    if (algo.status === "approved") {
+      const { computeGates } = await import("@/lib/quality-gates/runner");
+      const { score, results } = await computeGates(supabase, id, user.id);
+      if (score.must_failed > 0 || score.gates_passed < score.gates_total) {
+        const failed = results
+          .filter((r) => !r.passed)
+          .map((r) => ({ gate_key: r.gate_key, reason: r.reason }));
+        return NextResponse.json(
+          { error: "Tier-1 quality gates not passed — deploy blocked", score, failed },
+          { status: 403 },
+        );
+      }
     }
 
     const rows = parsed.data.bot_account_ids.map((bot_account_id) => ({

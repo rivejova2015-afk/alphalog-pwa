@@ -23,6 +23,14 @@ export interface GateResult {
   passed:          boolean;
   value_observed:  number | null;
   reason:          string | null;
+  /**
+   * false = este gate no aplica al market_type de este algoritmo (ej:
+   * heartbeat_active/latency_p99 en mercados sin telemetría wireada aún).
+   * Los resultados no-aplicables no se insertan en
+   * algorithm_quality_gate_results, así que no cuentan en gates_total ni
+   * pueden bloquear TIER_1. Default true cuando se omite.
+   */
+  applicable?:     boolean;
 }
 
 export interface GateRow extends GateResult {
@@ -49,6 +57,9 @@ export interface AlgorithmRow {
   user_id:               string;
   name:                  string;
   status:                string;
+  /** 'forex' | 'futures' | 'crypto' | ... — determina qué fuente de
+   * telemetría consulta loadTelemetry()/loadOps(). */
+  market_type:           string;
   risk_percent:          number | null;
   max_drawdown_pct:      number | null;
   linked_bot_account_id: string | null;
@@ -68,6 +79,13 @@ export interface BacktestSnapshot {
 export interface TelemetrySnapshot {
   last_heartbeat_ts:    string | null;
   execution_latency_p99_ms: number | null;
+  /** false cuando el mercado del algoritmo no tiene fuente de heartbeat
+   * wireada todavía (ej: CME) — el check heartbeat_active se marca
+   * not-applicable en vez de failed. */
+  heartbeat_applicable: boolean;
+  /** Idem para latencia de ejecución (ej: CME, y crypto que no trackea
+   * execution_latency_ms hoy). */
+  latency_applicable:   boolean;
 }
 
 export interface OpsSnapshot {
