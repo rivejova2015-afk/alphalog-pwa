@@ -115,6 +115,68 @@ export type Database = {
           },
         ]
       }
+      agent_operations: {
+        Row: {
+          agent_id: string
+          closed_at: string | null
+          confidence: number | null
+          created_at: string
+          direction: string
+          entry_price: number | null
+          exit_price: number | null
+          id: string
+          lots: number | null
+          opened_at: string
+          pnl: number | null
+          reasoning: string | null
+          status: string
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          closed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          direction: string
+          entry_price?: number | null
+          exit_price?: number | null
+          id?: string
+          lots?: number | null
+          opened_at?: string
+          pnl?: number | null
+          reasoning?: string | null
+          status?: string
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          closed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          direction?: string
+          entry_price?: number | null
+          exit_price?: number | null
+          id?: string
+          lots?: number | null
+          opened_at?: string
+          pnl?: number | null
+          reasoning?: string | null
+          status?: string
+          symbol?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_operations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agents: {
         Row: {
           capabilities: string[] | null
@@ -195,6 +257,733 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      algo_cme_accounts: {
+        Row: {
+          account_number: string
+          account_type: string
+          created_at: string
+          deleted_at: string | null
+          funded_amount: number | null
+          id: string
+          is_paper: boolean
+          label: string | null
+          max_daily_loss: number | null
+          max_trailing_dd: number | null
+          provider_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_number: string
+          account_type: string
+          created_at?: string
+          deleted_at?: string | null
+          funded_amount?: number | null
+          id?: string
+          is_paper?: boolean
+          label?: string | null
+          max_daily_loss?: number | null
+          max_trailing_dd?: number | null
+          provider_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_number?: string
+          account_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          funded_amount?: number | null
+          id?: string
+          is_paper?: boolean
+          label?: string | null
+          max_daily_loss?: number | null
+          max_trailing_dd?: number | null
+          provider_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      algo_paper_trades: {
+        Row: {
+          algorithm_id: string | null
+          closed_at: string | null
+          created_at: string
+          direction: string
+          entry_price: number | null
+          exit_price: number | null
+          id: string
+          opened_at: string
+          pnl: number | null
+          quantity: number
+          signal_log_id: string | null
+          source: string
+          status: string
+          symbol: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          direction: string
+          entry_price?: number | null
+          exit_price?: number | null
+          id?: string
+          opened_at?: string
+          pnl?: number | null
+          quantity?: number
+          signal_log_id?: string | null
+          source?: string
+          status?: string
+          symbol: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          direction?: string
+          entry_price?: number | null
+          exit_price?: number | null
+          id?: string
+          opened_at?: string
+          pnl?: number | null
+          quantity?: number
+          signal_log_id?: string | null
+          source?: string
+          status?: string
+          symbol?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algo_paper_trades_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "algo_paper_trades_signal_log_id_fkey"
+            columns: ["signal_log_id"]
+            isOneToOne: false
+            referencedRelation: "algo_signal_log"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      algo_signal_log: {
+        Row: {
+          algorithm_id: string
+          confidence: number | null
+          created_at: string
+          final_action: string
+          generated_at: string
+          id: string
+          lots: number | null
+          overlay_kind: string
+          regime_code: string | null
+          session_code: string | null
+          signal_action: string
+          signal_id: string
+          symbol: string
+          user_id: string
+          vol_15m: number | null
+        }
+        Insert: {
+          algorithm_id: string
+          confidence?: number | null
+          created_at?: string
+          final_action: string
+          generated_at?: string
+          id?: string
+          lots?: number | null
+          overlay_kind?: string
+          regime_code?: string | null
+          session_code?: string | null
+          signal_action: string
+          signal_id: string
+          symbol: string
+          user_id: string
+          vol_15m?: number | null
+        }
+        Update: {
+          algorithm_id?: string
+          confidence?: number | null
+          created_at?: string
+          final_action?: string
+          generated_at?: string
+          id?: string
+          lots?: number | null
+          overlay_kind?: string
+          regime_code?: string | null
+          session_code?: string | null
+          signal_action?: string
+          signal_id?: string
+          symbol?: string
+          user_id?: string
+          vol_15m?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algo_signal_log_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "trading_algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      algorithm_alert_preferences: {
+        Row: {
+          coinarb_heartbeat_dedup_minutes: number
+          coinarb_heartbeat_stale_sec: number
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          coinarb_heartbeat_dedup_minutes?: number
+          coinarb_heartbeat_stale_sec?: number
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          coinarb_heartbeat_dedup_minutes?: number
+          coinarb_heartbeat_stale_sec?: number
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      algorithm_backtest_results: {
+        Row: {
+          algorithm_id: string
+          created_at: string
+          id: string
+          max_drawdown: number | null
+          net_profit: number | null
+          period_end: string | null
+          period_start: string | null
+          platform: string
+          profit_factor: number | null
+          raw_data: Json | null
+          recovery_factor: number | null
+          sharpe_ratio: number | null
+          total_trades: number | null
+          user_id: string
+          win_rate: number | null
+        }
+        Insert: {
+          algorithm_id: string
+          created_at?: string
+          id?: string
+          max_drawdown?: number | null
+          net_profit?: number | null
+          period_end?: string | null
+          period_start?: string | null
+          platform: string
+          profit_factor?: number | null
+          raw_data?: Json | null
+          recovery_factor?: number | null
+          sharpe_ratio?: number | null
+          total_trades?: number | null
+          user_id: string
+          win_rate?: number | null
+        }
+        Update: {
+          algorithm_id?: string
+          created_at?: string
+          id?: string
+          max_drawdown?: number | null
+          net_profit?: number | null
+          period_end?: string | null
+          period_start?: string | null
+          platform?: string
+          profit_factor?: number | null
+          raw_data?: Json | null
+          recovery_factor?: number | null
+          sharpe_ratio?: number | null
+          total_trades?: number | null
+          user_id?: string
+          win_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithm_backtest_results_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "trading_algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      algorithm_deployments: {
+        Row: {
+          algorithm_id: string
+          bot_account_id: string
+          created_at: string
+          deployed_at: string
+          id: string
+          notes: string | null
+          status: string
+          stopped_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          bot_account_id: string
+          created_at?: string
+          deployed_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          stopped_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          bot_account_id?: string
+          created_at?: string
+          deployed_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          stopped_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithm_deployments_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "algorithm_deployments_bot_account_id_fkey"
+            columns: ["bot_account_id"]
+            isOneToOne: false
+            referencedRelation: "bot_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      algorithm_phase_log: {
+        Row: {
+          algorithm_id: string
+          capital_at_change: number | null
+          changed_at: string
+          created_at: string
+          from_phase: string | null
+          from_risk_pct: number | null
+          id: string
+          reason: string | null
+          to_phase: string | null
+          to_risk_pct: number | null
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          capital_at_change?: number | null
+          changed_at?: string
+          created_at?: string
+          from_phase?: string | null
+          from_risk_pct?: number | null
+          id?: string
+          reason?: string | null
+          to_phase?: string | null
+          to_risk_pct?: number | null
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          capital_at_change?: number | null
+          changed_at?: string
+          created_at?: string
+          from_phase?: string | null
+          from_risk_pct?: number | null
+          id?: string
+          reason?: string | null
+          to_phase?: string | null
+          to_risk_pct?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithm_phase_log_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      algorithm_quality_gate_definitions: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          gate_key: string
+          is_active: boolean
+          name: string
+          severity: string
+          sort_index: number
+          source_field: string
+          threshold_op: string
+          threshold_value: number
+          unit: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          description: string
+          gate_key: string
+          is_active?: boolean
+          name: string
+          severity: string
+          sort_index: number
+          source_field: string
+          threshold_op: string
+          threshold_value: number
+          unit?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          gate_key?: string
+          is_active?: boolean
+          name?: string
+          severity?: string
+          sort_index?: number
+          source_field?: string
+          threshold_op?: string
+          threshold_value?: number
+          unit?: string | null
+        }
+        Relationships: []
+      }
+      algorithm_quality_gate_results: {
+        Row: {
+          algorithm_id: string
+          computed_at: string
+          gate_key: string
+          id: string
+          passed: boolean
+          reason: string | null
+          user_id: string
+          value_observed: number | null
+        }
+        Insert: {
+          algorithm_id: string
+          computed_at?: string
+          gate_key: string
+          id?: string
+          passed: boolean
+          reason?: string | null
+          user_id: string
+          value_observed?: number | null
+        }
+        Update: {
+          algorithm_id?: string
+          computed_at?: string
+          gate_key?: string
+          id?: string
+          passed?: boolean
+          reason?: string | null
+          user_id?: string
+          value_observed?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithm_quality_gate_results_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "algorithm_quality_gate_results_gate_key_fkey"
+            columns: ["gate_key"]
+            isOneToOne: false
+            referencedRelation: "algorithm_quality_gate_definitions"
+            referencedColumns: ["gate_key"]
+          },
+        ]
+      }
+      algorithm_templates: {
+        Row: {
+          algo_type: string
+          created_at: string
+          default_direction: string
+          default_instrument: string
+          default_lot_size: number
+          default_max_trades: number
+          default_risk_percent: number
+          description: string | null
+          id: string
+          is_active: boolean
+          magic_number: number | null
+          market_type: string
+          name: string
+          parameters: Json
+          sort_index: number
+          source_path: string | null
+          supported_platforms: string[]
+          template_key: string
+          updated_at: string
+        }
+        Insert: {
+          algo_type: string
+          created_at?: string
+          default_direction?: string
+          default_instrument: string
+          default_lot_size?: number
+          default_max_trades?: number
+          default_risk_percent?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          magic_number?: number | null
+          market_type: string
+          name: string
+          parameters?: Json
+          sort_index?: number
+          source_path?: string | null
+          supported_platforms?: string[]
+          template_key: string
+          updated_at?: string
+        }
+        Update: {
+          algo_type?: string
+          created_at?: string
+          default_direction?: string
+          default_instrument?: string
+          default_lot_size?: number
+          default_max_trades?: number
+          default_risk_percent?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          magic_number?: number | null
+          market_type?: string
+          name?: string
+          parameters?: Json
+          sort_index?: number
+          source_path?: string | null
+          supported_platforms?: string[]
+          template_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      algorithm_trades: {
+        Row: {
+          algorithm_id: string
+          closed_at: string | null
+          created_at: string
+          direction: string
+          duration_min: number | null
+          entry_price: number | null
+          exit_price: number | null
+          id: string
+          instrument: string
+          lots: number | null
+          opened_at: string
+          pnl: number | null
+          status: string
+          trade_number: number | null
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          closed_at?: string | null
+          created_at?: string
+          direction: string
+          duration_min?: number | null
+          entry_price?: number | null
+          exit_price?: number | null
+          id?: string
+          instrument: string
+          lots?: number | null
+          opened_at?: string
+          pnl?: number | null
+          status?: string
+          trade_number?: number | null
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          closed_at?: string | null
+          created_at?: string
+          direction?: string
+          duration_min?: number | null
+          entry_price?: number | null
+          exit_price?: number | null
+          id?: string
+          instrument?: string
+          lots?: number | null
+          opened_at?: string
+          pnl?: number | null
+          status?: string
+          trade_number?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithm_trades_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      algorithms: {
+        Row: {
+          created_at: string
+          default_backtest_balance: number | null
+          deleted_at: string | null
+          direction: string
+          drawdown_pct: number
+          engine_config: Json | null
+          id: string
+          instrument: string[]
+          last_dispatch_action: string | null
+          last_dispatch_at: string | null
+          last_dispatch_reason: string | null
+          last_signal_bar_ts: string | null
+          linked_bot_account_id: string | null
+          lot_size: number
+          market_type: string
+          max_drawdown_pct: number
+          max_trades: number
+          name: string
+          parameters: Json
+          platform: string
+          pnl_today: number
+          pnl_total: number
+          profit_factor: number
+          risk_percent: number
+          scan_config: Json
+          sort_index: number
+          status: string
+          trade_count: number
+          updated_at: string
+          user_id: string
+          win_rate: number
+        }
+        Insert: {
+          created_at?: string
+          default_backtest_balance?: number | null
+          deleted_at?: string | null
+          direction?: string
+          drawdown_pct?: number
+          engine_config?: Json | null
+          id?: string
+          instrument?: string[]
+          last_dispatch_action?: string | null
+          last_dispatch_at?: string | null
+          last_dispatch_reason?: string | null
+          last_signal_bar_ts?: string | null
+          linked_bot_account_id?: string | null
+          lot_size?: number
+          market_type?: string
+          max_drawdown_pct?: number
+          max_trades?: number
+          name: string
+          parameters?: Json
+          platform?: string
+          pnl_today?: number
+          pnl_total?: number
+          profit_factor?: number
+          risk_percent?: number
+          scan_config?: Json
+          sort_index?: number
+          status?: string
+          trade_count?: number
+          updated_at?: string
+          user_id: string
+          win_rate?: number
+        }
+        Update: {
+          created_at?: string
+          default_backtest_balance?: number | null
+          deleted_at?: string | null
+          direction?: string
+          drawdown_pct?: number
+          engine_config?: Json | null
+          id?: string
+          instrument?: string[]
+          last_dispatch_action?: string | null
+          last_dispatch_at?: string | null
+          last_dispatch_reason?: string | null
+          last_signal_bar_ts?: string | null
+          linked_bot_account_id?: string | null
+          lot_size?: number
+          market_type?: string
+          max_drawdown_pct?: number
+          max_trades?: number
+          name?: string
+          parameters?: Json
+          platform?: string
+          pnl_today?: number
+          pnl_total?: number
+          profit_factor?: number
+          risk_percent?: number
+          scan_config?: Json
+          sort_index?: number
+          status?: string
+          trade_count?: number
+          updated_at?: string
+          user_id?: string
+          win_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithms_linked_bot_account_id_fkey"
+            columns: ["linked_bot_account_id"]
+            isOneToOne: false
+            referencedRelation: "bot_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_rate_limits: {
+        Row: {
+          created_at: string
+          hits: number
+          id: string
+          key: string
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          hits?: number
+          id?: string
+          key: string
+          updated_at?: string
+          window_start: string
+        }
+        Update: {
+          created_at?: string
+          hits?: number
+          id?: string
+          key?: string
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
       }
       app_logs: {
         Row: {
@@ -312,6 +1101,345 @@ export type Database = {
           version?: string
         }
         Relationships: []
+      }
+      arbitrage_latency_pairs: {
+        Row: {
+          algorithm_id: string
+          created_at: string
+          enabled: boolean
+          fast_bot_account_id: string
+          id: string
+          last_signal_at: string | null
+          max_hold_seconds: number
+          max_skew_points: number
+          min_hold_seconds: number
+          min_pulse_ticks: number
+          pulse_window_ms: number
+          slow_bot_account_id: string
+          symbol: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          created_at?: string
+          enabled?: boolean
+          fast_bot_account_id: string
+          id?: string
+          last_signal_at?: string | null
+          max_hold_seconds?: number
+          max_skew_points?: number
+          min_hold_seconds?: number
+          min_pulse_ticks?: number
+          pulse_window_ms?: number
+          slow_bot_account_id: string
+          symbol: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          created_at?: string
+          enabled?: boolean
+          fast_bot_account_id?: string
+          id?: string
+          last_signal_at?: string | null
+          max_hold_seconds?: number
+          max_skew_points?: number
+          min_hold_seconds?: number
+          min_pulse_ticks?: number
+          pulse_window_ms?: number
+          slow_bot_account_id?: string
+          symbol?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arbitrage_latency_pairs_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arbitrage_latency_pairs_fast_bot_account_id_fkey"
+            columns: ["fast_bot_account_id"]
+            isOneToOne: false
+            referencedRelation: "bot_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arbitrage_latency_pairs_slow_bot_account_id_fkey"
+            columns: ["slow_bot_account_id"]
+            isOneToOne: false
+            referencedRelation: "bot_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          changes: Json | null
+          created_at: string
+          error_message: string | null
+          id: string
+          ip_hint: string | null
+          resource_id: string | null
+          resource_type: string
+          status: string | null
+          user_agent_hash: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          changes?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_hint?: string | null
+          resource_id?: string | null
+          resource_type: string
+          status?: string | null
+          user_agent_hash?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          changes?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_hint?: string | null
+          resource_id?: string | null
+          resource_type?: string
+          status?: string | null
+          user_agent_hash?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      backtest_daemon_state: {
+        Row: {
+          algorithm_id: string
+          created_at: string
+          decay_alert: boolean
+          decay_alert_emitted_at: string | null
+          id: string
+          last_check_at: string
+          last_is_sharpe: number | null
+          last_oos_sharpe: number | null
+          meta: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          created_at?: string
+          decay_alert?: boolean
+          decay_alert_emitted_at?: string | null
+          id?: string
+          last_check_at?: string
+          last_is_sharpe?: number | null
+          last_oos_sharpe?: number | null
+          meta?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          created_at?: string
+          decay_alert?: boolean
+          decay_alert_emitted_at?: string | null
+          id?: string
+          last_check_at?: string
+          last_is_sharpe?: number | null
+          last_oos_sharpe?: number | null
+          meta?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtest_daemon_state_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: true
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backtest_jobs: {
+        Row: {
+          algorithm_id: string | null
+          config: Json
+          created_at: string
+          current_phase: string | null
+          engine_version: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          progress_pct: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          config: Json
+          created_at?: string
+          current_phase?: string | null
+          engine_version?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          progress_pct?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          config?: Json
+          created_at?: string
+          current_phase?: string | null
+          engine_version?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          progress_pct?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtest_jobs_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backtest_paper_signals: {
+        Row: {
+          algorithm_id: string
+          created_at: string
+          entry_price: number | null
+          expected_pnl: number | null
+          id: string
+          meta: Json | null
+          side: string
+          signal_ts: string
+          sl_price: number | null
+          source: string
+          symbol: string
+          timeframe: string
+          tp_price: number | null
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          created_at?: string
+          entry_price?: number | null
+          expected_pnl?: number | null
+          id?: string
+          meta?: Json | null
+          side: string
+          signal_ts: string
+          sl_price?: number | null
+          source?: string
+          symbol: string
+          timeframe: string
+          tp_price?: number | null
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          created_at?: string
+          entry_price?: number | null
+          expected_pnl?: number | null
+          id?: string
+          meta?: Json | null
+          side?: string
+          signal_ts?: string
+          sl_price?: number | null
+          source?: string
+          symbol?: string
+          timeframe?: string
+          tp_price?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtest_paper_signals_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backtest_results: {
+        Row: {
+          advanced: Json | null
+          created_at: string
+          equity_curve: Json
+          job_id: string
+          metrics: Json
+          monte_carlo: Json | null
+          regime: Json | null
+          robustness: Json | null
+          sensitivity: Json | null
+          stress_tests: Json | null
+          trades: Json
+          user_id: string
+          walk_forward: Json | null
+        }
+        Insert: {
+          advanced?: Json | null
+          created_at?: string
+          equity_curve: Json
+          job_id: string
+          metrics: Json
+          monte_carlo?: Json | null
+          regime?: Json | null
+          robustness?: Json | null
+          sensitivity?: Json | null
+          stress_tests?: Json | null
+          trades: Json
+          user_id: string
+          walk_forward?: Json | null
+        }
+        Update: {
+          advanced?: Json | null
+          created_at?: string
+          equity_curve?: Json
+          job_id?: string
+          metrics?: Json
+          monte_carlo?: Json | null
+          regime?: Json | null
+          robustness?: Json | null
+          sensitivity?: Json | null
+          stress_tests?: Json | null
+          trades?: Json
+          user_id?: string
+          walk_forward?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backtest_results_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "backtest_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bot_accounts: {
         Row: {
@@ -463,6 +1591,7 @@ export type Database = {
           payload: Json
           status: string
           target_scope: string
+          target_strategy: string
           updated_at: string
         }
         Insert: {
@@ -474,6 +1603,7 @@ export type Database = {
           payload?: Json
           status?: string
           target_scope?: string
+          target_strategy?: string
           updated_at?: string
         }
         Update: {
@@ -485,6 +1615,7 @@ export type Database = {
           payload?: Json
           status?: string
           target_scope?: string
+          target_strategy?: string
           updated_at?: string
         }
         Relationships: [
@@ -548,9 +1679,14 @@ export type Database = {
           instance_secret: string
           is_paper_mode: boolean
           last_heartbeat_at: string | null
+          pairing_token_expires_at: string | null
+          pairing_token_hash: string | null
+          pairing_token_used_at: string | null
           platform: string
+          signal_secret_hash: string | null
           status: string
           updated_at: string
+          webhook_secret: string | null
         }
         Insert: {
           bot_account_id: string
@@ -560,9 +1696,14 @@ export type Database = {
           instance_secret: string
           is_paper_mode?: boolean
           last_heartbeat_at?: string | null
+          pairing_token_expires_at?: string | null
+          pairing_token_hash?: string | null
+          pairing_token_used_at?: string | null
           platform?: string
+          signal_secret_hash?: string | null
           status?: string
           updated_at?: string
+          webhook_secret?: string | null
         }
         Update: {
           bot_account_id?: string
@@ -572,13 +1713,134 @@ export type Database = {
           instance_secret?: string
           is_paper_mode?: boolean
           last_heartbeat_at?: string | null
+          pairing_token_expires_at?: string | null
+          pairing_token_hash?: string | null
+          pairing_token_used_at?: string | null
           platform?: string
+          signal_secret_hash?: string | null
           status?: string
           updated_at?: string
+          webhook_secret?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "bot_instances_bot_account_id_fkey"
+            columns: ["bot_account_id"]
+            isOneToOne: false
+            referencedRelation: "bot_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bot_monitor_state: {
+        Row: {
+          bot_instance_id: string
+          down_since: string | null
+          is_down: boolean
+          last_alerted_at: string | null
+          recovery_cmd_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bot_instance_id: string
+          down_since?: string | null
+          is_down?: boolean
+          last_alerted_at?: string | null
+          recovery_cmd_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bot_instance_id?: string
+          down_since?: string | null
+          is_down?: boolean
+          last_alerted_at?: string | null
+          recovery_cmd_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_monitor_state_bot_instance_id_fkey"
+            columns: ["bot_instance_id"]
+            isOneToOne: true
+            referencedRelation: "bot_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bot_open_positions: {
+        Row: {
+          algorithm_id: string | null
+          bot_account_id: string
+          close_price: number | null
+          closed_at: string | null
+          created_at: string
+          current_price: number | null
+          direction: string
+          id: string
+          last_updated_at: string
+          lots: number
+          open_price: number
+          open_time: string | null
+          profit: number
+          sl: number | null
+          status: string
+          symbol: string
+          ticket: number
+          tp: number | null
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          bot_account_id: string
+          close_price?: number | null
+          closed_at?: string | null
+          created_at?: string
+          current_price?: number | null
+          direction: string
+          id?: string
+          last_updated_at?: string
+          lots: number
+          open_price: number
+          open_time?: string | null
+          profit?: number
+          sl?: number | null
+          status?: string
+          symbol: string
+          ticket: number
+          tp?: number | null
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          bot_account_id?: string
+          close_price?: number | null
+          closed_at?: string | null
+          created_at?: string
+          current_price?: number | null
+          direction?: string
+          id?: string
+          last_updated_at?: string
+          lots?: number
+          open_price?: number
+          open_time?: string | null
+          profit?: number
+          sl?: number | null
+          status?: string
+          symbol?: string
+          ticket?: number
+          tp?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_open_positions_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bot_open_positions_bot_account_id_fkey"
             columns: ["bot_account_id"]
             isOneToOne: false
             referencedRelation: "bot_accounts"
@@ -909,6 +2171,8 @@ export type Database = {
           bot_account_id: string
           created_at: string
           equity: number | null
+          execution_latency_ms: number | null
+          feed_latency_ms: number | null
           id: string
           instance_id: string
           last_heartbeat_ts: string | null
@@ -927,6 +2191,8 @@ export type Database = {
           bot_account_id: string
           created_at?: string
           equity?: number | null
+          execution_latency_ms?: number | null
+          feed_latency_ms?: number | null
           id?: string
           instance_id: string
           last_heartbeat_ts?: string | null
@@ -945,6 +2211,8 @@ export type Database = {
           bot_account_id?: string
           created_at?: string
           equity?: number | null
+          execution_latency_ms?: number | null
+          feed_latency_ms?: number | null
           id?: string
           instance_id?: string
           last_heartbeat_ts?: string | null
@@ -1260,15 +2528,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "business_milestones_goal_id_fkey"
-            columns: ["goal_id"]
-            isOneToOne: false
-            referencedRelation: "tradermap_goals"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       business_sop_items: {
         Row: {
@@ -1475,119 +2735,2010 @@ export type Database = {
         }
         Relationships: []
       }
-      goals: {
+      cme_connections: {
         Row: {
-          account_id: string | null
-          active_quarter: string | null
+          access_token_vault_key: string | null
+          broker_type: string
+          cme_account_id: string
           created_at: string
-          deleted_at: string | null
+          daily_pnl_usd: number | null
+          error_at: string | null
           id: string
-          q1_end_date: string | null
-          q1_start_balance: number | null
-          q1_start_date: string | null
-          q1_target_balance: number | null
-          q2_end_date: string | null
-          q2_start_balance: number | null
-          q2_start_date: string | null
-          q2_target_balance: number | null
-          q3_end_date: string | null
-          q3_start_balance: number | null
-          q3_start_date: string | null
-          q3_target_balance: number | null
-          q4_end_date: string | null
-          q4_start_balance: number | null
-          q4_start_date: string | null
-          q4_target_balance: number | null
-          title: string | null
+          last_connected_at: string | null
+          last_error: string | null
+          status: string
+          token_expires_at: string | null
+          tradovate_account_id: number | null
+          tradovate_account_spec: string | null
           updated_at: string
-          user_id: string | null
-          year: number | null
+          user_id: string
         }
         Insert: {
-          account_id?: string | null
-          active_quarter?: string | null
+          access_token_vault_key?: string | null
+          broker_type?: string
+          cme_account_id: string
           created_at?: string
-          deleted_at?: string | null
+          daily_pnl_usd?: number | null
+          error_at?: string | null
           id?: string
-          q1_end_date?: string | null
-          q1_start_balance?: number | null
-          q1_start_date?: string | null
-          q1_target_balance?: number | null
-          q2_end_date?: string | null
-          q2_start_balance?: number | null
-          q2_start_date?: string | null
-          q2_target_balance?: number | null
-          q3_end_date?: string | null
-          q3_start_balance?: number | null
-          q3_start_date?: string | null
-          q3_target_balance?: number | null
-          q4_end_date?: string | null
-          q4_start_balance?: number | null
-          q4_start_date?: string | null
-          q4_target_balance?: number | null
-          title?: string | null
+          last_connected_at?: string | null
+          last_error?: string | null
+          status?: string
+          token_expires_at?: string | null
+          tradovate_account_id?: number | null
+          tradovate_account_spec?: string | null
           updated_at?: string
-          user_id?: string | null
-          year?: number | null
+          user_id: string
         }
         Update: {
-          account_id?: string | null
-          active_quarter?: string | null
+          access_token_vault_key?: string | null
+          broker_type?: string
+          cme_account_id?: string
           created_at?: string
-          deleted_at?: string | null
+          daily_pnl_usd?: number | null
+          error_at?: string | null
           id?: string
-          q1_end_date?: string | null
-          q1_start_balance?: number | null
-          q1_start_date?: string | null
-          q1_target_balance?: number | null
-          q2_end_date?: string | null
-          q2_start_balance?: number | null
-          q2_start_date?: string | null
-          q2_target_balance?: number | null
-          q3_end_date?: string | null
-          q3_start_balance?: number | null
-          q3_start_date?: string | null
-          q3_target_balance?: number | null
-          q4_end_date?: string | null
-          q4_start_balance?: number | null
-          q4_start_date?: string | null
-          q4_target_balance?: number | null
-          title?: string | null
+          last_connected_at?: string | null
+          last_error?: string | null
+          status?: string
+          token_expires_at?: string | null
+          tradovate_account_id?: number | null
+          tradovate_account_spec?: string | null
           updated_at?: string
-          user_id?: string | null
-          year?: number | null
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "goals_account_id_fkey"
-            columns: ["account_id"]
+            foreignKeyName: "cme_connections_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cme_equity_snapshots: {
+        Row: {
+          balance_usd: number
+          cme_account_id: string
+          daily_pnl_usd: number
+          equity_usd: number
+          id: string
+          open_pnl_usd: number
+          snapshot_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_usd: number
+          cme_account_id: string
+          daily_pnl_usd?: number
+          equity_usd: number
+          id?: string
+          open_pnl_usd?: number
+          snapshot_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_usd?: number
+          cme_account_id?: string
+          daily_pnl_usd?: number
+          equity_usd?: number
+          id?: string
+          open_pnl_usd?: number
+          snapshot_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cme_equity_snapshots_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cme_positions: {
+        Row: {
+          algorithm_id: string | null
+          avg_entry_price: number | null
+          broker_position_id: string | null
+          cme_account_id: string
+          connection_id: string | null
+          contract: string
+          current_price: number | null
+          direction: string
+          id: string
+          is_manual: boolean
+          opened_at: string | null
+          quantity: number
+          stop_loss_price: number | null
+          take_profit_price: number | null
+          unrealized_pnl_usd: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          avg_entry_price?: number | null
+          broker_position_id?: string | null
+          cme_account_id: string
+          connection_id?: string | null
+          contract: string
+          current_price?: number | null
+          direction: string
+          id?: string
+          is_manual?: boolean
+          opened_at?: string | null
+          quantity: number
+          stop_loss_price?: number | null
+          take_profit_price?: number | null
+          unrealized_pnl_usd?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          avg_entry_price?: number | null
+          broker_position_id?: string | null
+          cme_account_id?: string
+          connection_id?: string | null
+          contract?: string
+          current_price?: number | null
+          direction?: string
+          id?: string
+          is_manual?: boolean
+          opened_at?: string | null
+          quantity?: number
+          stop_loss_price?: number | null
+          take_profit_price?: number | null
+          unrealized_pnl_usd?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cme_positions_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_positions_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_positions_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "cme_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cme_risk_configs: {
+        Row: {
+          circuit_breaker_pct: number
+          cme_account_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          max_positions: number | null
+          paused_at: string | null
+          paused_reason: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          circuit_breaker_pct?: number
+          cme_account_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          max_positions?: number | null
+          paused_at?: string | null
+          paused_reason?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          circuit_breaker_pct?: number
+          cme_account_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          max_positions?: number | null
+          paused_at?: string | null
+          paused_reason?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cme_risk_configs_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cme_signals: {
+        Row: {
+          algorithm_id: string | null
+          cme_account_id: string
+          contract: string
+          created_at: string
+          direction: string
+          executed_at: string | null
+          execution_algo: string | null
+          expires_at: string
+          id: string
+          parent_signal_id: string | null
+          quantity: number
+          reject_reason: string | null
+          risk_check_result: Json | null
+          scheduled_at: string | null
+          signal_type: string
+          slice_index: number | null
+          status: string
+          stop_loss_ticks: number | null
+          take_profit_ticks: number | null
+          total_slices: number | null
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          cme_account_id: string
+          contract: string
+          created_at?: string
+          direction: string
+          executed_at?: string | null
+          execution_algo?: string | null
+          expires_at?: string
+          id?: string
+          parent_signal_id?: string | null
+          quantity?: number
+          reject_reason?: string | null
+          risk_check_result?: Json | null
+          scheduled_at?: string | null
+          signal_type?: string
+          slice_index?: number | null
+          status?: string
+          stop_loss_ticks?: number | null
+          take_profit_ticks?: number | null
+          total_slices?: number | null
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          cme_account_id?: string
+          contract?: string
+          created_at?: string
+          direction?: string
+          executed_at?: string | null
+          execution_algo?: string | null
+          expires_at?: string
+          id?: string
+          parent_signal_id?: string | null
+          quantity?: number
+          reject_reason?: string | null
+          risk_check_result?: Json | null
+          scheduled_at?: string | null
+          signal_type?: string
+          slice_index?: number | null
+          status?: string
+          stop_loss_ticks?: number | null
+          take_profit_ticks?: number | null
+          total_slices?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cme_signals_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_signals_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_signals_parent_signal_id_fkey"
+            columns: ["parent_signal_id"]
+            isOneToOne: false
+            referencedRelation: "cme_signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cme_trades_propfirm: {
+        Row: {
+          algorithm_id: string | null
+          broker_order_id: string | null
+          broker_position_id: string | null
+          close_reason: string | null
+          cme_account_id: string
+          commission_usd: number | null
+          connection_id: string | null
+          contract: string
+          created_at: string
+          direction: string
+          entry_price: number | null
+          exit_price: number | null
+          fill_price: number | null
+          fill_timestamp: string | null
+          id: string
+          pnl_usd: number | null
+          quantity: number
+          signal_id: string | null
+          slippage_ticks: number | null
+          status: string
+          stop_loss_price: number | null
+          take_profit_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          broker_order_id?: string | null
+          broker_position_id?: string | null
+          close_reason?: string | null
+          cme_account_id: string
+          commission_usd?: number | null
+          connection_id?: string | null
+          contract: string
+          created_at?: string
+          direction: string
+          entry_price?: number | null
+          exit_price?: number | null
+          fill_price?: number | null
+          fill_timestamp?: string | null
+          id?: string
+          pnl_usd?: number | null
+          quantity?: number
+          signal_id?: string | null
+          slippage_ticks?: number | null
+          status?: string
+          stop_loss_price?: number | null
+          take_profit_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          broker_order_id?: string | null
+          broker_position_id?: string | null
+          close_reason?: string | null
+          cme_account_id?: string
+          commission_usd?: number | null
+          connection_id?: string | null
+          contract?: string
+          created_at?: string
+          direction?: string
+          entry_price?: number | null
+          exit_price?: number | null
+          fill_price?: number | null
+          fill_timestamp?: string | null
+          id?: string
+          pnl_usd?: number | null
+          quantity?: number
+          signal_id?: string | null
+          slippage_ticks?: number | null
+          status?: string
+          stop_loss_price?: number | null
+          take_profit_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cme_trades_propfirm_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_trades_propfirm_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_trades_propfirm_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "cme_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cme_trades_real: {
+        Row: {
+          algorithm_id: string | null
+          broker_order_id: string | null
+          broker_position_id: string | null
+          close_reason: string | null
+          cme_account_id: string
+          commission_usd: number | null
+          connection_id: string | null
+          contract: string
+          created_at: string
+          direction: string
+          entry_price: number | null
+          exit_price: number | null
+          fill_price: number | null
+          fill_timestamp: string | null
+          id: string
+          pnl_usd: number | null
+          quantity: number
+          signal_id: string | null
+          slippage_ticks: number | null
+          status: string
+          stop_loss_price: number | null
+          take_profit_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id?: string | null
+          broker_order_id?: string | null
+          broker_position_id?: string | null
+          close_reason?: string | null
+          cme_account_id: string
+          commission_usd?: number | null
+          connection_id?: string | null
+          contract: string
+          created_at?: string
+          direction: string
+          entry_price?: number | null
+          exit_price?: number | null
+          fill_price?: number | null
+          fill_timestamp?: string | null
+          id?: string
+          pnl_usd?: number | null
+          quantity?: number
+          signal_id?: string | null
+          slippage_ticks?: number | null
+          status?: string
+          stop_loss_price?: number | null
+          take_profit_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string | null
+          broker_order_id?: string | null
+          broker_position_id?: string | null
+          close_reason?: string | null
+          cme_account_id?: string
+          commission_usd?: number | null
+          connection_id?: string | null
+          contract?: string
+          created_at?: string
+          direction?: string
+          entry_price?: number | null
+          exit_price?: number | null
+          fill_price?: number | null
+          fill_timestamp?: string | null
+          id?: string
+          pnl_usd?: number | null
+          quantity?: number
+          signal_id?: string | null
+          slippage_ticks?: number | null
+          status?: string
+          stop_loss_price?: number | null
+          take_profit_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cme_trades_real_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_trades_real_cme_account_id_fkey"
+            columns: ["cme_account_id"]
+            isOneToOne: false
+            referencedRelation: "algo_cme_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cme_trades_real_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "cme_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_50x_validation_checkpoints: {
+        Row: {
+          agent_id: string
+          checkpoint_day: number
+          decision: string
+          executed_at: string
+          id: string
+          metrics_json: Json
+          recommendation: string | null
+          validation_passed: boolean
+        }
+        Insert: {
+          agent_id: string
+          checkpoint_day: number
+          decision: string
+          executed_at?: string
+          id?: string
+          metrics_json: Json
+          recommendation?: string | null
+          validation_passed: boolean
+        }
+        Update: {
+          agent_id?: string
+          checkpoint_day?: number
+          decision?: string
+          executed_at?: string
+          id?: string
+          metrics_json?: Json
+          recommendation?: string | null
+          validation_passed?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_50x_validation_checkpoints_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_agents: {
+        Row: {
+          api_key_encrypted: string | null
+          api_passphrase_encrypted: string | null
+          api_secret_encrypted: string | null
+          config: Json
+          created_at: string
+          deleted_at: string | null
+          fly_instance_id: string | null
+          id: string
+          last_heartbeat_at: string | null
+          name: string
+          starting_capital_usd: number | null
+          status: string
+          updated_at: string
+          user_id: string
+          wallet_address: string | null
+        }
+        Insert: {
+          api_key_encrypted?: string | null
+          api_passphrase_encrypted?: string | null
+          api_secret_encrypted?: string | null
+          config?: Json
+          created_at?: string
+          deleted_at?: string | null
+          fly_instance_id?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          name?: string
+          starting_capital_usd?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          wallet_address?: string | null
+        }
+        Update: {
+          api_key_encrypted?: string | null
+          api_passphrase_encrypted?: string | null
+          api_secret_encrypted?: string | null
+          config?: Json
+          created_at?: string
+          deleted_at?: string | null
+          fly_instance_id?: string | null
+          id?: string
+          last_heartbeat_at?: string | null
+          name?: string
+          starting_capital_usd?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          wallet_address?: string | null
+        }
+        Relationships: []
+      }
+      coinarb_calibration: {
+        Row: {
+          agent_id: string
+          brier_score: number
+          closed_at: string
+          created_at: string
+          id: string
+          outcome: number
+          pnl_usd: number
+          position_id: string | null
+          predicted_confidence: number
+          predicted_edge: number | null
+          regime: string | null
+          symbol: string
+          tier: string | null
+          user_id: string
+          venue: string
+        }
+        Insert: {
+          agent_id: string
+          brier_score: number
+          closed_at: string
+          created_at?: string
+          id?: string
+          outcome: number
+          pnl_usd: number
+          position_id?: string | null
+          predicted_confidence: number
+          predicted_edge?: number | null
+          regime?: string | null
+          symbol: string
+          tier?: string | null
+          user_id: string
+          venue: string
+        }
+        Update: {
+          agent_id?: string
+          brier_score?: number
+          closed_at?: string
+          created_at?: string
+          id?: string
+          outcome?: number
+          pnl_usd?: number
+          position_id?: string | null
+          predicted_confidence?: number
+          predicted_edge?: number | null
+          regime?: string | null
+          symbol?: string
+          tier?: string | null
+          user_id?: string
+          venue?: string
+        }
+        Relationships: []
+      }
+      coinarb_calibration_data: {
+        Row: {
+          agent_id: string
+          id: string
+          prob_bucket: string
+          symbol: string
+          total: number
+          updated_at: string
+          user_id: string
+          wins: number
+        }
+        Insert: {
+          agent_id: string
+          id?: string
+          prob_bucket: string
+          symbol: string
+          total?: number
+          updated_at?: string
+          user_id: string
+          wins?: number
+        }
+        Update: {
+          agent_id?: string
+          id?: string
+          prob_bucket?: string
+          symbol?: string
+          total?: number
+          updated_at?: string
+          user_id?: string
+          wins?: number
+        }
+        Relationships: []
+      }
+      coinarb_circuit_breaker_events: {
+        Row: {
+          action_taken: string
+          agent_id: string
+          created_at: string
+          detail: string | null
+          equity_at_trigger: number | null
+          id: string
+          payload: Json | null
+          severity: string
+          trigger_type: string
+          user_id: string
+        }
+        Insert: {
+          action_taken: string
+          agent_id: string
+          created_at?: string
+          detail?: string | null
+          equity_at_trigger?: number | null
+          id?: string
+          payload?: Json | null
+          severity: string
+          trigger_type: string
+          user_id: string
+        }
+        Update: {
+          action_taken?: string
+          agent_id?: string
+          created_at?: string
+          detail?: string | null
+          equity_at_trigger?: number | null
+          id?: string
+          payload?: Json | null
+          severity?: string
+          trigger_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_circuit_breaker_events_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_compliance_audit: {
+        Row: {
+          after_state: Json | null
+          agent_id: string
+          before_state: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_table: string | null
+          event_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          after_state?: Json | null
+          agent_id: string
+          before_state?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          event_type: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          after_state?: Json | null
+          agent_id?: string
+          before_state?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_table?: string | null
+          event_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_compliance_audit_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_daily_stats: {
+        Row: {
+          agent_id: string
+          best_trade_usd: number | null
+          capital_end_usd: number | null
+          capital_start_usd: number | null
+          circuit_breaker_triggered: boolean
+          consecutive_loss_max: number
+          created_at: string
+          day_utc: string
+          fear_greed_avg: number | null
+          id: string
+          losses: number
+          phase_end: string | null
+          phase_start: string | null
+          strategy_id: string
+          total_pnl_usd: number
+          total_trades: number
+          updated_at: string
+          user_id: string
+          win_rate: number | null
+          wins: number
+          worst_trade_usd: number | null
+        }
+        Insert: {
+          agent_id: string
+          best_trade_usd?: number | null
+          capital_end_usd?: number | null
+          capital_start_usd?: number | null
+          circuit_breaker_triggered?: boolean
+          consecutive_loss_max?: number
+          created_at?: string
+          day_utc: string
+          fear_greed_avg?: number | null
+          id?: string
+          losses?: number
+          phase_end?: string | null
+          phase_start?: string | null
+          strategy_id?: string
+          total_pnl_usd?: number
+          total_trades?: number
+          updated_at?: string
+          user_id: string
+          win_rate?: number | null
+          wins?: number
+          worst_trade_usd?: number | null
+        }
+        Update: {
+          agent_id?: string
+          best_trade_usd?: number | null
+          capital_end_usd?: number | null
+          capital_start_usd?: number | null
+          circuit_breaker_triggered?: boolean
+          consecutive_loss_max?: number
+          created_at?: string
+          day_utc?: string
+          fear_greed_avg?: number | null
+          id?: string
+          losses?: number
+          phase_end?: string | null
+          phase_start?: string | null
+          strategy_id?: string
+          total_pnl_usd?: number
+          total_trades?: number
+          updated_at?: string
+          user_id?: string
+          win_rate?: number | null
+          wins?: number
+          worst_trade_usd?: number | null
+        }
+        Relationships: []
+      }
+      coinarb_decisions: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          kind: string
+          meta: Json | null
+          reason: string
+          regime: string | null
+          strategy_id: string
+          symbol: string | null
+          user_id: string
+          venue: string | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          meta?: Json | null
+          reason: string
+          regime?: string | null
+          strategy_id?: string
+          symbol?: string | null
+          user_id: string
+          venue?: string | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          meta?: Json | null
+          reason?: string
+          regime?: string | null
+          strategy_id?: string
+          symbol?: string | null
+          user_id?: string
+          venue?: string | null
+        }
+        Relationships: []
+      }
+      coinarb_equity_snapshots: {
+        Row: {
+          agent_id: string
+          archived_at: string | null
+          btc_price: number | null
+          equity_usd: number
+          id: string
+          open_positions: number
+          pnl_usd: number
+          snapshot_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          archived_at?: string | null
+          btc_price?: number | null
+          equity_usd: number
+          id?: string
+          open_positions?: number
+          pnl_usd?: number
+          snapshot_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          archived_at?: string | null
+          btc_price?: number | null
+          equity_usd?: number
+          id?: string
+          open_positions?: number
+          pnl_usd?: number
+          snapshot_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_equity_snapshots_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_liquidity_map: {
+        Row: {
+          agent_id: string
+          created_at: string
+          detected_at: string
+          id: string
+          meta: Json | null
+          price_bottom: number
+          price_top: number
+          swept_at: string | null
+          symbol: string
+          timeframe: string
+          user_id: string
+          zone_type: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          detected_at?: string
+          id?: string
+          meta?: Json | null
+          price_bottom: number
+          price_top: number
+          swept_at?: string | null
+          symbol: string
+          timeframe: string
+          user_id: string
+          zone_type: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          detected_at?: string
+          id?: string
+          meta?: Json | null
+          price_bottom?: number
+          price_top?: number
+          swept_at?: string | null
+          symbol?: string
+          timeframe?: string
+          user_id?: string
+          zone_type?: string
+        }
+        Relationships: []
+      }
+      coinarb_phase_log: {
+        Row: {
+          agent_id: string
+          capital_at_change: number
+          changed_at: string
+          created_at: string
+          from_phase: string | null
+          from_risk_pct: number | null
+          id: string
+          reason: string | null
+          strategy_id: string
+          to_phase: string
+          to_risk_pct: number
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          capital_at_change: number
+          changed_at?: string
+          created_at?: string
+          from_phase?: string | null
+          from_risk_pct?: number | null
+          id?: string
+          reason?: string | null
+          strategy_id?: string
+          to_phase: string
+          to_risk_pct: number
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          capital_at_change?: number
+          changed_at?: string
+          created_at?: string
+          from_phase?: string | null
+          from_risk_pct?: number | null
+          id?: string
+          reason?: string | null
+          strategy_id?: string
+          to_phase?: string
+          to_risk_pct?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      coinarb_positions: {
+        Row: {
+          agent_id: string
+          arb_gap_pct: number | null
+          base_qty: number | null
+          closed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          direction: string
+          entry_price: number | null
+          entry_reason: Json | null
+          exit_price: number | null
+          exit_reason: string | null
+          fear_greed_at_entry: number | null
+          id: string
+          opened_at: string | null
+          phase_at_entry: string | null
+          pnl_percent: number | null
+          pnl_usd: number | null
+          regime: string | null
+          side: string
+          size_usd: number | null
+          smc_zone_price: number | null
+          smc_zone_type: string | null
+          status: string
+          stop_loss_price: number | null
+          strategy_id: string
+          symbol: string
+          take_profit_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          arb_gap_pct?: number | null
+          base_qty?: number | null
+          closed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          direction?: string
+          entry_price?: number | null
+          entry_reason?: Json | null
+          exit_price?: number | null
+          exit_reason?: string | null
+          fear_greed_at_entry?: number | null
+          id?: string
+          opened_at?: string | null
+          phase_at_entry?: string | null
+          pnl_percent?: number | null
+          pnl_usd?: number | null
+          regime?: string | null
+          side: string
+          size_usd?: number | null
+          smc_zone_price?: number | null
+          smc_zone_type?: string | null
+          status?: string
+          stop_loss_price?: number | null
+          strategy_id?: string
+          symbol?: string
+          take_profit_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          arb_gap_pct?: number | null
+          base_qty?: number | null
+          closed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          direction?: string
+          entry_price?: number | null
+          entry_reason?: Json | null
+          exit_price?: number | null
+          exit_reason?: string | null
+          fear_greed_at_entry?: number | null
+          id?: string
+          opened_at?: string | null
+          phase_at_entry?: string | null
+          pnl_percent?: number | null
+          pnl_usd?: number | null
+          regime?: string | null
+          side?: string
+          size_usd?: number | null
+          smc_zone_price?: number | null
+          smc_zone_type?: string | null
+          status?: string
+          stop_loss_price?: number | null
+          strategy_id?: string
+          symbol?: string
+          take_profit_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_positions_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_regime_snapshots: {
+        Row: {
+          agent_id: string
+          agent_multiplier: number
+          captured_at: string
+          consistency_score: number | null
+          id: string
+          is_transition: boolean
+          previous_regime: string | null
+          regime: string
+          trend: string | null
+          trend_strength: number | null
+          user_id: string
+          volatility_pct: number | null
+        }
+        Insert: {
+          agent_id: string
+          agent_multiplier: number
+          captured_at?: string
+          consistency_score?: number | null
+          id?: string
+          is_transition?: boolean
+          previous_regime?: string | null
+          regime: string
+          trend?: string | null
+          trend_strength?: number | null
+          user_id: string
+          volatility_pct?: number | null
+        }
+        Update: {
+          agent_id?: string
+          agent_multiplier?: number
+          captured_at?: string
+          consistency_score?: number | null
+          id?: string
+          is_transition?: boolean
+          previous_regime?: string | null
+          regime?: string
+          trend?: string | null
+          trend_strength?: number | null
+          user_id?: string
+          volatility_pct?: number | null
+        }
+        Relationships: []
+      }
+      coinarb_signal_memory: {
+        Row: {
+          agent_id: string
+          closed_at: string | null
+          condition_id: string
+          created_at: string | null
+          distance_zone: string
+          edge_at_entry: number
+          entered_at: string
+          hunt_bucket: string
+          id: string
+          outcome: string | null
+          pnl_usd: number | null
+          regime: string
+          symbol: string
+          user_id: string
+          velocity_alignment: string
+        }
+        Insert: {
+          agent_id: string
+          closed_at?: string | null
+          condition_id: string
+          created_at?: string | null
+          distance_zone: string
+          edge_at_entry: number
+          entered_at: string
+          hunt_bucket: string
+          id: string
+          outcome?: string | null
+          pnl_usd?: number | null
+          regime: string
+          symbol: string
+          user_id: string
+          velocity_alignment: string
+        }
+        Update: {
+          agent_id?: string
+          closed_at?: string | null
+          condition_id?: string
+          created_at?: string | null
+          distance_zone?: string
+          edge_at_entry?: number
+          entered_at?: string
+          hunt_bucket?: string
+          id?: string
+          outcome?: string | null
+          pnl_usd?: number | null
+          regime?: string
+          symbol?: string
+          user_id?: string
+          velocity_alignment?: string
+        }
+        Relationships: []
+      }
+      coinarb_smc_signals: {
+        Row: {
+          agent_id: string
+          created_at: string
+          detected_at: string
+          direction: string | null
+          id: string
+          invalidated_at: string | null
+          meta: Json | null
+          price: number | null
+          signal_type: string
+          strategy_id: string
+          strength: number | null
+          symbol: string
+          timeframe: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          detected_at?: string
+          direction?: string | null
+          id?: string
+          invalidated_at?: string | null
+          meta?: Json | null
+          price?: number | null
+          signal_type: string
+          strategy_id?: string
+          strength?: number | null
+          symbol: string
+          timeframe: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          detected_at?: string
+          direction?: string | null
+          id?: string
+          invalidated_at?: string | null
+          meta?: Json | null
+          price?: number | null
+          signal_type?: string
+          strategy_id?: string
+          strength?: number | null
+          symbol?: string
+          timeframe?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      coinarb_telemetry: {
+        Row: {
+          agent_id: string
+          available_balance_usd: number | null
+          btc_spot_price: number | null
+          capital_current: number | null
+          consecutive_losses: number | null
+          consecutive_wins: number | null
+          created_at: string
+          daily_losses: number | null
+          daily_trades_count: number | null
+          daily_wins: number | null
+          equity_usd: number | null
+          error_count_1h: number | null
+          fear_greed_index: number | null
+          id: string
+          last_heartbeat_at: string
+          last_signal: Json | null
+          loop_latency_ms: number | null
+          max_drawdown_pct: number | null
+          open_positions_count: number | null
+          paused_until: string | null
+          payload: Json | null
+          phase_current: string | null
+          profit_factor: number | null
+          regime: string | null
+          risk_pct_current: number | null
+          sharpe_ratio: number | null
+          smc_bias: Json | null
+          strategy_id: string
+          total_pnl_usd: number | null
+          updated_at: string
+          user_id: string
+          win_rate: number | null
+          ws_binance_connected: boolean | null
+          ws_binance_connected_spot: boolean | null
+          ws_coinbase_connected: boolean | null
+        }
+        Insert: {
+          agent_id: string
+          available_balance_usd?: number | null
+          btc_spot_price?: number | null
+          capital_current?: number | null
+          consecutive_losses?: number | null
+          consecutive_wins?: number | null
+          created_at?: string
+          daily_losses?: number | null
+          daily_trades_count?: number | null
+          daily_wins?: number | null
+          equity_usd?: number | null
+          error_count_1h?: number | null
+          fear_greed_index?: number | null
+          id?: string
+          last_heartbeat_at?: string
+          last_signal?: Json | null
+          loop_latency_ms?: number | null
+          max_drawdown_pct?: number | null
+          open_positions_count?: number | null
+          paused_until?: string | null
+          payload?: Json | null
+          phase_current?: string | null
+          profit_factor?: number | null
+          regime?: string | null
+          risk_pct_current?: number | null
+          sharpe_ratio?: number | null
+          smc_bias?: Json | null
+          strategy_id?: string
+          total_pnl_usd?: number | null
+          updated_at?: string
+          user_id: string
+          win_rate?: number | null
+          ws_binance_connected?: boolean | null
+          ws_binance_connected_spot?: boolean | null
+          ws_coinbase_connected?: boolean | null
+        }
+        Update: {
+          agent_id?: string
+          available_balance_usd?: number | null
+          btc_spot_price?: number | null
+          capital_current?: number | null
+          consecutive_losses?: number | null
+          consecutive_wins?: number | null
+          created_at?: string
+          daily_losses?: number | null
+          daily_trades_count?: number | null
+          daily_wins?: number | null
+          equity_usd?: number | null
+          error_count_1h?: number | null
+          fear_greed_index?: number | null
+          id?: string
+          last_heartbeat_at?: string
+          last_signal?: Json | null
+          loop_latency_ms?: number | null
+          max_drawdown_pct?: number | null
+          open_positions_count?: number | null
+          paused_until?: string | null
+          payload?: Json | null
+          phase_current?: string | null
+          profit_factor?: number | null
+          regime?: string | null
+          risk_pct_current?: number | null
+          sharpe_ratio?: number | null
+          smc_bias?: Json | null
+          strategy_id?: string
+          total_pnl_usd?: number | null
+          updated_at?: string
+          user_id?: string
+          win_rate?: number | null
+          ws_binance_connected?: boolean | null
+          ws_binance_connected_spot?: boolean | null
+          ws_coinbase_connected?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_telemetry_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coinarb_trades: {
+        Row: {
+          agent_id: string
+          archived_at: string | null
+          created_at: string
+          direction: string | null
+          executed_at: string
+          execution_latency_ms: number | null
+          fee_rate_bps: number | null
+          fee_usd: number | null
+          id: string
+          order_id: string | null
+          pnl_usd: number | null
+          position_id: string | null
+          price: number
+          raw_response: Json | null
+          regime: string | null
+          side: string
+          size: number
+          size_usd: number | null
+          slippage_bps: number | null
+          status: string
+          strategy_id: string
+          symbol: string | null
+          trade_type: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          archived_at?: string | null
+          created_at?: string
+          direction?: string | null
+          executed_at?: string
+          execution_latency_ms?: number | null
+          fee_rate_bps?: number | null
+          fee_usd?: number | null
+          id?: string
+          order_id?: string | null
+          pnl_usd?: number | null
+          position_id?: string | null
+          price: number
+          raw_response?: Json | null
+          regime?: string | null
+          side: string
+          size: number
+          size_usd?: number | null
+          slippage_bps?: number | null
+          status?: string
+          strategy_id?: string
+          symbol?: string | null
+          trade_type?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          archived_at?: string | null
+          created_at?: string
+          direction?: string | null
+          executed_at?: string
+          execution_latency_ms?: number | null
+          fee_rate_bps?: number | null
+          fee_usd?: number | null
+          id?: string
+          order_id?: string | null
+          pnl_usd?: number | null
+          position_id?: string | null
+          price?: number
+          raw_response?: Json | null
+          regime?: string | null
+          side?: string
+          size?: number
+          size_usd?: number | null
+          slippage_bps?: number | null
+          status?: string
+          strategy_id?: string
+          symbol?: string | null
+          trade_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coinarb_trades_agent_fk"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coinarb_trades_position_fk"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "coinarb_positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_group_events: {
+        Row: {
+          actor_id: string | null
+          copy_group_id: string
+          created_at: string
+          event_type: string
+          id: string
+          payload_json: Json | null
+        }
+        Insert: {
+          actor_id?: string | null
+          copy_group_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          payload_json?: Json | null
+        }
+        Update: {
+          actor_id?: string | null
+          copy_group_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_group_events_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_group_experiments: {
+        Row: {
+          copy_group_id: string
+          created_at: string
+          flags_json: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          copy_group_id: string
+          created_at?: string
+          flags_json?: Json
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          copy_group_id?: string
+          created_at?: string
+          flags_json?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_group_experiments_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_group_links: {
+        Row: {
+          child_account_id: string
+          copy_group_id: string
+          copy_multiplier: number
+          created_at: string
+          id: string
+          link_type: string
+          parent_account_id: string
+        }
+        Insert: {
+          child_account_id: string
+          copy_group_id: string
+          copy_multiplier?: number
+          created_at?: string
+          id?: string
+          link_type?: string
+          parent_account_id: string
+        }
+        Update: {
+          child_account_id?: string
+          copy_group_id?: string
+          copy_multiplier?: number
+          created_at?: string
+          id?: string
+          link_type?: string
+          parent_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_group_links_child_account_id_fkey"
+            columns: ["child_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copy_group_links_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copy_group_links_parent_account_id_fkey"
+            columns: ["parent_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
         ]
       }
+      copy_group_nodes: {
+        Row: {
+          account_id: string
+          copy_group_id: string
+          created_at: string
+          id: string
+          risk_node: Json | null
+          risk_pct: number
+          role: string
+          sort_index: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          copy_group_id: string
+          created_at?: string
+          id?: string
+          risk_node?: Json | null
+          risk_pct?: number
+          role: string
+          sort_index?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          copy_group_id?: string
+          created_at?: string
+          id?: string
+          risk_node?: Json | null
+          risk_pct?: number
+          role?: string
+          sort_index?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_group_nodes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copy_group_nodes_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_group_snapshots: {
+        Row: {
+          checksum: string
+          copy_group_id: string
+          created_at: string
+          id: string
+          snapshot_json: Json
+          version_int: number
+        }
+        Insert: {
+          checksum: string
+          copy_group_id: string
+          created_at?: string
+          id?: string
+          snapshot_json: Json
+          version_int: number
+        }
+        Update: {
+          checksum?: string
+          copy_group_id?: string
+          created_at?: string
+          id?: string
+          snapshot_json?: Json
+          version_int?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_group_snapshots_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_group_versions: {
+        Row: {
+          copy_group_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          message: string | null
+          version_int: number
+        }
+        Insert: {
+          copy_group_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message?: string | null
+          version_int: number
+        }
+        Update: {
+          copy_group_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message?: string | null
+          version_int?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_group_versions_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_groups: {
+        Row: {
+          active_version: number
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          sync_mode: string
+          updated_at: string
+        }
+        Insert: {
+          active_version?: number
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          sync_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          active_version?: number
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          sync_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      engine_backtest_runs: {
+        Row: {
+          advanced: Json | null
+          algorithm_id: string
+          bars_loaded: Json
+          baseline_metrics: Json
+          created_at: string
+          duration_ms: number | null
+          equity_curve: Json
+          final_balance: number | null
+          id: string
+          monte_carlo: Json | null
+          params: Json
+          range_from: string
+          range_to: string
+          symbol: string
+          total_trades: number | null
+          user_id: string
+          walk_forward: Json | null
+        }
+        Insert: {
+          advanced?: Json | null
+          algorithm_id: string
+          bars_loaded?: Json
+          baseline_metrics?: Json
+          created_at?: string
+          duration_ms?: number | null
+          equity_curve?: Json
+          final_balance?: number | null
+          id?: string
+          monte_carlo?: Json | null
+          params?: Json
+          range_from: string
+          range_to: string
+          symbol: string
+          total_trades?: number | null
+          user_id: string
+          walk_forward?: Json | null
+        }
+        Update: {
+          advanced?: Json | null
+          algorithm_id?: string
+          bars_loaded?: Json
+          baseline_metrics?: Json
+          created_at?: string
+          duration_ms?: number | null
+          equity_curve?: Json
+          final_balance?: number | null
+          id?: string
+          monte_carlo?: Json | null
+          params?: Json
+          range_from?: string
+          range_to?: string
+          symbol?: string
+          total_trades?: number | null
+          user_id?: string
+          walk_forward?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engine_backtest_runs_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      global_trading_halt: {
+        Row: {
+          halted: boolean
+          halted_at: string | null
+          halted_by: string | null
+          reason: string | null
+          resumed_at: string | null
+          resumed_by: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          halted?: boolean
+          halted_at?: string | null
+          halted_by?: string | null
+          reason?: string | null
+          resumed_at?: string | null
+          resumed_by?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          halted?: boolean
+          halted_at?: string | null
+          halted_by?: string | null
+          reason?: string | null
+          resumed_at?: string | null
+          resumed_by?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      historical_bars: {
+        Row: {
+          close: number
+          created_at: string
+          high: number
+          id: number
+          low: number
+          open: number
+          source: string
+          spread: number | null
+          symbol: string
+          timeframe: string
+          ts: string
+          uploaded_by: string | null
+          volume: number
+        }
+        Insert: {
+          close: number
+          created_at?: string
+          high: number
+          id?: number
+          low: number
+          open: number
+          source: string
+          spread?: number | null
+          symbol: string
+          timeframe: string
+          ts: string
+          uploaded_by?: string | null
+          volume?: number
+        }
+        Update: {
+          close?: number
+          created_at?: string
+          high?: number
+          id?: number
+          low?: number
+          open?: number
+          source?: string
+          spread?: number | null
+          symbol?: string
+          timeframe?: string
+          ts?: string
+          uploaded_by?: string | null
+          volume?: number
+        }
+        Relationships: []
+      }
+      historical_bars_coverage: {
+        Row: {
+          bar_count: number
+          last_ingest_at: string
+          range_end: string
+          range_start: string
+          source: string
+          symbol: string
+          timeframe: string
+        }
+        Insert: {
+          bar_count: number
+          last_ingest_at?: string
+          range_end: string
+          range_start: string
+          source: string
+          symbol: string
+          timeframe: string
+        }
+        Update: {
+          bar_count?: number
+          last_ingest_at?: string
+          range_end?: string
+          range_start?: string
+          source?: string
+          symbol?: string
+          timeframe?: string
+        }
+        Relationships: []
+      }
       instruments: {
         Row: {
+          category: string
           created_at: string
           display_name: string
           id: string
+          market_type: string
           sort_index: number
           symbol: string
           updated_at: string
         }
         Insert: {
+          category?: string
           created_at?: string
           display_name: string
           id?: string
+          market_type?: string
           sort_index?: number
           symbol: string
           updated_at?: string
         }
         Update: {
+          category?: string
           created_at?: string
           display_name?: string
           id?: string
+          market_type?: string
           sort_index?: number
           symbol?: string
           updated_at?: string
@@ -2169,6 +5320,253 @@ export type Database = {
           },
         ]
       }
+      map_hot_goal_links: {
+        Row: {
+          algorithm_id: string
+          created_at: string
+          goal_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          algorithm_id: string
+          created_at?: string
+          goal_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          algorithm_id?: string
+          created_at?: string
+          goal_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "map_hot_goal_links_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "map_hot_goal_links_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "map_hot_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      map_hot_goal_snapshots: {
+        Row: {
+          created_at: string
+          current_value: number
+          goal_id: string
+          id: string
+          recorded_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_value: number
+          goal_id: string
+          id?: string
+          recorded_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_value?: number
+          goal_id?: string
+          id?: string
+          recorded_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "map_hot_goal_snapshots_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "map_hot_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      map_hot_goals: {
+        Row: {
+          created_at: string
+          current_value: number
+          deleted_at: string | null
+          due_date: string | null
+          id: string
+          name: string
+          sort_index: number
+          status: string
+          target_value: number
+          timeframe: string
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_value?: number
+          deleted_at?: string | null
+          due_date?: string | null
+          id?: string
+          name: string
+          sort_index?: number
+          status?: string
+          target_value: number
+          timeframe: string
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_value?: number
+          deleted_at?: string | null
+          due_date?: string | null
+          id?: string
+          name?: string
+          sort_index?: number
+          status?: string
+          target_value?: number
+          timeframe?: string
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      map_hot_milestones: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          id: string
+          label: string
+          quarter: string
+          sort_index: number
+          status: string
+          target_amount: number
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          label: string
+          quarter: string
+          sort_index?: number
+          status?: string
+          target_amount: number
+          updated_at?: string
+          user_id: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          label?: string
+          quarter?: string
+          sort_index?: number
+          status?: string
+          target_amount?: number
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      ml_models: {
+        Row: {
+          algorithm_id: string | null
+          created_at: string
+          feature_names: string[]
+          id: string
+          kind: string
+          symbol: string | null
+          timeframe: string | null
+          train_acc: number | null
+          trained_at: string
+          user_id: string
+          valid_acc: number | null
+          weights: Json
+        }
+        Insert: {
+          algorithm_id?: string | null
+          created_at?: string
+          feature_names?: string[]
+          id?: string
+          kind: string
+          symbol?: string | null
+          timeframe?: string | null
+          train_acc?: number | null
+          trained_at?: string
+          user_id: string
+          valid_acc?: number | null
+          weights: Json
+        }
+        Update: {
+          algorithm_id?: string | null
+          created_at?: string
+          feature_names?: string[]
+          id?: string
+          kind?: string
+          symbol?: string | null
+          timeframe?: string | null
+          train_acc?: number | null
+          trained_at?: string
+          user_id?: string
+          valid_acc?: number | null
+          weights?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ml_models_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_alert_history: {
+        Row: {
+          created_at: string
+          id: string
+          job_name: string
+          message: string
+          metadata: Json
+          severity: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_name: string
+          message: string
+          metadata?: Json
+          severity: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_name?: string
+          message?: string
+          metadata?: Json
+          severity?: string
+        }
+        Relationships: []
+      }
       paper_trades: {
         Row: {
           account_id: string
@@ -2265,106 +5663,43 @@ export type Database = {
           },
         ]
       }
-      playbook_setup_current: {
+      polyarb_50x_validation_checkpoints: {
         Row: {
-          current_version_id: string
-          group_id: string
-          updated_at: string
+          agent_id: string
+          checkpoint_day: number
+          decision: string
+          executed_at: string
+          id: string
+          metrics_json: Json
+          recommendation: string | null
+          validation_passed: boolean
         }
         Insert: {
-          current_version_id: string
-          group_id: string
-          updated_at?: string
+          agent_id: string
+          checkpoint_day: number
+          decision: string
+          executed_at?: string
+          id?: string
+          metrics_json: Json
+          recommendation?: string | null
+          validation_passed: boolean
         }
         Update: {
-          current_version_id?: string
-          group_id?: string
-          updated_at?: string
+          agent_id?: string
+          checkpoint_day?: number
+          decision?: string
+          executed_at?: string
+          id?: string
+          metrics_json?: Json
+          recommendation?: string | null
+          validation_passed?: boolean
         }
         Relationships: [
           {
-            foreignKeyName: "playbook_setup_current_current_version_id_fkey"
-            columns: ["current_version_id"]
+            foreignKeyName: "polyarb_50x_validation_checkpoints_agent_id_fkey"
+            columns: ["agent_id"]
             isOneToOne: false
-            referencedRelation: "playbook_setup_versions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "playbook_setup_current_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: true
-            referencedRelation: "playbook_setup_groups"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      playbook_setup_groups: {
-        Row: {
-          created_at: string
-          deleted_at: string | null
-          id: string
-          name: string
-          name_lower: string | null
-          sort_index: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          deleted_at?: string | null
-          id?: string
-          name: string
-          name_lower?: string | null
-          sort_index?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          deleted_at?: string | null
-          id?: string
-          name?: string
-          name_lower?: string | null
-          sort_index?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      playbook_setup_versions: {
-        Row: {
-          checklist: string | null
-          created_at: string
-          description: string | null
-          group_id: string
-          id: string
-          user_id: string
-          version: number
-        }
-        Insert: {
-          checklist?: string | null
-          created_at?: string
-          description?: string | null
-          group_id: string
-          id?: string
-          user_id: string
-          version: number
-        }
-        Update: {
-          checklist?: string | null
-          created_at?: string
-          description?: string | null
-          group_id?: string
-          id?: string
-          user_id?: string
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "playbook_setup_versions_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "playbook_setup_groups"
+            referencedRelation: "polyarb_agents"
             referencedColumns: ["id"]
           },
         ]
@@ -2420,6 +5755,39 @@ export type Database = {
           updated_at?: string
           user_id?: string
           wallet_address?: string | null
+        }
+        Relationships: []
+      }
+      polyarb_calibration_data: {
+        Row: {
+          agent_id: string
+          id: string
+          prob_bucket: string
+          symbol: string
+          total: number
+          updated_at: string
+          user_id: string
+          wins: number
+        }
+        Insert: {
+          agent_id: string
+          id?: string
+          prob_bucket: string
+          symbol: string
+          total?: number
+          updated_at?: string
+          user_id: string
+          wins?: number
+        }
+        Update: {
+          agent_id?: string
+          id?: string
+          prob_bucket?: string
+          symbol?: string
+          total?: number
+          updated_at?: string
+          user_id?: string
+          wins?: number
         }
         Relationships: []
       }
@@ -2514,9 +5882,46 @@ export type Database = {
           },
         ]
       }
+      polyarb_decisions: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          kind: string
+          meta: Json | null
+          reason: string
+          symbol: string | null
+          user_id: string
+          venue: string | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          meta?: Json | null
+          reason: string
+          symbol?: string | null
+          user_id: string
+          venue?: string | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          meta?: Json | null
+          reason?: string
+          symbol?: string | null
+          user_id?: string
+          venue?: string | null
+        }
+        Relationships: []
+      }
       polyarb_equity_snapshots: {
         Row: {
           agent_id: string
+          archived_at: string | null
           btc_price: number | null
           equity_usd: number
           id: string
@@ -2527,6 +5932,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          archived_at?: string | null
           btc_price?: number | null
           equity_usd: number
           id?: string
@@ -2537,6 +5943,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          archived_at?: string | null
           btc_price?: number | null
           equity_usd?: number
           id?: string
@@ -2555,6 +5962,42 @@ export type Database = {
           },
         ]
       }
+      polyarb_event_log: {
+        Row: {
+          agent_id: string
+          created_at: string
+          detected_at: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          severity: number
+          ttl_ms: number
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          detected_at: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          severity: number
+          ttl_ms: number
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          detected_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          severity?: number
+          ttl_ms?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       polyarb_positions: {
         Row: {
           agent_id: string
@@ -2568,11 +6011,14 @@ export type Database = {
           exit_reason: string | null
           id: string
           leverage_used: number | null
+          market_question: string | null
           market_slug: string
           opened_at: string | null
           outcome: string
           pnl_percent: number | null
           pnl_usd: number | null
+          redeemed: boolean
+          redeemed_at: string | null
           shares: number | null
           side: string
           size_usd: number | null
@@ -2592,11 +6038,14 @@ export type Database = {
           exit_reason?: string | null
           id?: string
           leverage_used?: number | null
+          market_question?: string | null
           market_slug: string
           opened_at?: string | null
           outcome: string
           pnl_percent?: number | null
           pnl_usd?: number | null
+          redeemed?: boolean
+          redeemed_at?: string | null
           shares?: number | null
           side: string
           size_usd?: number | null
@@ -2616,11 +6065,14 @@ export type Database = {
           exit_reason?: string | null
           id?: string
           leverage_used?: number | null
+          market_question?: string | null
           market_slug?: string
           opened_at?: string | null
           outcome?: string
           pnl_percent?: number | null
           pnl_usd?: number | null
+          redeemed?: boolean
+          redeemed_at?: string | null
           shares?: number | null
           side?: string
           size_usd?: number | null
@@ -2704,6 +6156,7 @@ export type Database = {
           cross_market_snapshot: Json | null
           equity_usd: number | null
           error_count_1h: number | null
+          event_state: Json | null
           id: string
           last_heartbeat_at: string
           last_signal: Json | null
@@ -2735,6 +6188,7 @@ export type Database = {
           cross_market_snapshot?: Json | null
           equity_usd?: number | null
           error_count_1h?: number | null
+          event_state?: Json | null
           id?: string
           last_heartbeat_at?: string
           last_signal?: Json | null
@@ -2766,6 +6220,7 @@ export type Database = {
           cross_market_snapshot?: Json | null
           equity_usd?: number | null
           error_count_1h?: number | null
+          event_state?: Json | null
           id?: string
           last_heartbeat_at?: string
           last_signal?: Json | null
@@ -2799,6 +6254,7 @@ export type Database = {
       polyarb_trades: {
         Row: {
           agent_id: string
+          archived_at: string | null
           condition_id: string | null
           created_at: string
           executed_at: string
@@ -2810,6 +6266,7 @@ export type Database = {
           order_id: string | null
           order_signature: string | null
           outcome: string | null
+          pnl_usd: number | null
           position_id: string | null
           price: number
           raw_response: Json | null
@@ -2818,10 +6275,12 @@ export type Database = {
           size_usd: number | null
           slippage_bps: number | null
           status: string
+          trade_type: string
           user_id: string
         }
         Insert: {
           agent_id: string
+          archived_at?: string | null
           condition_id?: string | null
           created_at?: string
           executed_at?: string
@@ -2833,6 +6292,7 @@ export type Database = {
           order_id?: string | null
           order_signature?: string | null
           outcome?: string | null
+          pnl_usd?: number | null
           position_id?: string | null
           price: number
           raw_response?: Json | null
@@ -2841,10 +6301,12 @@ export type Database = {
           size_usd?: number | null
           slippage_bps?: number | null
           status?: string
+          trade_type?: string
           user_id: string
         }
         Update: {
           agent_id?: string
+          archived_at?: string | null
           condition_id?: string | null
           created_at?: string
           executed_at?: string
@@ -2856,6 +6318,7 @@ export type Database = {
           order_id?: string | null
           order_signature?: string | null
           outcome?: string | null
+          pnl_usd?: number | null
           position_id?: string | null
           price?: number
           raw_response?: Json | null
@@ -2864,6 +6327,7 @@ export type Database = {
           size_usd?: number | null
           slippage_bps?: number | null
           status?: string
+          trade_type?: string
           user_id?: string
         }
         Relationships: [
@@ -2883,41 +6347,49 @@ export type Database = {
           },
         ]
       }
-      progress_events: {
+      portfolio_allocations: {
         Row: {
+          algorithm_id: string
           created_at: string
-          event_type: string
+          daily_return_stdev: number | null
           id: string
-          metadata: Json | null
-          occurred_at: string
-          ref_id: string | null
-          ref_table: string | null
+          is_current: boolean
+          lookback_days: number
+          run_at: string
           user_id: string
-          xp_delta: number
+          weight: number
         }
         Insert: {
+          algorithm_id: string
           created_at?: string
-          event_type: string
+          daily_return_stdev?: number | null
           id?: string
-          metadata?: Json | null
-          occurred_at?: string
-          ref_id?: string | null
-          ref_table?: string | null
+          is_current?: boolean
+          lookback_days: number
+          run_at?: string
           user_id: string
-          xp_delta?: number
+          weight: number
         }
         Update: {
+          algorithm_id?: string
           created_at?: string
-          event_type?: string
+          daily_return_stdev?: number | null
           id?: string
-          metadata?: Json | null
-          occurred_at?: string
-          ref_id?: string | null
-          ref_table?: string | null
+          is_current?: boolean
+          lookback_days?: number
+          run_at?: string
           user_id?: string
-          xp_delta?: number
+          weight?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_allocations_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       push_subscriptions: {
         Row: {
@@ -2951,6 +6423,67 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      replication_jobs: {
+        Row: {
+          attempts: number
+          copy_group_id: string
+          created_at: string
+          id: string
+          last_error: string | null
+          master_trade_id: string
+          scheduled_at: string
+          slave_account_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          copy_group_id: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          master_trade_id: string
+          scheduled_at?: string
+          slave_account_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          copy_group_id?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          master_trade_id?: string
+          scheduled_at?: string
+          slave_account_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "replication_jobs_copy_group_id_fkey"
+            columns: ["copy_group_id"]
+            isOneToOne: false
+            referencedRelation: "copy_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "replication_jobs_master_trade_id_fkey"
+            columns: ["master_trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "replication_jobs_slave_account_id_fkey"
+            columns: ["slave_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       secure_allowed_senders: {
         Row: {
@@ -3218,54 +6751,234 @@ export type Database = {
           },
         ]
       }
-      setup_library: {
+      securities_exam_results: {
         Row: {
-          created_at: string
-          deleted_at: string | null
-          description: string | null
-          entry_model: string | null
+          answers: Json
+          attempt_no: number
           id: string
-          invalidations: string | null
-          market_conditions: string | null
-          name: string
-          short_name: string | null
-          statistics_enabled: boolean
-          tags: string[]
-          timeframes: string[]
-          updated_at: string
-          user_id: string | null
+          passed: boolean | null
+          score: number
+          section: string | null
+          taken_at: string
+          total: number
+          user_id: string
         }
         Insert: {
-          created_at?: string
-          deleted_at?: string | null
-          description?: string | null
-          entry_model?: string | null
+          answers?: Json
+          attempt_no: number
           id?: string
-          invalidations?: string | null
-          market_conditions?: string | null
-          name: string
-          short_name?: string | null
-          statistics_enabled?: boolean
-          tags?: string[]
-          timeframes?: string[]
-          updated_at?: string
-          user_id?: string | null
+          passed?: boolean | null
+          score: number
+          section?: string | null
+          taken_at?: string
+          total: number
+          user_id: string
         }
         Update: {
+          answers?: Json
+          attempt_no?: number
+          id?: string
+          passed?: boolean | null
+          score?: number
+          section?: string | null
+          taken_at?: string
+          total?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      securities_homework_submissions: {
+        Row: {
+          content: string | null
+          created_at: string
+          deleted_at: string | null
+          graded_at: string | null
+          homework_id: number
+          id: string
+          points: number | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
           created_at?: string
           deleted_at?: string | null
-          description?: string | null
-          entry_model?: string | null
+          graded_at?: string | null
+          homework_id: number
           id?: string
-          invalidations?: string | null
-          market_conditions?: string | null
-          name?: string
-          short_name?: string | null
-          statistics_enabled?: boolean
-          tags?: string[]
-          timeframes?: string[]
+          points?: number | null
+          status?: string
+          submitted_at?: string | null
           updated_at?: string
-          user_id?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          graded_at?: string | null
+          homework_id?: number
+          id?: string
+          points?: number | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      securities_library_uploads: {
+        Row: {
+          author: string | null
+          category: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          level: string
+          mime_type: string | null
+          notes: string | null
+          size_bytes: number | null
+          storage_path: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          author?: string | null
+          category?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          level?: string
+          mime_type?: string | null
+          notes?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          author?: string | null
+          category?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          level?: string
+          mime_type?: string | null
+          notes?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      securities_progress: {
+        Row: {
+          completed_levels: string[]
+          created_at: string
+          id: string
+          module_id: number
+          research_done: boolean
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_levels?: string[]
+          created_at?: string
+          id?: string
+          module_id: number
+          research_done?: boolean
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_levels?: string[]
+          created_at?: string
+          id?: string
+          module_id?: number
+          research_done?: boolean
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      securities_quiz_results: {
+        Row: {
+          answers: Json
+          id: string
+          lesson_id: number
+          level: string
+          score: number
+          taken_at: string
+          total: number
+          user_id: string
+        }
+        Insert: {
+          answers?: Json
+          id?: string
+          lesson_id: number
+          level?: string
+          score: number
+          taken_at?: string
+          total: number
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          id?: string
+          lesson_id?: number
+          level?: string
+          score?: number
+          taken_at?: string
+          total?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      securities_user_state: {
+        Row: {
+          daily_goal: number
+          gating: string
+          last_notified_on: string | null
+          milestone_snapshot: Json | null
+          notify_streak: boolean
+          placement_done: boolean
+          specialization: string | null
+          srs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          daily_goal?: number
+          gating?: string
+          last_notified_on?: string | null
+          milestone_snapshot?: Json | null
+          notify_streak?: boolean
+          placement_done?: boolean
+          specialization?: string | null
+          srs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          daily_goal?: number
+          gating?: string
+          last_notified_on?: string | null
+          milestone_snapshot?: Json | null
+          notify_streak?: boolean
+          placement_done?: boolean
+          specialization?: string | null
+          srs?: Json
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3305,6 +7018,58 @@ export type Database = {
         }
         Relationships: []
       }
+      slave_trade_links: {
+        Row: {
+          id: string
+          last_error: string | null
+          master_trade_id: string
+          slave_account_id: string
+          slave_trade_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          last_error?: string | null
+          master_trade_id: string
+          slave_account_id: string
+          slave_trade_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_error?: string | null
+          master_trade_id?: string
+          slave_account_id?: string
+          slave_trade_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slave_trade_links_master_trade_id_fkey"
+            columns: ["master_trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slave_trade_links_slave_account_id_fkey"
+            columns: ["slave_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slave_trade_links_slave_trade_id_fkey"
+            columns: ["slave_trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tags: {
         Row: {
           created_at: string
@@ -3333,6 +7098,148 @@ export type Database = {
           name?: string
           name_lower?: string | null
           sort_index?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      terminal_assistant_memory: {
+        Row: {
+          asset: string | null
+          content: string
+          created_at: string
+          id: string
+          importance_score: number
+          last_accessed_at: string
+          memory_type: string
+          source_session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asset?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          importance_score?: number
+          last_accessed_at?: string
+          memory_type: string
+          source_session_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asset?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          importance_score?: number
+          last_accessed_at?: string
+          memory_type?: string
+          source_session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terminal_assistant_memory_source_session_id_fkey"
+            columns: ["source_session_id"]
+            isOneToOne: false
+            referencedRelation: "terminal_chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      terminal_assistant_settings: {
+        Row: {
+          assistant_name: string
+          default_asset: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assistant_name?: string
+          default_asset?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assistant_name?: string
+          default_asset?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      terminal_chat_messages: {
+        Row: {
+          content: string
+          context_snapshot: Json | null
+          created_at: string
+          id: string
+          image_path: string | null
+          rating: number | null
+          role: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          context_snapshot?: Json | null
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          rating?: number | null
+          role: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          context_snapshot?: Json | null
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          rating?: number | null
+          role?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terminal_chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "terminal_chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      terminal_chat_sessions: {
+        Row: {
+          asset: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asset?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asset?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          title?: string
           updated_at?: string
           user_id?: string
         }
@@ -3668,108 +7575,48 @@ export type Database = {
           },
         ]
       }
-      tradermap_goal_quarters: {
+      trade_replication_map: {
         Row: {
-          completed_at: string | null
+          copy_group_id: string
           created_at: string
-          current_balance: number | null
-          deleted_at: string | null
-          end_date: string
-          goal_id: string
           id: string
-          quarter: string
-          sort_index: number
-          start_balance: number
-          start_date: string
-          target_balance: number
-          updated_at: string
-          user_id: string
+          master_account_id: string
+          master_trade_id: string
         }
         Insert: {
-          completed_at?: string | null
+          copy_group_id: string
           created_at?: string
-          current_balance?: number | null
-          deleted_at?: string | null
-          end_date: string
-          goal_id: string
           id?: string
-          quarter: string
-          sort_index?: number
-          start_balance: number
-          start_date: string
-          target_balance: number
-          updated_at?: string
-          user_id: string
+          master_account_id: string
+          master_trade_id: string
         }
         Update: {
-          completed_at?: string | null
+          copy_group_id?: string
           created_at?: string
-          current_balance?: number | null
-          deleted_at?: string | null
-          end_date?: string
-          goal_id?: string
           id?: string
-          quarter?: string
-          sort_index?: number
-          start_balance?: number
-          start_date?: string
-          target_balance?: number
-          updated_at?: string
-          user_id?: string
+          master_account_id?: string
+          master_trade_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "tradermap_goal_quarters_goal_id_fkey"
-            columns: ["goal_id"]
+            foreignKeyName: "trade_replication_map_copy_group_id_fkey"
+            columns: ["copy_group_id"]
             isOneToOne: false
-            referencedRelation: "tradermap_goals"
+            referencedRelation: "copy_groups"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      tradermap_goals: {
-        Row: {
-          account_id: string
-          active_quarter: string
-          created_at: string
-          deleted_at: string | null
-          id: string
-          sort_index: number
-          title: string
-          updated_at: string
-          user_id: string
-          year: number
-        }
-        Insert: {
-          account_id: string
-          active_quarter?: string
-          created_at?: string
-          deleted_at?: string | null
-          id?: string
-          sort_index?: number
-          title: string
-          updated_at?: string
-          user_id: string
-          year: number
-        }
-        Update: {
-          account_id?: string
-          active_quarter?: string
-          created_at?: string
-          deleted_at?: string | null
-          id?: string
-          sort_index?: number
-          title?: string
-          updated_at?: string
-          user_id?: string
-          year?: number
-        }
-        Relationships: [
           {
-            foreignKeyName: "tradermap_goals_account_id_fkey"
-            columns: ["account_id"]
+            foreignKeyName: "trade_replication_map_master_account_id_fkey"
+            columns: ["master_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_replication_map_master_trade_id_fkey"
+            columns: ["master_trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
             referencedColumns: ["id"]
           },
         ]
@@ -3869,6 +7716,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      trading_algorithms: {
+        Row: {
+          algo_type: string
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          engine_config: Json | null
+          id: string
+          name: string
+          parameters: Json
+          platform: string
+          slot_number: number
+          sort_index: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algo_type: string
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          engine_config?: Json | null
+          id?: string
+          name: string
+          parameters?: Json
+          platform: string
+          slot_number: number
+          sort_index?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algo_type?: string
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          engine_config?: Json | null
+          id?: string
+          name?: string
+          parameters?: Json
+          platform?: string
+          slot_number?: number
+          sort_index?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       treasury_budgets: {
         Row: {
@@ -4297,33 +8195,6 @@ export type Database = {
           },
         ]
       }
-      user_level_state: {
-        Row: {
-          last_activity_date: string | null
-          level: number
-          streak_days: number
-          updated_at: string
-          user_id: string
-          xp_total: number
-        }
-        Insert: {
-          last_activity_date?: string | null
-          level?: number
-          streak_days?: number
-          updated_at?: string
-          user_id: string
-          xp_total?: number
-        }
-        Update: {
-          last_activity_date?: string | null
-          level?: number
-          streak_days?: number
-          updated_at?: string
-          user_id?: string
-          xp_total?: number
-        }
-        Relationships: []
-      }
       weekly_reports: {
         Row: {
           content_md: string
@@ -4389,10 +8260,87 @@ export type Database = {
         }
         Relationships: []
       }
+      algorithm_quality_score: {
+        Row: {
+          algorithm_id: string | null
+          gates_passed: number | null
+          gates_total: number | null
+          last_computed_at: string | null
+          must_failed: number | null
+          should_failed: number | null
+          tier: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "algorithm_quality_gate_results_algorithm_id_fkey"
+            columns: ["algorithm_id"]
+            isOneToOne: false
+            referencedRelation: "algorithms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       activate_app_update: { Args: { p_update_id: string }; Returns: undefined }
+      copy_group_apply_snapshot: {
+        Args: { p_copy_group_id: string; p_snapshot: Json }
+        Returns: undefined
+      }
+      copy_group_get_solid_descendants: {
+        Args: { p_copy_group_id: string; p_root_account_id: string }
+        Returns: {
+          account_id: string
+          depth: number
+          multiplier_path: number
+          parent_account_id: string
+        }[]
+      }
+      copy_group_would_create_cycle: {
+        Args: {
+          p_child_account_id: string
+          p_copy_group_id: string
+          p_parent_account_id: string
+        }
+        Returns: boolean
+      }
       force_app_refresh: { Args: { reason?: string }; Returns: undefined }
+      get_user_audit_logs: {
+        Args: {
+          p_action?: string
+          p_limit?: number
+          p_offset?: number
+          p_resource_type?: string
+        }
+        Returns: {
+          action: string
+          changes: Json
+          created_at: string
+          id: string
+          resource_id: string
+          resource_type: string
+          status: string
+        }[]
+      }
+      increment_api_rate_limit: {
+        Args: { p_key: string; p_window_start: string }
+        Returns: number
+      }
+      log_audit_event: {
+        Args: {
+          p_action: string
+          p_changes?: Json
+          p_error_message?: string
+          p_ip_hint?: string
+          p_resource_id?: string
+          p_resource_type: string
+          p_status?: string
+          p_user_agent_hash?: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       security_rls_audit: {
         Args: { target_tables?: string[] }
         Returns: {
@@ -4402,10 +8350,6 @@ export type Database = {
           table_exists: boolean
           table_name: string
         }[]
-      }
-      upsert_user_level_state: {
-        Args: { p_user_id: string }
-        Returns: undefined
       }
     }
     Enums: {
