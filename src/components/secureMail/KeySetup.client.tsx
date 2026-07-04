@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { Key, Download, Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { generateKeypair, verifyPublicKey } from '@/lib/crypto/openpgp';
+import { generateKeypair, verifyPublicKey, isPrivateKeyPassphraseProtected } from '@/lib/crypto/openpgp';
 import { createClient } from '@/lib/supabase/browser';
 
 export default function KeySetup() {
@@ -95,6 +95,18 @@ export default function KeySetup() {
     try {
       const isValidPublic = await verifyPublicKey(importPublicKey);
       if (!isValidPublic) throw new Error('Invalid public key format');
+
+      // Guardrail (auditoría de madurez 2026-07): antes se guardaba
+      // cualquier private key pegada tal cual, con key_kdf hardcodeado a
+      // 'Imported' sin verificar que la key realmente esté protegida por
+      // passphrase — un usuario podía pegar una clave sin cifrar y quedaba
+      // guardada en texto plano en la DB sin ningún aviso.
+      const isProtected = await isPrivateKeyPassphraseProtected(importPrivateKey);
+      if (!isProtected) {
+        throw new Error(
+          'La private key pegada no está protegida por passphrase. Por seguridad, solo se aceptan private keys cifradas — generá o exportá una key con passphrase antes de importarla.'
+        );
+      }
 
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();

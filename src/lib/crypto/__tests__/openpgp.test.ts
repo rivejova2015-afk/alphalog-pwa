@@ -31,6 +31,7 @@ import {
   decryptBytes,
   verifyPublicKey,
   extractEmailFromKey,
+  isPrivateKeyPassphraseProtected,
 } from "../openpgp";
 
 describe("openpgp wrappers", () => {
@@ -159,6 +160,26 @@ describe("openpgp wrappers", () => {
     it("nunca throw — siempre retorna boolean", async () => {
       mockReadKey.mockRejectedValue(new Error("anything"));
       await expect(verifyPublicKey("")).resolves.toBe(false);
+    });
+  });
+
+  // Guardrail agregado en la auditoría de madurez 2026-07: antes
+  // KeySetup.client.tsx::handleImport() guardaba cualquier private key
+  // pegada sin verificar que estuviera realmente protegida por passphrase.
+  describe("isPrivateKeyPassphraseProtected", () => {
+    it("true cuando la key está cifrada (isDecrypted()=false)", async () => {
+      mockReadPrivateKey.mockResolvedValue({ isDecrypted: () => false });
+      expect(await isPrivateKeyPassphraseProtected("ARMORED_ENCRYPTED")).toBe(true);
+    });
+
+    it("false cuando la key NO está cifrada (isDecrypted()=true, texto plano)", async () => {
+      mockReadPrivateKey.mockResolvedValue({ isDecrypted: () => true });
+      expect(await isPrivateKeyPassphraseProtected("ARMORED_PLAINTEXT")).toBe(false);
+    });
+
+    it("false (no true) cuando la key ni siquiera parsea — no es un falso positivo de 'protegida'", async () => {
+      mockReadPrivateKey.mockRejectedValue(new Error("invalid armor"));
+      expect(await isPrivateKeyPassphraseProtected("GARBAGE")).toBe(false);
     });
   });
 

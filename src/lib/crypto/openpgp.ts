@@ -195,6 +195,30 @@ export async function verifyPublicKey(publicKey: string): Promise<boolean> {
 }
 
 /**
+ * Check whether an armored private key is passphrase-protected.
+ *
+ * OpenPGP.js's `readPrivateKey()` parses the key structure without needing
+ * the passphrase; `isDecrypted()` on the result is true only when the key
+ * material itself was never encrypted (i.e. it's plaintext — no passphrase
+ * required to use it). A key that fails to parse at all is NOT reported as
+ * "protected" — the caller should already be validating key format
+ * separately and treat parse failures as invalid input, not as a
+ * false-positive pass here.
+ *
+ * @param privateKeyArmored - Armored private key (encrypted or not)
+ * @returns true if the key requires a passphrase to decrypt/use
+ */
+export async function isPrivateKeyPassphraseProtected(privateKeyArmored: string): Promise<boolean> {
+  try {
+    const key = await openpgp.readPrivateKey({ armoredKey: privateKeyArmored });
+    return !key.isDecrypted();
+  } catch (error) {
+    logError('OpenPGP', { component: 'crypto.openpgp.isPrivateKeyPassphraseProtected', message: 'Failed to parse private key', error: error instanceof Error ? error.message : String(error) });
+    return false;
+  }
+}
+
+/**
  * Extract email from public key
  * @param publicKey - Armored public key
  * @returns Email address or null
