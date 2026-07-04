@@ -12,6 +12,8 @@ import { computeIntegrityHash } from '@/lib/security/integrity';
 import { encryptNumeric, encryptForDomain } from '@/lib/security/encryption';
 import { requireFreshStepUp } from '@/lib/security/stepUp';
 import { logError } from "@/lib/log";
+import { computeCycleStart, computeCycleExpectedEnd, calculatePeriodPnL, calculatePayoutBreakdown } from '@/lib/treasury/payoutEngine';
+import { calculateDrawdown } from '@/lib/treasury/calculations';
 
 const createSchema = z.object({
   accountId: z.string().uuid(),
@@ -100,7 +102,7 @@ export async function POST(request: Request): Promise<Response> {
         .single(),
       supabase
         .from('treasury_configs')
-        .select('id, account_id, withdrawal_day, split_mode, balance_threshold, anti_drawdown_active, anti_drawdown_threshold, tax_buffer_percentage, wallet_id')
+        .select('id, account_id, withdrawal_day, split_mode, balance_threshold, anti_drawdown_active, anti_drawdown_threshold, tax_buffer_percentage, tax_buffer_accumulated, wallet_id')
         .eq('account_id', accountId)
         .eq('user_id', userId)
         .is('deleted_at', null)
@@ -134,99 +136,39 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    // Calculate cycle dates
-    let cycleStart = new Date(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), configData.withdrawal_day);
-    if (cycleStart > todayUTC) {
-      cycleStart = new Date(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth() - 1, configData.withdrawal_day);
-    }
-
-    const cycleExpectedEnd = new Date(cycleStart);
-    cycleExpectedEnd.setUTCMonth(cycleExpectedEnd.getUTCMonth() + 1);
-    cycleExpectedEnd.setUTCDate(cycleExpectedEnd.getUTCDate() - 1);
-
-    // Calculate period PnL
+    // Cycle dates: clamps withdrawal_day to 28 internally so months with
+    // fewer days (e.g. Feb) don't roll over into the next month.
+    const cycleStart = computeCycleStart(configData.withdrawal_day, todayUTC);
+    const cycleExpectedEnd = computeCycleExpectedEnd(configData.withdrawal_day, cycleStart);
     const cycleStartStr = cycleStart.toISOString().split('T')[0];
     const todayStr = todayUTC.toISOString().split('T')[0];
-    let periodPnL = 0;
 
-    if (tradesData) {
-      for (const trade of tradesData) {
-        if (trade.account_id === accountId && trade.status === 'Closed') {
-          const tradeDate = trade.exit_date || trade.entry_date || trade.created_at || '';
-          const tradeDateStr = tradeDate.split('T')[0];
-          if (tradeDateStr >= cycleStartStr && tradeDateStr <= todayStr) {
-            periodPnL += trade.pnl;
-          }
-        }
-      }
-    }
+    const periodPnL = tradesData
+      ? calculatePeriodPnL(accountId, tradesData, cycleStart, todayUTC)
+      : 0;
+    const currentDrawdown = tradesData
+      ? calculateDrawdown(accountId, accountData, tradesData)
+      : 0;
 
-    // Calculate drawdown
-    let currentDrawdown = 0;
-    if (tradesData) {
-      const accountTrades = tradesData.filter(
-        (t) => t.account_id === accountId && t.status === 'Closed'
-      );
-      if (accountTrades.length > 0) {
-        let peak = accountData.account_size;
-        let runningBalance = accountData.account_size;
+    const breakdown = calculatePayoutBreakdown(
+      accountData as any,
+      configData as any,
+      periodPnL,
+      currentDrawdown
+    );
 
-        accountTrades.sort((a, b) => {
-          const dateA = new Date(a.exit_date || a.entry_date || a.created_at || 0).getTime();
-          const dateB = new Date(b.exit_date || b.entry_date || b.created_at || 0).getTime();
-          return dateA - dateB;
-        });
-
-        for (const trade of accountTrades) {
-          runningBalance += trade.pnl;
-          if (runningBalance > peak) {
-            peak = runningBalance;
-          }
-          const dd = peak > 0 ? ((peak - runningBalance) / peak) * 100 : 0;
-          if (dd > currentDrawdown) {
-            currentDrawdown = dd;
-          }
-        }
-      }
-    }
-
-    // Check blocking conditions
-    const blockedReasons: string[] = [];
-
-    if (!accountData.withdrawals_enabled) {
-      blockedReasons.push('withdrawals_disabled');
-    }
-
-    if (configData.anti_drawdown_active && currentDrawdown >= configData.anti_drawdown_threshold) {
-      blockedReasons.push('anti_dd_active');
-    }
-
-    if (configData.balance_threshold && accountData.current_balance < configData.balance_threshold) {
-      blockedReasons.push('balance_below_threshold');
-    }
-
-    if (blockedReasons.length > 0) {
+    if (breakdown.blockedReasons.length > 0) {
       return Response.json(
         {
           success: false,
           error: 'Payout creation blocked',
-          blockedReasons,
+          blockedReasons: breakdown.blockedReasons,
         },
         { status: 409 }
       );
     }
 
-    // Calculate breakdown
-    const profitTotal = accountData.current_balance - accountData.account_size;
-    const payoutableProfit = Math.max(0, Math.min(periodPnL, profitTotal));
-
-    const splitModes: Record<string, number> = {
-      growth: 50,
-      safe: 40,
-      cash: 100,
-    };
-    const splitPercentage = splitModes[configData.split_mode] || 50;
-    const retirable = payoutableProfit * (splitPercentage / 100);
+    const { retirable, taxReserveAmount, bonusVaultAmount, cashPayoutAmount } = breakdown;
 
     if (retirable <= 0) {
       return Response.json(
@@ -234,10 +176,6 @@ export async function POST(request: Request): Promise<Response> {
         { status: 400 }
       );
     }
-
-    const taxReserveAmount = retirable * (configData.tax_buffer_percentage / 100);
-    const bonusVaultAmount = 0; // Default 0, editable in Milestone
-    const cashPayoutAmount = Math.max(0, retirable - taxReserveAmount - bonusVaultAmount);
 
     // Get max version for this cycle
     const { data: existingPayouts } = await supabase
@@ -296,6 +234,20 @@ export async function POST(request: Request): Promise<Response> {
         { success: false, error: 'Failed to create payout' },
         { status: 500 }
       );
+    }
+
+    // Accumulate the tax reserve of this payout into the config's running
+    // total. Best-effort: the payout itself already succeeded, so a failure
+    // here shouldn't fail the request — it just means tax_buffer_accumulated
+    // drifts from reality until the next successful payout catches it up.
+    if (taxReserveAmount > 0) {
+      const { error: taxBufferError } = await supabase
+        .from('treasury_configs')
+        .update({ tax_buffer_accumulated: (configData.tax_buffer_accumulated ?? 0) + taxReserveAmount })
+        .eq('id', configData.id);
+      if (taxBufferError) {
+        logError("TreasuryPayouts", { component: "treasury.payouts.create.tax_buffer", message: "Failed to update tax_buffer_accumulated", error: taxBufferError.message });
+      }
     }
 
     return Response.json({

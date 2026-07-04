@@ -10,6 +10,14 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { sendThresholdPush } from '@/lib/treasury/pushNotifications';
 import { logError, logWarn } from "@/lib/log";
+import { calculateDrawdown } from '@/lib/treasury/calculations';
+import {
+  computeCycleStart,
+  computeCycleExpectedEnd,
+  calculatePeriodPnL,
+  calculatePayoutBreakdown,
+  shouldSendThresholdPush,
+} from '@/lib/treasury/payoutEngine';
 
 // accountId is either the literal string "ALL" or a UUID. Other values are
 // rejected before hitting downstream filters to catch typos/malformed input.
@@ -93,9 +101,7 @@ export async function POST(request: Request): Promise<Response> {
     }
     const { accountId } = parsed.data;
 
-    // Get cycle info
     const todayUTC = new Date();
-    const cycle = { cycleStart: new Date(), cycleExpectedEnd: new Date(), calcCutoff: todayUTC };
 
     // Fetch all required data
     const [
@@ -160,26 +166,10 @@ export async function POST(request: Request): Promise<Response> {
         continue;
       }
 
-      // Get cycle info for this account's withdrawal_day
-      const accountCycle = {
-        cycleStart: new Date(
-          todayUTC.getUTCFullYear(),
-          todayUTC.getUTCMonth(),
-          config.withdrawal_day <= todayUTC.getUTCDate() ? config.withdrawal_day : 0
-        ),
-        cycleExpectedEnd: new Date(),
-        calcCutoff: todayUTC,
-      };
-
-      // Simplified cycle calculation (use withdrawal_day directly)
-      let cycleStart = new Date(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth(), config.withdrawal_day);
-      if (cycleStart > todayUTC) {
-        cycleStart = new Date(todayUTC.getUTCFullYear(), todayUTC.getUTCMonth() - 1, config.withdrawal_day);
-      }
-
-      const cycleExpectedEnd = new Date(cycleStart);
-      cycleExpectedEnd.setUTCMonth(cycleExpectedEnd.getUTCMonth() + 1);
-      cycleExpectedEnd.setUTCDate(cycleExpectedEnd.getUTCDate() - 1);
+      // Cycle dates: clamps withdrawal_day to 28 internally so months with
+      // fewer days (e.g. Feb) don't roll over into the next month.
+      const cycleStart = computeCycleStart(config.withdrawal_day, todayUTC);
+      const cycleExpectedEnd = computeCycleExpectedEnd(config.withdrawal_day, cycleStart);
 
       // Calculate period PnL
       const periodPnL = calculatePeriodPnL(
@@ -300,120 +290,3 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-// Helper to calculate drawdown (reuse from calculations.ts)
-function calculateDrawdown(
-  accountId: string,
-  account: any,
-  trades: any[]
-): number {
-  if (!account || !accountId) return 0;
-
-  const accountTrades = trades.filter((t) => t.account_id === accountId && t.status === 'Closed');
-  if (accountTrades.length === 0) return 0;
-
-  let peak = account.account_size;
-  let maxDrawdown = 0;
-  let runningBalance = account.account_size;
-
-  accountTrades.sort((a, b) => {
-    const dateA = new Date(a.exit_date || a.entry_date || a.created_at || 0).getTime();
-    const dateB = new Date(b.exit_date || b.entry_date || b.created_at || 0).getTime();
-    return dateA - dateB;
-  });
-
-  for (const trade of accountTrades) {
-    runningBalance += trade.pnl;
-    if (runningBalance > peak) {
-      peak = runningBalance;
-    }
-    const drawdown = peak > 0 ? ((peak - runningBalance) / peak) * 100 : 0;
-    if (drawdown > maxDrawdown) {
-      maxDrawdown = drawdown;
-    }
-  }
-
-  return Math.max(0, maxDrawdown);
-}
-
-// Helper to calculate period PnL
-function calculatePeriodPnL(
-  accountId: string,
-  trades: any[],
-  cycleStart: Date,
-  calcCutoff: Date
-): number {
-  const accountTrades = trades.filter((t) => t.account_id === accountId && t.status === 'Closed');
-  if (accountTrades.length === 0) return 0;
-
-  const cycleStartStr = cycleStart.toISOString().split('T')[0];
-  const calcCutoffStr = calcCutoff.toISOString().split('T')[0];
-
-  let totalPnL = 0;
-  for (const trade of accountTrades) {
-    const tradeDate = trade.exit_date || trade.entry_date || trade.created_at || '';
-    const tradeDateStr = tradeDate.split('T')[0];
-    if (tradeDateStr >= cycleStartStr && tradeDateStr <= calcCutoffStr) {
-      totalPnL += trade.pnl;
-    }
-  }
-
-  return totalPnL;
-}
-
-// Helper to calculate breakdown
-function calculatePayoutBreakdown(
-  account: any,
-  config: any,
-  periodPnL: number,
-  currentDrawdown: number
-) {
-  const blockedReasons: string[] = [];
-
-  if (!account.withdrawals_enabled) {
-    blockedReasons.push('withdrawals_disabled');
-  }
-
-  if (config.anti_drawdown_active && currentDrawdown >= config.anti_drawdown_threshold) {
-    blockedReasons.push('anti_dd_active');
-  }
-
-  if (config.balance_threshold && account.current_balance < config.balance_threshold) {
-    blockedReasons.push('balance_below_threshold');
-  }
-
-  const profitTotal = account.current_balance - account.account_size;
-  const payoutableProfit = Math.max(0, Math.min(periodPnL, profitTotal));
-
-  const splitModes: Record<string, number> = {
-    growth: 50,
-    safe: 40,
-    cash: 100,
-  };
-  const splitPercentage = splitModes[config.split_mode] || 50;
-  const retirable = payoutableProfit * (splitPercentage / 100);
-
-  const taxReserveAmount = retirable * (config.tax_buffer_percentage / 100);
-  const bonusVaultAmount = 0;
-  const cashPayoutAmount = Math.max(0, retirable - taxReserveAmount - bonusVaultAmount);
-
-  return {
-    retirable,
-    taxReserveAmount,
-    bonusVaultAmount,
-    cashPayoutAmount,
-    blockedReasons,
-  };
-}
-
-// Helper to check threshold push condition
-function shouldSendThresholdPush(
-  account: any,
-  config: any,
-  retirable: number
-): boolean {
-  if (!config.balance_threshold) {
-    return false;
-  }
-
-  return account.current_balance >= config.balance_threshold && retirable > 0;
-}

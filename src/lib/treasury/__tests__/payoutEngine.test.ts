@@ -71,6 +71,13 @@ describe("computeCycleStart", () => {
     expect(start.getUTCFullYear()).toBe(2025);
     expect(start.getUTCMonth()).toBe(11);
   });
+
+  it("withdrawal_day=1 (primero de mes) → today=Mar 15 → cycle_start=Mar 1", () => {
+    const today = new Date(Date.UTC(2026, 2, 15));
+    const start = computeCycleStart(1, today);
+    expect(start.getUTCMonth()).toBe(2);
+    expect(start.getUTCDate()).toBe(1);
+  });
 });
 
 describe("computeCycleExpectedEnd", () => {
@@ -160,6 +167,10 @@ describe("calculateRetirableFromPeriod", () => {
 
   it("returns 0 cuando profitTotal es negativo (sin profit acumulado)", () => {
     expect(calculateRetirableFromPeriod(1000, -500, "growth")).toBe(0);
+  });
+
+  it("returns 0 cuando profitTotal es exactamente 0", () => {
+    expect(calculateRetirableFromPeriod(500, 0, "growth")).toBe(0);
   });
 
   it("default 'growth' cuando no se pasa split mode", () => {
