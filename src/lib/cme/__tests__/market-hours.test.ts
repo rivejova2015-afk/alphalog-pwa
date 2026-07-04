@@ -153,9 +153,28 @@ describe("market-hours", () => {
       expect(isPastCutoffEt(at1644, "16:45")).toBe(false);
     });
 
-    it("weekend cuenta como past cutoff (no se permiten órdenes)", () => {
+    it("sábado cuenta como past cutoff todo el día (Globex cerrado)", () => {
       const saturday = new Date("2026-06-13T15:00:00Z");
       expect(isPastCutoffEt(saturday, "16:59")).toBe(true);
+    });
+
+    // Bug #3 del review: antes, dayOfWeek===0 (domingo) devolvía true todo el
+    // día sin importar la hora — bloqueando la primera orden legítima de la
+    // semana incluso después de que Globex reabre a las 18:00 ET. Ahora solo
+    // bloquea domingo ANTES de esa reapertura, igual que isGlobexOpen.
+    it("domingo antes de las 18:00 ET → past cutoff (Globex todavía cerrado)", () => {
+      const sundayBeforeOpen = new Date("2026-06-14T21:59:00Z"); // 17:59 ET (DST)
+      expect(isPastCutoffEt(sundayBeforeOpen, "16:59")).toBe(true);
+    });
+
+    it("domingo justo a las 18:00 ET (Globex reabre) → YA NO bloquea", () => {
+      const sundayAtOpen = new Date("2026-06-14T22:00:00Z"); // 18:00 ET (DST)
+      expect(isPastCutoffEt(sundayAtOpen, "16:59")).toBe(false);
+    });
+
+    it("domingo a la noche (20:00 ET, Globex abierto) → permite la primera orden de la semana", () => {
+      const sundayEvening = new Date("2026-06-15T00:00:00Z"); // 20:00 ET domingo (DST)
+      expect(isPastCutoffEt(sundayEvening, "16:59")).toBe(false);
     });
 
     it("formato inválido → false (no bloquea defensivamente)", () => {

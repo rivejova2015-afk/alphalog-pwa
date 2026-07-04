@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { buildSlicePlan, insertExecutionSlices, finalizeParentIfDone } from "../execution-slices";
+import { buildSlicePlan, insertExecutionSlices, finalizeParentIfDone, claimSignal } from "../execution-slices";
 
 describe("buildSlicePlan", () => {
   it("selecciona planTwap por default", () => {
@@ -169,6 +169,86 @@ describe("insertExecutionSlices", () => {
         },
       }),
     ).rejects.toThrow("could not insert parent signal");
+  });
+
+  // Bug #7 del review: si el padre ya commiteó pero el insert de hijas
+  // falla, sin este fix el padre quedaba en 'executing' con 0 hijas para
+  // siempre (finalizeParentIfDone no-opea sobre 0 hermanas). Ahora se marca
+  // 'rejected' antes de relanzar, dejándolo en un estado terminal.
+  it("throws si el insert de hijas falla, pero marca el padre 'rejected' (no lo deja huérfano)", async () => {
+    const { mock, updateCalls } = makeMockSupabase({
+      childInsertResult: { data: null, error: { message: "insert failed" } },
+    });
+    await expect(
+      insertExecutionSlices(mock as never, {
+        userId: "u1",
+        cmeAccountId: "acc1",
+        contract: "MESU6",
+        direction: "BUY",
+        stopLossTicks: 20,
+        takeProfitTicks: 40,
+        plan: {
+          algo: "twap",
+          totalQuantity: 5,
+          totalSlices: 1,
+          durationMinutes: 10,
+          slices: [{ scheduledAt: "2026-07-03T20:00:00.000Z", quantity: 5, sliceIndex: 0 }],
+        },
+      }),
+    ).rejects.toThrow("could not insert slice rows");
+
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0].payload).toMatchObject({
+      status: "rejected",
+      reject_reason: "slice_insert_failed",
+    });
+  });
+});
+
+describe("claimSignal", () => {
+  function makeClaimMock(selectResult: { data: unknown; error?: { message: string } | null }) {
+    const calls: Array<{ payload: unknown; eqCalls: Array<[string, unknown]> }> = [];
+    const mock = {
+      from: () => {
+        const eqCalls: Array<[string, unknown]> = [];
+        const chain = {
+          update: (payload: unknown) => {
+            calls.push({ payload, eqCalls });
+            return chain;
+          },
+          eq: (col: string, val: unknown) => {
+            eqCalls.push([col, val]);
+            return chain;
+          },
+          select: async () => selectResult,
+        };
+        return chain;
+      },
+    };
+    return { mock, calls };
+  }
+
+  // Bug #1 del review: sin este claim atómico, el dispatcher (slice-0) y el
+  // cron execution-tick podían colocar la misma orden dos veces.
+  it("devuelve true y marca 'executing' cuando la fila afectada existe (estaba 'pending')", async () => {
+    const { mock, calls } = makeClaimMock({ data: [{ id: "slice-1" }], error: null });
+    const claimed = await claimSignal(mock as never, "slice-1");
+    expect(claimed).toBe(true);
+    expect(calls[0].payload).toMatchObject({ status: "executing" });
+    expect(calls[0].eqCalls).toContainEqual(["id", "slice-1"]);
+    expect(calls[0].eqCalls).toContainEqual(["status", "pending"]);
+  });
+
+  it("devuelve false cuando 0 filas fueron afectadas (ya no estaba 'pending' — reclamada por el otro camino)", async () => {
+    const { mock } = makeClaimMock({ data: [], error: null });
+    const claimed = await claimSignal(mock as never, "slice-1");
+    expect(claimed).toBe(false);
+  });
+
+  it("devuelve false si el UPDATE falla con error de DB", async () => {
+    const { mock } = makeClaimMock({ data: null, error: { message: "db down" } });
+    const claimed = await claimSignal(mock as never, "slice-1");
+    expect(claimed).toBe(false);
   });
 });
 

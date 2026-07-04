@@ -129,6 +129,18 @@ export async function insertExecutionSlices(
     .order("slice_index", { ascending: true });
 
   if (childErr || !inserted || inserted.length === 0) {
+    // Best-effort: el padre ya se insertó (status='executing') pero quedó sin
+    // hijas — sin esto, finalizeParentIfDone nunca lo revisitaría (no-opea
+    // sobre 0 hermanas, ver más abajo) y quedaría trabado para siempre.
+    try {
+      await svc
+        .from("cme_signals")
+        .update({ status: "rejected", reject_reason: "slice_insert_failed" })
+        .eq("id", parentSignalId);
+    } catch {
+      // Si esto también falla, el padre queda huérfano — pero no perdemos
+      // la excepción original, que sigue siendo lo que se le informa al caller.
+    }
     throw new Error(`could not insert slice rows: ${childErr?.message ?? "no rows returned"}`);
   }
 
@@ -172,4 +184,24 @@ export async function finalizeParentIfDone(
       reject_reason: anyExecuted ? null : "all_slices_rejected",
     })
     .eq("id", parentSignalId);
+}
+
+/**
+ * Reclama atómicamente una slice antes de ejecutarla — evita que el
+ * dispatcher (que ejecuta slice-0 de inmediato) y el cron execution-tick
+ * (que corre cada minuto) coloquen la misma orden dos veces si ambos la ven
+ * elegible en la misma ventana. El UPDATE condicional (`WHERE status='pending'`)
+ * solo afecta una fila si nadie más la reclamó todavía; si `data` viene vacío,
+ * la slice ya fue tomada por el otro camino y el caller debe abortar sin
+ * ejecutar nada más.
+ */
+export async function claimSignal(svc: SupabaseClient, signalId: string): Promise<boolean> {
+  const { data, error } = await svc
+    .from("cme_signals")
+    .update({ status: "executing" })
+    .eq("id", signalId)
+    .eq("status", "pending")
+    .select("id");
+  if (error) return false;
+  return (data?.length ?? 0) > 0;
 }

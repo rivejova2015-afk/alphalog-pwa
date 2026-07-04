@@ -85,6 +85,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     {
       providerName,
+      // true solo cuando hay provider_name Y no matchea ningún PropfirmRule —
+      // esa combinación significa "cuenta propfirm sin ningún enforcement
+      // activo" (getPropfirmRule falla abierto en silencio). null providerName
+      // (cuenta no-propfirm) no cuenta como "no reconocido".
+      providerRecognized: providerName == null || rule != null,
       rule,
       evaluatedAt: now.toISOString(),
       nowEtHHMM: nowEtHHMM(now),

@@ -26,6 +26,7 @@ interface UpcomingEvent {
 
 interface RulesResponse {
   providerName: string | null;
+  providerRecognized: boolean;
   rule: PropfirmRule | null;
   evaluatedAt: string;
   nowEtHHMM: string;
@@ -93,6 +94,25 @@ export default function CmePropfirmRulesPanel({ cmeAccountId }: { cmeAccountId: 
     return (
       <div className="px-3 py-2 rounded-md text-xs bg-rose-500/10 border border-rose-500/30 text-rose-300">
         {error}
+      </div>
+    );
+  }
+
+  // Provider seteado pero no reconocido (ej. un nombre legacy que ya no está
+  // en la lista del wizard) → sin enforcement propfirm activo en absoluto.
+  // getPropfirmRule() falla abierto en silencio; esto lo hace visible.
+  if (data?.providerName && !data.providerRecognized) {
+    return (
+      <div className="px-3 py-3 rounded-md text-xs border border-rose-500/40 bg-rose-500/10 text-rose-300">
+        <div className="flex items-center gap-1.5 font-medium mb-1">
+          <AlertCircle className="w-3.5 h-3.5" />
+          Provider no reconocido: &quot;{data.providerName}&quot;
+        </div>
+        <div className="text-rose-300/80">
+          Ningún enforcement propfirm está activo para esta cuenta (sin overnight cutoff,
+          trailing-DD lock, news blackout ni max-contracts). Actualizá el provider desde el
+          wizard de la estrategia a uno de los 4 soportados.
+        </div>
       </div>
     );
   }

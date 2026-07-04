@@ -25,20 +25,50 @@ type TableData = {
 
 let tableData: TableData = {};
 
+// Mock "order-aware": para tablas seedeadas como array (cme_equity_snapshots,
+// cme_positions, terminal_events), simula sort real por la columna pasada a
+// .order() + slice por .limit(n) — necesario porque risk-manager.ts ahora
+// hace 2 queries de una sola fila cada una (peak por equity_usd DESC, actual
+// por snapshot_at DESC) en vez de traer hasta 500 filas de una.
 const mockSupabase = {
   from(table: string) {
     const data = tableData[table as keyof TableData];
+    let orderCol: string | null = null;
+    let orderAsc = true;
+    let limitN: number | null = null;
+
+    function sortedSliced(): Record<string, unknown>[] {
+      const arr = (Array.isArray(data) ? [...data] : data ? [data] : []) as Record<string, unknown>[];
+      if (orderCol) {
+        const col = orderCol;
+        arr.sort((a, b) => {
+          const av = a[col] as string | number;
+          const bv = b[col] as string | number;
+          if (av === bv) return 0;
+          return orderAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+        });
+      }
+      return limitN != null ? arr.slice(0, limitN) : arr;
+    }
+
     const chain = {
       select: () => chain,
       eq: () => chain,
       in: () => chain,
       gte: () => chain,
       lte: () => chain,
-      order: () => chain,
-      limit: () => chain,
-      maybeSingle: async () => ({ data: data ?? null }),
+      order: (col: string, opts?: { ascending?: boolean }) => {
+        orderCol = col;
+        orderAsc = opts?.ascending ?? true;
+        return chain;
+      },
+      limit: (n: number) => {
+        limitN = n;
+        return chain;
+      },
+      maybeSingle: async () => ({ data: sortedSliced()[0] ?? null }),
       // When the call ends without .maybeSingle() (e.g. cme_positions), the awaited result is the array
-      then: (resolve: (v: unknown) => unknown) => resolve({ data: Array.isArray(data) ? data : (data ? [data] : []) }),
+      then: (resolve: (v: unknown) => unknown) => resolve({ data: sortedSliced() }),
     };
     return chain;
   },
@@ -186,6 +216,39 @@ describe("risk-manager", () => {
       expect(r.reason).toBe("max_trailing_dd_breached");
     });
 
+    // Bug #4 del review: la query vieja ordenaba por snapshot_at DESC +
+    // limit(500), que a la frecuencia real de equity-sync (cada 5min) solo
+    // cubre ~1.7-2 días — un peak más viejo quedaba invisible. Ahora se pide
+    // el MAX real (ORDER BY equity_usd DESC LIMIT 1) separado del equity
+    // actual (ORDER BY snapshot_at DESC LIMIT 1), sin importar cuántas filas
+    // haya entre medio.
+    it("detecta el peak real aunque esté 'sepultado' entre cientos de snapshots más recientes y bajos", async () => {
+      tableData.algo_cme_accounts = { max_daily_loss: 1000, max_trailing_dd: 2000, funded_amount: 50000 };
+      const manySnapshots = Array.from({ length: 300 }, (_, i) => ({
+        equity_usd: 51000, // ninguno de estos es el peak real
+        snapshot_at: new Date(2026, 5, 20 + i).toISOString(),
+      }));
+      tableData.cme_equity_snapshots = [
+        { equity_usd: 60000, snapshot_at: "2026-06-01T00:00:00Z" }, // peak real, "viejo"
+        ...manySnapshots,
+        { equity_usd: 51000, snapshot_at: "2026-06-30T00:00:00Z" }, // más reciente = equity actual
+      ];
+      // peak=60000, current=51000 → DD=9000 ≥ 2000 → debe bloquear.
+      const r = await checkOrderRisk(PARAMS);
+      expect(r.allowed).toBe(false);
+      expect(r.reason).toBe("max_trailing_dd_breached");
+    });
+
+    it("permite cuando el peak real está lejos pero el DD sigue bajo el umbral", async () => {
+      tableData.algo_cme_accounts = { max_daily_loss: 1000, max_trailing_dd: 5000, funded_amount: 50000 };
+      tableData.cme_equity_snapshots = [
+        { equity_usd: 52000, snapshot_at: "2026-06-01T00:00:00Z" }, // peak real
+        { equity_usd: 50000, snapshot_at: "2026-06-30T00:00:00Z" }, // actual, DD=2000 < 5000
+      ];
+      const r = await checkOrderRisk(PARAMS);
+      expect(r.allowed).toBe(true);
+    });
+
     // ── Reglas por propfirm (Fase 2) ─────────────────────────────────────
     describe("propfirm overnight cutoff", () => {
       it("Apex past 16:59 ET → bloqueado con propfirm_overnight_cutoff", async () => {
@@ -273,6 +336,40 @@ describe("risk-manager", () => {
         };
         const r = await checkOrderRisk({ ...PARAMS, quantity: 100 });
         expect(r.allowed).toBe(true);
+      });
+
+      // Bug #2 del review: en un reversal, quantity ya incluye el tamaño para
+      // cerrar la posición actual (quantity = |netPos| + proposedQty) — sumarle
+      // además currentContracts contaba esa misma posición dos veces.
+      it("Apex $25K reversal: long 2 (en el límite) + SELL de flatten+flip (quantity=3) → permite (neta=1)", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 25000, provider_name: "Apex",
+        };
+        tableData.cme_positions = [{ id: "pos-1", is_manual: false, quantity: 2 }];
+        // Sin isReversal, esto se hubiera bloqueado (2+3=5 > 2) aunque la
+        // posición neta resultante (short 1) está bien dentro del límite.
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 3, isReversal: true });
+        expect(r.allowed).toBe(true);
+      });
+
+      it("Apex $25K reversal que SÍ excede el límite neto (quantity=6, current=2 → neta=4 > 2) → bloqueado", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 25000, provider_name: "Apex",
+        };
+        tableData.cme_positions = [{ id: "pos-1", is_manual: false, quantity: 2 }];
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 6, isReversal: true });
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_max_contracts");
+      });
+
+      it("misma orden SIN isReversal (default false) → usa la fórmula normal (2+3=5 > 2, bloqueado)", async () => {
+        tableData.algo_cme_accounts = {
+          max_daily_loss: 1000, max_trailing_dd: null, funded_amount: 25000, provider_name: "Apex",
+        };
+        tableData.cme_positions = [{ id: "pos-1", is_manual: false, quantity: 2 }];
+        const r = await checkOrderRisk({ ...PARAMS, quantity: 3 });
+        expect(r.allowed).toBe(false);
+        expect(r.reason).toBe("propfirm_max_contracts");
       });
     });
 

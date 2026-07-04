@@ -12,6 +12,11 @@ export async function checkOrderRisk(p: {
   cmeAccountId: string;
   direction: 'BUY' | 'SELL';
   quantity: number;
+  /** True cuando esta orden es un flatten+flip (cierra la posición actual y
+   *  abre en la dirección opuesta con una sola orden combinada). El check de
+   *  max-contracts-por-tier necesita saberlo para no contar la posición que
+   *  se está cerrando como si fuera exposición nueva. */
+  isReversal?: boolean;
   /** Override del "now" para tests. Default = Date.now(). */
   now?: Date;
 }): Promise<RiskCheckResult> {
@@ -23,7 +28,7 @@ export async function checkOrderRisk(p: {
 
   const supabase = createServiceClient();
 
-  const [riskRes, accountRes, positionsRes, connectionRes, equityRes] = await Promise.all([
+  const [riskRes, accountRes, positionsRes, connectionRes] = await Promise.all([
     supabase
       .from('cme_risk_configs')
       .select('enabled, paused_reason, circuit_breaker_pct, max_positions')
@@ -46,15 +51,6 @@ export async function checkOrderRisk(p: {
       .eq('user_id', p.userId)
       .eq('cme_account_id', p.cmeAccountId)
       .maybeSingle(),
-    // Para max_trailing_dd: snapshots de equity (peak histórico vs equity actual).
-    supabase
-      .from('cme_equity_snapshots')
-      .select('equity_usd, snapshot_at')
-      .eq('user_id', p.userId)
-      .eq('cme_account_id', p.cmeAccountId)
-      .gte('snapshot_at', new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString())
-      .order('snapshot_at', { ascending: false })
-      .limit(500),
   ]);
 
   const risk = riskRes.data;
@@ -63,7 +59,6 @@ export async function checkOrderRisk(p: {
     | null;
   const positions = positionsRes.data ?? [];
   const connection = connectionRes.data;
-  const equitySnaps = (equityRes.data ?? []) as { equity_usd: number; snapshot_at: string }[];
 
   if (!risk || !risk.enabled) {
     return {
@@ -108,8 +103,12 @@ export async function checkOrderRisk(p: {
   }
 
   // Max contracts per tier — Apex tiene límites estrictos por tier (PA values).
-  // Sumamos quantity de todas las posiciones abiertas + la quantity de la orden
-  // nueva y comparamos contra el límite del tier (funded_amount como key).
+  // En una orden normal, sumamos quantity de las posiciones abiertas + la
+  // quantity de la orden nueva y comparamos contra el límite del tier.
+  // En un reversal, `p.quantity` ya incluye el tamaño necesario para cerrar
+  // la posición actual (quantity = |netPos| + proposedQty, ver dispatcher) —
+  // sumarle además `currentContracts` contaría esa misma posición dos veces.
+  // La posición NETA resultante en un reversal es solo `p.quantity - currentContracts`.
   if (propfirmRule?.maxContractsByTier && account?.funded_amount != null) {
     const tierKey = String(Math.round(Number(account.funded_amount)));
     const limit = propfirmRule.maxContractsByTier[tierKey];
@@ -118,7 +117,10 @@ export async function checkOrderRisk(p: {
         (sum, pos) => sum + Number(pos.quantity ?? 1),
         0,
       );
-      if (currentContracts + p.quantity > limit) {
+      const resultingContracts = p.isReversal
+        ? Math.abs(p.quantity - currentContracts)
+        : currentContracts + p.quantity;
+      if (resultingContracts > limit) {
         return { allowed: false, reason: 'propfirm_max_contracts' };
       }
     }
@@ -169,23 +171,53 @@ export async function checkOrderRisk(p: {
   // MFFU Pro, Tradeify Select), el peak efectivo se fija en funded+lock una vez
   // que el equity lo alcanzó (no puede bajar de ahí aunque el peak histórico
   // sea más alto — y tampoco puede bajar del trailing original).
-  if (account?.max_trailing_dd && equitySnaps.length > 0) {
+  //
+  // El peak y el equity actual se piden con 2 queries de 1 fila cada una
+  // (ORDER BY equity_usd DESC / ORDER BY snapshot_at DESC, ambas LIMIT 1) en
+  // vez de traer hasta 500 filas ordenadas por tiempo: a la frecuencia real
+  // de equity-sync (cada 5min, weekdays) 500 filas cubren ~1.7-2 días, no los
+  // 90 días pretendidos, dejando invisible cualquier peak más viejo que eso.
+  if (account?.max_trailing_dd) {
     const fundedAmount = Number(account.funded_amount ?? 0);
-    const observedPeak = Math.max(
-      fundedAmount,
-      ...equitySnaps.map((s) => Number(s.equity_usd)),
-    );
-    const currentEquity = Number(equitySnaps[0].equity_usd); // más reciente (DESC)
-    let effectivePeak = observedPeak;
-    if (propfirmRule?.trailingDdLockAtProfitDollars != null) {
-      const lockFloor = fundedAmount + propfirmRule.trailingDdLockAtProfitDollars;
-      // Si en algún momento equity alcanzó el lock, el peak efectivo no baja de ahí.
-      const everReachedLock = observedPeak >= lockFloor;
-      if (everReachedLock) effectivePeak = Math.max(observedPeak, lockFloor);
-    }
-    const drawdownFromPeak = effectivePeak - currentEquity;
-    if (drawdownFromPeak >= Number(account.max_trailing_dd)) {
-      return { allowed: false, reason: 'max_trailing_dd_breached' };
+    const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [peakRes, currentRes] = await Promise.all([
+      supabase
+        .from('cme_equity_snapshots')
+        .select('equity_usd')
+        .eq('user_id', p.userId)
+        .eq('cme_account_id', p.cmeAccountId)
+        .gte('snapshot_at', cutoff)
+        .order('equity_usd', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('cme_equity_snapshots')
+        .select('equity_usd, snapshot_at')
+        .eq('user_id', p.userId)
+        .eq('cme_account_id', p.cmeAccountId)
+        .order('snapshot_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    const peakRow = peakRes.data as { equity_usd: number } | null;
+    const currentRow = currentRes.data as { equity_usd: number; snapshot_at: string } | null;
+
+    if (currentRow) {
+      const observedPeak = Math.max(fundedAmount, Number(peakRow?.equity_usd ?? 0));
+      const currentEquity = Number(currentRow.equity_usd);
+      let effectivePeak = observedPeak;
+      if (propfirmRule?.trailingDdLockAtProfitDollars != null) {
+        const lockFloor = fundedAmount + propfirmRule.trailingDdLockAtProfitDollars;
+        // Si en algún momento equity alcanzó el lock, el peak efectivo no baja de ahí.
+        const everReachedLock = observedPeak >= lockFloor;
+        if (everReachedLock) effectivePeak = Math.max(observedPeak, lockFloor);
+      }
+      const drawdownFromPeak = effectivePeak - currentEquity;
+      if (drawdownFromPeak >= Number(account.max_trailing_dd)) {
+        return { allowed: false, reason: 'max_trailing_dd_breached' };
+      }
     }
   }
 

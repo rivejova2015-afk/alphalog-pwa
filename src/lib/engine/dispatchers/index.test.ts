@@ -51,10 +51,12 @@ vi.mock("@/lib/cme/risk-manager", () => ({
 const buildSlicePlanMock = vi.fn();
 const insertExecutionSlicesMock = vi.fn();
 const finalizeParentIfDoneMock = vi.fn().mockResolvedValue(undefined);
+const claimSignalMock = vi.fn().mockResolvedValue(true);
 vi.mock("@/lib/cme/execution-slices", () => ({
   buildSlicePlan: (...args: unknown[]) => buildSlicePlanMock(...args),
   insertExecutionSlices: (...args: unknown[]) => insertExecutionSlicesMock(...args),
   finalizeParentIfDone: (...args: unknown[]) => finalizeParentIfDoneMock(...args),
+  claimSignal: (...args: unknown[]) => claimSignalMock(...args),
 }));
 
 // Mock del volume-profile builder (VWAP) — solo verificamos que dispatchTradovate
@@ -68,10 +70,11 @@ vi.mock("@/lib/cme/volume-profile", () => ({
 }));
 
 // Mock the logger so tests don't pollute output.
+const logWarnMock = vi.fn();
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(),
   logInfo:  vi.fn(),
-  logWarn:  vi.fn(),
+  logWarn:  (...args: unknown[]) => logWarnMock(...args),
 }));
 
 // ── Supabase client mock with a chainable query builder ─────────────────────
@@ -150,6 +153,8 @@ beforeEach(() => {
   buildSlicePlanMock.mockReset();
   insertExecutionSlicesMock.mockReset();
   finalizeParentIfDoneMock.mockReset().mockResolvedValue(undefined);
+  claimSignalMock.mockReset().mockResolvedValue(true);
+  logWarnMock.mockReset();
   buildHourlyVolumeProfileMock.mockReset().mockReturnValue(new Array(24).fill(0));
   sliceWeightsFromHourlyProfileMock.mockReset().mockReturnValue([1, 1]);
   updateCalls.length = 0;
@@ -388,9 +393,57 @@ describe("dispatchSignal — Tradovate", () => {
         expect.objectContaining({ algo: "twap", totalQuantity: 2 }),
       );
       expect(insertExecutionSlicesMock).toHaveBeenCalledTimes(1);
+      // Reclama la slice-0 antes de tocar Tradovate (fix del bug #1 del review).
+      expect(claimSignalMock).toHaveBeenCalledWith(svc, "slice_0");
       // Only the FIRST slice is executed now — quantity=1, not the total (2).
       expect(executeSignalMock).toHaveBeenCalledTimes(1);
       expect(executeSignalMock.mock.calls[0][0]).toMatchObject({ id: "slice_0", quantity: 1 });
+      expect(finalizeParentIfDoneMock).toHaveBeenCalledWith(svc, "parent_1");
+    });
+
+    it("slice-0 ya reclamada por execution-tick (claimSignal→false) → skipped sin ejecutar (bug #1 del review)", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan());
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      claimSignalMock.mockResolvedValueOnce(false);
+      const svc = makeSupabaseMock();
+
+      const res = await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "twap" } } }),
+        svc,
+      );
+
+      expect(res.ok).toBe(true);
+      expect(res.action).toBe("skipped");
+      expect(checkOrderRiskMock).not.toHaveBeenCalled();
+      expect(executeSignalMock).not.toHaveBeenCalled();
+    });
+
+    it("checkOrderRisk de slice-0 THROWS → capturado, rejected, finaliza el padre, NO re-lanza (bug #6 del review)", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan());
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      checkOrderRiskMock.mockRejectedValueOnce(new Error("db connection lost"));
+      const svc = makeSupabaseMock();
+
+      const res = await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", execution_algo: "twap" } } }),
+        svc,
+      );
+
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("risk_check_threw");
+      expect(executeSignalMock).not.toHaveBeenCalled();
+      const rejection = updateCalls.find((u) => u.payload.status === "rejected");
+      expect(rejection?.payload.reject_reason).toContain("risk_check_threw");
       expect(finalizeParentIfDoneMock).toHaveBeenCalledWith(svc, "parent_1");
     });
 
@@ -441,6 +494,29 @@ describe("dispatchSignal — Tradovate", () => {
       // ATR SL/TP también llama loadHistoricalBars — VWAP la llama una 2da vez
       // para el volume profile.
       expect(loadHistoricalBarsMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("plan.fallbackReason seteado (VWAP degradó a TWAP) → logWarn explícito (bug #8 del review)", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue({ ...slicedPlan({ algo: "vwap" }), fallbackReason: "sparse_volume_profile" });
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+      const svc = makeSupabaseMock();
+
+      await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "vwap" } } }),
+        svc,
+      );
+
+      expect(logWarnMock).toHaveBeenCalledWith(
+        "DispatchTradovate",
+        expect.stringContaining("sparse_volume_profile"),
+        expect.anything(),
+      );
     });
 
     it("execution_algo='vwap': si falla la carga de bars, sigue con volumeProfile=undefined (fallback a TWAP en planVwap)", async () => {
@@ -830,6 +906,10 @@ describe("dispatchTradovate — close-and-reverse (Sprint F)", () => {
     // Reversal: abs(3) + 2 = 5 sells (3 close + 2 new short)
     expect(executeSignalMock.mock.calls[0][0].quantity).toBe(5);
     expect(executeSignalMock.mock.calls[0][0].direction).toBe("SELL");
+    // isReversal=true se pasa a checkOrderRisk para que el check de
+    // max-contracts-por-tier no cuente la posición que se cierra dos veces
+    // (bug #2 del review).
+    expect(checkOrderRiskMock).toHaveBeenCalledWith(expect.objectContaining({ isReversal: true }));
   });
 
   it("reverses short→long with combined-quantity market order", async () => {

@@ -77,6 +77,34 @@ describe("planVwap", () => {
     });
     expect(r.algo).toBe("vwap"); // mantiene label
     expect(r.slices.map((s) => s.quantity)).toEqual([2, 2, 2, 2, 2]);
+    // Bug #8 del review: el fallback quedaba invisible — ahora expone
+    // fallbackReason para que el caller pueda loguearlo en vez de degradar
+    // en silencio.
+    expect(r.fallbackReason).toBe("sparse_volume_profile");
+  });
+
+  it("un solo bucket en 0 (ej. hora de mantenimiento de Globex) también dispara el fallback con fallbackReason", () => {
+    // 5 buckets pero uno es exactamente 0 → cleanProfile.length=4 ≠ sliceCount=5.
+    const r = planVwap({
+      totalQuantity: 10,
+      durationMinutes: 20,
+      sliceCount: 5,
+      volumeProfile: [4, 1, 0, 1, 3],
+      startAt: START,
+    });
+    expect(r.fallbackReason).toBe("sparse_volume_profile");
+    expect(r.slices.map((s) => s.quantity)).toEqual([2, 2, 2, 2, 2]);
+  });
+
+  it("sin fallback (profile completo) → fallbackReason no está seteado", () => {
+    const r = planVwap({
+      totalQuantity: 10,
+      durationMinutes: 20,
+      sliceCount: 5,
+      volumeProfile: [4, 1, 1, 1, 3],
+      startAt: START,
+    });
+    expect(r.fallbackReason).toBeUndefined();
   });
 
   it("normaliza y redondea preservando totalQuantity exacto", () => {

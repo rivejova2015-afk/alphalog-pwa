@@ -81,14 +81,18 @@ function parseHHMM(hhmm: string): number {
   return h * 60 + mm;
 }
 
-/** True si la hora ET actual es ≥ cutoffHHMM (formato "HH:MM"). Días no laborables
- *  (sábado / domingo en ET) cuentan como "past cutoff" — no se permiten órdenes.
+/** True si la hora ET actual es ≥ cutoffHHMM (formato "HH:MM"). Sábado cuenta
+ *  como "past cutoff" todo el día (Globex cerrado). Domingo solo cuenta como
+ *  "past cutoff" ANTES de las 18:00 ET (igual que isGlobexOpen) — desde que
+ *  Globex reabre el domingo a la noche, el cutoff (un concepto de cierre de
+ *  día hábil) ya no aplica y debe permitirse la primera orden de la semana.
  *  Sirve para enforcement del overnight cutoff propfirm. */
 export function isPastCutoffEt(now: Date, cutoffHHMM: string): boolean {
   const cutoffMin = parseHHMM(cutoffHHMM);
   if (cutoffMin < 0) return false; // formato inválido → no bloquea
   const { dayOfWeek, minutesOfDay } = toETMinutes(now);
-  if (dayOfWeek === 0 || dayOfWeek === 6) return true; // weekend = bloqueado
+  if (dayOfWeek === 6) return true; // sábado: Globex cerrado todo el día
+  if (dayOfWeek === 0) return minutesOfDay < 18 * 60; // domingo: bloqueado solo antes de la reapertura
   return minutesOfDay >= cutoffMin;
 }
 

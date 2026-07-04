@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { safeCompareTokens } from '@/lib/security/timing';
 import { checkOrderRisk } from '@/lib/cme/risk-manager';
 import { executeSignal, type CmeSignal } from '@/lib/cme/order-executor';
-import { finalizeParentIfDone } from '@/lib/cme/execution-slices';
+import { finalizeParentIfDone, claimSignal } from '@/lib/cme/execution-slices';
 import { logError, logInfo } from '@/lib/log';
 
 // Coloca las slices de TWAP/VWAP/IS cuya scheduled_at ya pasó. La primera
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const { data: dueSlices, error: fetchErr } = await svc
     .from('cme_signals')
-    .select('id, user_id, algorithm_id, cme_account_id, contract, direction, quantity, stop_loss_ticks, take_profit_ticks, parent_signal_id')
+    .select('id, user_id, algorithm_id, cme_account_id, contract, direction, quantity, stop_loss_ticks, take_profit_ticks, parent_signal_id, expires_at')
     .eq('status', 'pending')
     .not('parent_signal_id', 'is', null)
     .lte('scheduled_at', new Date().toISOString())
@@ -38,10 +38,34 @@ export async function POST(req: NextRequest) {
   const slices = dueSlices ?? [];
   let placed = 0;
   let rejected = 0;
+  let expired = 0;
   let failed = 0;
 
   for (const slice of slices) {
     try {
+      // Si el cron se perdió corridas (deploy, outage), una slice vieja no
+      // debe colocarse tarde de golpe — eso colapsaría la distribución en el
+      // tiempo que TWAP/VWAP/IS existen para lograr. expires_at (scheduled_at
+      // + grace window) marca el límite; si ya pasó, se rechaza sin ejecutar.
+      if (slice.expires_at && new Date(slice.expires_at) < new Date()) {
+        await svc
+          .from('cme_signals')
+          .update({ status: 'rejected', reject_reason: 'slice_expired' })
+          .eq('id', slice.id);
+        await finalizeParentIfDone(svc, slice.parent_signal_id);
+        expired++;
+        continue;
+      }
+
+      // Reclamar la slice antes de tocar Tradovate — evita colocarla dos
+      // veces si el dispatcher (slice-0) y este cron la ven elegible en la
+      // misma ventana. Si ya la reclamó el otro camino, se skip sin marcar
+      // nada (la fila ya está en su estado final o en curso).
+      const claimed = await claimSignal(svc, slice.id);
+      if (!claimed) {
+        continue;
+      }
+
       const risk = await checkOrderRisk({
         userId: slice.user_id,
         cmeAccountId: slice.cme_account_id,
@@ -96,14 +120,19 @@ export async function POST(req: NextRequest) {
           .from('cme_signals')
           .update({ status: 'rejected', reject_reason: `executor_threw: ${msg}` })
           .eq('id', slice.id);
+        // Sin esto, si esta era la última hermana pendiente, el padre queda
+        // trabado en 'executing' para siempre — ningún cron futuro lo
+        // revisitaría (la query solo selecciona hermanas status='pending').
+        await finalizeParentIfDone(svc, slice.parent_signal_id);
       } catch {
-        // best-effort — la slice queda 'pending' y expira sola (expires_at).
+        // best-effort — si esto también falla, la slice/padre quedan
+        // huérfanos, pero no perdemos la excepción original ya logueada.
       }
       failed++;
     }
   }
 
-  return NextResponse.json({ checked: slices.length, placed, rejected, failed });
+  return NextResponse.json({ checked: slices.length, placed, rejected, expired, failed });
 }
 
 // Vercel Cron puede invocar GET o POST según config — alias para soportar ambos.

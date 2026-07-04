@@ -30,6 +30,10 @@ export interface SchedulePlan {
   totalSlices: number;
   durationMinutes: number;
   slices: ExecutionSlice[];
+  /** Seteado solo cuando planVwap cayó a distribución uniforme por un
+   *  volumeProfile inutilizable — permite al caller loguear que VWAP no
+   *  operó como VWAP esta vez, en vez de degradar en silencio. */
+  fallbackReason?: string;
 }
 
 export interface TwapParams {
@@ -102,11 +106,14 @@ export function planVwap(params: VwapParams): SchedulePlan {
   const { totalQuantity, durationMinutes, sliceCount, volumeProfile } = params;
   if (totalQuantity < 1) throw new Error("totalQuantity must be >= 1");
 
-  // Fallback: si el profile es inutilizable, hacemos TWAP.
+  // Fallback: si el profile es inutilizable, hacemos TWAP. Un profile real
+  // (agregado por hora UTC desde barras históricas) puede tener buckets en
+  // exactamente 0 para horas sin barras — ej. la ventana de mantenimiento
+  // diario de Globex — así que esto ocurre en producción, no solo en tests.
   const cleanProfile = volumeProfile.filter((v) => Number.isFinite(v) && v > 0);
   if (cleanProfile.length === 0 || cleanProfile.length !== sliceCount) {
     const twap = planTwap({ totalQuantity, durationMinutes, sliceCount, startAt: params.startAt });
-    return { ...twap, algo: "vwap" };
+    return { ...twap, algo: "vwap", fallbackReason: "sparse_volume_profile" };
   }
 
   const sum = cleanProfile.reduce((a, b) => a + b, 0);

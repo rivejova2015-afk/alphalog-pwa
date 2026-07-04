@@ -35,7 +35,7 @@ import { tickValueFor } from "@/lib/cme/tick-values";
 import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { computeAtrFromBars } from "./atr";
 import { computeKellyContracts } from "../position-sizing/kelly";
-import { buildSlicePlan, insertExecutionSlices, finalizeParentIfDone, type InsertedSlices } from "@/lib/cme/execution-slices";
+import { buildSlicePlan, insertExecutionSlices, finalizeParentIfDone, claimSignal, type InsertedSlices } from "@/lib/cme/execution-slices";
 import { buildHourlyVolumeProfile, sliceWeightsFromHourlyProfile } from "@/lib/cme/volume-profile";
 import { checkOrderRisk } from "@/lib/cme/risk-manager";
 import { logError, logInfo, logWarn } from "@/lib/log";
@@ -408,6 +408,17 @@ export async function dispatchTradovate(
       volumeProfile,
     });
 
+    // planVwap cae a TWAP en silencio cuando el volume profile no matchea
+    // sliceCount (ej. una slice cae en la hora de mantenimiento de Globex,
+    // sin barras) — avisamos para que no sea invisible que VWAP no operó
+    // como VWAP esta vez.
+    if (plan.fallbackReason) {
+      logWarn("DispatchTradovate", `${executionAlgo} degradó a distribución uniforme: ${plan.fallbackReason}`, {
+        component: "execution-algos",
+        meta: { algoId: algo.id },
+      });
+    }
+
     let inserted: InsertedSlices;
     try {
       inserted = await insertExecutionSlices(svc, {
@@ -430,14 +441,39 @@ export async function dispatchTradovate(
       return { ok: false, action: "failed", reason: "persist_failed", error: msg };
     }
 
+    // Reclamar slice-0 antes de tocar Tradovate — el cron execution-tick corre
+    // cada minuto y ve esta misma fila (scheduled_at<=now() apenas se inserta).
+    // Sin este claim atómico, dispatcher y cron podrían colocar la misma orden
+    // dos veces. Si no se pudo reclamar, ya la tomó el otro camino.
+    const claimed = await claimSignal(svc, inserted.firstSlice.id);
+    if (!claimed) {
+      logInfo("DispatchTradovate", `${plan.algo} slice-0 ya reclamada por otro camino (algo=${algo.id})`);
+      return { ok: true, action: "skipped", cmeSignalId: inserted.parentSignalId, reason: "slice_already_claimed" };
+    }
+
     // Risk-check + place the first slice now — el resto lo recoge el cron
-    // execution-tick a medida que llega su scheduled_at.
-    const sliceRisk = await checkOrderRisk({
-      userId: algo.user_id,
-      cmeAccountId,
-      direction: signal.action,
-      quantity: inserted.firstSlice.quantity,
-    });
+    // execution-tick a medida que llega su scheduled_at. Envuelto en try/catch
+    // (a diferencia del executeSignal de más abajo, que ya lo estaba) para que
+    // una excepción real de checkOrderRisk no deje el padre+hija huérfanos.
+    let sliceRisk: { allowed: boolean; reason?: string };
+    try {
+      sliceRisk = await checkOrderRisk({
+        userId: algo.user_id,
+        cmeAccountId,
+        direction: signal.action,
+        quantity: inserted.firstSlice.quantity,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logError("DispatchTradovate", {
+        component: "checkOrderRisk threw (slice-0)",
+        message: msg,
+        meta: { algoId: algo.id },
+      });
+      await svc.from("cme_signals").update({ status: "rejected", reject_reason: `risk_check_threw: ${msg}` }).eq("id", inserted.firstSlice.id);
+      await finalizeParentIfDone(svc, inserted.parentSignalId);
+      return { ok: false, action: "failed", cmeSignalId: inserted.parentSignalId, reason: "risk_check_threw", error: msg };
+    }
     if (!sliceRisk.allowed) {
       const reason = sliceRisk.reason ?? "risk_denied";
       await svc.from("cme_signals").update({ status: "rejected", reject_reason: reason }).eq("id", inserted.firstSlice.id);
@@ -558,6 +594,7 @@ export async function dispatchTradovate(
     cmeAccountId,
     direction: signal.action,
     quantity,
+    isReversal,
   });
   if (!risk.allowed) {
     const reason = risk.reason ?? "risk_denied";
