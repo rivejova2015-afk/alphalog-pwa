@@ -50,26 +50,47 @@ export async function listExpiredPositions(
 
 /**
  * Verifica circuit breaker diario: si el algorithm cayó >5% hoy, abortar.
- * Se basa en pnl_today del row de algorithms.
+ *
+ * `algorithms.pnl_today` es siempre dólares (numeric(14,2), ver migration 044
+ * y todos sus consumers: AlgoCard/AlgoAccordion lo formatean como `$X.XX`).
+ * No hay ninguna ambigüedad fracción/porcentaje que "normalizar" — para
+ * expresarlo como % de drawdown hace falta el equity de la cuenta que
+ * sostiene las posiciones (`bot_telemetry.equity` del slow_bot_account, que
+ * es la cuenta que efectivamente abre/cierra posiciones en el par de arb).
+ * Sin ese equity no se puede calcular un % válido, así que no se dispara el
+ * breaker (fail-open) en vez de adivinar una unidad — mejor que interpretar
+ * cualquier pérdida en dólares como una caída de decenas de puntos porcentuales.
  */
 export async function isDailyCircuitOpen(
   sb: SupabaseClient,
   algorithmId: string,
+  botAccountId: string,
   ddLimit = 0.05,
 ): Promise<{ open: boolean; reason: string | null }> {
   const { data: algo } = await sb
     .from('algorithms')
-    .select('pnl_today,parameters')
+    .select('pnl_today')
     .eq('id', algorithmId)
     .maybeSingle();
   if (!algo) return { open: true, reason: 'Algorithm not found' };
 
   const pnlToday = typeof algo.pnl_today === 'number' ? algo.pnl_today : 0;
-  // pnl_today se asume en porcentaje (-5 = -5%). Si es fracción (-0.05) lo normalizamos.
-  const pct = Math.abs(pnlToday) <= 1 ? pnlToday : pnlToday / 100;
+  if (pnlToday >= 0) return { open: false, reason: null };
 
+  const { data: telemetry } = await sb
+    .from('bot_telemetry')
+    .select('equity')
+    .eq('bot_account_id', botAccountId)
+    .maybeSingle();
+  const equity = typeof telemetry?.equity === 'number' ? telemetry.equity : null;
+  if (!equity || equity <= 0) return { open: false, reason: null };
+
+  const pct = pnlToday / equity;
   if (pct <= -ddLimit) {
-    return { open: true, reason: `Daily DD ${(pct * 100).toFixed(2)}% ≤ -${(ddLimit * 100).toFixed(0)}% — circuit breaker disparado` };
+    return {
+      open: true,
+      reason: `Daily DD ${(pct * 100).toFixed(2)}% ($${pnlToday.toFixed(2)} / $${equity.toFixed(2)} equity) ≤ -${(ddLimit * 100).toFixed(0)}% — circuit breaker disparado`,
+    };
   }
   return { open: false, reason: null };
 }

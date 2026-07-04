@@ -77,6 +77,20 @@ export function calculatePositionSize(params: SizerParams): PositionResult {
     (winRate * avgRR - (1 - winRate)) / Math.max(avgRR, 0.01);
   const kellyRaw = kellyFull * 0.25; // 25% del Kelly óptimo
 
+  // Edge negativo (kellyRaw <= 0): no hay ventaja estadística que sizear.
+  // El piso de 0.001 de abajo es solo para edges positivos muy chicos — no
+  // debe convertir un edge negativo en una orden de tamaño mínimo.
+  if (kellyRaw <= 0) {
+    return {
+      lots: 0,
+      blocked: true,
+      reason: "NEGATIVE_EDGE",
+      kellyFraction: 0,
+      volScalar: 0,
+      riskPct: 0,
+    };
+  }
+
   // Clamp: nunca menos de 0.1% ni más de 5% del equity por trade
   const kellyFraction = Math.max(0.001, Math.min(kellyRaw, 0.05));
 

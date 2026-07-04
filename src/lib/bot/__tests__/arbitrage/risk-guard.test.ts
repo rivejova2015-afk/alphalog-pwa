@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { listExpiredPositions, isDailyCircuitOpen, type PairConfig } from "../../arbitrage/risk-guard";
 
 const PAIR: PairConfig = {
@@ -13,6 +13,7 @@ const PAIR: PairConfig = {
 interface MockState {
   positionsData: Array<{ id: string; ticket: number; open_time: string; bot_account_id: string }> | null;
   algoData: { pnl_today: number | null; parameters?: unknown } | null;
+  telemetryData: { equity: number | null } | null;
 }
 
 let state: MockState;
@@ -25,6 +26,7 @@ function makeMockSupabase() {
         eq() { return chain; },
         async maybeSingle() {
           if (table === "algorithms") return { data: state.algoData };
+          if (table === "bot_telemetry") return { data: state.telemetryData };
           return { data: null };
         },
         then(resolve: (v: unknown) => unknown) {
@@ -42,7 +44,7 @@ function makeMockSupabase() {
 
 describe("risk-guard", () => {
   beforeEach(() => {
-    state = { positionsData: null, algoData: null };
+    state = { positionsData: null, algoData: null, telemetryData: null };
   });
 
   describe("listExpiredPositions", () => {
@@ -76,40 +78,59 @@ describe("risk-guard", () => {
   describe("isDailyCircuitOpen", () => {
     it("retorna open=true cuando no se encuentra el algorithm", async () => {
       state.algoData = null;
-      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "missing-id");
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "missing-id", "slow-bot-1");
       expect(r.open).toBe(true);
       expect(r.reason).toContain("not found");
     });
 
-    it("retorna open=false cuando pnl_today está dentro del límite (porcentaje)", async () => {
-      state.algoData = { pnl_today: -3 }; // -3% (porcentaje directo)
-      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
+    it("pnl_today es siempre dólares — un valor chico (ej. -75.25) NO se malinterpreta como -75%", async () => {
+      // Regresión del bug: antes Math.abs(-75.25) <= 1 era falso → se dividía
+      // por 100 y se leía como -0.75 (-75%), disparando el breaker en falso.
+      state.algoData = { pnl_today: -75.25 };
+      state.telemetryData = { equity: 50_000 }; // -75.25 / 50000 = -0.15%, trivial
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.05);
       expect(r.open).toBe(false);
     });
 
-    it("retorna open=true cuando pnl_today <= -ddLimit (porcentaje)", async () => {
-      state.algoData = { pnl_today: -6 }; // -6%
-      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
+    it("una pérdida chica en dólares (ej. -0.50) tampoco se lee como -50%", async () => {
+      state.algoData = { pnl_today: -0.5 };
+      state.telemetryData = { equity: 10_000 };
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.05);
+      expect(r.open).toBe(false);
+    });
+
+    it("retorna open=true cuando el drawdown real (pnl_today/equity) supera ddLimit", async () => {
+      state.algoData = { pnl_today: -600 };
+      state.telemetryData = { equity: 10_000 }; // -6%
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.05);
       expect(r.open).toBe(true);
       expect(r.reason).toContain("circuit breaker");
     });
 
-    it("normaliza pnl_today cuando viene como fracción", async () => {
-      state.algoData = { pnl_today: -0.06 }; // -6% como fracción
-      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
-      expect(r.open).toBe(true);
-    });
-
     it("respeta ddLimit custom", async () => {
-      state.algoData = { pnl_today: -8 };
+      state.algoData = { pnl_today: -800 };
+      state.telemetryData = { equity: 10_000 }; // -8%
       // Con ddLimit 10%, -8% no dispara
-      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.10);
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.10);
       expect(r.open).toBe(false);
     });
 
-    it("pnl_today no numérico se trata como 0", async () => {
+    it("pnl_today no numérico se trata como 0 (no dispara)", async () => {
       state.algoData = { pnl_today: null };
-      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.05);
+      expect(r.open).toBe(false);
+    });
+
+    it("sin telemetry.equity disponible no se puede normalizar a % — no dispara (fail-open)", async () => {
+      state.algoData = { pnl_today: -5000 };
+      state.telemetryData = null;
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.05);
+      expect(r.open).toBe(false);
+    });
+
+    it("pnl_today positivo nunca dispara, sin necesidad de consultar equity", async () => {
+      state.algoData = { pnl_today: 500 };
+      const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", "slow-bot-1", 0.05);
       expect(r.open).toBe(false);
     });
   });

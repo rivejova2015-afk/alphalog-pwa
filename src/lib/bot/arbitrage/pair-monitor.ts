@@ -148,7 +148,7 @@ export async function runIteration(
     const pair = raw;
 
     // 1. Circuit breaker diario
-    const circuit = await isDailyCircuitOpen(sb, pair.algorithm_id, 0.05);
+    const circuit = await isDailyCircuitOpen(sb, pair.algorithm_id, pair.slow_bot_account_id, 0.05);
     if (circuit.open) {
       outcomes.push({ pair_id: pair.id, symbol: pair.symbol, status: 'circuit_open', reason: circuit.reason });
       continue;

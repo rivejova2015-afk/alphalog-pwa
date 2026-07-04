@@ -27,10 +27,38 @@ describe("position-sizer", () => {
   });
 
   describe("calculatePositionSize - Kelly clamping", () => {
-    it("Kelly fraction siempre ≥ 0.001 (piso)", () => {
-      // recentTrades muy malos → kelly raw negativo → clamped a 0.001
+    it("edge negativo (kellyRaw <= 0) bloquea con lots=0, NO se floorea a 0.001", () => {
+      // Regresión: antes el piso de 0.001 convertía un edge negativo (racha
+      // de puras pérdidas) en una orden real de tamaño mínimo en vez de
+      // bloquear el trade. recentTrades muy malos → kellyRaw negativo.
       const losers = Array.from({ length: 10 }, () => makeRecentTrade({ pnl: -100 }));
       const r = calculatePositionSize(makeSizerParams({ recentTrades: losers }));
+      expect(r.blocked).toBe(true);
+      expect(r.reason).toBe("NEGATIVE_EDGE");
+      expect(r.lots).toBe(0);
+      expect(r.kellyFraction).toBe(0);
+    });
+
+    it("edge break-even con win rate bajo (kellyRaw negativo) también bloquea, no se sizea a mínimo", () => {
+      // winRate=0.3, avgRR=1.0 → kellyFull=(0.3·1 - 0.7)/1 = -0.4 → kellyRaw negativo
+      const trades = [
+        ...Array.from({ length: 3 }, () => makeRecentTrade({ pnl: 100 })),
+        ...Array.from({ length: 7 }, () => makeRecentTrade({ pnl: -100 })),
+      ];
+      const r = calculatePositionSize(makeSizerParams({ recentTrades: trades }));
+      expect(r.blocked).toBe(true);
+      expect(r.reason).toBe("NEGATIVE_EDGE");
+      expect(r.lots).toBe(0);
+    });
+
+    it("Kelly fraction ≥ 0.001 (piso) cuando el edge es positivo pero muy chico", () => {
+      // winRate apenas > breakeven → kellyRaw positivo pero diminuto → floor 0.001
+      const trades = [
+        ...Array.from({ length: 6 }, () => makeRecentTrade({ pnl: 100 })),
+        ...Array.from({ length: 5 }, () => makeRecentTrade({ pnl: -100 })),
+      ];
+      const r = calculatePositionSize(makeSizerParams({ recentTrades: trades }));
+      expect(r.blocked).toBe(false);
       expect(r.kellyFraction).toBeGreaterThanOrEqual(0.001);
     });
 
