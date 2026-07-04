@@ -844,8 +844,8 @@ VERCEL_ENV=                     # legado pre-Fly, ya no se setea
 - Loading skeletons en AccountComparisonTable, TradeHubOverviewWidget
 
 **Testing**
-- Vitest: **1356 unit tests across 106 files** — incluye toda la cobertura previa + sprint 2026-06 (offline-first journal/trades + conflicts UI + QStash terminal reports verify/helpers).
-- Coinarb subproject: 140 tests across 14 files
+- Vitest: **3037 unit tests across 260 files** (2026-07-06 count) — incluye toda la cobertura previa + la auditoría de madurez de Business/Treasury/Secure Mail/Bot Control/Coinarb.
+- Coinarb subproject: 340 tests across 29 files (2026-07-06 count)
 - Playwright E2E: 21 specs (auth, smoke, navigation, mobile-layout-fit, api-health, wizard-strategy, intelligence, dispatcher-smoke, polyarb, coinarb-unified-flow, tradehub, bot-control-selector, securities, inbox, **backtest-advanced**)
 
 **Features**
