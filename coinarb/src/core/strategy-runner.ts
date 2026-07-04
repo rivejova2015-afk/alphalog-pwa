@@ -379,6 +379,20 @@ export class StrategyRunner {
         kind: 'SKIP', symbol, venue: 'spot',
         reason: `position size $${sizeUsd.toFixed(2)} below $5 minimum`,
       });
+      // Alert once per UTC day (resets with the rest of dailyTracker on
+      // rollover) so a stuck-equity freeze gets noticed within minutes
+      // instead of silently accumulating SKIPs for days.
+      if (!this.dailyTracker.current.data.equityFloorAlerted) {
+        this.dailyTracker.markEquityFloorAlerted();
+        notify({
+          userId: COINARB_USER_ID,
+          ...formatBreaker({
+            kind: 'equity-floor',
+            message: `Equity too low to size a position ($${ctx.phaseManager.capitalNow.toFixed(2)}) — strategy ${this.id} stuck below $5 minimum`,
+            paper: PAPER_MODE,
+          }),
+        });
+      }
       return;
     }
 
@@ -506,6 +520,7 @@ export class StrategyRunner {
         side: dir === 'BUY' ? 'SELL' : 'BUY',
         sizeUsd: pos.size_usd,
         markPrice: px,
+        purpose: 'close',
       });
       const feeUsd = closeFill?.feeUsd ?? (pos.size_usd * 60) / 10_000;
 
