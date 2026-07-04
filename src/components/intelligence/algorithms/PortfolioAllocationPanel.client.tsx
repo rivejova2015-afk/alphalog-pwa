@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PieChart } from "lucide-react";
+import { PieChart, History, ChevronDown, ChevronUp } from "lucide-react";
 import { logError } from "@/lib/log";
 
 interface AllocationRow {
@@ -16,6 +16,12 @@ interface AllocationsResponse {
   allocations: AllocationRow[];
   runAt: string | null;
   lookbackDays: number | null;
+}
+
+interface HistoryRun {
+  runAt: string;
+  lookbackDays: number | null;
+  allocations: { algorithmId: string; algorithmName: string; weight: number }[];
 }
 
 const MARKET_COLORS: Record<string, string> = {
@@ -37,6 +43,37 @@ export function PortfolioAllocationPanel() {
   const [data, setData] = useState<AllocationsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryRun[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  async function toggleHistory() {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+    setHistoryOpen(true);
+    if (history) return; // ya cargado, no refetch
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await fetch("/api/portfolio/allocations/history");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      setHistory(json.runs);
+    } catch (e) {
+      logError("Portfolio", {
+        component: "PortfolioAllocationPanel.loadHistory",
+        message: "fetch allocations history failed",
+        error: e instanceof Error ? e.message : String(e),
+      });
+      setHistoryError(e instanceof Error ? e.message : "Error desconocido");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -137,6 +174,52 @@ export function PortfolioAllocationPanel() {
         correlacionados con el resto — no es una recomendación de trading, es un input para decidir cuánto
         capital destinarle a cada estrategia.
       </p>
+
+      <div className="pt-2 border-t border-[#1f2937]">
+        <button
+          type="button"
+          onClick={toggleHistory}
+          className="flex items-center gap-1.5 text-[10px] text-[#64748b] hover:text-[#94a3b8] transition-colors"
+        >
+          <History size={11} />
+          Ver historial de corridas
+          {historyOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+
+        {historyOpen && (
+          <div className="mt-3 space-y-3">
+            {historyLoading && (
+              <div className="h-16 bg-[#0a0e1a] rounded animate-pulse" />
+            )}
+            {historyError && (
+              <p className="text-xs text-red-400">Error cargando historial: {historyError}</p>
+            )}
+            {!historyLoading && !historyError && history && history.length === 0 && (
+              <p className="text-xs text-[#475569]">Todavía no hay corridas históricas — esta es la primera.</p>
+            )}
+            {!historyLoading && !historyError && history && history.length > 0 && (
+              <div className="space-y-2">
+                {history.map((run) => (
+                  <div key={run.runAt} className="rounded-md bg-[#0a0e1a] border border-[#1f2937] p-2.5">
+                    <div className="flex items-center justify-between text-[10px] text-[#64748b] mb-1.5">
+                      <span>{formatRelative(run.runAt)}</span>
+                      <span>lookback {run.lookbackDays}d</span>
+                    </div>
+                    <div className="space-y-1">
+                      {run.allocations.map((a) => (
+                        <div key={a.algorithmId} className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#94a3b8] truncate">{a.algorithmName}</span>
+                          <span className="text-[#cbd5e1] font-mono ml-2">{(a.weight * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
