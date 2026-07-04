@@ -36,6 +36,7 @@ import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { computeAtrFromBars } from "./atr";
 import { computeKellyContracts } from "../position-sizing/kelly";
 import { buildSlicePlan, insertExecutionSlices, finalizeParentIfDone, type InsertedSlices } from "@/lib/cme/execution-slices";
+import { buildHourlyVolumeProfile, sliceWeightsFromHourlyProfile } from "@/lib/cme/volume-profile";
 import { checkOrderRisk } from "@/lib/cme/risk-manager";
 import { logError, logInfo, logWarn } from "@/lib/log";
 import { getDispatchMode, type DispatchInput, type DispatchResult } from "./types";
@@ -53,6 +54,11 @@ const DEFAULT_TP_ATR_MULT = 3.0;   // RR 1:2
 // How far back to look when computing ATR. M15 × 3 days = ~288 bars during
 // futures sessions — way more than the 14 needed for the seed.
 const ATR_LOOKBACK_DAYS = 3;
+
+// How far back to look when building the hourly volume profile for VWAP.
+// Wider than ATR_LOOKBACK_DAYS on purpose — averaging by hour-of-day across
+// more days smooths out single-day noise into a representative session shape.
+const VOLUME_PROFILE_LOOKBACK_DAYS = 14;
 
 function num(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
@@ -371,11 +377,35 @@ export async function dispatchTradovate(
   if (useSlicing) {
     const durationMinutes = num(params.execution_duration_minutes, 20);
     const sliceCount = Math.max(1, Math.round(num(params.execution_slice_count, 5)));
+
+    // VWAP necesita un perfil de volumen real o planVwap cae silenciosamente
+    // a TWAP. Lo construimos acá (no dentro de buildSlicePlan, que se
+    // mantiene puro/testeable) promediando volumen por hora UTC de las
+    // últimas VOLUME_PROFILE_LOOKBACK_DAYS. Failure-open: cualquier error
+    // deja volumeProfile undefined y planVwap hace el fallback solo.
+    let volumeProfile: number[] | undefined;
+    if (executionAlgo === "vwap") {
+      try {
+        const now = Date.now();
+        const to = new Date(now).toISOString();
+        const from = new Date(now - VOLUME_PROFILE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const bars = await loadHistoricalBars(svc, rootSym, "M15", from, to);
+        const hourlyProfile = buildHourlyVolumeProfile(bars);
+        volumeProfile = sliceWeightsFromHourlyProfile(hourlyProfile, sliceCount, durationMinutes, new Date());
+      } catch (err) {
+        logWarn("DispatchTradovate", "volume profile load failed — VWAP will fall back to TWAP", {
+          component: "execution-algos",
+          meta: { algoId: algo.id, error: err instanceof Error ? err.message : String(err) },
+        });
+      }
+    }
+
     const plan = buildSlicePlan({
       algo: executionAlgo!,
       totalQuantity: quantity,
       durationMinutes,
       sliceCount,
+      volumeProfile,
     });
 
     let inserted: InsertedSlices;

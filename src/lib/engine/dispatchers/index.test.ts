@@ -57,6 +57,16 @@ vi.mock("@/lib/cme/execution-slices", () => ({
   finalizeParentIfDone: (...args: unknown[]) => finalizeParentIfDoneMock(...args),
 }));
 
+// Mock del volume-profile builder (VWAP) — solo verificamos que dispatchTradovate
+// lo invoca y pasa el resultado a buildSlicePlan; la lógica real de agregación
+// se testea en volume-profile.test.ts.
+const buildHourlyVolumeProfileMock = vi.fn().mockReturnValue(new Array(24).fill(0));
+const sliceWeightsFromHourlyProfileMock = vi.fn().mockReturnValue([1, 1]);
+vi.mock("@/lib/cme/volume-profile", () => ({
+  buildHourlyVolumeProfile: (...args: unknown[]) => buildHourlyVolumeProfileMock(...args),
+  sliceWeightsFromHourlyProfile: (...args: unknown[]) => sliceWeightsFromHourlyProfileMock(...args),
+}));
+
 // Mock the logger so tests don't pollute output.
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(),
@@ -140,6 +150,8 @@ beforeEach(() => {
   buildSlicePlanMock.mockReset();
   insertExecutionSlicesMock.mockReset();
   finalizeParentIfDoneMock.mockReset().mockResolvedValue(undefined);
+  buildHourlyVolumeProfileMock.mockReset().mockReturnValue(new Array(24).fill(0));
+  sliceWeightsFromHourlyProfileMock.mockReset().mockReturnValue([1, 1]);
   updateCalls.length = 0;
   delete behavior.insertReturn;
   delete behavior.updateError;
@@ -402,6 +414,85 @@ describe("dispatchSignal — Tradovate", () => {
       expect(res.reason).toBe("propfirm_overnight_cutoff");
       expect(executeSignalMock).not.toHaveBeenCalled();
       expect(finalizeParentIfDoneMock).toHaveBeenCalledWith(svc, "parent_1");
+    });
+
+    it("execution_algo='vwap': carga el volume profile y lo pasa a buildSlicePlan", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan({ algo: "vwap" }));
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+      sliceWeightsFromHourlyProfileMock.mockReturnValue([10, 5]);
+      const svc = makeSupabaseMock();
+
+      await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "vwap", execution_slice_count: 2 } } }),
+        svc,
+      );
+
+      expect(buildHourlyVolumeProfileMock).toHaveBeenCalledTimes(1);
+      expect(sliceWeightsFromHourlyProfileMock).toHaveBeenCalledTimes(1);
+      expect(buildSlicePlanMock).toHaveBeenCalledWith(
+        expect.objectContaining({ algo: "vwap", volumeProfile: [10, 5] }),
+      );
+      // ATR SL/TP también llama loadHistoricalBars — VWAP la llama una 2da vez
+      // para el volume profile.
+      expect(loadHistoricalBarsMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("execution_algo='vwap': si falla la carga de bars, sigue con volumeProfile=undefined (fallback a TWAP en planVwap)", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan({ algo: "vwap" }));
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+      // 1ra llamada = ATR SL/TP (no relacionada, resuelve vacío normal);
+      // 2da llamada = volume profile — esa es la que falla.
+      loadHistoricalBarsMock
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("bars fetch failed"));
+      const svc = makeSupabaseMock();
+
+      const res = await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "vwap" } } }),
+        svc,
+      );
+
+      // No revienta el dispatch entero — solo el volume profile queda undefined.
+      expect(res.ok).toBe(true);
+      expect(buildSlicePlanMock).toHaveBeenCalledWith(
+        expect.objectContaining({ algo: "vwap", volumeProfile: undefined }),
+      );
+    });
+
+    it("execution_algo='twap'/'is' NO cargan el volume profile (solo VWAP lo necesita)", async () => {
+      process.env.DISPATCH_MODE = "live";
+      buildSlicePlanMock.mockReturnValue(slicedPlan({ algo: "is" }));
+      insertExecutionSlicesMock.mockResolvedValue({
+        parentSignalId: "parent_1",
+        firstSlice: { id: "slice_0", quantity: 1 },
+        remainingCount: 1,
+      });
+      executeSignalMock.mockResolvedValue({ success: true, orderId: 1 });
+      const svc = makeSupabaseMock();
+
+      await dispatchSignal(
+        tradovateInput({ algo: { id: "a", user_id: "u", platform: "Tradovate", parameters: { cme_account_id: "cme_1", contract: "ESH4", contracts_per_trade: 2, execution_algo: "is" } } }),
+        svc,
+      );
+
+      expect(buildHourlyVolumeProfileMock).not.toHaveBeenCalled();
+      expect(buildSlicePlanMock).toHaveBeenCalledWith(
+        expect.objectContaining({ algo: "is", volumeProfile: undefined }),
+      );
+      // Solo la llamada de ATR SL/TP, no una segunda para volume profile.
+      expect(loadHistoricalBarsMock).toHaveBeenCalledTimes(1);
     });
 
     it("reversal (posición opuesta abierta) IGNORA execution_algo — usa una sola orden de flatten+flip", async () => {
