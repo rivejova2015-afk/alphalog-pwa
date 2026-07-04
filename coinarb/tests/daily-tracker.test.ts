@@ -132,4 +132,18 @@ describe("DailyTracker", () => {
       expect(dt.current.data.circuitTriggered).toBe(true);
     });
   });
+
+  describe("markEquityFloorAlerted", () => {
+    it("setea equityFloorAlerted = true", () => {
+      expect(dt.current.data.equityFloorAlerted).toBe(false);
+      dt.markEquityFloorAlerted();
+      expect(dt.current.data.equityFloorAlerted).toBe(true);
+    });
+
+    it("se resetea a false en blank()/hydrate parcial", () => {
+      dt.markEquityFloorAlerted();
+      dt.hydrate({ totalTrades: 5 });
+      expect(dt.current.data.equityFloorAlerted).toBe(false);
+    });
+  });
 });

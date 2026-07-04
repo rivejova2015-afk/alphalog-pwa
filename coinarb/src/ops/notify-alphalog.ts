@@ -82,7 +82,7 @@ export function formatExit(p: ExitNotice): { title: string; body: string } {
 }
 
 export interface BreakerNotice {
-  kind: 'loss-streak' | 'daily-cap' | 'cooldown';
+  kind: 'loss-streak' | 'daily-cap' | 'cooldown' | 'equity-floor';
   message: string;
   paper: boolean;
 }

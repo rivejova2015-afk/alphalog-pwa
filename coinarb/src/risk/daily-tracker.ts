@@ -25,6 +25,7 @@ export interface DailySnapshot {
   fearGreedSum: number;
   fearGreedSamples: number;
   circuitTriggered: boolean;
+  equityFloorAlerted: boolean;
 }
 
 export class DailyTracker {
@@ -113,6 +114,10 @@ export class DailyTracker {
     this.snap.circuitTriggered = true;
   }
 
+  markEquityFloorAlerted(): void {
+    this.snap.equityFloorAlerted = true;
+  }
+
   get current(): { day: string; data: DailySnapshot } {
     return { day: this.dayUtc, data: { ...this.snap } };
   }
@@ -174,5 +179,6 @@ function blank(): DailySnapshot {
     fearGreedSum: 0,
     fearGreedSamples: 0,
     circuitTriggered: false,
+    equityFloorAlerted: false,
   };
 }

@@ -35,28 +35,33 @@ export class PaperSpotBroker {
 
   /**
    * Market BUY: spend `sizeUsd` to acquire base.
-   * Market SELL: sell `sizeUsd` worth of base (closing a long).
-   * Returns null on insufficient balance.
+   * Market SELL: sell `sizeUsd` worth of base (closing a long, or opening a short).
+   * `purpose: 'open'` (default) gates the fill on available balance — this
+   * applies to BOTH sides, since opening a short still needs collateral to
+   * back the eventual buy-back. `purpose: 'close'` never gates: unwinding a
+   * position you already hold must always be allowed, even if fee drag has
+   * pushed `balance` below the notional.
+   * Returns null on insufficient balance (opens only).
    */
   placeMarket(params: {
     symbol: Symbol;
     side: 'BUY' | 'SELL';
     sizeUsd: number;
     markPrice: number;
+    purpose?: 'open' | 'close';
   }): PaperFill | null {
-    const { symbol, side, sizeUsd, markPrice } = params;
+    const { symbol, side, sizeUsd, markPrice, purpose = 'open' } = params;
     if (markPrice <= 0 || sizeUsd <= 0) return null;
 
     const fillPrice = markPrice;
     const baseQty = sizeUsd / fillPrice;
     const feeUsd = (sizeUsd * TAKER_FEE_BPS) / 10_000;
 
-    // Balance accounting: BUY consumes USD; SELL releases USD.
+    if (purpose === 'open' && this.balance < sizeUsd + feeUsd) {
+      console.warn(`[paper-broker] insufficient balance to open ${side}: have ${this.balance}, need ${sizeUsd + feeUsd}`);
+      return null;
+    }
     if (side === 'BUY') {
-      if (this.balance < sizeUsd + feeUsd) {
-        console.warn(`[paper-broker] insufficient balance: have ${this.balance}, need ${sizeUsd + feeUsd}`);
-        return null;
-      }
       this.balance -= (sizeUsd + feeUsd);
     } else {
       this.balance += (sizeUsd - feeUsd);
