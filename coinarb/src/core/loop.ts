@@ -345,7 +345,7 @@ export class CoinarbCoordinator {
       try {
         await this.flushTelemetry(fgValue);
         for (const runner of this.runners.values()) {
-          await runner.dailyTracker.flush();
+          await runner.dailyTracker.flush(runner.id);
         }
       } catch (err) {
         console.error('[loop] telemetry flush in finally failed:', err);

@@ -1,5 +1,23 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { DailyTracker } from "../src/risk/daily-tracker.js";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const upsertCalls: Array<{ payload: unknown; onConflict: unknown }> = [];
+
+vi.mock("../src/core/config.js", () => ({
+  COINARB_AGENT_ID: "agent-1",
+  COINARB_USER_ID: "user-1",
+}));
+vi.mock("../src/supabase.js", () => ({
+  getSupabase: () => ({
+    from: () => ({
+      upsert: (payload: unknown, opts: unknown) => {
+        upsertCalls.push({ payload, onConflict: opts });
+        return Promise.resolve({ data: null, error: null });
+      },
+    }),
+  }),
+}));
+
+const { DailyTracker } = await import("../src/risk/daily-tracker.js");
 
 describe("DailyTracker", () => {
   let dt: DailyTracker;
@@ -130,6 +148,38 @@ describe("DailyTracker", () => {
       expect(dt.current.data.circuitTriggered).toBe(false);
       dt.markCircuitTriggered();
       expect(dt.current.data.circuitTriggered).toBe(true);
+    });
+  });
+
+  // Bug encontrado en la auditoría de madurez 2026-07: flush() hardcodeaba
+  // strategy_id:'A' para los 5 runners (loop.ts corre A/B/M/P/DD, cada uno
+  // con su propio DailyTracker) — todos colisionaban en la misma fila
+  // (agent_id, 'A', day_utc), pisándose las stats diarias entre sí.
+  describe("flush", () => {
+    beforeEach(() => {
+      upsertCalls.length = 0;
+    });
+
+    it("persiste con el strategy_id que le pasa el caller, no 'A' hardcodeado", async () => {
+      dt.recordTrade("BTC-USD", 50, 1050, "phase-1");
+      await dt.flush("M");
+      expect(upsertCalls).toHaveLength(1);
+      expect(upsertCalls[0].payload).toMatchObject({
+        agent_id: "agent-1",
+        user_id: "user-1",
+        strategy_id: "M",
+      });
+      expect(upsertCalls[0].onConflict).toMatchObject({ onConflict: "agent_id,strategy_id,day_utc" });
+    });
+
+    it("cada uno de los 5 strategy_id posibles se persiste tal cual, sin colisionar", async () => {
+      for (const id of ["A", "B", "M", "P", "DD"] as const) {
+        await dt.flush(id);
+      }
+      expect(upsertCalls).toHaveLength(5);
+      expect(upsertCalls.map((c) => (c.payload as { strategy_id: string }).strategy_id)).toEqual([
+        "A", "B", "M", "P", "DD",
+      ]);
     });
   });
 });

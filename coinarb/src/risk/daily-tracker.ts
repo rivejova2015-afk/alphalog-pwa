@@ -8,6 +8,7 @@
 
 import { COINARB_AGENT_ID, COINARB_USER_ID } from '../core/config.js';
 import { getSupabase } from '../supabase.js';
+import type { StrategyId } from '../trading/spot-positions.js';
 
 export interface DailySnapshot {
   totalTrades: number;
@@ -117,7 +118,15 @@ export class DailyTracker {
     return { day: this.dayUtc, data: { ...this.snap } };
   }
 
-  async flush(): Promise<void> {
+  /**
+   * Persists this runner's daily snapshot. `strategyId` MUST be the calling
+   * runner's own id ('A'|'B'|'M'|'P'|'DD') — the upsert key is
+   * (agent_id, strategy_id, day_utc), so passing the wrong id (or hardcoding
+   * one) makes every runner's flush collide on the same row, silently
+   * overwriting each other's daily stats. Bug found + fixed 2026-07: this
+   * hardcoded 'A' for all 5 runners since the multi-strategy sprints landed.
+   */
+  async flush(strategyId: StrategyId): Promise<void> {
     if (!COINARB_USER_ID) return;
     try {
       const supabase = getSupabase();
@@ -127,7 +136,7 @@ export class DailyTracker {
         {
           user_id: COINARB_USER_ID,
           agent_id: COINARB_AGENT_ID,
-          strategy_id: 'A',
+          strategy_id: strategyId,
           day_utc: this.dayUtc,
           total_trades: this.snap.totalTrades,
           wins: this.snap.wins,
