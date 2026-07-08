@@ -29,6 +29,7 @@ import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendPushToSubscriptions } from '@/lib/push/webpush.server';
+import { getPgClient } from '@/lib/pg/client';
 import { logError, logInfo, logWarn } from "@/lib/log";
 
 interface PushSubscriptionJSON {
@@ -163,8 +164,12 @@ export async function GET(request: NextRequest) {
       try {
         const userId = user.user_id;
 
-        // Fetch all trades and costs for this user
-        const { data: trades, error: tradesError } = await supabase
+        // Fetch all trades and costs for this user. trades is in-scope (own
+        // Postgres); business_costs/llc_info/push_subscriptions/
+        // business_alert_history below are not in the 16-table list and stay
+        // on Supabase.
+        const pg = getPgClient();
+        const { data: tradesRaw, error: tradesError } = await pg
           .from('trades')
           .select('id, exit_date, pnl, account_id')
           .eq('user_id', userId)
@@ -174,6 +179,8 @@ export async function GET(request: NextRequest) {
           logWarn("cron.business.alerts", "trades query failed", { userId, error: tradesError.message });
           continue;
         }
+
+        const trades = tradesRaw as unknown as { id: string; exit_date: string | null; pnl: number | null; account_id: string }[] | null;
 
         const { data: costs, error: costsError } = await supabase
           .from('business_costs')

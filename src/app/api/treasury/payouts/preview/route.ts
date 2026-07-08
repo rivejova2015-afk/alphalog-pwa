@@ -9,6 +9,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { sendThresholdPush } from '@/lib/treasury/pushNotifications';
+import { getPgClient } from '@/lib/pg/client';
 import { logError, logWarn } from "@/lib/log";
 
 // accountId is either the literal string "ALL" or a UUID. Other values are
@@ -98,12 +99,15 @@ export async function POST(request: Request): Promise<Response> {
     const cycle = { cycleStart: new Date(), cycleExpectedEnd: new Date(), calcCutoff: todayUTC };
 
     // Fetch all required data
+    // accounts + trades are in-scope (own Postgres); treasury_configs is not
+    // one of the 16 migrated tables and stays on Supabase.
+    const pg = getPgClient();
     const [
-      { data: accountsData },
+      { data: accountsDataRaw },
       { data: configsData },
-      { data: tradesData },
+      { data: tradesDataRaw },
     ] = await Promise.all([
-      supabase
+      pg
         .from('accounts')
         .select('id, name, account_size, current_balance, phase_status, withdrawals_enabled')
         .eq('user_id', userId)
@@ -113,12 +117,21 @@ export async function POST(request: Request): Promise<Response> {
         .select('id, account_id, withdrawal_day, split_mode, balance_threshold, anti_drawdown_active, anti_drawdown_threshold, tax_buffer_percentage, wallet_id, last_threshold_push_cycle_start')
         .eq('user_id', userId)
         .is('deleted_at', null),
-      supabase
+      pg
         .from('trades')
         .select('id, account_id, entry_date, exit_date, created_at, pnl, status')
         .eq('user_id', userId)
         .is('deleted_at', null),
     ]);
+
+    const accountsData = accountsDataRaw as unknown as {
+      id: string; name: string; account_size: number; current_balance: number;
+      phase_status: string; withdrawals_enabled: boolean;
+    }[] | null;
+    const tradesData = tradesDataRaw as unknown as {
+      id: string; account_id: string; entry_date: string | null; exit_date: string | null;
+      created_at: string | null; pnl: number; status: string;
+    }[] | null;
 
     if (!accountsData || !configsData || !tradesData) {
       return Response.json(

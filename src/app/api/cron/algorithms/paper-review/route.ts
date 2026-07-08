@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { createServiceClient } from "@/lib/supabase/server";
+import { getPgClient } from "@/lib/pg/client";
 import { evaluatePaperGates, type PaperTrade } from "@/lib/engine/v1/paper-gates";
 import { buildKellyInputsFromTrades, mergeKellyInputs } from "@/lib/engine/position-sizing/auto-populate";
 import { logError, logInfo, logWarn } from "@/lib/log";
@@ -41,9 +41,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const svc = createServiceClient();
+  // algorithms and algo_paper_trades are the only tables this route touches,
+  // and both are in-scope (own Postgres).
+  const pg = getPgClient();
 
-  const { data: algos, error: algoErr } = await svc
+  const { data: algos, error: algoErr } = await pg
     .from("algorithms")
     .select("id, user_id, name, status, parameters")
     .eq("status", "paper")
@@ -58,17 +60,20 @@ export async function GET(request: NextRequest) {
 
   for (const algo of (algos ?? []) as AlgoRow[]) {
     try {
-      const { data: trades, error: tradesErr } = await svc
+      // algo_paper_trades: shim has no `.limit()` — fetch ordered rows (order
+      // preserved from the shim's SQL ORDER BY) and slice(0, 500) in JS.
+      const { data: tradesRaw, error: tradesErr } = await pg
         .from("algo_paper_trades")
         .select("pnl, status, opened_at, closed_at")
         .eq("algorithm_id", algo.id)
-        .order("opened_at", { ascending: true })
-        .limit(500);
+        .order("opened_at", { ascending: true });
 
       if (tradesErr) {
         summary.push({ algorithmId: algo.id, promoted: false, closedTrades: 0, kellyRefreshed: false, reason: tradesErr.message });
         continue;
       }
+
+      const trades = ((tradesRaw ?? []) as unknown as { pnl: number | null; status: string; opened_at: string | Date | null; closed_at: string | Date | null }[]).slice(0, 500);
 
       // Sprint P — refresh Kelly inputs from live paper trades. Live data
       // overrides whatever the engine-backtest wrote when there are ≥30
@@ -81,7 +86,7 @@ export async function GET(request: NextRequest) {
       });
       if (kellyPayload) {
         const mergedParams = mergeKellyInputs(algo.parameters, kellyPayload);
-        const { error: kellyErr } = await svc
+        const { error: kellyErr } = await pg
           .from("algorithms")
           .update({ parameters: mergedParams })
           .eq("id", algo.id)
@@ -110,7 +115,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const { error: promoteErr } = await svc
+      const { error: promoteErr } = await pg
         .from("algorithms")
         .update({ status: "approved" })
         .eq("id", algo.id)

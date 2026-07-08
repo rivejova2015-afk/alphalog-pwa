@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getCoinarbAgent } from '@/lib/coinarb/agent';
+import { getPgClient } from '@/lib/pg/client';
 import { dayStartUtc, safeNumber } from '@/lib/coinarb/queries';
 
 interface Bucket {
@@ -25,17 +26,25 @@ export async function GET() {
   }
 
   // Spot-only bot: venue = 'spot', symbol is direct column. Tier still in entry_reason.
-  const { data: closed, error } = await supabase
+  // coinarb_positions is in-scope (own Postgres); the shim has no
+  // `.not(col,'is',null)` / `.limit()`, so fetch ordered rows and apply both
+  // in JS (order is preserved by the shim's SQL ORDER BY before we filter).
+  const pg = getPgClient();
+  const { data: closedRaw, error } = await pg
     .from('coinarb_positions')
     .select('symbol, pnl_usd, entry_reason, closed_at')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .is('deleted_at', null)
-    .not('closed_at', 'is', null)
-    .order('closed_at', { ascending: true })
-    .limit(1000);
+    .order('closed_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const closed = ((closedRaw ?? []) as unknown as {
+    symbol: string | null; pnl_usd: number | string | null; entry_reason: unknown; closed_at: string | Date | null;
+  }[])
+    .filter((p) => p.closed_at !== null)
+    .slice(0, 1000);
 
   const byVenue: Record<string, Bucket> = {};
   const bySymbol: Map<string, Bucket> = new Map();
@@ -45,7 +54,7 @@ export async function GET() {
   const cumulative: Array<{ at: string; cumPnlUsd: number }> = [];
   let runningToday = 0;
 
-  for (const p of closed ?? []) {
+  for (const p of closed) {
     const pnl = safeNumber(p.pnl_usd) ?? 0;
     const symbol = (typeof p.symbol === 'string' && p.symbol) ? p.symbol : 'unknown';
     const meta = (p.entry_reason ?? {}) as Record<string, unknown>;

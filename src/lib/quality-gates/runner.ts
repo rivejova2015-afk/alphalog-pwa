@@ -18,6 +18,7 @@
 // purposes despite the similar name.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getPgClient } from '@/lib/pg/client';
 import { edgeChecks } from './checks/edge';
 import { capitalChecks } from './checks/capital';
 import { microChecks } from './checks/micro';
@@ -30,7 +31,13 @@ import type {
 const ALL_CHECKS = [...edgeChecks, ...capitalChecks, ...microChecks, ...opsChecks];
 
 async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: string): Promise<AlgorithmRow> {
-  const { data, error } = await sb
+  // algorithms is in-scope (own Postgres); the shim has no embedded/joined
+  // selects, so the original `deployments:algorithm_deployments(...)` embed
+  // is split into a second lookup against `algorithm_deployments` directly
+  // by `algorithm_id` (algorithm_deployments is not one of the 16 migrated
+  // tables and stays on the injected `sb`/Supabase).
+  const pg = getPgClient();
+  const { data, error } = await pg
     .from('algorithms')
     .select('id,user_id,name,status,market_type,parameters,risk_percent,max_drawdown_pct,linked_bot_account_id,scan_config,deployments:algorithm_deployments(bot_account_id,status)')
     .eq('id', algorithmId)
@@ -39,8 +46,20 @@ async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: st
     .single();
   if (error || !data) throw new Error(`Algorithm ${algorithmId} not found: ${error?.message ?? 'no row'}`);
 
-  const params = (data.parameters as Record<string, unknown>) ?? {};
-  const deps = (data.deployments as { bot_account_id: string | null; status: string }[] | null) ?? [];
+  const row = data as unknown as {
+    id: string; user_id: string; name: string; status: string;
+    parameters: Record<string, unknown> | null; risk_percent: number | string | null;
+    max_drawdown_pct: number | string | null; linked_bot_account_id: string | null;
+    scan_config: Record<string, unknown> | null;
+  };
+
+  const { data: deploymentsData } = await sb
+    .from('algorithm_deployments')
+    .select('bot_account_id,status')
+    .eq('algorithm_id', algorithmId);
+
+  const params = (row.parameters as Record<string, unknown>) ?? {};
+  const deps = (deploymentsData as { bot_account_id: string | null; status: string }[] | null) ?? [];
   const activeDep = deps.find((d) => d.status === 'active') ?? deps[0] ?? null;
 
   const num = (v: unknown): number | null =>
@@ -56,7 +75,7 @@ async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: st
     max_drawdown_pct:      num(data.max_drawdown_pct),
     linked_bot_account_id: (data.linked_bot_account_id as string | null) ?? activeDep?.bot_account_id ?? null,
     parameters:            params,
-    scan_config:           (data.scan_config as Record<string, unknown> | null) ?? null,
+    scan_config:           row.scan_config ?? null,
   };
 }
 
@@ -168,41 +187,66 @@ async function loadTelemetry(sb: SupabaseClient, algo: AlgorithmRow): Promise<Te
 }
 
 async function loadOps(sb: SupabaseClient, algo: AlgorithmRow): Promise<OpsSnapshot> {
-  // 1) Last KILL ack timing
+  void sb;
+  const pg = getPgClient();
+
+  // 1) Last KILL ack timing.
+  // bot_command_status + bot_commands are in-scope (own Postgres); the shim
+  // has no `.limit()` on bot_command_status, and no `.in()` / `.ilike()` /
+  // `.limit()` on bot_commands. bot_command_status: fetch ordered rows
+  // (order preserved from the shim's SQL ORDER BY) and slice(0,20) in JS.
+  // bot_commands: cmdIds is already bounded to ≤20 ids from that slice, so
+  // look each one up individually (bounded fan-out) instead of `.in()`, then
+  // apply the case-insensitive "KILL" substring match and slice(0,5) in JS.
   let lastKillAckMs: number | null = null;
   if (algo.linked_bot_account_id) {
-    const { data: cmds } = await sb
+    const { data: cmdsRaw } = await pg
       .from('bot_command_status')
       .select('command_id,acked_at,created_at,status')
       .eq('bot_account_id', algo.linked_bot_account_id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (cmds?.length) {
+      .order('created_at', { ascending: false });
+    const cmds = ((cmdsRaw ?? []) as unknown as {
+      command_id: string; acked_at: string | Date | null; created_at: string | Date; status: string;
+    }[]).slice(0, 20);
+
+    if (cmds.length) {
       // Buscar el último KILL command status
-      const cmdIds = cmds.map((c) => c.command_id as string);
-      const { data: killCmds } = await sb
-        .from('bot_commands')
-        .select('id,command_type,created_at')
-        .in('id', cmdIds)
-        .ilike('command_type', '%KILL%')
-        .limit(5);
-      if (killCmds?.length) {
-        const killCmdIds = new Set(killCmds.map((k) => k.id as string));
-        const killStatus = cmds.find((c) => killCmdIds.has(c.command_id as string) && c.acked_at);
+      const cmdIds = cmds.map((c) => c.command_id);
+      const killCmdLookups = await Promise.all(
+        cmdIds.map((id) => pg.from('bot_commands').select('id,command_type,created_at').eq('id', id).single()),
+      );
+      const killCmds = killCmdLookups
+        .map((r) => r.data as unknown as { id: string; command_type: string; created_at: string | Date } | null)
+        .filter((c): c is { id: string; command_type: string; created_at: string | Date } =>
+          c !== null && typeof c.command_type === 'string' && c.command_type.toUpperCase().includes('KILL'))
+        .slice(0, 5);
+
+      if (killCmds.length) {
+        const killCmdIds = new Set(killCmds.map((k) => k.id));
+        const killStatus = cmds.find((c) => killCmdIds.has(c.command_id) && c.acked_at);
         if (killStatus?.acked_at && killStatus.created_at) {
-          lastKillAckMs = new Date(killStatus.acked_at as string).getTime() - new Date(killStatus.created_at as string).getTime();
+          lastKillAckMs = new Date(killStatus.acked_at).getTime() - new Date(killStatus.created_at).getTime();
         }
       }
     }
   }
 
-  // 2) Forward paper trades últimos 30d
+  // 2) Forward paper trades últimos 30d.
+  // algo_paper_trades is in-scope; the shim has no `.gte()` /
+  // count-with-`{count:'exact',head:true}`. Fetch the algorithm's rows and
+  // count how many have opened_at >= since30d in JS. Both sides of the date
+  // comparison go through `new Date(...).getTime()` — the pg driver
+  // auto-parses `opened_at` (timestamptz) into a Date at runtime, and a bare
+  // `Date >= string` comparison silently always evaluates false.
   const since30d = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  const { count } = await sb
+  const since30dMs = new Date(since30d).getTime();
+  const { data: paperTradesRaw } = await pg
     .from('algo_paper_trades')
-    .select('id', { count: 'exact', head: true })
-    .eq('algorithm_id', algo.id)
-    .gte('opened_at', since30d);
+    .select('id, opened_at')
+    .eq('algorithm_id', algo.id);
+  const paperTrades30d = ((paperTradesRaw ?? []) as unknown as { id: string; opened_at: string | Date | null }[])
+    .filter((t) => t.opened_at !== null && new Date(t.opened_at).getTime() >= since30dMs)
+    .length;
 
   // 3) Audit trail completo (heurística: parameters tienen flag explícito)
   const auditFlag = algo.parameters['audit_trail_enabled'];
@@ -210,7 +254,7 @@ async function loadOps(sb: SupabaseClient, algo: AlgorithmRow): Promise<OpsSnaps
 
   return {
     last_kill_ack_ms:     lastKillAckMs,
-    paper_trades_30d:     count ?? 0,
+    paper_trades_30d:     paperTrades30d,
     audit_trail_complete: auditOk,
   };
 }

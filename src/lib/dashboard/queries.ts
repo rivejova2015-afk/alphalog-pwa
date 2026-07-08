@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { logError } from '@/lib/log';
 
 export interface AccountGroup {
@@ -92,9 +93,14 @@ export async function getAccountGroups(userId: string): Promise<AccountGroup[]> 
   try {
     const supabase = await createClient();
 
-    const { data: accounts, error } = await supabase
+    // accounts is in-scope (own Postgres); the shim has no embedded/joined
+    // selects, so the original `account_categories(name)` embed is split
+    // into a separate lookup against Supabase (account_categories is not one
+    // of the 16 migrated tables) keyed by the distinct category_ids found.
+    const pg = getPgClient();
+    const { data: accountsRaw, error } = await pg
       .from('accounts')
-      .select('id, name, current_balance, category_id, account_categories(name)')
+      .select('id, name, current_balance, category_id')
       .eq('user_id', userId)
       .is('deleted_at', null);
 
@@ -103,11 +109,25 @@ export async function getAccountGroups(userId: string): Promise<AccountGroup[]> 
       return [];
     }
 
+    const accounts = (accountsRaw as unknown as {
+      id: string; name: string; current_balance: number | null; category_id: string | null;
+    }[] | null) ?? [];
+
+    const categoryIds = Array.from(new Set(accounts.map((a) => a.category_id).filter((id): id is string => !!id)));
+    const categoryNameById = new Map<string, string>();
+    if (categoryIds.length > 0) {
+      const { data: categories } = await supabase
+        .from('account_categories')
+        .select('id, name')
+        .in('id', categoryIds);
+      (categories || []).forEach((c: any) => categoryNameById.set(c.id, c.name));
+    }
+
     // Group by category
     const grouped = new Map<string, AccountGroup>();
 
-    (accounts || []).forEach((account: any) => {
-      const categoryName = account.account_categories?.name || 'All Accounts';
+    accounts.forEach((account) => {
+      const categoryName = (account.category_id && categoryNameById.get(account.category_id)) || 'All Accounts';
       if (!grouped.has(categoryName)) {
         grouped.set(categoryName, { name: categoryName, count: 0, totalBalance: 0 });
       }
@@ -135,20 +155,21 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
   try {
     const supabase = await createClient();
 
-    // Run account, trade, and setup fetches in parallel
-    const [accountsResult, tradesResult, setupsResult] = await Promise.all([
-      supabase
+    // accounts + trades are in-scope (own Postgres); setups is not one of
+    // the 16 migrated tables and stays on Supabase.
+    const pg = getPgClient();
+    const [accountsResult, tradesResultRaw, setupsResult] = await Promise.all([
+      pg
         .from('accounts')
         .select('account_size')
         .eq('user_id', userId)
         .is('deleted_at', null),
 
-      supabase
+      pg
         .from('trades')
         .select('id, entry_date, exit_date, pnl, direction, setup_id, status')
         .eq('user_id', userId)
-        .is('deleted_at', null)
-        .not('exit_date', 'is', null),
+        .is('deleted_at', null),
 
       supabase
         .from('setups')
@@ -157,18 +178,27 @@ export async function getPerformanceMetrics(userId: string): Promise<Performance
         .is('deleted_at', null),
     ]);
 
-    if (tradesResult.error) {
-      logError('Dashboard', { component: 'dashboard.queries.trades', message: 'Error fetching trades', error: tradesResult.error instanceof Error ? tradesResult.error.message : String(tradesResult.error) });
+    if (tradesResultRaw.error) {
+      logError('Dashboard', { component: 'dashboard.queries.trades', message: 'Error fetching trades', error: tradesResultRaw.error instanceof Error ? tradesResultRaw.error.message : String(tradesResultRaw.error) });
       return getEmptyMetrics();
     }
     if (accountsResult.error) {
       logError('Dashboard', { component: 'dashboard.queries.baseCapital', message: 'Error fetching accounts for base capital', error: accountsResult.error instanceof Error ? accountsResult.error.message : String(accountsResult.error) });
     }
 
+    // The shim has no `.not(col,'is',null)` — filter exit_date IS NOT NULL
+    // client-side, matching the original `.not('exit_date','is',null)` predicate.
+    const tradesResult = {
+      data: ((tradesResultRaw.data ?? []) as unknown as {
+        id: string; entry_date: string | null; exit_date: string | null;
+        pnl: number | null; direction: string | null; setup_id: string | null; status: string | null;
+      }[]).filter((t) => t.exit_date !== null),
+    };
+
     // ---------------------------------------------------------------------------
     // Base capital: sum of account_size across all non-deleted accounts
     // ---------------------------------------------------------------------------
-    const baseCapital = (accountsResult.data || []).reduce(
+    const baseCapital = ((accountsResult.data as unknown as { account_size: number | string | null }[] | null) || []).reduce(
       (sum: number, a: any) => sum + (Number(a.account_size) || 0),
       0
     );

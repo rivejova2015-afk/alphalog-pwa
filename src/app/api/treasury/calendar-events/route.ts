@@ -11,6 +11,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { getPgClient } from '@/lib/pg/client';
 import { logError } from '@/lib/log';
 
 export async function GET(request: NextRequest) {
@@ -72,14 +73,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify account ownership
-    const { data: account, error: accountError } = await supabase
+    // Verify account ownership. accounts is in-scope (own Postgres);
+    // treasury_calendar_events below is NOT one of the 16 migrated tables
+    // and stays on Supabase.
+    const pg = getPgClient();
+    const { data: accountRaw, error: accountError } = await pg
       .from('accounts')
       .select('id')
       .eq('id', account_id)
       .eq('user_id', user.id)
       .is('deleted_at', null)
       .single();
+    const account = accountRaw as { id: string } | null;
 
     if (accountError || !account) {
       return NextResponse.json(

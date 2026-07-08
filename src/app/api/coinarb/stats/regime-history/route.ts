@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getCoinarbAgent } from '@/lib/coinarb/agent';
+import { getPgClient } from '@/lib/pg/client';
 import { hourStartUtc } from '@/lib/coinarb/queries';
 
 export async function GET() {
@@ -14,24 +15,34 @@ export async function GET() {
   }
 
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const dayAgoMs = new Date(dayAgo).getTime();
+  const allowedKinds = new Set(['ENTER', 'SCALP']);
 
-  const { data, error } = await supabase
+  // coinarb_decisions is in-scope (own Postgres); the shim has no `.in()` /
+  // `.gte()` / `.limit()`. Fetch ordered rows (order preserved from the
+  // shim's SQL ORDER BY) and apply the kind/cutoff filter + cap in JS. Both
+  // sides of the date comparison go through `new Date(...).getTime()` — the
+  // pg driver auto-parses `created_at` (timestamptz) into a Date at runtime,
+  // and a bare `Date >= string` comparison silently always evaluates false.
+  const pg = getPgClient();
+  const { data: rawRows, error } = await pg
     .from('coinarb_decisions')
     .select('kind, meta, created_at')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
-    .in('kind', ['ENTER', 'SCALP'])
-    .gte('created_at', dayAgo)
-    .order('created_at', { ascending: true })
-    .limit(5000);
+    .order('created_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const data = ((rawRows ?? []) as unknown as { kind: string; meta: unknown; created_at: string | Date }[])
+    .filter((d) => allowedKinds.has(d.kind) && new Date(d.created_at).getTime() >= dayAgoMs)
+    .slice(0, 5000);
 
   const byRegime = new Map<string, number>();
   const timeline = new Map<string, Map<string, number>>();
   let total = 0;
 
-  for (const d of data ?? []) {
+  for (const d of data) {
     const meta = (d.meta ?? {}) as Record<string, unknown>;
     const regime = typeof meta.regime === 'string' && meta.regime ? meta.regime : 'UNKNOWN';
     byRegime.set(regime, (byRegime.get(regime) ?? 0) + 1);

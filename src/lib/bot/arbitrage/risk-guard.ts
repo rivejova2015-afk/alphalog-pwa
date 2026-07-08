@@ -4,6 +4,7 @@
 // Computa Kelly sizing capado a max_hold_seconds + circuit breaker -5% diario.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getPgClient } from '@/lib/pg/client';
 
 export interface PairConfig {
   algorithm_id:     string;
@@ -51,17 +52,31 @@ export async function listExpiredPositions(
 /**
  * Verifica circuit breaker diario: si el algorithm cayó >5% hoy, abortar.
  * Se basa en pnl_today del row de algorithms.
+ *
+ * `algorithms` is in-scope (own Postgres) — this now reads via `getPgClient()`
+ * instead of the injected `sb`. The `sb` parameter is kept (unused inside
+ * this function) so the exported signature — and every existing call site,
+ * including the vitest mocks in
+ * `src/lib/bot/__tests__/arbitrage/risk-guard.test.ts` — doesn't need to
+ * change. NOTE for the controller: those existing unit tests mock `sb` for
+ * the `algorithms` lookup this function used to make; they still type-check
+ * but will no longer exercise real coverage here since the lookup now goes
+ * through `getPgClient()` — worth a follow-up test update, out of scope for
+ * this migration task.
  */
 export async function isDailyCircuitOpen(
   sb: SupabaseClient,
   algorithmId: string,
   ddLimit = 0.05,
 ): Promise<{ open: boolean; reason: string | null }> {
-  const { data: algo } = await sb
+  void sb;
+  const pg = getPgClient();
+  const { data: algoRaw } = await pg
     .from('algorithms')
     .select('pnl_today,parameters')
     .eq('id', algorithmId)
-    .maybeSingle();
+    .single();
+  const algo = algoRaw as { pnl_today: number | null; parameters?: unknown } | null;
   if (!algo) return { open: true, reason: 'Algorithm not found' };
 
   const pnlToday = typeof algo.pnl_today === 'number' ? algo.pnl_today : 0;

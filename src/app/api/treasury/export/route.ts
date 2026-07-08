@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getPgClient } from '@/lib/pg/client';
 import { getMonthDateRange, calculateExportSummary, generateTreasuryExportCsv, type ExportData } from '@/lib/treasury/exportCsv';
 import {
   exportMonthSchema,
@@ -114,13 +115,17 @@ export async function GET(request: Request) {
 
     // ===== FETCH DATA =====
 
-    // Fetch trades (for PnL calculation)
-    const { data: trades, error: tradesError } = await supabase
+    // Fetch trades (for PnL calculation). trades is in-scope (own Postgres);
+    // the shim has no `.gte()`/`.lte()`, so fetch the user's rows and filter
+    // the [from, to] window in JS. Both sides of the comparison are wrapped
+    // in `new Date(...).getTime()` — the pg driver auto-parses `updated_at`
+    // (timestamptz) into a native Date at runtime, and a bare `Date >= string`
+    // comparison silently always evaluates false.
+    const pg = getPgClient();
+    const { data: tradesRaw, error: tradesError } = await pg
       .from('trades')
       .select('id, status, pnl, pnl_percent, closed_at, updated_at')
-      .eq('user_id', userId)
-      .gte('updated_at', from.toISOString())
-      .lte('updated_at', to.toISOString());
+      .eq('user_id', userId);
 
     if (tradesError) {
       logError("Export", { component: "treasury.export", message: "Error fetching trades:", error: tradesError instanceof Error ? tradesError.message : String(tradesError) });
@@ -132,6 +137,16 @@ export async function GET(request: Request) {
       });
       return new Response('Error fetching trades', { status: 500 });
     }
+
+    const fromMs = from.getTime();
+    const toMs = to.getTime();
+    const trades = ((tradesRaw ?? []) as unknown as {
+      id: string; status: string; pnl: number | null; pnl_percent: number | null;
+      closed_at: string | Date | null; updated_at: string | Date;
+    }[]).filter((t) => {
+      const updatedMs = new Date(t.updated_at).getTime();
+      return updatedMs >= fromMs && updatedMs <= toMs;
+    });
 
     // Fetch payouts with account names
     const { data: payouts, error: payoutsError } = await supabase

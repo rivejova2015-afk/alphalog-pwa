@@ -11,6 +11,7 @@ import { checkAiRateLimit } from '@/lib/security/aiRateLimit';
 import { computeIntegrityHash } from '@/lib/security/integrity';
 import { encryptNumeric, encryptForDomain } from '@/lib/security/encryption';
 import { requireFreshStepUp } from '@/lib/security/stepUp';
+import { getPgClient } from '@/lib/pg/client';
 import { logError } from "@/lib/log";
 
 const createSchema = z.object({
@@ -85,13 +86,16 @@ export async function POST(request: Request): Promise<Response> {
     const { accountId, note } = parsed;
 
     // Fetch account, config, and trades
+    // accounts + trades are in-scope (own Postgres); treasury_configs is not
+    // one of the 16 migrated tables and stays on Supabase.
     const todayUTC = new Date();
+    const pg = getPgClient();
     const [
-      { data: accountData, error: accountError },
+      { data: accountDataRaw, error: accountError },
       { data: configData, error: configError },
-      { data: tradesData },
+      { data: tradesDataRaw },
     ] = await Promise.all([
-      supabase
+      pg
         .from('accounts')
         .select('id, name, account_size, current_balance, phase_status, withdrawals_enabled')
         .eq('id', accountId)
@@ -105,12 +109,21 @@ export async function POST(request: Request): Promise<Response> {
         .eq('user_id', userId)
         .is('deleted_at', null)
         .single(),
-      supabase
+      pg
         .from('trades')
         .select('id, account_id, entry_date, exit_date, created_at, pnl, status')
         .eq('user_id', userId)
         .is('deleted_at', null),
     ]);
+
+    const accountData = accountDataRaw as unknown as {
+      id: string; name: string; account_size: number; current_balance: number;
+      phase_status: string; withdrawals_enabled: boolean;
+    } | null;
+    const tradesData = tradesDataRaw as unknown as {
+      id: string; account_id: string; entry_date: string | null; exit_date: string | null;
+      created_at: string | null; pnl: number; status: string;
+    }[] | null;
 
     if (accountError || !accountData) {
       return Response.json(

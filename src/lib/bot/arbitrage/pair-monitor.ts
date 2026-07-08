@@ -9,6 +9,7 @@
 //   6. Si todo alinea → emite bot_command OPEN_POSITION al slow account
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getPgClient } from '@/lib/pg/client';
 import { detectSkew, getPointSize, type Tick } from './latency-detector';
 import { validatePulse } from './pulse-validator';
 import { isDailyCircuitOpen, listExpiredPositions } from './risk-guard';
@@ -62,13 +63,20 @@ async function loadRecentTicks(
   }));
 }
 
+// bot_accounts is in-scope (own Postgres). `sb` is kept unused in the
+// signature so call sites (including the mocked-Supabase vitest suite at
+// src/lib/bot/__tests__/arbitrage/pair-monitor.test.ts) don't need to change
+// — see the NOTE on isDailyCircuitOpen in risk-guard.ts for the same caveat:
+// that test's bot_accounts mock is no longer exercised by this path.
 async function getBrokerSource(sb: SupabaseClient, botAccountId: string): Promise<string | null> {
-  const { data } = await sb
+  void sb;
+  const pg = getPgClient();
+  const { data } = await pg
     .from('bot_accounts')
     .select('account_id')
     .eq('id', botAccountId)
-    .maybeSingle();
-  return (data?.account_id as string) ?? null;
+    .single();
+  return ((data as { account_id: string } | null)?.account_id as string) ?? null;
 }
 
 async function emitOpenCommand(
@@ -77,15 +85,19 @@ async function emitOpenCommand(
   direction: 'BUY' | 'SELL',
   signalMeta: Record<string, unknown>,
 ): Promise<void> {
-  // Necesitamos el bot_id del slow_bot_account
-  const { data: slowAcc } = await sb
+  // bot_accounts + bot_commands are in-scope (own Postgres);
+  // arbitrage_latency_pairs below is not one of the 16 migrated tables and
+  // stays on the injected `sb` (Supabase).
+  const pg = getPgClient();
+  const { data: slowAccRaw } = await pg
     .from('bot_accounts')
     .select('bot_id')
     .eq('id', pair.slow_bot_account_id)
-    .maybeSingle();
+    .single();
+  const slowAcc = slowAccRaw as { bot_id: string } | null;
   if (!slowAcc) throw new Error('slow_bot_account no encontrado');
 
-  await sb.from('bot_commands').insert({
+  await pg.from('bot_commands').insert({
     bot_id:        slowAcc.bot_id,
     command_type:  'OPEN_POSITION',
     target_scope:  pair.slow_bot_account_id,
@@ -106,19 +118,26 @@ async function emitOpenCommand(
     .eq('id', pair.id);
 }
 
+// bot_accounts + bot_commands are in-scope (own Postgres) and are the only
+// tables this function touches, so `sb` is kept unused in the signature
+// purely to avoid touching call sites/tests (see NOTE on getBrokerSource
+// above).
 async function closeExpiredPosition(
   sb: SupabaseClient,
   pair: ArbPair,
   positionRef: string,
 ): Promise<void> {
-  const { data: slowAcc } = await sb
+  void sb;
+  const pg = getPgClient();
+  const { data: slowAccRaw } = await pg
     .from('bot_accounts')
     .select('bot_id')
     .eq('id', pair.slow_bot_account_id)
-    .maybeSingle();
+    .single();
+  const slowAcc = slowAccRaw as { bot_id: string } | null;
   if (!slowAcc) return;
 
-  await sb.from('bot_commands').insert({
+  await pg.from('bot_commands').insert({
     bot_id:        slowAcc.bot_id,
     command_type:  'CLOSE_POSITION',
     target_scope:  pair.slow_bot_account_id,

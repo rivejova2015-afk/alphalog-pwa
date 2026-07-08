@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getCoinarbAgent } from '@/lib/coinarb/agent';
+import { getPgClient } from '@/lib/pg/client';
 import { safeNumber } from '@/lib/coinarb/queries';
 
 interface HeatCell {
@@ -21,16 +22,22 @@ export async function GET() {
     return NextResponse.json({ venues: [], symbols: [], cells: [], totalNotionalUsd: 0 });
   }
 
-  const { data, error } = await supabase
+  // coinarb_positions is in-scope (own Postgres); the shim has no `.limit()`,
+  // so fetch matching rows and cap in JS.
+  const pg = getPgClient();
+  const { data: rawRows, error } = await pg
     .from('coinarb_positions')
     .select('symbol, direction, side, size_usd, status')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .eq('status', 'OPEN')
-    .is('deleted_at', null)
-    .limit(500);
+    .is('deleted_at', null);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const data = ((rawRows ?? []) as unknown as {
+    symbol: string | null; direction: string | null; side: string | null; size_usd: number | string | null; status: string;
+  }[]).slice(0, 500);
 
   const cells = new Map<string, HeatCell>();
   const venues = new Set<string>();
@@ -38,7 +45,7 @@ export async function GET() {
   let totalNotional = 0;
 
   // Spot-only bot: venue is constant 'spot', heatmap collapses to spot×{BTC,ETH,SOL}×{BUY,SELL}
-  for (const p of data ?? []) {
+  for (const p of data) {
     const venue = 'spot';
     const symbol = (typeof p.symbol === 'string' && p.symbol) ? p.symbol : 'unknown';
     const dir = p.direction ?? p.side;

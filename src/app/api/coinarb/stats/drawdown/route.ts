@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getCoinarbAgent } from '@/lib/coinarb/agent';
+import { getPgClient } from '@/lib/pg/client';
 import { safeNumber } from '@/lib/coinarb/queries';
 
 const WINDOW_DAYS = 14;
@@ -26,21 +27,29 @@ export async function GET() {
 
   const startCapital = Number(agent.starting_capital_usd ?? 0) || 0;
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const sinceMs = new Date(since).getTime();
 
-  const { data, error } = await supabase
+  // coinarb_positions is in-scope (own Postgres); the shim has no
+  // `.not(col,'is',null)` / `.gte()` / `.limit()`. Fetch ordered rows (order
+  // is preserved from the shim's SQL ORDER BY) and apply the not-null +
+  // since-cutoff filter and the cap in JS. Both sides of the date comparison
+  // go through `new Date(...).getTime()` — the pg driver auto-parses
+  // `closed_at` (timestamptz) into a Date at runtime, and a bare
+  // `Date >= string` comparison silently always evaluates false.
+  const pg = getPgClient();
+  const { data: rawRows, error } = await pg
     .from('coinarb_positions')
     .select('pnl_usd, closed_at')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .is('deleted_at', null)
-    .not('closed_at', 'is', null)
-    .gte('closed_at', since)
-    .order('closed_at', { ascending: true })
-    .limit(5000);
+    .order('closed_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = data ?? [];
+  const rows = ((rawRows ?? []) as unknown as { pnl_usd: number | string | null; closed_at: string | Date | null }[])
+    .filter((p) => p.closed_at !== null && new Date(p.closed_at).getTime() >= sinceMs)
+    .slice(0, 5000);
   if (rows.length === 0 || startCapital <= 0) {
     return NextResponse.json({ window: `${WINDOW_DAYS}d`, points: [], maxDrawdownPct: 0, currentDrawdownPct: 0, startCapital });
   }

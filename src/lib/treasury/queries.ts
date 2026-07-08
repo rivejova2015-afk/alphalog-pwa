@@ -5,6 +5,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { getPgClient } from '@/lib/pg/client';
 import { logError } from '@/lib/log';
 
 const supabase = createClient(
@@ -101,9 +102,15 @@ export interface TreasuryPayout {
 
 /**
  * Get all accounts for current user (non-deleted)
+ *
+ * accounts is in-scope (own Postgres). This function has no user_id filter
+ * even before the migration (relies on the caller/RLS elsewhere) — that
+ * pre-existing behavior is preserved as-is here, just against pg instead of
+ * Supabase.
  */
 export async function getAccounts(): Promise<Account[]> {
-  const { data, error } = await supabase
+  const pg = getPgClient();
+  const { data, error } = await pg
     .from('accounts')
     .select('id, name, account_size, current_balance, phase_status, withdrawals_enabled')
     .is('deleted_at', null)
@@ -114,7 +121,7 @@ export async function getAccounts(): Promise<Account[]> {
     return [];
   }
 
-  return data || [];
+  return (data as unknown as Account[] | null) || [];
 }
 
 /**
@@ -123,10 +130,12 @@ export async function getAccounts(): Promise<Account[]> {
 export async function getAccountsByIds(ids: string[]): Promise<Account[]> {
   if (!ids.length) return [];
 
-  const { data, error } = await supabase
+  // accounts is in-scope (own Postgres); the shim has no `.in()`, so fetch
+  // non-deleted rows and filter by id membership in JS.
+  const pg = getPgClient();
+  const { data, error } = await pg
     .from('accounts')
     .select('id, name, account_size, current_balance, phase_status, withdrawals_enabled')
-    .in('id', ids)
     .is('deleted_at', null);
 
   if (error) {
@@ -134,14 +143,16 @@ export async function getAccountsByIds(ids: string[]): Promise<Account[]> {
     return [];
   }
 
-  return data || [];
+  const idSet = new Set(ids);
+  return ((data as unknown as Account[] | null) || []).filter((a) => idSet.has(a.id));
 }
 
 /**
  * Get single account by ID
  */
 export async function getAccount(id: string): Promise<Account | null> {
-  const { data, error } = await supabase
+  const pg = getPgClient();
+  const { data, error } = await pg
     .from('accounts')
     .select('id, name, account_size, current_balance, phase_status, withdrawals_enabled')
     .eq('id', id)
@@ -149,14 +160,11 @@ export async function getAccount(id: string): Promise<Account | null> {
     .single();
 
   if (error) {
-    if (error.code !== 'PGRST116') {
-      // PGRST116 = no rows returned
-      await logTreasuryError('Error fetching account:', error);
-    }
+    await logTreasuryError('Error fetching account:', error);
     return null;
   }
 
-  return data || null;
+  return (data as unknown as Account | null) || null;
 }
 
 /**
@@ -260,20 +268,25 @@ export async function upsertTreasuryConfig(
  * Used for drawdown and health score calculations
  */
 export async function getAccountTrades(accountId: string): Promise<Trade[]> {
-  const { data, error } = await supabase
+  // trades is in-scope (own Postgres). The shim's `.order()` has no
+  // `nullsFirst` option — dropped rather than emulated in JS, since Postgres'
+  // own default null ordering for `ASC` is already NULLS LAST, matching the
+  // original `{ ascending: true, nullsFirst: false }` intent exactly.
+  const pg = getPgClient();
+  const { data, error } = await pg
     .from('trades')
     .select('id, account_id, entry_date, exit_date, created_at, pnl, status')
     .eq('account_id', accountId)
     .eq('status', 'Closed')
     .is('deleted_at', null)
-    .order('exit_date', { ascending: true, nullsFirst: false });
+    .order('exit_date', { ascending: true });
 
   if (error) {
     await logTreasuryError('Error fetching account trades:', error);
     return [];
   }
 
-  return data || [];
+  return (data as unknown as Trade[] | null) || [];
 }
 
 /**
@@ -281,19 +294,22 @@ export async function getAccountTrades(accountId: string): Promise<Trade[]> {
  * Used for aggregated calculations
  */
 export async function getAllTrades(): Promise<Trade[]> {
-  const { data, error } = await supabase
+  // trades is in-scope (own Postgres); see getAccountTrades() above re:
+  // dropping `nullsFirst` (Postgres' ASC default already sorts NULLs last).
+  const pg = getPgClient();
+  const { data, error } = await pg
     .from('trades')
     .select('id, account_id, entry_date, exit_date, created_at, pnl, status')
     .eq('status', 'Closed')
     .is('deleted_at', null)
-    .order('exit_date', { ascending: true, nullsFirst: false });
+    .order('exit_date', { ascending: true });
 
   if (error) {
     await logTreasuryError('Error fetching all trades:', error);
     return [];
   }
 
-  return data || [];
+  return (data as unknown as Trade[] | null) || [];
 }
 
 /**

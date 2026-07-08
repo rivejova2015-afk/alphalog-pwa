@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getPgClient } from '@/lib/pg/client';
 import { validateBearerToken } from '@/lib/security/timing';
 
 export const runtime = 'nodejs';
@@ -47,16 +48,20 @@ export async function POST(request: NextRequest) {
   if (!url || !key) return NextResponse.json({ error: 'Missing config' }, { status: 500 });
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const pg = getPgClient();
 
   // All crypto algorithms (regardless of status — we want to know if a paused
   // bot's process also died, since "paused" should still tick).
-  const { data: algos, error: algoErr } = await supabase
+  // algorithms + coinarb_telemetry are in-scope (own Postgres); app_logs
+  // below is not one of the 16 migrated tables and stays on Supabase.
+  const { data: algosRaw, error: algoErr } = await pg
     .from('algorithms')
     .select('id, user_id, name')
     .eq('market_type', 'crypto')
     .is('deleted_at', null);
 
   if (algoErr) return NextResponse.json({ error: algoErr.message }, { status: 500 });
+  const algos = algosRaw as unknown as { id: string; user_id: string; name: string }[] | null;
   if (!algos || algos.length === 0) return NextResponse.json({ ok: true, checked: 0 });
 
   // Per-user thresholds (Wave 5 item 22) — one query for every distinct
@@ -82,8 +87,8 @@ export async function POST(request: NextRequest) {
       .select('last_heartbeat_at')
       .eq('agent_id', algo.id)
       .order('last_heartbeat_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .single();
+    const tele = teleRaw as { last_heartbeat_at: string | null } | null;
 
     // No telemetry row at all → bot has never ticked. Treat as stale only if
     // the algorithm row is more than 10 minutes old (post-deploy boot window).

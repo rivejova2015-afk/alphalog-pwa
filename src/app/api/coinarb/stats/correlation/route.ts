@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getCoinarbAgent } from '@/lib/coinarb/agent';
+import { getPgClient } from '@/lib/pg/client';
 import { dayStartUtc, safeNumber } from '@/lib/coinarb/queries';
 
 const MAX_SYMBOLS = 6;
@@ -17,24 +18,36 @@ export async function GET() {
   }
 
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const sinceMs = new Date(since).getTime();
 
-  const { data, error } = await supabase
+  // coinarb_positions is in-scope (own Postgres); the shim has no
+  // `.not(col,'is',null)` / `.gte()` / `.limit()`. Fetch ordered rows and
+  // apply the not-null + since-cutoff filter and the cap in JS. Both sides
+  // of the date comparison go through `new Date(...).getTime()` — the pg
+  // driver auto-parses `closed_at` (timestamptz) into a Date at runtime, and
+  // a bare `Date >= string` comparison silently always evaluates false.
+  const pg = getPgClient();
+  const { data: rawRows, error } = await pg
     .from('coinarb_positions')
     .select('symbol, pnl_usd, closed_at')
     .eq('user_id', user.id)
     .eq('agent_id', agent.id)
     .is('deleted_at', null)
-    .not('closed_at', 'is', null)
-    .gte('closed_at', since)
-    .limit(2000);
+    .order('closed_at', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const data = ((rawRows ?? []) as unknown as {
+    symbol: string | null; pnl_usd: number | string | null; closed_at: string | Date | null;
+  }[])
+    .filter((p) => p.closed_at !== null && new Date(p.closed_at).getTime() >= sinceMs)
+    .slice(0, 2000);
 
   // Group daily pnl per symbol. Spot-only bot — symbol is the underlying coin already.
   const perSymbol = new Map<string, Map<string, number>>(); // symbol → day → pnl
   const counts = new Map<string, number>();
 
-  for (const p of data ?? []) {
+  for (const p of data) {
     const symbol = (typeof p.symbol === 'string' && p.symbol) ? p.symbol.replace(/-(USD|USDT)$/, '') : 'unknown';
     const pnl = safeNumber(p.pnl_usd) ?? 0;
     const closedAt = p.closed_at ? new Date(p.closed_at).getTime() : NaN;
