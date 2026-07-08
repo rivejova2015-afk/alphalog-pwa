@@ -14,10 +14,24 @@
 //      lookup.
 //   7. evaluateAll output count matches the registered check count.
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { evaluateAll, computeGates } from "../runner";
 import type { CheckContext, GateScore } from "../types";
+
+// `algorithms`, `bot_command_status`, `bot_commands` and `algo_paper_trades`
+// are in-scope (own Postgres) — loadAlgorithm/loadOps now read them via
+// getPgClient() instead of the injected `sb`. `backtest_jobs`,
+// `backtest_results`, `bot_telemetry`, `algorithm_deployments`,
+// `algorithm_quality_gate_results` and `algorithm_quality_score` stay on the
+// injected Supabase client (out of scope for this migration).
+let pgTables: Record<string, ReturnType<typeof makeAwaitableChain>> = {};
+
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({
+    from: (table: string) => pgTables[table] ?? makeAwaitableChain({ data: null, error: null }),
+  }),
+}));
 
 const emptyContext: CheckContext = {
   algorithm: {
@@ -92,20 +106,27 @@ const VALID_ALGO_ROW = {
 };
 
 describe("computeGates — orchestrator", () => {
+  beforeEach(() => {
+    pgTables = {};
+  });
+
   it("throws when the algorithm row is not found", async () => {
-    const sb = makeSb({
+    pgTables = {
       algorithms: makeAwaitableChain({ data: null, error: { message: "not found" } }),
-    });
+    };
+    const sb = makeSb({});
     await expect(computeGates(sb, "missing", "u1")).rejects.toThrow(/Algorithm missing not found/);
   });
 
   it("throws when inserting gate results errors", async () => {
-    const sb = makeSb({
+    pgTables = {
       algorithms:                       makeAwaitableChain({ data: VALID_ALGO_ROW, error: null }),
+      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
+      algo_paper_trades:                makeAwaitableChain({ data: null, error: null }),
+    };
+    const sb = makeSb({
       backtest_jobs:                    makeAwaitableChain({ data: [], error: null }),
       bot_telemetry:                    makeAwaitableChain({ data: [], error: null }),
-      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
-      algo_paper_trades:                makeAwaitableChain({ data: null, error: null, count: 0 }),
       algorithm_quality_gate_results:   makeAwaitableChain({ data: null, error: { message: "rls denied" } }),
       algorithm_quality_score:          makeAwaitableChain({ data: null, error: null }),
     });
@@ -113,12 +134,14 @@ describe("computeGates — orchestrator", () => {
   });
 
   it("throws when fetching the score row errors", async () => {
-    const sb = makeSb({
+    pgTables = {
       algorithms:                       makeAwaitableChain({ data: VALID_ALGO_ROW, error: null }),
+      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
+      algo_paper_trades:                makeAwaitableChain({ data: null, error: null }),
+    };
+    const sb = makeSb({
       backtest_jobs:                    makeAwaitableChain({ data: [], error: null }),
       bot_telemetry:                    makeAwaitableChain({ data: [], error: null }),
-      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
-      algo_paper_trades:                makeAwaitableChain({ data: null, error: null, count: 0 }),
       algorithm_quality_gate_results:   makeAwaitableChain({ data: null, error: null }),
       algorithm_quality_score:          makeAwaitableChain({ data: null, error: { message: "score boom" } }),
     });
@@ -126,12 +149,14 @@ describe("computeGates — orchestrator", () => {
   });
 
   it("returns a synthesized score when the score row is null", async () => {
-    const sb = makeSb({
+    pgTables = {
       algorithms:                       makeAwaitableChain({ data: VALID_ALGO_ROW, error: null }),
+      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
+      algo_paper_trades:                makeAwaitableChain({ data: null, error: null }),
+    };
+    const sb = makeSb({
       backtest_jobs:                    makeAwaitableChain({ data: [], error: null }),
       bot_telemetry:                    makeAwaitableChain({ data: [], error: null }),
-      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
-      algo_paper_trades:                makeAwaitableChain({ data: null, error: null, count: 0 }),
       algorithm_quality_gate_results:   makeAwaitableChain({ data: null, error: null }),
       algorithm_quality_score:          makeAwaitableChain({ data: null, error: null }),
     });
@@ -153,12 +178,14 @@ describe("computeGates — orchestrator", () => {
       last_computed_at:  "2026-06-12T10:00:00Z",
       tier:              "TIER_1",
     };
-    const sb = makeSb({
+    pgTables = {
       algorithms:                       makeAwaitableChain({ data: VALID_ALGO_ROW, error: null }),
+      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
+      algo_paper_trades:                makeAwaitableChain({ data: null, error: null }),
+    };
+    const sb = makeSb({
       backtest_jobs:                    makeAwaitableChain({ data: [], error: null }),
       bot_telemetry:                    makeAwaitableChain({ data: [], error: null }),
-      bot_command_status:               makeAwaitableChain({ data: [], error: null }),
-      algo_paper_trades:                makeAwaitableChain({ data: null, error: null, count: 0 }),
       algorithm_quality_gate_results:   makeAwaitableChain({ data: null, error: null }),
       algorithm_quality_score:          makeAwaitableChain({ data: persistedScore, error: null }),
     });

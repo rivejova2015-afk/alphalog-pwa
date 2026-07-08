@@ -12,8 +12,33 @@ const PAIR: PairConfig = {
 
 interface MockState {
   positionsData: Array<{ id: string; ticket: number; open_time: string; bot_account_id: string }> | null;
-  algoData: { pnl_today: number | null; parameters?: unknown } | null;
 }
+
+// `algorithms` is in-scope (own Postgres) — isDailyCircuitOpen now reads it via
+// getPgClient() instead of the injected `sb`. pgState/vi.mock below stand in
+// for what used to be the `state.algoData` Supabase mock.
+const pgState = vi.hoisted(() => ({
+  algoData: null as { pnl_today: number | null; parameters?: unknown } | null,
+}));
+
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({
+    from(table: string) {
+      const chain = {
+        select() { return chain; },
+        eq() { return chain; },
+        single() { return chain; },
+        then(resolve: (v: unknown) => unknown) {
+          if (table === "algorithms") {
+            return resolve({ data: pgState.algoData, error: null });
+          }
+          return resolve({ data: null, error: null });
+        },
+      };
+      return chain;
+    },
+  }),
+}));
 
 let state: MockState;
 
@@ -24,7 +49,6 @@ function makeMockSupabase() {
         select() { return chain; },
         eq() { return chain; },
         async maybeSingle() {
-          if (table === "algorithms") return { data: state.algoData };
           return { data: null };
         },
         then(resolve: (v: unknown) => unknown) {
@@ -42,7 +66,8 @@ function makeMockSupabase() {
 
 describe("risk-guard", () => {
   beforeEach(() => {
-    state = { positionsData: null, algoData: null };
+    state = { positionsData: null };
+    pgState.algoData = null;
   });
 
   describe("listExpiredPositions", () => {
@@ -75,40 +100,40 @@ describe("risk-guard", () => {
 
   describe("isDailyCircuitOpen", () => {
     it("retorna open=true cuando no se encuentra el algorithm", async () => {
-      state.algoData = null;
+      pgState.algoData = null;
       const r = await isDailyCircuitOpen(makeMockSupabase() as never, "missing-id");
       expect(r.open).toBe(true);
       expect(r.reason).toContain("not found");
     });
 
     it("retorna open=false cuando pnl_today está dentro del límite (porcentaje)", async () => {
-      state.algoData = { pnl_today: -3 }; // -3% (porcentaje directo)
+      pgState.algoData = { pnl_today: -3 }; // -3% (porcentaje directo)
       const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
       expect(r.open).toBe(false);
     });
 
     it("retorna open=true cuando pnl_today <= -ddLimit (porcentaje)", async () => {
-      state.algoData = { pnl_today: -6 }; // -6%
+      pgState.algoData = { pnl_today: -6 }; // -6%
       const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
       expect(r.open).toBe(true);
       expect(r.reason).toContain("circuit breaker");
     });
 
     it("normaliza pnl_today cuando viene como fracción", async () => {
-      state.algoData = { pnl_today: -0.06 }; // -6% como fracción
+      pgState.algoData = { pnl_today: -0.06 }; // -6% como fracción
       const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
       expect(r.open).toBe(true);
     });
 
     it("respeta ddLimit custom", async () => {
-      state.algoData = { pnl_today: -8 };
+      pgState.algoData = { pnl_today: -8 };
       // Con ddLimit 10%, -8% no dispara
       const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.10);
       expect(r.open).toBe(false);
     });
 
     it("pnl_today no numérico se trata como 0", async () => {
-      state.algoData = { pnl_today: null };
+      pgState.algoData = { pnl_today: null };
       const r = await isDailyCircuitOpen(makeMockSupabase() as never, "algo-1", 0.05);
       expect(r.open).toBe(false);
     });

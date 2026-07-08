@@ -8,6 +8,54 @@ vi.mock("../../arbitrage/risk-guard", () => ({
   listExpiredPositions: (...args: unknown[]) => mockListExpired(...args),
 }));
 
+// `bot_accounts` + `bot_commands` are in-scope (own Postgres) — getBrokerSource,
+// emitOpenCommand and closeExpiredPosition now read/write them via
+// getPgClient() instead of the injected `sb`. This mock reads/writes the same
+// `state` object the Supabase mock below uses (declared further down in this
+// file; safe because the closures here only touch it lazily, at await-time
+// inside test bodies — never during module evaluation), so the existing
+// fastBrokerSource/slowBrokerSource/slowBotIdLookup/insertedCommands fixtures
+// keep working unchanged. `arbitrage_latency_pairs` and `live_market_data`
+// stay on the Supabase mock (out of scope for this migration).
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({
+    from(table: string) {
+      let idFilter: unknown;
+      const chain = {
+        select() { return chain; },
+        eq(col: string, val: unknown) {
+          if (col === "id") idFilter = val;
+          return chain;
+        },
+        single() { return chain; },
+        insert(rows: unknown) {
+          if (table === "bot_commands") {
+            const list = Array.isArray(rows) ? rows : [rows];
+            state.insertedCommands.push(...list);
+          }
+          return chain;
+        },
+        then(resolve: (v: unknown) => unknown) {
+          if (table === "bot_accounts") {
+            if (idFilter === "fast-bot-1") {
+              return resolve({ data: { account_id: state.fastBrokerSource, bot_id: "bot-fast" }, error: null });
+            }
+            if (idFilter === "slow-bot-1") {
+              return resolve({ data: { account_id: state.slowBrokerSource, bot_id: state.slowBotIdLookup }, error: null });
+            }
+            return resolve({ data: null, error: null });
+          }
+          if (table === "bot_commands") {
+            return resolve({ data: null, error: null });
+          }
+          return resolve({ data: null, error: null });
+        },
+      };
+      return chain;
+    },
+  }),
+}));
+
 import { runIteration, type ArbPair } from "../../arbitrage/pair-monitor";
 
 function basePair(overrides: Partial<ArbPair> = {}): ArbPair {
