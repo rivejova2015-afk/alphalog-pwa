@@ -42,6 +42,7 @@ import { DecisionLogger } from '../ops/decision-logger.js';
 import { CommandPoller } from '../ops/command-poller.js';
 import { syncAgentHeartbeat } from '../ops/agent-heartbeat.js';
 import { getSupabase } from '../supabase.js';
+import { getPg } from '../pg-client.js';
 import {
   SYMBOLS, TIMEFRAMES, LOOP_INTERVAL_MS, PAPER_MODE, TRADING_PAUSED,
   COINARB_AGENT_ID, COINARB_USER_ID,
@@ -225,20 +226,13 @@ export class CoinarbCoordinator {
         // through. Better a rare duplicate symbol than blocking trades when
         // Supabase wobbles for 5s.
         try {
-          const supabase = getSupabase();
-          const { data, error } = await supabase
-            .from('coinarb_positions')
-            .select('strategy_id')
-            .eq('agent_id', COINARB_AGENT_ID)
-            .eq('symbol', symbol)
-            .eq('status', 'OPEN')
-            .neq('strategy_id', byStrategy)
-            .limit(1);
-          if (error) {
-            console.warn(`[loop] mutex check error for ${symbol}:`, error.message);
-            return false;
-          }
-          return (data?.length ?? 0) > 0;
+          const pg = getPg();
+          const rows = await pg`
+            SELECT strategy_id FROM coinarb_positions
+            WHERE agent_id = ${COINARB_AGENT_ID} AND symbol = ${symbol} AND status = 'OPEN' AND strategy_id != ${byStrategy}
+            LIMIT 1
+          `;
+          return rows.length > 0;
         } catch (err) {
           console.warn(`[loop] mutex check threw for ${symbol}:`, err);
           return false;
@@ -361,28 +355,27 @@ export class CoinarbCoordinator {
     }
   }
 
-  private async syncAlgorithmStatus(supabase: ReturnType<typeof getSupabase>, paused: boolean): Promise<void> {
+  private async syncAlgorithmStatus(paused: boolean): Promise<void> {
     // Sync algorithms.status with the bot's actual runtime state so the UI
     // doesn't lie. Only writes when status actually flips — a passive bot
     // shouldn't churn updated_at every 15s.
     const desired: 'live' | 'paused' = paused ? 'paused' : 'live';
     if (desired === this.lastSyncedStatus) return;
-    const { error } = await supabase
-      .from('algorithms')
-      .update({ status: desired, updated_at: new Date().toISOString() })
-      .eq('id', COINARB_AGENT_ID);
-    if (error) {
-      console.warn(`[loop] algorithms.status sync failed:`, error.message);
-      return;
+    try {
+      const pg = getPg();
+      await pg`UPDATE algorithms SET status = ${desired}, updated_at = ${new Date().toISOString()} WHERE id = ${COINARB_AGENT_ID}`;
+      this.lastSyncedStatus = desired;
+      console.log(`[loop] algorithms.status -> ${desired}`);
+    } catch (err) {
+      console.warn(`[loop] algorithms.status sync failed:`, err instanceof Error ? err.message : String(err));
     }
-    this.lastSyncedStatus = desired;
-    console.log(`[loop] algorithms.status -> ${desired}`);
   }
 
   private async flushTelemetry(fearGreed: number): Promise<void> {
     if (!COINARB_USER_ID) return;
     try {
       const supabase = getSupabase();
+      const pg = getPg();
       const btc = this.coinbase.getPrice('BTC');
 
       // Overall paused flag is true if user paused OR any runner tripped OR any
@@ -394,7 +387,7 @@ export class CoinarbCoordinator {
         if (cb.pausedUntil !== null && cb.pausedUntil > Date.now()) anyPaused = true;
         if (runner.dailyTracker.isTotalCapReached()) anyPaused = true;
       }
-      await this.syncAlgorithmStatus(supabase, anyPaused);
+      await this.syncAlgorithmStatus(anyPaused);
 
       // Open positions count is global (across all runners) — it's a shared
       // wallet snapshot, not a per-strategy stat.
@@ -407,7 +400,7 @@ export class CoinarbCoordinator {
         const cbState = runner.circuitBreaker.snapshot;
         const daily = runner.dailyTracker.current.data;
         const tradesBySymbol = runner.dailyTracker.getAllCountsBySymbol();
-        await supabase.from('coinarb_telemetry').upsert({
+        const row = {
           user_id: COINARB_USER_ID,
           agent_id: COINARB_AGENT_ID,
           strategy_id: runner.id,
@@ -440,7 +433,33 @@ export class CoinarbCoordinator {
           // column too so analytics queries can `WHERE regime = ...` without
           // jsonb extraction.
           regime: this.lastRegime,
-        }, { onConflict: 'agent_id,strategy_id' });
+        };
+        await pg`
+          INSERT INTO coinarb_telemetry ${pg(row)}
+          ON CONFLICT (agent_id, strategy_id) DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            equity_usd = EXCLUDED.equity_usd,
+            available_balance_usd = EXCLUDED.available_balance_usd,
+            open_positions_count = EXCLUDED.open_positions_count,
+            total_pnl_usd = EXCLUDED.total_pnl_usd,
+            win_rate = EXCLUDED.win_rate,
+            ws_coinbase_connected = EXCLUDED.ws_coinbase_connected,
+            ws_binance_connected = EXCLUDED.ws_binance_connected,
+            ws_binance_connected_spot = EXCLUDED.ws_binance_connected_spot,
+            btc_spot_price = EXCLUDED.btc_spot_price,
+            consecutive_losses = EXCLUDED.consecutive_losses,
+            daily_trades_count = EXCLUDED.daily_trades_count,
+            daily_wins = EXCLUDED.daily_wins,
+            daily_losses = EXCLUDED.daily_losses,
+            phase_current = EXCLUDED.phase_current,
+            risk_pct_current = EXCLUDED.risk_pct_current,
+            capital_current = EXCLUDED.capital_current,
+            fear_greed_index = EXCLUDED.fear_greed_index,
+            paused_until = EXCLUDED.paused_until,
+            last_heartbeat_at = EXCLUDED.last_heartbeat_at,
+            payload = EXCLUDED.payload,
+            regime = EXCLUDED.regime
+        `;
       }
       // Mirror heartbeat to coinarb_agents (legacy table still consumed by the
       // /intelligence/agents dashboard). One write per tick — best-effort.

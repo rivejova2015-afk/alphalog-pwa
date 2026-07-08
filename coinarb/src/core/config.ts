@@ -156,19 +156,13 @@ export function applyParameters(params: Record<string, unknown>): string[] {
 // Precedence: DB row → env var → hardcoded default. DB failure keeps env values.
 // =============================================================================
 export async function loadConfigFromDb(): Promise<void> {
-  const { getSupabase } = await import('../supabase.js');
+  const { getPg } = await import('../pg-client.js');
   try {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('algorithms')
-      .select('parameters, engine_config')
-      .eq('id', COINARB_AGENT_ID)
-      .maybeSingle();
+    const pg = getPg();
+    const [data] = await pg<{ parameters: Record<string, unknown> | null; engine_config: Record<string, unknown> | null }[]>`
+      SELECT parameters, engine_config FROM algorithms WHERE id = ${COINARB_AGENT_ID}
+    `;
 
-    if (error) {
-      console.warn('[config] algorithms row lookup failed, keeping env defaults:', error.message);
-      return;
-    }
     if (!data) {
       console.warn(`[config] no algorithms row for id=${COINARB_AGENT_ID}, keeping env defaults`);
       return;

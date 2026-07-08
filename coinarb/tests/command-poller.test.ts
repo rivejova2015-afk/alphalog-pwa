@@ -1,68 +1,58 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock @supabase/supabase-js's createClient so getSupabase() inside the
-// poller resolves against our fake client. We build a fluent query builder
-// whose terminal methods return the data we want per query.
-type QueueEntry = { table: string; ops: string[]; result: { data: unknown; error?: { message: string } | null } };
-const queryQueue: QueueEntry[] = [];
-const inserts: Record<string, unknown>[] = [];
-const updates: { table: string; payload: Record<string, unknown>; eqs: [string, unknown][] }[] = [];
+// Mock the pg-client module so getPg() inside the poller resolves against a
+// fake tagged-template `sql` function. postgres.js tagged calls are invoked
+// as `fn(stringsArray, ...values)` (stringsArray has a `.raw` property); the
+// dynamic `pg(row)` insert helper is invoked as a plain function call with a
+// single plain-object argument (no `.raw`). We tell those apart and route
+// SELECT/UPDATE/INSERT into queues the tests can assert against.
+type Row = Record<string, unknown>;
 
-function makeBuilder(table: string) {
-  const ops: string[] = [];
-  const eqs: [string, unknown][] = [];
+const selectQueue: Row[][] = [];
+const inserts: { table: string; row: Row }[] = [];
+const updates: { text: string; values: unknown[] }[] = [];
 
-  const builder: {
-    [k: string]: (...args: unknown[]) => unknown;
-  } & PromiseLike<unknown> = {
-    select(_cols: string) { ops.push(`select:${_cols}`); return builder; },
-    eq(col: string, val: unknown) { ops.push(`eq:${col}=${val}`); eqs.push([col, val]); return builder; },
-    in(col: string, vals: unknown[]) { ops.push(`in:${col}=${JSON.stringify(vals)}`); return builder; },
-    order(col: string, _opts?: unknown) { ops.push(`order:${col}`); return builder; },
-    limit(n: number) { ops.push(`limit:${n}`); return builder; },
-    update(payload: Record<string, unknown>) {
-      ops.push('update');
-      updates.push({ table, payload, eqs });
-      return builder;
-    },
-    insert(payload: Record<string, unknown>) {
-      ops.push('insert');
-      inserts.push({ table, ...payload });
-      // insert resolves to { error: null }
-      return Promise.resolve({ error: null });
-    },
-    maybeSingle() { ops.push('maybeSingle'); return resolve(); },
-    then(onFulfilled: (v: unknown) => unknown) { return resolve().then(onFulfilled); },
-  };
-
-  function resolve() {
-    const next = queryQueue.shift();
-    if (!next || next.table !== table) {
-      return Promise.resolve({ data: null, error: null });
-    }
-    return Promise.resolve(next.result);
-  }
-
-  return builder;
+function isTemplateStrings(x: unknown): x is TemplateStringsArray {
+  return Array.isArray(x) && 'raw' in (x as object);
 }
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({
-    from: (table: string) => makeBuilder(table),
-  }),
+function mockSql(stringsOrRow: TemplateStringsArray | Row, ...values: unknown[]) {
+  if (!isTemplateStrings(stringsOrRow)) {
+    // pg(row) dynamic-insert helper — return a marker fragment carrying the row.
+    return { __insertRow: stringsOrRow };
+  }
+
+  const text = stringsOrRow.join(' ? ').replace(/\s+/g, ' ').trim();
+
+  if (/^SELECT/i.test(text)) {
+    return Promise.resolve(selectQueue.shift() ?? []);
+  }
+  if (/^UPDATE/i.test(text)) {
+    updates.push({ text, values });
+    return Promise.resolve([]);
+  }
+  if (/^INSERT/i.test(text)) {
+    const fragment = values.find(
+      (v): v is { __insertRow: Row } => !!v && typeof v === 'object' && '__insertRow' in (v as object),
+    );
+    const table = /INSERT INTO (\w+)/i.exec(text)?.[1] ?? 'unknown';
+    inserts.push({ table, row: fragment?.__insertRow ?? {} });
+    return Promise.resolve([]);
+  }
+  return Promise.resolve([]);
+}
+
+vi.mock('../src/pg-client.js', () => ({
+  getPg: () => mockSql,
 }));
 
 // Now safe to import the poller — the import will pick up our mock.
 const { CommandPoller } = await import('../src/ops/command-poller.js');
 const config = await import('../src/core/config.js');
 
-// Required by getSupabase() before it's called.
-process.env.SUPABASE_URL ??= 'http://test';
-process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'test-key';
-
 describe('CommandPoller.process', () => {
   beforeEach(() => {
-    queryQueue.length = 0;
+    selectQueue.length = 0;
     inserts.length = 0;
     updates.length = 0;
     if (config.TRADING_PAUSED) config.setTradingPaused(false);
@@ -73,63 +63,45 @@ describe('CommandPoller.process', () => {
   });
 
   it('update_parameters applies thresholds and acks DONE', async () => {
-    queryQueue.push({
-      table: 'bot_commands',
-      ops: [],
-      result: {
-        data: [{
-          id: 'cmd-1', bot_id: 'bot-a', command_type: 'update_parameters',
-          payload: { parameters: { mtf_confidence_min: 0.42 } },
-          status: 'pending', created_at: '2026-01-01',
-        }],
-        error: null,
-      },
-    });
+    selectQueue.push([{
+      id: 'cmd-1', bot_id: 'bot-a', command_type: 'update_parameters',
+      payload: { parameters: { mtf_confidence_min: 0.42 } },
+      status: 'pending', created_at: '2026-01-01',
+    }]);
 
     const p = new CommandPoller();
     // call the private poll() via type bypass; cleanest path for unit test
     await (p as unknown as { poll: () => Promise<void> }).poll();
 
     expect(config.MTF_CONFIDENCE_MIN).toBe(0.42);
-    expect(updates.find(u => u.table === 'bot_commands' && u.payload.status === 'DONE')).toBeTruthy();
+    const bcUpdate = updates.find(u => /bot_commands/i.test(u.text));
+    expect(bcUpdate).toBeTruthy();
+    expect(bcUpdate?.values[0]).toBe('DONE');
     const ack = inserts.find(i => i.table === 'bot_command_status');
     expect(ack).toBeTruthy();
-    expect((ack as Record<string, unknown>).status).toBe('DONE');
+    expect(ack?.row.status).toBe('DONE');
   });
 
   it('pause command flips TRADING_PAUSED and acks DONE', async () => {
-    queryQueue.push({
-      table: 'bot_commands',
-      ops: [],
-      result: {
-        data: [{
-          id: 'cmd-2', bot_id: 'bot-a', command_type: 'pause',
-          payload: { source: 'ui' }, status: 'pending', created_at: '2026-01-01',
-        }],
-        error: null,
-      },
-    });
+    selectQueue.push([{
+      id: 'cmd-2', bot_id: 'bot-a', command_type: 'pause',
+      payload: { source: 'ui' }, status: 'pending', created_at: '2026-01-01',
+    }]);
 
     const p = new CommandPoller();
     await (p as unknown as { poll: () => Promise<void> }).poll();
 
     expect(config.TRADING_PAUSED).toBe(true);
-    expect(updates.find(u => u.payload.status === 'DONE')).toBeTruthy();
+    const bcUpdate = updates.find(u => /bot_commands/i.test(u.text));
+    expect(bcUpdate?.values[0]).toBe('DONE');
   });
 
   it('resume command flips TRADING_PAUSED back to false', async () => {
     config.setTradingPaused(true);
-    queryQueue.push({
-      table: 'bot_commands',
-      ops: [],
-      result: {
-        data: [{
-          id: 'cmd-3', bot_id: 'bot-a', command_type: 'resume',
-          payload: { source: 'ui' }, status: 'pending', created_at: '2026-01-01',
-        }],
-        error: null,
-      },
-    });
+    selectQueue.push([{
+      id: 'cmd-3', bot_id: 'bot-a', command_type: 'resume',
+      payload: { source: 'ui' }, status: 'pending', created_at: '2026-01-01',
+    }]);
 
     const p = new CommandPoller();
     await (p as unknown as { poll: () => Promise<void> }).poll();
@@ -137,30 +109,23 @@ describe('CommandPoller.process', () => {
   });
 
   it('unsupported command_type acks FAILED with explanatory message', async () => {
-    queryQueue.push({
-      table: 'bot_commands',
-      ops: [],
-      result: {
-        data: [{
-          id: 'cmd-4', bot_id: 'bot-a', command_type: 'rocket_launch',
-          payload: {}, status: 'pending', created_at: '2026-01-01',
-        }],
-        error: null,
-      },
-    });
+    selectQueue.push([{
+      id: 'cmd-4', bot_id: 'bot-a', command_type: 'rocket_launch',
+      payload: {}, status: 'pending', created_at: '2026-01-01',
+    }]);
 
     const p = new CommandPoller();
     await (p as unknown as { poll: () => Promise<void> }).poll();
 
-    const update = updates.find(u => u.table === 'bot_commands');
-    expect(update?.payload.status).toBe('FAILED');
-    const ack = inserts.find(i => i.table === 'bot_command_status') as Record<string, unknown>;
-    expect(ack.status).toBe('FAILED');
-    expect((ack.message as string)).toContain('unsupported command_type: rocket_launch');
+    const bcUpdate = updates.find(u => /bot_commands/i.test(u.text));
+    expect(bcUpdate?.values[0]).toBe('FAILED');
+    const ack = inserts.find(i => i.table === 'bot_command_status');
+    expect(ack?.row.status).toBe('FAILED');
+    expect(ack?.row.message as string).toContain('unsupported command_type: rocket_launch');
   });
 
   it('no commands → no insert/update activity', async () => {
-    queryQueue.push({ table: 'bot_commands', ops: [], result: { data: [], error: null } });
+    selectQueue.push([]);
     const p = new CommandPoller();
     await (p as unknown as { poll: () => Promise<void> }).poll();
     expect(inserts).toHaveLength(0);
@@ -168,14 +133,14 @@ describe('CommandPoller.process', () => {
   });
 
   it('inFlight guard prevents concurrent poll runs', async () => {
-    queryQueue.push({ table: 'bot_commands', ops: [], result: { data: [], error: null } });
-    queryQueue.push({ table: 'bot_commands', ops: [], result: { data: [], error: null } });
+    selectQueue.push([]);
+    selectQueue.push([]);
 
     const p = new CommandPoller();
     const poll = (p as unknown as { poll: () => Promise<void> }).poll;
-    // Fire two polls concurrently; the second should bail before hitting Supabase.
+    // Fire two polls concurrently; the second should bail before hitting Postgres.
     const [, ] = await Promise.all([poll.call(p), poll.call(p)]);
     // Only one of the queue entries should have been consumed.
-    expect(queryQueue.length).toBe(1);
+    expect(selectQueue.length).toBe(1);
   });
 });

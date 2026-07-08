@@ -45,7 +45,6 @@ import { checkRiskReward } from '../math/kelly-sizer.js';
 import { DecisionLogger } from '../ops/decision-logger.js';
 import { notify, formatEntry, formatExit, formatBreaker } from '../ops/notify-alphalog.js';
 import { buildSmcSignalRow, persistSmcSignal } from '../ops/smc-signal-persist.js';
-import { getSupabase } from '../supabase.js';
 import {
   ARB_GAP_MIN_PCT, RR_MIN, PAPER_MODE, MTF_CONFIDENCE_MIN, TRADING_PAUSED,
   COINARB_AGENT_ID, COINARB_USER_ID,
@@ -253,7 +252,6 @@ export class StrategyRunner {
 
     if (COINARB_USER_ID) {
       void persistSmcSignal(
-        getSupabase(),
         buildSmcSignalRow({
           userId: COINARB_USER_ID,
           agentId: COINARB_AGENT_ID,

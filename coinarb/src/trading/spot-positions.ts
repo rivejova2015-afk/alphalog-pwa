@@ -12,6 +12,7 @@
 
 import { COINARB_AGENT_ID, COINARB_USER_ID, type Symbol } from '../core/config.js';
 import { getSupabase } from '../supabase.js';
+import { getPg } from '../pg-client.js';
 
 /**
  * Strategy id stamped on every position/trade/decision row this code path
@@ -92,12 +93,13 @@ function ensureUserId(): string {
 export async function openPosition(input: OpenPositionInput): Promise<OpenPositionRow> {
   const userId = ensureUserId();
   const supabase = getSupabase();
+  const pg = getPg();
   const now = new Date().toISOString();
   const strategyId: StrategyId = input.strategyId ?? 'A';
 
-  const { data: pos, error } = await supabase
-    .from('coinarb_positions')
-    .insert({
+  let pos: OpenPositionRow | undefined;
+  try {
+    const insertRow: Record<string, unknown> = {
       user_id: userId,
       agent_id: COINARB_AGENT_ID,
       strategy_id: strategyId,
@@ -117,11 +119,17 @@ export async function openPosition(input: OpenPositionInput): Promise<OpenPositi
       entry_reason: input.entryReason,
       status: 'OPEN',
       opened_at: now,
-    })
-    .select('id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at')
-    .single();
+    };
+    const [row] = await pg<OpenPositionRow[]>`
+      INSERT INTO coinarb_positions ${pg(insertRow)}
+      RETURNING id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at
+    `;
+    pos = row;
+  } catch (err) {
+    throw new Error(`[spot-positions] open failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
-  if (error || !pos) throw new Error(`[spot-positions] open failed: ${error?.message}`);
+  if (!pos) throw new Error('[spot-positions] open failed: no row returned');
 
   await supabase.from('coinarb_trades').insert({
     user_id: userId,
@@ -145,40 +153,66 @@ export async function openPosition(input: OpenPositionInput): Promise<OpenPositi
   return pos as OpenPositionRow;
 }
 
+interface ClosePositionSourceRow {
+  id: string;
+  symbol: string;
+  direction: 'BUY' | 'SELL' | null;
+  entry_price: number;
+  base_qty: number;
+  size_usd: number;
+  opened_at: string;
+  entry_reason: Record<string, unknown> | null;
+  smc_zone_type: string | null;
+  smc_zone_price: number | null;
+  arb_gap_pct: number | null;
+  fear_greed_at_entry: number | null;
+  phase_at_entry: string | null;
+  strategy_id: string | null;
+}
+
 export async function closePosition(input: CloseInput): Promise<{ pnlUsd: number; pnlPct: number }> {
   const userId = ensureUserId();
   const supabase = getSupabase();
+  const pg = getPg();
   const now = new Date().toISOString();
 
-  const { data: pos, error: posErr } = await supabase
-    .from('coinarb_positions')
-    .select('id, symbol, direction, entry_price, base_qty, size_usd, opened_at, entry_reason, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry, strategy_id')
-    .eq('id', input.positionId)
-    .single();
+  let pos: ClosePositionSourceRow | undefined;
+  try {
+    const [row] = await pg<ClosePositionSourceRow[]>`
+      SELECT id, symbol, direction, entry_price, base_qty, size_usd, opened_at, entry_reason, smc_zone_type, smc_zone_price, arb_gap_pct, fear_greed_at_entry, phase_at_entry, strategy_id
+      FROM coinarb_positions
+      WHERE id = ${input.positionId}
+    `;
+    pos = row;
+  } catch (err) {
+    throw new Error(`[spot-positions] position ${input.positionId} not found: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
-  if (posErr || !pos) throw new Error(`[spot-positions] position ${input.positionId} not found: ${posErr?.message}`);
+  if (!pos) throw new Error(`[spot-positions] position ${input.positionId} not found`);
 
   const dir = (pos.direction ?? 'BUY') as 'BUY' | 'SELL';
-  const strategyId: StrategyId = ((pos as { strategy_id?: string }).strategy_id as StrategyId | undefined) ?? 'A';
+  const strategyId: StrategyId = (pos.strategy_id as StrategyId | undefined) ?? 'A';
   const grossPnl = dir === 'BUY'
     ? (input.exitPrice - pos.entry_price) * pos.base_qty
     : (pos.entry_price - input.exitPrice) * pos.base_qty;
   const pnlUsd = grossPnl - input.feeUsd;
   const pnlPct = pos.size_usd > 0 ? (pnlUsd / pos.size_usd) * 100 : 0;
 
-  const { error: updErr } = await supabase
-    .from('coinarb_positions')
-    .update({
-      status: 'CLOSED',
-      exit_price: input.exitPrice,
-      exit_reason: input.exitReason,
-      pnl_usd: pnlUsd,
-      pnl_percent: pnlPct,
-      closed_at: now,
-    })
-    .eq('id', input.positionId);
-
-  if (updErr) throw new Error(`[spot-positions] close update failed: ${updErr.message}`);
+  try {
+    await pg`
+      UPDATE coinarb_positions SET ${pg({
+        status: 'CLOSED',
+        exit_price: input.exitPrice,
+        exit_reason: input.exitReason,
+        pnl_usd: pnlUsd,
+        pnl_percent: pnlPct,
+        closed_at: now,
+      })}
+      WHERE id = ${input.positionId}
+    `;
+  } catch (err) {
+    throw new Error(`[spot-positions] close update failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   await supabase.from('coinarb_trades').insert({
     user_id: userId,
@@ -247,14 +281,17 @@ async function writeCalibrationRow(args: {
 }
 
 export async function getOpenPositions(): Promise<OpenPositionRow[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('coinarb_positions')
-    .select('id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at')
-    .eq('agent_id', COINARB_AGENT_ID)
-    .eq('status', 'OPEN');
-  if (error) throw new Error(`[spot-positions] getOpen failed: ${error.message}`);
-  return (data ?? []) as OpenPositionRow[];
+  const pg = getPg();
+  try {
+    const rows = await pg<OpenPositionRow[]>`
+      SELECT id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at
+      FROM coinarb_positions
+      WHERE agent_id = ${COINARB_AGENT_ID} AND status = 'OPEN'
+    `;
+    return rows;
+  } catch (err) {
+    throw new Error(`[spot-positions] getOpen failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 /**
@@ -263,13 +300,15 @@ export async function getOpenPositions(): Promise<OpenPositionRow[]> {
  * getOpenPositions to see ALL open positions across strategies.
  */
 export async function getOpenPositionsByStrategy(strategyId: StrategyId): Promise<OpenPositionRow[]> {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from('coinarb_positions')
-    .select('id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at')
-    .eq('agent_id', COINARB_AGENT_ID)
-    .eq('strategy_id', strategyId)
-    .eq('status', 'OPEN');
-  if (error) throw new Error(`[spot-positions] getOpenByStrategy(${strategyId}) failed: ${error.message}`);
-  return (data ?? []) as OpenPositionRow[];
+  const pg = getPg();
+  try {
+    const rows = await pg<OpenPositionRow[]>`
+      SELECT id, symbol, direction, entry_price, base_qty, size_usd, stop_loss_price, take_profit_price, opened_at
+      FROM coinarb_positions
+      WHERE agent_id = ${COINARB_AGENT_ID} AND strategy_id = ${strategyId} AND status = 'OPEN'
+    `;
+    return rows;
+  } catch (err) {
+    throw new Error(`[spot-positions] getOpenByStrategy(${strategyId}) failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }

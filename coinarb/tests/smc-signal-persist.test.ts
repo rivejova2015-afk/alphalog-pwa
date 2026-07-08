@@ -1,6 +1,36 @@
-import { describe, it, expect } from 'vitest';
-import { buildSmcSignalRow, persistSmcSignal } from '../src/ops/smc-signal-persist.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SmcSignal } from '../src/analysis/smc-detector.js';
+
+// Mock the pg-client module so getPg() inside persistSmcSignal resolves
+// against a fake tagged-template `sql` function instead of a real Postgres
+// connection. See tests/command-poller.test.ts for the same pattern with
+// more detail on how tagged-template vs. dynamic-insert-helper calls differ.
+type Row = Record<string, unknown>;
+
+let insertBehavior: 'ok' | 'error' = 'ok';
+let capturedRow: Row | undefined;
+
+function isTemplateStrings(x: unknown): x is TemplateStringsArray {
+  return Array.isArray(x) && 'raw' in (x as object);
+}
+
+function mockSql(stringsOrRow: TemplateStringsArray | Row, ..._values: unknown[]) {
+  if (!isTemplateStrings(stringsOrRow)) {
+    return { __insertRow: stringsOrRow };
+  }
+  const fragment = _values[0] as { __insertRow: Row } | undefined;
+  capturedRow = fragment?.__insertRow;
+  if (insertBehavior === 'error') {
+    return Promise.reject(new Error('rls denied'));
+  }
+  return Promise.resolve([]);
+}
+
+vi.mock('../src/pg-client.js', () => ({
+  getPg: () => mockSql,
+}));
+
+const { buildSmcSignalRow, persistSmcSignal } = await import('../src/ops/smc-signal-persist.js');
 
 function makeSignal(overrides: Partial<SmcSignal> = {}): SmcSignal {
   return {
@@ -107,42 +137,30 @@ describe('buildSmcSignalRow', () => {
 });
 
 describe('persistSmcSignal', () => {
-  it('inserts the row into coinarb_smc_signals and returns ok:true', async () => {
-    const captured: { table?: string; row?: unknown } = {};
-    const supabase = {
-      from: (t: string) => {
-        captured.table = t;
-        return {
-          insert: async (row: unknown) => {
-            captured.row = row;
-            return { error: null };
-          },
-        };
-      },
-    };
-    const row = buildSmcSignalRow({
-      userId: 'user-1', agentId: 'agent-1', symbol: 'BTC-USD', timeframe: '5M',
-      signal: makeSignal(),
-      price: 62500,
-    });
-    const result = await persistSmcSignal(supabase as never, row);
-    expect(result.ok).toBe(true);
-    expect(captured.table).toBe('coinarb_smc_signals');
-    expect((captured.row as { user_id: string }).user_id).toBe('user-1');
+  beforeEach(() => {
+    insertBehavior = 'ok';
+    capturedRow = undefined;
   });
 
-  it('surfaces Supabase errors as ok:false with message', async () => {
-    const supabase = {
-      from: () => ({
-        insert: async () => ({ error: { message: 'rls denied' } }),
-      }),
-    };
+  it('inserts the row into coinarb_smc_signals and returns ok:true', async () => {
     const row = buildSmcSignalRow({
       userId: 'user-1', agentId: 'agent-1', symbol: 'BTC-USD', timeframe: '5M',
       signal: makeSignal(),
       price: 62500,
     });
-    const result = await persistSmcSignal(supabase as never, row);
+    const result = await persistSmcSignal(row);
+    expect(result.ok).toBe(true);
+    expect(capturedRow?.user_id).toBe('user-1');
+  });
+
+  it('surfaces Postgres errors as ok:false with message', async () => {
+    insertBehavior = 'error';
+    const row = buildSmcSignalRow({
+      userId: 'user-1', agentId: 'agent-1', symbol: 'BTC-USD', timeframe: '5M',
+      signal: makeSignal(),
+      price: 62500,
+    });
+    const result = await persistSmcSignal(row);
     expect(result).toEqual({ ok: false, error: 'rls denied' });
   });
 });

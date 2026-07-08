@@ -14,7 +14,7 @@
  * warn and tries again next interval; the trading loop is unaffected.
  */
 
-import { getSupabase } from '../supabase.js';
+import { getPg } from '../pg-client.js';
 import {
   applyParameters,
   setTradingPaused,
@@ -56,22 +56,18 @@ export class CommandPoller {
     if (this.inFlight) return;  // skip if previous poll still running (slow DB / many commands)
     this.inFlight = true;
     try {
-      const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('bot_commands')
-        .select('id, bot_id, command_type, payload, status, created_at')
-        .eq('bot_id', COINARB_BOT_ID)
-        .in('status', ['pending', 'PENDING'])
-        .order('created_at', { ascending: true })
-        .limit(20);
+      const pg = getPg();
+      const data = await pg<BotCommand[]>`
+        SELECT id, bot_id, command_type, payload, status, created_at
+        FROM bot_commands
+        WHERE bot_id = ${COINARB_BOT_ID} AND status = ANY(${['pending', 'PENDING']})
+        ORDER BY created_at ASC
+        LIMIT 20
+      `;
 
-      if (error) {
-        console.warn('[command-poller] query failed:', error.message);
-        return;
-      }
       if (!data || data.length === 0) return;
 
-      for (const row of data as BotCommand[]) {
+      for (const row of data) {
         await this.process(row);
       }
     } catch (err) {
@@ -127,26 +123,21 @@ export class CommandPoller {
 
   private async ack(commandId: string, status: 'DONE' | 'FAILED', message: string | null): Promise<void> {
     try {
-      const supabase = getSupabase();
+      const pg = getPg();
       const now = new Date().toISOString();
       // Overall lifecycle: bot_commands.status is the canonical "is this done?".
-      const { error: upErr } = await supabase
-        .from('bot_commands')
-        .update({ status, updated_at: now })
-        .eq('id', commandId);
-      if (upErr) console.warn('[command-poller] bot_commands update failed:', upErr.message);
+      await pg`UPDATE bot_commands SET status = ${status}, updated_at = ${now} WHERE id = ${commandId}`;
 
       // Per-bot ack row (relevant for target_scope='all' fan-out; harmless for 'account').
-      const { error: insErr } = await supabase
-        .from('bot_command_status')
-        .insert({
+      await pg`
+        INSERT INTO bot_command_status ${pg({
           command_id: commandId,
           bot_account_id: COINARB_BOT_ACCOUNT_ID,
           status,
           acked_at: now,
           message,
-        });
-      if (insErr) console.warn('[command-poller] bot_command_status insert failed:', insErr.message);
+        })}
+      `;
     } catch (err) {
       console.warn('[command-poller] ack threw:', err);
     }

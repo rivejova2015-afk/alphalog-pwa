@@ -6,7 +6,7 @@
  * doesn't flood the table. ENTER/EXIT/SCALP/BREAKER are always written.
  */
 
-import { getSupabase } from '../supabase.js';
+import { getPg } from '../pg-client.js';
 
 export type DecisionKind = 'ENTER' | 'SCALP' | 'SKIP' | 'EXIT' | 'BREAKER' | 'CASCADE' | 'TICK';
 /**
@@ -51,8 +51,8 @@ export class DecisionLogger {
     }
 
     try {
-      const supabase = getSupabase();
-      const { error } = await supabase.from('coinarb_decisions').insert({
+      const pg = getPg();
+      const insertRow: Record<string, unknown> = {
         user_id: row.userId,
         agent_id: row.agentId,
         strategy_id: row.strategyId ?? 'A',
@@ -62,10 +62,8 @@ export class DecisionLogger {
         reason: row.reason,
         meta: row.meta ?? {},
         created_at: new Date().toISOString(),
-      });
-      if (error) {
-        console.warn('[decision-logger] insert failed:', error.message);
-      }
+      };
+      await pg`INSERT INTO coinarb_decisions ${pg(insertRow)}`;
     } catch (err) {
       console.warn('[decision-logger] error:', err instanceof Error ? err.message : String(err));
     }

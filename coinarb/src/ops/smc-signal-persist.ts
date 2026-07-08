@@ -15,6 +15,7 @@
  */
 
 import type { SmcSignal } from '../analysis/smc-detector.js';
+import { getPg } from '../pg-client.js';
 
 /** Strategy id mirror — keep aligned with trading/spot-positions.ts. */
 export type StrategyId = 'A' | 'B' | 'M' | 'P' | 'DD';
@@ -70,18 +71,14 @@ export function buildSmcSignalRow(opts: {
   };
 }
 
-type SupabaseLike = {
-  from(table: string): {
-    // PromiseLike (thenable) — Supabase's PostgrestFilterBuilder isn't a true Promise.
-    insert(row: SmcSignalRow): PromiseLike<{ error: { message: string } | null }>;
-  };
-};
-
 export async function persistSmcSignal(
-  supabase: SupabaseLike,
   row: SmcSignalRow,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase.from('coinarb_smc_signals').insert(row);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  try {
+    const pg = getPg();
+    await pg`INSERT INTO coinarb_smc_signals ${pg(row)}`;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
