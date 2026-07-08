@@ -27,8 +27,11 @@ const {
   buildKellyInputsFromTradesMock: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createServiceClient: () => ({ from: fromMock }),
+// `algorithms` + `algo_paper_trades` are the only tables this route touches
+// and both are fully in-scope (own Postgres) — the route now reads/writes
+// them via getPgClient() instead of a Supabase service client.
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({ from: fromMock }),
 }));
 vi.mock("@/lib/engine/v1/paper-gates", () => ({
   evaluatePaperGates: evaluatePaperGatesMock,

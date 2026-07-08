@@ -18,12 +18,18 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { createClientMock, validateBearerMock } = vi.hoisted(() => ({
+const { createClientMock, pgFromMock, validateBearerMock } = vi.hoisted(() => ({
   createClientMock:   vi.fn(),
+  pgFromMock:         vi.fn(),
   validateBearerMock: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
+// `bot_accounts`, `bot_instances`, `bot_command_status` and `bot_events` are
+// in-scope (own Postgres) — the route now reads/writes them via
+// getPgClient() instead of the Supabase service client. `bots` is NOT one of
+// the 16 migrated tables and stays on the Supabase mock above.
+vi.mock("@/lib/pg/client", () => ({ getPgClient: () => ({ from: pgFromMock }) }));
 vi.mock("@/lib/security/timing", () => ({ validateBearerToken: validateBearerMock }));
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(), logInfo: vi.fn(), logWarn: vi.fn(),
@@ -110,11 +116,42 @@ function setupSupabase({
       return proxy;
     },
   });
+
+  pgFromMock.mockImplementation((table: string) => {
+    const proxy: Record<string, unknown> = {};
+    const chainable = ["select", "eq", "is", "in", "order", "limit"];
+    for (const m of chainable) proxy[m] = () => proxy;
+
+    if (table === "bot_accounts") {
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: botAccounts, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_instances") {
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: instances, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_command_status") {
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: pendingCmds, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_events") {
+      proxy.insert = () =>
+        Promise.resolve({ error: insertEventError ?? null });
+      return proxy;
+    }
+    proxy.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(resolve);
+    return proxy;
+  });
 }
 
 describe("/api/ops/cron/bot-daily-verify — handler", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    pgFromMock.mockReset();
     validateBearerMock.mockReset();
     validateBearerMock.mockReturnValue({ ok: true });
   });

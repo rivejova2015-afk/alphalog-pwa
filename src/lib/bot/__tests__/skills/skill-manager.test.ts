@@ -23,6 +23,17 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: () => mockCreateClient(),
 }));
 
+// `paper_trades` + `bot_skills` are in-scope (own Postgres) — the paper
+// trades fetch, the existing/new-skill lookup and the final bot_skills
+// update now go through getPgClient() instead of the injected Supabase
+// client. `bot_regime_states`, `bot_signal_engine_state`,
+// `bot_skill_audit_log` and Storage stay on Supabase (out of scope for this
+// migration). Both mocks read/write the same `state` object so the existing
+// fixtures/assertions keep working unchanged.
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({ from: (table: string) => makePgChain(table) }),
+}));
+
 import { runSkillLearningCycle } from "../../skills/skill-manager";
 
 interface MockState {
@@ -43,6 +54,46 @@ interface MockState {
 
 let state: MockState;
 
+// pg.from('paper_trades' | 'bot_skills') — mode-aware chain: select (default),
+// insert() or update() switch the resolved shape, mirroring how the real
+// getPgClient() QueryBuilder tracks a single `mode` per `.from()` call.
+function makePgChain(table: string) {
+  let mode: "select" | "insert" | "update" = "select";
+  const chain: Record<string, unknown> = { _table: table };
+  chain.select = function () { return chain; };
+  chain.eq = function () { return chain; };
+  chain.is = function () { return chain; };
+  chain.order = function () { return chain; };
+  chain.single = function () { return chain; };
+  chain.insert = function () {
+    mode = "insert";
+    return chain;
+  };
+  chain.update = function (payload: unknown) {
+    mode = "update";
+    if (table === "bot_skills") state.updatedSkillPayloads.push(payload);
+    return chain;
+  };
+  chain.then = function (resolve: (v: unknown) => unknown) {
+    if (mode === "insert") {
+      if (table === "bot_skills") {
+        if (state.newSkillError) return resolve({ data: null, error: state.newSkillError });
+        return resolve({ data: { id: state.newSkillId }, error: null });
+      }
+      return resolve({ data: null, error: null });
+    }
+    if (mode === "update") {
+      if (table === "bot_skills") return resolve({ data: null, error: state.updateSkillError });
+      return resolve({ data: null, error: null });
+    }
+    // select mode
+    if (table === "paper_trades") return resolve({ data: state.paperTrades, error: state.paperTradesError });
+    if (table === "bot_skills") return resolve({ data: state.existingSkill, error: null });
+    return resolve({ data: null, error: null });
+  };
+  return chain;
+}
+
 function makeMockSupabase() {
   return {
     from(table: string) {
@@ -53,40 +104,14 @@ function makeMockSupabase() {
       chain.gt = function () { return chain; };
       chain.order = function () { return chain; };
       chain.limit = function () { return chain; };
-      chain.maybeSingle = async function () {
-        if (table === "bot_skills") return { data: state.existingSkill };
-        return { data: null };
-      };
       chain.insert = function (payload: unknown) {
-        if (table === "bot_skills") {
-          return {
-            select() {
-              return {
-                async single() {
-                  if (state.newSkillError) return { data: null, error: state.newSkillError };
-                  return { data: { id: state.newSkillId }, error: null };
-                },
-              };
-            },
-          };
-        }
         if (table === "bot_skill_audit_log") {
           state.insertedAuditEntries.push(payload);
           return Promise.resolve({ error: state.auditError });
         }
         return Promise.resolve({ error: null });
       };
-      chain.update = function (payload: unknown) {
-        if (table === "bot_skills") {
-          state.updatedSkillPayloads.push(payload);
-          return {
-            eq() { return Promise.resolve({ error: state.updateSkillError }); },
-          };
-        }
-        return { eq() { return Promise.resolve({ error: null }); } };
-      };
       chain.then = function (resolve: (v: unknown) => unknown) {
-        if (table === "paper_trades") return resolve({ data: state.paperTrades, error: state.paperTradesError });
         if (table === "bot_regime_states") return resolve({ data: state.regimeHistory });
         if (table === "bot_signal_engine_state") return resolve({ data: state.sessionHistory });
         return resolve({ data: null, error: null });
@@ -114,10 +139,15 @@ function makeMockSupabase() {
   };
 }
 
-function makeManyTrades(n: number): Array<{ pnl: number; symbol: string }> {
+function makeManyTrades(n: number): Array<{ pnl: number; symbol: string; created_at: string }> {
+  // created_at must be within the last 24h: runSkillLearningCycle now fetches
+  // paper_trades via getPgClient() (whose shim has no `.gt()`) and filters
+  // the 24h cutoff in JS against this field instead of at the query level.
+  const now = new Date().toISOString();
   return Array.from({ length: n }, (_, i) => ({
     pnl: i % 3 === 0 ? -50 : 100, // mezcla pérdidas/ganancias
     symbol: "XAUUSD",
+    created_at: now,
   }));
 }
 

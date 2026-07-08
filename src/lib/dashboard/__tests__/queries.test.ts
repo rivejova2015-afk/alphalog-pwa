@@ -1,15 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock supabase server before importing
-const mockSupabase = {
-  from: vi.fn(),
-};
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: () => Promise.resolve(mockSupabase),
-}));
-
-import { getAccountGroups, getPerformanceMetrics } from "../queries";
-
 interface MockState {
   accounts: Array<Record<string, unknown>> | null;
   accountsError: { message: string } | null;
@@ -17,6 +7,7 @@ interface MockState {
   tradesError: { message: string } | null;
   setups: Array<Record<string, unknown>> | null;
   setupsError: { message: string } | null;
+  categories: Array<Record<string, unknown>> | null;
 }
 
 let state: MockState;
@@ -27,14 +18,37 @@ function setupChain(table: string) {
   chain.eq = function () { return chain; };
   chain.is = function () { return chain; };
   chain.not = function () { return chain; };
+  chain.in = function () { return chain; };
   chain.then = function (resolve: (v: unknown) => unknown) {
     if (table === "accounts") return resolve({ data: state.accounts, error: state.accountsError });
     if (table === "trades") return resolve({ data: state.trades, error: state.tradesError });
     if (table === "setups") return resolve({ data: state.setups, error: state.setupsError });
+    if (table === "account_categories") return resolve({ data: state.categories, error: null });
     return resolve({ data: null, error: null });
   };
   return chain;
 }
+
+// `accounts` + `trades` are in-scope (own Postgres) — getAccountGroups and
+// getPerformanceMetrics now read them via getPgClient() instead of the
+// injected Supabase client. `setups` and `account_categories` stay on
+// Supabase (out of scope for this migration). Both mocks share the same
+// `state` object / `setupChain` helper so existing fixtures keep working.
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({
+    from: (table: string) => setupChain(table),
+  }),
+}));
+
+// Mock supabase server before importing
+const mockSupabase = {
+  from: vi.fn(),
+};
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: () => Promise.resolve(mockSupabase),
+}));
+
+import { getAccountGroups, getPerformanceMetrics } from "../queries";
 
 describe("dashboard/queries", () => {
   beforeEach(() => {
@@ -45,6 +59,7 @@ describe("dashboard/queries", () => {
       tradesError: null,
       setups: [],
       setupsError: null,
+      categories: [],
     };
     mockSupabase.from = vi.fn((table: string) => setupChain(table));
   });
@@ -67,9 +82,13 @@ describe("dashboard/queries", () => {
 
     it("agrupa por categoría con count + totalBalance", async () => {
       state.accounts = [
-        { id: "a1", current_balance: 1000, account_categories: { name: "PropFirm" } },
-        { id: "a2", current_balance: 2000, account_categories: { name: "PropFirm" } },
-        { id: "a3", current_balance: 5000, account_categories: { name: "Personal" } },
+        { id: "a1", current_balance: 1000, category_id: "cat-prop" },
+        { id: "a2", current_balance: 2000, category_id: "cat-prop" },
+        { id: "a3", current_balance: 5000, category_id: "cat-personal" },
+      ];
+      state.categories = [
+        { id: "cat-prop", name: "PropFirm" },
+        { id: "cat-personal", name: "Personal" },
       ];
       const r = await getAccountGroups("user-1");
       const propfirm = r.find((g) => g.name === "PropFirm");
@@ -79,16 +98,17 @@ describe("dashboard/queries", () => {
     });
 
     it("usa 'All Accounts' como fallback cuando no hay category", async () => {
-      state.accounts = [{ id: "a1", current_balance: 100, account_categories: null }];
+      state.accounts = [{ id: "a1", current_balance: 100, category_id: null }];
       const r = await getAccountGroups("user-1");
       expect(r[0].name).toBe("All Accounts");
     });
 
     it("trata current_balance null como 0", async () => {
       state.accounts = [
-        { id: "a1", current_balance: null, account_categories: { name: "X" } },
-        { id: "a2", current_balance: 100, account_categories: { name: "X" } },
+        { id: "a1", current_balance: null, category_id: "cat-x" },
+        { id: "a2", current_balance: 100, category_id: "cat-x" },
       ];
+      state.categories = [{ id: "cat-x", name: "X" }];
       const r = await getAccountGroups("user-1");
       expect(r[0].totalBalance).toBe(100);
     });

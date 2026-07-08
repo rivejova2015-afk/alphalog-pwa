@@ -22,12 +22,18 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { createClientMock, validateBearerMock } = vi.hoisted(() => ({
+const { createClientMock, pgFromMock, validateBearerMock } = vi.hoisted(() => ({
   createClientMock:   vi.fn(),
+  pgFromMock:         vi.fn(),
   validateBearerMock: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
+// `algorithms` + `coinarb_telemetry` are in-scope (own Postgres) — the route
+// now reads them via getPgClient() instead of the Supabase service client.
+// `app_logs` is NOT one of the 16 migrated tables and stays on the Supabase
+// mock above.
+vi.mock("@/lib/pg/client", () => ({ getPgClient: () => ({ from: pgFromMock }) }));
 vi.mock("@/lib/security/timing", () => ({ validateBearerToken: validateBearerMock }));
 
 let POST: (req: NextRequest) => Promise<Response>;
@@ -140,12 +146,46 @@ function setupSupabase({
     },
   });
 
+  pgFromMock.mockImplementation((table: string) => {
+    if (table === "algorithms") {
+      const proxy: Record<string, unknown> = {};
+      proxy.select = () => proxy;
+      proxy.eq     = () => proxy;
+      proxy.is     = () => proxy;
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: algos, error: algoError ?? null }).then(resolve);
+      return proxy;
+    }
+    if (table === "coinarb_telemetry") {
+      let currentAlgo: string | null = null;
+      const proxy: Record<string, unknown> = {};
+      proxy.select = () => proxy;
+      proxy.eq = (col: string, val: string) => {
+        if (col === "agent_id") currentAlgo = val;
+        return proxy;
+      };
+      proxy.order = () => proxy;
+      proxy.single = () => proxy;
+      proxy.then = (resolve: (v: unknown) => unknown) => {
+        const tele = telemetryByAlgo[currentAlgo ?? ""];
+        return Promise.resolve({ data: tele ?? null, error: null }).then(resolve);
+      };
+      return proxy;
+    }
+    const fallback: Record<string, unknown> = {};
+    fallback.select = () => fallback;
+    fallback.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(resolve);
+    return fallback;
+  });
+
   return { appLogInserts };
 }
 
 describe("/api/ops/cron/coinarb-heartbeat — handler", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    pgFromMock.mockReset();
     validateBearerMock.mockReset();
     validateBearerMock.mockReturnValue({ ok: true });
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as unknown as typeof fetch;

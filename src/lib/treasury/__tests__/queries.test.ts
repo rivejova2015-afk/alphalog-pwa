@@ -12,13 +12,20 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
-const { createClientMock, fromMock, logErrorMock } = vi.hoisted(() => ({
+const { createClientMock, fromMock, pgFromMock, logErrorMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   fromMock:         vi.fn(),
+  pgFromMock:       vi.fn(),
   logErrorMock:     vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
+// `accounts` + `trades` are in-scope (own Postgres) — getAccounts,
+// getAccountsByIds, getAccount, getAccountTrades and getAllTrades now read
+// them via getPgClient() instead of the module-level Supabase client.
+// Everything else in this file (treasury_configs/wallets/transactions/
+// budgets/payouts) stays on the Supabase client mocked via fromMock above.
+vi.mock("@/lib/pg/client", () => ({ getPgClient: () => ({ from: pgFromMock }) }));
 vi.mock("@/lib/log", () => ({
   logError: logErrorMock, logInfo: vi.fn(), logWarn: vi.fn(),
 }));
@@ -60,11 +67,12 @@ function makeMutationChain(result: { data?: unknown; error?: unknown }) {
 describe("getAccounts / getAccountsByIds / getAccount", () => {
   beforeEach(() => {
     fromMock.mockReset();
+    pgFromMock.mockReset();
     logErrorMock.mockReset();
   });
 
   it("getAccounts returns [] cuando supabase tira error", async () => {
-    fromMock.mockReturnValue(makeListChain({ data: null, error: { message: "rls denied" } }));
+    pgFromMock.mockReturnValue(makeListChain({ data: null, error: { message: "rls denied" } }));
     const result = await q.getAccounts();
     expect(result).toEqual([]);
     expect(logErrorMock).toHaveBeenCalled();
@@ -72,7 +80,7 @@ describe("getAccounts / getAccountsByIds / getAccount", () => {
 
   it("getAccounts returns data cuando OK", async () => {
     const rows = [{ id: "a1", name: "Main", account_size: 10000, current_balance: 12000, withdrawals_enabled: true }];
-    fromMock.mockReturnValue(makeListChain({ data: rows, error: null }));
+    pgFromMock.mockReturnValue(makeListChain({ data: rows, error: null }));
     const result = await q.getAccounts();
     expect(result).toEqual(rows);
   });
@@ -80,25 +88,28 @@ describe("getAccounts / getAccountsByIds / getAccount", () => {
   it("getAccountsByIds returns [] sin hits DB cuando ids está vacío (early exit)", async () => {
     const result = await q.getAccountsByIds([]);
     expect(result).toEqual([]);
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(pgFromMock).not.toHaveBeenCalled();
   });
 
   it("getAccountsByIds returns rows cuando ids no vacío", async () => {
     const rows = [{ id: "a1", name: "Main" }];
-    fromMock.mockReturnValue(makeListChain({ data: rows, error: null }));
+    pgFromMock.mockReturnValue(makeListChain({ data: rows, error: null }));
     const result = await q.getAccountsByIds(["a1"]);
     expect(result).toEqual(rows);
   });
 
-  it("getAccount PGRST116 (no rows) → null silencioso (no log)", async () => {
-    fromMock.mockReturnValue(makeSingleChain({ data: null, error: { code: "PGRST116", message: "no rows" } }));
+  it("getAccount sin filas (pg .single() con 0 rows) → null silencioso (no log)", async () => {
+    // The getPgClient() shim's .single() resolves { data: null, error: null }
+    // when the query returns 0 rows (it never synthesizes a PGRST116-style
+    // error the way postgrest does) — this is the real "no rows" shape now.
+    pgFromMock.mockReturnValue(makeSingleChain({ data: null, error: null }));
     const result = await q.getAccount("missing-id");
     expect(result).toBeNull();
     expect(logErrorMock).not.toHaveBeenCalled();
   });
 
   it("getAccount non-PGRST116 error → log + null", async () => {
-    fromMock.mockReturnValue(makeSingleChain({ data: null, error: { code: "OTHER", message: "rls boom" } }));
+    pgFromMock.mockReturnValue(makeSingleChain({ data: null, error: { code: "OTHER", message: "rls boom" } }));
     const result = await q.getAccount("a1");
     expect(result).toBeNull();
     expect(logErrorMock).toHaveBeenCalled();
@@ -106,7 +117,7 @@ describe("getAccounts / getAccountsByIds / getAccount", () => {
 
   it("getAccount returns row cuando OK", async () => {
     const row = { id: "a1", name: "Main", account_size: 10000, current_balance: 12000 };
-    fromMock.mockReturnValue(makeSingleChain({ data: row, error: null }));
+    pgFromMock.mockReturnValue(makeSingleChain({ data: row, error: null }));
     const result = await q.getAccount("a1");
     expect(result).toEqual(row);
   });
@@ -214,18 +225,18 @@ describe("upsertTreasuryConfig — branches", () => {
 
 describe("getAccountTrades / getAllTrades", () => {
   beforeEach(() => {
-    fromMock.mockReset();
+    pgFromMock.mockReset();
     logErrorMock.mockReset();
   });
 
   it("getAccountTrades returns rows cuando OK", async () => {
     const trades = [{ id: "t1", account_id: "a1", pnl: 100, status: "Closed" }];
-    fromMock.mockReturnValue(makeListChain({ data: trades, error: null }));
+    pgFromMock.mockReturnValue(makeListChain({ data: trades, error: null }));
     expect(await q.getAccountTrades("a1")).toEqual(trades);
   });
 
   it("getAccountTrades returns [] en error", async () => {
-    fromMock.mockReturnValue(makeListChain({ data: null, error: { message: "boom" } }));
+    pgFromMock.mockReturnValue(makeListChain({ data: null, error: { message: "boom" } }));
     expect(await q.getAccountTrades("a1")).toEqual([]);
   });
 
@@ -234,7 +245,7 @@ describe("getAccountTrades / getAllTrades", () => {
       { id: "t1", status: "Closed", pnl: 100 },
       { id: "t2", status: "Closed", pnl: -50 },
     ];
-    fromMock.mockReturnValue(makeListChain({ data: trades, error: null }));
+    pgFromMock.mockReturnValue(makeListChain({ data: trades, error: null }));
     expect(await q.getAllTrades()).toEqual(trades);
   });
 });

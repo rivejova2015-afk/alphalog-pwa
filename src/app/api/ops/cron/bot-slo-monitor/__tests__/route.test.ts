@@ -18,13 +18,20 @@ import { NextRequest } from "next/server";
 
 const {
   createClientMock,
+  pgFromMock,
   validateBearerMock,
 } = vi.hoisted(() => ({
   createClientMock:    vi.fn(),
+  pgFromMock:          vi.fn(),
   validateBearerMock:  vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
+// `bot_instances` + `bot_command_status` are in-scope (own Postgres) — the
+// route now reads them via getPgClient() instead of the Supabase service
+// client. `bots` is NOT one of the 16 migrated tables and stays on the
+// Supabase mock above.
+vi.mock("@/lib/pg/client", () => ({ getPgClient: () => ({ from: pgFromMock }) }));
 vi.mock("@/lib/security/timing", () => ({ validateBearerToken: validateBearerMock }));
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(), logInfo: vi.fn(), logWarn: vi.fn(),
@@ -66,20 +73,30 @@ function setupSupabase({
       const proxy: Record<string, unknown> = {};
       const chainable = ["select", "eq", "is", "in", "order", "limit"];
       for (const m of chainable) proxy[m] = () => proxy;
-      let result: { data: unknown; error: unknown };
-      if (table === "bots")              result = { data: bots, error: null };
-      else if (table === "bot_instances") result = { data: instances, error: null };
-      else if (table === "bot_command_status") result = { data: cmdStatus, error: null };
-      else                                result = { data: [], error: null };
+      const result: { data: unknown; error: unknown } =
+        table === "bots" ? { data: bots, error: null } : { data: [], error: null };
       proxy.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve);
       return proxy;
     },
+  });
+
+  pgFromMock.mockImplementation((table: string) => {
+    const proxy: Record<string, unknown> = {};
+    const chainable = ["select", "eq", "is", "in", "order", "limit"];
+    for (const m of chainable) proxy[m] = () => proxy;
+    let result: { data: unknown; error: unknown };
+    if (table === "bot_instances") result = { data: instances, error: null };
+    else if (table === "bot_command_status") result = { data: cmdStatus, error: null };
+    else result = { data: [], error: null };
+    proxy.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve);
+    return proxy;
   });
 }
 
 describe("/api/ops/cron/bot-slo-monitor — handler", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    pgFromMock.mockReset();
     validateBearerMock.mockReset();
     validateBearerMock.mockReturnValue({ ok: true });
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as unknown as typeof fetch;

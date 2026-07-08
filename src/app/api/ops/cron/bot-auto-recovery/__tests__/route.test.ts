@@ -15,12 +15,18 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { createClientMock, validateBearerMock } = vi.hoisted(() => ({
+const { createClientMock, pgFromMock, validateBearerMock } = vi.hoisted(() => ({
   createClientMock:   vi.fn(),
+  pgFromMock:         vi.fn(),
   validateBearerMock: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
+// `bot_accounts`, `bot_instances`, `bot_commands`, `bot_command_status` and
+// `bot_events` are in-scope (own Postgres) — the route now reads/writes them
+// via getPgClient() instead of the Supabase service client. `bots` is NOT one
+// of the 16 migrated tables and stays on the Supabase mock above.
+vi.mock("@/lib/pg/client", () => ({ getPgClient: () => ({ from: pgFromMock }) }));
 vi.mock("@/lib/security/timing", () => ({ validateBearerToken: validateBearerMock }));
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(), logInfo: vi.fn(), logWarn: vi.fn(),
@@ -69,51 +75,62 @@ function setupSupabase({
           Promise.resolve({ data: bots, error: null }).then(resolve);
         return proxy;
       }
-      if (table === "bot_accounts") {
-        proxy.select = () => proxy;
-        proxy.then = (resolve: (v: unknown) => unknown) =>
-          Promise.resolve({ data: botAccounts, error: null }).then(resolve);
-        return proxy;
-      }
-      if (table === "bot_instances") {
-        proxy.select = () => proxy;
-        proxy.then = (resolve: (v: unknown) => unknown) =>
-          Promise.resolve({ data: instances, error: null }).then(resolve);
-        return proxy;
-      }
-      if (table === "bot_commands") {
-        let currentBotId: string | null = null;
-        const cmdProxy: Record<string, unknown> = {};
-        cmdProxy.select = () => cmdProxy;
-        cmdProxy.eq = (col: string, val: string) => {
-          if (col === "bot_id") currentBotId = val;
-          return cmdProxy;
-        };
-        cmdProxy.gte = () => cmdProxy;
-        cmdProxy.limit = () => cmdProxy;
-        cmdProxy.then = (resolve: (v: unknown) => unknown) =>
-          Promise.resolve({ data: recentRestartCmds[currentBotId ?? ""] ?? [], error: null }).then(resolve);
-        cmdProxy.insert = () => {
-          const ins: Record<string, unknown> = {};
-          ins.select = () => ins;
-          ins.single = () => Promise.resolve(insertCmdResult);
-          return ins;
-        };
-        return cmdProxy;
-      }
-      if (table === "bot_command_status" || table === "bot_events") {
-        const ins: Record<string, unknown> = {};
-        ins.insert = () => Promise.resolve({ error: null });
-        ins.select = () => ins;
-        ins.then = (resolve: (v: unknown) => unknown) =>
-          Promise.resolve({ error: null }).then(resolve);
-        return ins;
-      }
       proxy.select = () => proxy;
       proxy.then = (resolve: (v: unknown) => unknown) =>
         Promise.resolve({ data: [], error: null }).then(resolve);
       return proxy;
     },
+  });
+
+  pgFromMock.mockImplementation((table: string) => {
+    const proxy: Record<string, unknown> = {};
+    const chainable = ["eq", "is", "in", "gte", "order", "limit"];
+    for (const m of chainable) proxy[m] = () => proxy;
+
+    if (table === "bot_accounts") {
+      proxy.select = () => proxy;
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: botAccounts, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_instances") {
+      proxy.select = () => proxy;
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: instances, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_commands") {
+      let currentBotId: string | null = null;
+      const cmdProxy: Record<string, unknown> = {};
+      cmdProxy.select = () => cmdProxy;
+      cmdProxy.eq = (col: string, val: string) => {
+        if (col === "bot_id") currentBotId = val;
+        return cmdProxy;
+      };
+      cmdProxy.gte = () => cmdProxy;
+      cmdProxy.limit = () => cmdProxy;
+      cmdProxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: recentRestartCmds[currentBotId ?? ""] ?? [], error: null }).then(resolve);
+      cmdProxy.insert = () => {
+        const ins: Record<string, unknown> = {};
+        ins.select = () => ins;
+        ins.single = () => Promise.resolve(insertCmdResult);
+        return ins;
+      };
+      return cmdProxy;
+    }
+    if (table === "bot_command_status" || table === "bot_events") {
+      const ins: Record<string, unknown> = {};
+      ins.insert = () => Promise.resolve({ error: null });
+      ins.select = () => ins;
+      ins.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ error: null }).then(resolve);
+      return ins;
+    }
+    proxy.select = () => proxy;
+    proxy.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(resolve);
+    return proxy;
   });
 }
 
@@ -122,6 +139,7 @@ const STALE_HEARTBEAT_ISO = new Date(Date.now() - 600 * 1000).toISOString(); // 
 describe("/api/ops/cron/bot-auto-recovery — handler", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    pgFromMock.mockReset();
     validateBearerMock.mockReset();
     validateBearerMock.mockReturnValue({ ok: true });
   });

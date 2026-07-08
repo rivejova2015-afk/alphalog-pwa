@@ -17,12 +17,18 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { createClientMock, validateBearerMock } = vi.hoisted(() => ({
+const { createClientMock, pgFromMock, validateBearerMock } = vi.hoisted(() => ({
   createClientMock:   vi.fn(),
+  pgFromMock:         vi.fn(),
   validateBearerMock: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: createClientMock }));
+// `bot_instances`, `bot_accounts` and `bot_commands` are in-scope (own
+// Postgres) — the route now reads/writes them via getPgClient() instead of
+// the Supabase service client. `bot_monitor_state` is NOT one of the 16
+// migrated tables and stays on the Supabase mock above.
+vi.mock("@/lib/pg/client", () => ({ getPgClient: () => ({ from: pgFromMock }) }));
 vi.mock("@/lib/security/timing", () => ({ validateBearerToken: validateBearerMock }));
 
 let POST: (req: NextRequest) => Promise<Response>;
@@ -68,13 +74,6 @@ function setupSupabase({
 
   createClientMock.mockReturnValue({
     from: (table: string) => {
-      if (table === "bot_instances") {
-        const proxy: Record<string, unknown> = {};
-        proxy.select = () => proxy;
-        proxy.then = (resolve: (v: unknown) => unknown) =>
-          Promise.resolve({ data: instances, error: null }).then(resolve);
-        return proxy;
-      }
       if (table === "bot_monitor_state") {
         const proxy: Record<string, unknown> = {};
         proxy.select = () => proxy;
@@ -97,24 +96,6 @@ function setupSupabase({
         };
         return proxy;
       }
-      if (table === "bot_accounts") {
-        const proxy: Record<string, unknown> = {};
-        proxy.select = () => proxy;
-        proxy.then = (resolve: (v: unknown) => unknown) =>
-          Promise.resolve({ data: accounts, error: null }).then(resolve);
-        return proxy;
-      }
-      if (table === "bot_commands") {
-        const proxy: Record<string, unknown> = {};
-        proxy.insert = (row: Record<string, unknown>) => {
-          inserts.push(row);
-          const ret: Record<string, unknown> = {};
-          ret.select = () => ret;
-          ret.single = () => Promise.resolve({ data: { id: "cmd-new-1" }, error: null });
-          return ret;
-        };
-        return proxy;
-      }
       const fallback: Record<string, unknown> = {};
       fallback.select = () => fallback;
       fallback.then = (resolve: (v: unknown) => unknown) =>
@@ -123,12 +104,46 @@ function setupSupabase({
     },
   });
 
+  pgFromMock.mockImplementation((table: string) => {
+    if (table === "bot_instances") {
+      const proxy: Record<string, unknown> = {};
+      proxy.select = () => proxy;
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: instances, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_accounts") {
+      const proxy: Record<string, unknown> = {};
+      proxy.select = () => proxy;
+      proxy.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: accounts, error: null }).then(resolve);
+      return proxy;
+    }
+    if (table === "bot_commands") {
+      const proxy: Record<string, unknown> = {};
+      proxy.insert = (row: Record<string, unknown>) => {
+        inserts.push(row);
+        const ret: Record<string, unknown> = {};
+        ret.select = () => ret;
+        ret.single = () => Promise.resolve({ data: { id: "cmd-new-1" }, error: null });
+        return ret;
+      };
+      return proxy;
+    }
+    const fallback: Record<string, unknown> = {};
+    fallback.select = () => fallback;
+    fallback.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(resolve);
+    return fallback;
+  });
+
   return { upserts, inserts, updates };
 }
 
 describe("/api/ops/cron/bot-heartbeat-monitor — handler", () => {
   beforeEach(() => {
     createClientMock.mockReset();
+    pgFromMock.mockReset();
     validateBearerMock.mockReset();
     validateBearerMock.mockReturnValue({ ok: true });
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as unknown as typeof fetch;
