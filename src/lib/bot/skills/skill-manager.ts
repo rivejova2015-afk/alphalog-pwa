@@ -116,7 +116,7 @@ export async function runSkillLearningCycle(
 
     const paperTrades = (
       (tradesRaw as unknown as (PaperTrade & { created_at: string })[] | null) ?? []
-    ).filter((t) => t.created_at > oneDayAgo);
+    ).filter((t) => new Date(t.created_at).getTime() > new Date(oneDayAgo).getTime());
 
     // 2. Minimum trades for meaningful learning
     if (paperTrades.length < 50) {

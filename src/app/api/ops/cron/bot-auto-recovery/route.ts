@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         .eq("bot_id", bot.id)
         .eq("command_type", "RESTART_LOGIC");
       const recentCmds = ((recentCmdsRaw as unknown as { id: string; created_at: string }[] | null) ?? [])
-        .filter((c) => c.created_at >= cooldownIso);
+        .filter((c) => new Date(c.created_at).getTime() >= new Date(cooldownIso).getTime());
 
       if (recentCmds.length > 0) {
         report.skipped.push({ bot_id: bot.id, reason: "cooldown_active", profile });
