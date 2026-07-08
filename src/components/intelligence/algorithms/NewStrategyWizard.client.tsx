@@ -958,24 +958,32 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
         marketType === 'futures' ? 'Tradovate' :
                                    'fly';
 
-      const { data: created, error } = await supabase.from('algorithms').insert({
-        user_id:               user.id,
-        name:                  name.trim(),
-        instrument:            instruments,
-        market_type:           marketType,
-        direction:             dbDirection,
-        platform:              resolvedPlatform,
-        linked_bot_account_id: marketType === 'forex' ? (botAccountId || null) : null,
-        lot_size:              lotSize,
-        max_trades:            maxTrades,
-        risk_percent:          riskPercent,
-        parameters,
-        engine_config:         engineConfig,
-        scan_config: {},
-        status: 'paused',
-      }).select('id').single();
+      const res = await fetch("/api/bot-control/algorithms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          instrument: instruments,
+          marketType,
+          direction: dbDirection,
+          platform: resolvedPlatform,
+          linkedBotAccountId: marketType === 'forex' ? (botAccountId || null) : null,
+          lotSize,
+          maxTrades,
+          riskPercent,
+          parameters,
+          engineConfig,
+          scanConfig: {},
+        }),
+      });
 
-      if (error) { toast.error(error.message); return; }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        toast.error(body.error ?? "Failed to create algorithm");
+        return;
+      }
+
+      const created = await res.json();
 
       if (isLatencyArb && created?.id) {
         const pairInsert = await supabase.from('arbitrage_latency_pairs').insert({

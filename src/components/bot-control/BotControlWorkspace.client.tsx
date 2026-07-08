@@ -411,36 +411,20 @@ export default function BotControlWorkspace({ mode, basePath }: BotControlWorksp
     setLoading(true);
     setError(null);
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id || null;
-
-      const { data: command, error: commandError } = await supabase
-        .from("bot_commands")
-        .insert({
-          bot_id: selectedBotId,
-          command_type: commandType,
+      const res = await fetch("/api/bot-control/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          botId: selectedBotId,
+          commandType,
+          targetAccountIds: targetAccountIds ?? accountsForBot.map((account) => account.id),
           payload,
-          target_scope: targetAccountIds ? "accounts" : "all",
-          created_by: userId,
-          status: "PENDING",
-        })
-        .select("id")
-        .single();
+        }),
+      });
 
-      if (commandError) throw commandError;
-
-      const targetIds = targetAccountIds || accountsForBot.map((account) => account.id);
-      const statusRows = targetIds.map((accountId) => ({
-        command_id: command.id,
-        bot_account_id: accountId,
-        status: "PENDING",
-      }));
-
-      if (statusRows.length > 0) {
-        const { error: statusError } = await supabase
-          .from("bot_command_status")
-          .insert(statusRows);
-        if (statusError) throw statusError;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
       }
 
       await loadData();

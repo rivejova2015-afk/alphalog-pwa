@@ -51,7 +51,10 @@ describe("canonical tables (anti-bug guard)", () => {
   it("algorithms feature: page, wizard, and crons all read/write the same table", () => {
     const ALGO_FILES = [
       "app/intelligence/algorithms/page.tsx",
-      "components/intelligence/algorithms/NewStrategyWizard.client.tsx",
+      // NewStrategyWizard.client.tsx no longer writes to `algorithms` directly —
+      // the alphalog-migration moved that insert server-side (raw-Postgres
+      // client) into this route, which the wizard now calls via fetch().
+      "app/api/bot-control/algorithms/route.ts",
       "app/api/cron/backtest/paper-bridge/route.ts",
       "app/api/cron/backtest/daemon/route.ts",
     ];
