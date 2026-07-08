@@ -7,7 +7,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { retryAsync, isRetryableError } from '@/lib/security/retry';
-import { createServiceClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { logError, logInfo, logWarn } from '@/lib/log';
 
 export const runtime = 'nodejs';
@@ -67,12 +67,13 @@ async function validatePairingSecret(rawBody: string, secret: string | null): Pr
     const instanceId = payload.bot_instance_id;
     if (!instanceId) return { ok: false, status: 401, error: 'Missing bot_instance_id in payload' };
 
-    const svc = createServiceClient();
-    const { data } = await svc
+    const pg = getPgClient();
+    const { data: rawData } = await pg
       .from('bot_instances')
       .select('webhook_secret_hash')
       .eq('id', instanceId)
-      .maybeSingle();
+      .single();
+    const data = rawData as { webhook_secret_hash: string } | null;
 
     if (!data?.webhook_secret_hash) return { ok: false, status: 401, error: 'Instance not found or not paired' };
 

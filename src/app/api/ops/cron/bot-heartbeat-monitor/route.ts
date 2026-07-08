@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { getPgClient } from "@/lib/pg/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,8 +25,11 @@ async function sendPush(userId: string, title: string, body: string, tag: string
   }).catch(() => undefined);
 }
 
-async function sendRecoveryCommand(supabase: ReturnType<typeof getServiceClient>, botId: string) {
-  const { data } = await supabase.from("bot_commands").insert({
+async function sendRecoveryCommand(botId: string) {
+  // bot_commands is one of the 16 in-scope tables — uses the pg client, unlike
+  // bot_monitor_state elsewhere in this file which stays on Supabase.
+  const pg = getPgClient();
+  const { data } = await pg.from("bot_commands").insert({
     bot_id: botId,
     command_type: "RESTART_LOGIC",
     target_scope: "all",
@@ -33,7 +37,8 @@ async function sendRecoveryCommand(supabase: ReturnType<typeof getServiceClient>
     status: "PENDING",
     payload: { reason: "auto_recovery", triggered_by: "bot-heartbeat-monitor" },
   }).select("id").single();
-  return data?.id ?? null;
+  const row = data as { id: string } | null;
+  return row?.id ?? null;
 }
 
 export async function POST(request: NextRequest) {
@@ -47,14 +52,19 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = getServiceClient();
+  const pg = getPgClient();
   const now = Date.now();
 
-  // Load all instances + their bot info + current monitor state
-  const [{ data: instances }, { data: states }, { data: accounts }] = await Promise.all([
-    supabase.from("bot_instances").select("id, bot_account_id, last_heartbeat_at, status"),
+  // Load all instances + their bot info + current monitor state.
+  // bot_instances/bot_accounts are in-scope (pg); bot_monitor_state is not
+  // one of the 16 migrated tables and stays on Supabase.
+  const [{ data: instancesRaw }, { data: states }, { data: accountsRaw }] = await Promise.all([
+    pg.from("bot_instances").select("id, bot_account_id, last_heartbeat_at, status"),
     supabase.from("bot_monitor_state").select("*"),
-    supabase.from("bot_accounts").select("id, bot_id, user_id"),
+    pg.from("bot_accounts").select("id, bot_id, user_id"),
   ]);
+  const instances = instancesRaw as unknown as { id: string; bot_account_id: string; last_heartbeat_at: string | null; status: string }[] | null;
+  const accounts = accountsRaw as unknown as { id: string; bot_id: string; user_id: string }[] | null;
 
   const stateMap = Object.fromEntries((states ?? []).map((s) => [s.bot_instance_id, s]));
   const accountMap = Object.fromEntries((accounts ?? []).map((a) => [a.id, a]));
@@ -78,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     // Transition: UP → DOWN
     if (isStale && !wasDown) {
-      const cmdId = await sendRecoveryCommand(supabase, account.bot_id);
+      const cmdId = await sendRecoveryCommand(account.bot_id);
       await supabase.from("bot_monitor_state").upsert({
         bot_instance_id: inst.id,
         is_down: true,

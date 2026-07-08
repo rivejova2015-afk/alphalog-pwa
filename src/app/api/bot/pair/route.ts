@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { getPgClient } from "@/lib/pg/client";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -32,15 +33,25 @@ export async function POST(request: NextRequest) {
 
     const { pairing_token, account_number, broker_name, platform } = parsed.data;
 
-    // POST from EA has no user session — use service client; token hash IS the auth
-    const svc = createServiceClient();
+    // POST from EA has no user session — token hash IS the auth
+    const pg = getPgClient();
 
     // 1. Find the pairing token in bot_instances
-    const { data: instance, error: findErr } = await svc
+    const { data: instanceRaw, error: findErr } = await pg
       .from("bot_instances")
       .select("id, bot_account_id, instance_secret, is_paper_mode, status, pairing_token_hash, pairing_token_used_at, pairing_token_expires_at")
       .eq("pairing_token_hash", hashToken(pairing_token))
-      .maybeSingle();
+      .single();
+    const instance = instanceRaw as {
+      id: string;
+      bot_account_id: string;
+      instance_secret: string;
+      is_paper_mode: boolean | null;
+      status: string;
+      pairing_token_hash: string | null;
+      pairing_token_used_at: string | null;
+      pairing_token_expires_at: string | null;
+    } | null;
 
     if (findErr || !instance) {
       return NextResponse.json({ error: "Token de emparejamiento inválido o no encontrado" }, { status: 401 });
@@ -65,7 +76,7 @@ export async function POST(request: NextRequest) {
     const webhookSecret = crypto.randomBytes(32).toString("hex");
 
     // 4. Mark token as used + update instance with broker info + store secrets
-    const { error: updateErr } = await svc
+    const { error: updateErr } = await pg
       .from("bot_instances")
       .update({
         platform,
@@ -83,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Update bot_accounts with real broker account number
-    await svc
+    await pg
       .from("bot_accounts")
       .update({ account_id: String(account_number), label: `${broker_name} #${account_number}` })
       .eq("id", instance.bot_account_id);
@@ -120,15 +131,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "instance_id requerido" }, { status: 400 });
     }
 
-    // Verify ownership via RLS (anon client with user session) + exclude deleted
-    const { data: instance, error: findErr } = await supabase
+    const pg = getPgClient();
+
+    // bot_instances now lives on our own Postgres, which has no RLS. Ownership was
+    // previously enforced by a Supabase RLS policy on this table (joining through
+    // bot_accounts.user_id) when queried with the anon/user-session client — that
+    // enforcement is gone now, so it's replicated explicitly below via two lookups.
+    const { data: instanceRaw, error: findErr } = await pg
       .from("bot_instances")
       .select("id, bot_account_id")
       .eq("id", instanceId)
       .is("deleted_at", null)
-      .maybeSingle();
+      .single();
+    const instance = instanceRaw as { id: string; bot_account_id: string } | null;
 
     if (findErr || !instance) {
+      return NextResponse.json({ error: "Instancia no encontrada" }, { status: 404 });
+    }
+
+    const { data: botAccountRaw, error: acctErr } = await pg
+      .from("bot_accounts")
+      .select("id, user_id")
+      .eq("id", instance.bot_account_id)
+      .single();
+    const botAccount = botAccountRaw as { id: string; user_id: string } | null;
+
+    if (acctErr || !botAccount || botAccount.user_id !== user.id) {
       return NextResponse.json({ error: "Instancia no encontrada" }, { status: 404 });
     }
 
@@ -137,7 +165,7 @@ export async function GET(request: NextRequest) {
     const token = `GOLD-${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
 
     // Store hash (never store raw token server-side)
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await pg
       .from("bot_instances")
       .update({
         pairing_token_hash: hashToken(token),

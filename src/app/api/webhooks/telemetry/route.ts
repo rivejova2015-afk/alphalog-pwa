@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getPgClient } from "@/lib/pg/client";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -39,13 +40,22 @@ export async function POST(request: NextRequest) {
     const { bot_instance_id, balance, equity, positions_total, positions_buy, positions_sell } = parsed.data;
 
     const svc = createServiceClient();
+    const pg = getPgClient();
 
-    // Look up instance + bot_account in one call. Hash comparison is constant-time at the DB layer.
-    const { data: instance, error: findErr } = await svc
+    // Look up instance + bot_account. bot_instances/bot_accounts now live on our own
+    // Postgres (no cross-table embed support in the pg shim), so this is split into
+    // two sequential lookups instead of the original single embedded-select call.
+    const { data: instanceRaw, error: findErr } = await pg
       .from("bot_instances")
-      .select("id, instance_id, webhook_secret_hash, bot_account_id, bot_accounts!inner(id, user_id, app_account_id)")
+      .select("id, instance_id, webhook_secret_hash, bot_account_id")
       .eq("id", bot_instance_id)
-      .maybeSingle();
+      .single();
+    const instance = instanceRaw as {
+      id: string;
+      instance_id: string;
+      webhook_secret_hash: string | null;
+      bot_account_id: string;
+    } | null;
 
     if (findErr || !instance || !instance.webhook_secret_hash) {
       return NextResponse.json({ error: "Instance not found or not paired" }, { status: 404 });
@@ -57,14 +67,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 });
     }
 
-    const botAccount = Array.isArray(instance.bot_accounts) ? instance.bot_accounts[0] : instance.bot_accounts;
-    if (!botAccount) {
+    const { data: botAccountRaw, error: acctErr } = await pg
+      .from("bot_accounts")
+      .select("id, user_id, app_account_id")
+      .eq("id", instance.bot_account_id)
+      .single();
+    const botAccount = botAccountRaw as { id: string; user_id: string; app_account_id: string | null } | null;
+    if (acctErr || !botAccount) {
       return NextResponse.json({ error: "Bot account missing" }, { status: 500 });
     }
 
     const now = new Date().toISOString();
 
-    // Upsert telemetry (one row per bot_account)
+    // Upsert telemetry (one row per bot_account). bot_telemetry is NOT one of the
+    // 16 in-scope tables for this migration batch — stays on Supabase.
     await svc
       .from("bot_telemetry")
       .upsert({
@@ -80,14 +96,14 @@ export async function POST(request: NextRequest) {
       }, { onConflict: "bot_account_id" });
 
     // Update heartbeat on instance for staleness tracking
-    await svc
+    await pg
       .from("bot_instances")
       .update({ last_heartbeat_at: now, status: "online" })
       .eq("id", instance.id);
 
     // Sync balance to the linked AlphaLog account (if user opted in to vinculation)
     if (botAccount.app_account_id) {
-      await svc
+      await pg
         .from("accounts")
         .update({ current_balance: balance, updated_at: now })
         .eq("id", botAccount.app_account_id)

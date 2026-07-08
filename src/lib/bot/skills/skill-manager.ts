@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getPgClient } from "@/lib/pg/client";
 import { logError } from "@/lib/log";
 import { runLearningCycle, createEmptyQTable } from "./rl-engine";
 import { extractTradingRules } from "./llm-rules";
@@ -94,23 +95,28 @@ export async function runSkillLearningCycle(
 ): Promise<SkillLearningOutput> {
   try {
     const supabase = await createClient();
+    const pg = getPgClient();
 
-    // 1. Fetch closed paper trades from last 24h
+    // 1. Fetch closed paper trades from last 24h. paper_trades is in-scope (pg
+    // client); the shim has no `.gt()`, so the 24h cutoff is filtered in JS
+    // after the query instead — the SQL ORDER BY already returns ascending
+    // order, which the JS filter preserves.
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: trades, error: tradesErr } = await supabase
+    const { data: tradesRaw, error: tradesErr } = await pg
       .from("paper_trades")
       .select("*")
       .eq("symbol", instrument)
       .is("deleted_at", null)
       .is("exit_date", null) // Only closed trades
-      .gt("created_at", oneDayAgo)
       .order("created_at", { ascending: true });
 
     if (tradesErr) {
       throw new Error(`Failed to fetch paper trades: ${tradesErr.message}`);
     }
 
-    const paperTrades = (trades ?? []) as PaperTrade[];
+    const paperTrades = (
+      (tradesRaw as unknown as (PaperTrade & { created_at: string })[] | null) ?? []
+    ).filter((t) => t.created_at > oneDayAgo);
 
     // 2. Minimum trades for meaningful learning
     if (paperTrades.length < 50) {
@@ -121,23 +127,30 @@ export async function runSkillLearningCycle(
       return { success: false, tradesProcessed: paperTrades.length };
     }
 
-    // 3. Get or create active skill
-    const { data: existingSkill } = await supabase
+    // 3. Get or create active skill. bot_skills is in-scope (pg client); the shim
+    // has no `.limit()`, but `.single()` already takes the first row of the
+    // ORDER BY result, which is equivalent to limit(1) + maybeSingle() here.
+    const { data: existingSkillRaw } = await pg
       .from("bot_skills")
       .select("id, model_blob_path, epsilon_current, performance_before")
       .eq("instrument", instrument)
       .eq("environment", "paper")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .single();
+    const existingSkill = existingSkillRaw as {
+      id: string;
+      model_blob_path: string | null;
+      epsilon_current: number | null;
+      performance_before: { sharpe?: number; winRate?: number; avg_pnl?: number } | null;
+    } | null;
 
     let skillId = existingSkill?.id;
     const performanceBefore = existingSkill?.performance_before;
 
     if (!skillId) {
       // Create new skill
-      const { data: newSkill, error: createErr } = await supabase
+      const { data: newSkillRaw, error: createErr } = await pg
         .from("bot_skills")
         .insert({
           user_id: userId,
@@ -149,6 +162,7 @@ export async function runSkillLearningCycle(
         })
         .select("id")
         .single();
+      const newSkill = newSkillRaw as { id: string } | null;
 
       if (createErr || !newSkill) {
         throw new Error(`Failed to create skill: ${createErr?.message}`);
@@ -209,7 +223,7 @@ export async function runSkillLearningCycle(
         }
       : null;
 
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await pg
       .from("bot_skills")
       .update({
         model_blob_path: newModelPath,

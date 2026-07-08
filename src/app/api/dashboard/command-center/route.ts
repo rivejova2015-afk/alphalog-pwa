@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { recordBugFromRequest } from '@/lib/security/bugRecorder';
 
 export async function GET(request: NextRequest) {
@@ -9,7 +10,14 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const uid = user.id;
+    const pg = getPgClient();
 
+    // accounts, trades, bot_instances, bot_commands, bot_events now live on our own
+    // Postgres. The pg shim has no `count`/`head` or `limit` support (unlike the
+    // Supabase client used everywhere else in this Promise.all), so those five calls
+    // fetch full rows and count/slice in JS instead — behaviorally equivalent, just
+    // not as bandwidth-efficient. Every other call below is on a table NOT in the
+    // 16-table migration scope and stays untouched on `supabase`.
     const [
       accounts, trades, setups, evidence,
       decisions, sops, costs, journal,
@@ -18,8 +26,16 @@ export async function GET(request: NextRequest) {
       appLogs, mailboxes, messages,
       news, calEvents, reports, jobs,
     ] = await Promise.all([
-      supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
-      supabase.from('trades').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
+      (async () => {
+        const r = await pg.from('accounts').select('id').eq('user_id', uid).is('deleted_at', null);
+        const rows = r.data as unknown as unknown[] | null;
+        return { count: rows?.length ?? 0 };
+      })(),
+      (async () => {
+        const r = await pg.from('trades').select('id').eq('user_id', uid).is('deleted_at', null);
+        const rows = r.data as unknown as unknown[] | null;
+        return { count: rows?.length ?? 0 };
+      })(),
       supabase.from('setups').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
       supabase.from('trade_evidence').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
       supabase.from('business_decisions').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
@@ -27,9 +43,21 @@ export async function GET(request: NextRequest) {
       supabase.from('business_costs').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
       supabase.from('journal_entries').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
       supabase.from('bots').select('id', { count: 'exact', head: true }).eq('user_id', uid),
-      supabase.from('bot_instances').select('id, status, last_heartbeat_at, instance_id, bot_account_id').limit(5),
-      supabase.from('bot_commands').select('command_type, status, created_at').eq('created_by', uid).order('created_at', { ascending: false }).limit(5),
-      supabase.from('bot_events').select('event_type, payload, created_at').eq('bot_id', uid).order('created_at', { ascending: false }).limit(6),
+      (async () => {
+        const r = await pg.from('bot_instances').select('id, status, last_heartbeat_at, instance_id, bot_account_id');
+        const rows = (r.data ?? []) as unknown as { id: string; status: string; last_heartbeat_at: string | null; instance_id: string; bot_account_id: string }[];
+        return { data: rows.slice(0, 5) };
+      })(),
+      (async () => {
+        const r = await pg.from('bot_commands').select('command_type, status, created_at').eq('created_by', uid).order('created_at', { ascending: false });
+        const rows = (r.data ?? []) as unknown as { command_type: string; status: string; created_at: string }[];
+        return { data: rows.slice(0, 5) };
+      })(),
+      (async () => {
+        const r = await pg.from('bot_events').select('event_type, payload, created_at').eq('bot_id', uid).order('created_at', { ascending: false });
+        const rows = (r.data ?? []) as unknown as { event_type: string; payload: unknown; created_at: string }[];
+        return { data: rows.slice(0, 6) };
+      })(),
       supabase.from('bot_telemetry').select('balance, equity, positions_total, positions_buy, positions_sell, basket_r, tier, last_signal_text, last_heartbeat_ts').limit(3),
       supabase.from('intelligence_capital_targets').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),
       supabase.from('intelligence_capital_accounts').select('id', { count: 'exact', head: true }).eq('user_id', uid).is('deleted_at', null),

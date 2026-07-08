@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { getPgClient } from "@/lib/pg/client";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -43,9 +44,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getServiceClient();
+    const pg = getPgClient();
     const nowMs = Date.now();
     const generatedAt = new Date().toISOString();
 
+    // bots is NOT one of the 16 in-scope tables and stays on Supabase.
+    // bot_accounts / bot_instances / bot_command_status are in-scope (pg client).
     const [
       { data: bots, error: botsErr },
       { data: botAccounts, error: accountsErr },
@@ -74,6 +78,10 @@ export async function POST(request: NextRequest) {
         .filter((a): a is { id: string; linked_bot_account_id: string } => Boolean(a.linked_bot_account_id))
         .map((a) => [a.linked_bot_account_id, a.id]),
     );
+
+    const botAccounts = botAccountsRaw as unknown as { id: string; bot_id: string }[] | null;
+    const instances = instancesRaw as unknown as { id: string; bot_account_id: string; status: string; last_heartbeat_at: string | null }[] | null;
+    const pendingCmds = pendingCmdsRaw as unknown as { id: string; bot_account_id: string; status: string; created_at: string }[] | null;
 
     const results: {
       profile: "forex" | "futuros" | "crypto";
@@ -156,7 +164,7 @@ export async function POST(request: NextRequest) {
     // Persist to bot_events per bot
     const savedCount = { success: 0, failed: 0 };
     for (const res of results) {
-      const { error: insertErr } = await supabase.from("bot_events").insert({
+      const { error: insertErr } = await pg.from("bot_events").insert({
         bot_id: res.botId,
         event_type: "DAILY_VERIFICATION",
         payload: {

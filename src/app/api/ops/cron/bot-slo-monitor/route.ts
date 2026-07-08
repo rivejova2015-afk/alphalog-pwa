@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { getPgClient } from "@/lib/pg/client";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -43,16 +44,19 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getServiceClient();
+    const pg = getPgClient();
     const nowMs = Date.now();
 
+    // bots is NOT one of the 16 in-scope tables and stays on Supabase.
+    // bot_instances / bot_command_status are in-scope and use the pg client.
     const [
       { data: bots, error: botsErr },
-      { data: instances, error: instancesErr },
-      { data: cmdStatus, error: cmdErr },
+      { data: instancesRaw, error: instancesErr },
+      { data: cmdStatusRaw, error: cmdErr },
     ] = await Promise.all([
       supabase.from("bots").select("id,name"),
-      supabase.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
-      supabase
+      pg.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
+      pg
         .from("bot_command_status")
         .select("id,bot_account_id,status,created_at,acked_at")
         .eq("status", "PENDING"),
@@ -61,6 +65,9 @@ export async function POST(request: NextRequest) {
     if (botsErr) throw botsErr;
     if (instancesErr) throw instancesErr;
     if (cmdErr) throw cmdErr;
+
+    const instances = instancesRaw as unknown as { id: string; bot_account_id: string; status: string; last_heartbeat_at: string | null }[] | null;
+    const cmdStatus = cmdStatusRaw as unknown as { id: string; bot_account_id: string; status: string; created_at: string; acked_at: string | null }[] | null;
 
     const checks: { code: string; severity: string; detail: string }[] = [];
 

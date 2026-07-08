@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken } from "@/lib/security/timing";
 import { createClient } from "@supabase/supabase-js";
+import { getPgClient } from "@/lib/pg/client";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -51,22 +52,28 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getServiceClient();
+    const pg = getPgClient();
     const nowMs = Date.now();
     const nowIso = new Date().toISOString();
 
+    // bots is NOT one of the 16 in-scope tables and stays on Supabase.
+    // bot_accounts / bot_instances are in-scope (pg client).
     const [
       { data: bots, error: botsErr },
-      { data: botAccounts, error: accountsErr },
-      { data: instances, error: instancesErr },
+      { data: botAccountsRaw, error: accountsErr },
+      { data: instancesRaw, error: instancesErr },
     ] = await Promise.all([
       supabase.from("bots").select("id,name"),
-      supabase.from("bot_accounts").select("id,bot_id"),
-      supabase.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
+      pg.from("bot_accounts").select("id,bot_id"),
+      pg.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
     ]);
 
     if (botsErr) throw botsErr;
     if (accountsErr) throw accountsErr;
     if (instancesErr) throw instancesErr;
+
+    const botAccounts = botAccountsRaw as unknown as { id: string; bot_id: string }[] | null;
+    const instances = instancesRaw as unknown as { id: string; bot_account_id: string; status: string; last_heartbeat_at: string | null }[] | null;
 
     const report = { actions: [] as unknown[], skipped: [] as unknown[], errors: [] as string[] };
 
@@ -94,23 +101,25 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Cooldown check
+      // Cooldown check. bot_commands is in-scope (pg client), which has no
+      // `.gte()`/`.limit()` — fetch matches for this bot+type and filter/check
+      // the age cutoff in JS instead (behaviorally equivalent).
       const cooldownIso = new Date(nowMs - COOLDOWN_MIN * 60 * 1000).toISOString();
-      const { data: recentCmds } = await supabase
+      const { data: recentCmdsRaw } = await pg
         .from("bot_commands")
         .select("id,created_at")
         .eq("bot_id", bot.id)
-        .eq("command_type", "RESTART_LOGIC")
-        .gte("created_at", cooldownIso)
-        .limit(1);
+        .eq("command_type", "RESTART_LOGIC");
+      const recentCmds = ((recentCmdsRaw as unknown as { id: string; created_at: string }[] | null) ?? [])
+        .filter((c) => c.created_at >= cooldownIso);
 
-      if ((recentCmds ?? []).length > 0) {
+      if (recentCmds.length > 0) {
         report.skipped.push({ bot_id: bot.id, reason: "cooldown_active", profile });
         continue;
       }
 
       // Issue RESTART_LOGIC command
-      const { data: cmd, error: cmdErr } = await supabase
+      const { data: cmdRaw, error: cmdErr } = await pg
         .from("bot_commands")
         .insert({
           bot_id: bot.id,
@@ -121,9 +130,10 @@ export async function POST(request: NextRequest) {
         })
         .select("id")
         .single();
+      const cmd = cmdRaw as { id: string } | null;
 
-      if (cmdErr) {
-        report.errors.push(`Failed to insert command for bot ${bot.id}: ${cmdErr.message}`);
+      if (cmdErr || !cmd) {
+        report.errors.push(`Failed to insert command for bot ${bot.id}: ${cmdErr?.message ?? "no row returned"}`);
         continue;
       }
 
@@ -133,10 +143,10 @@ export async function POST(request: NextRequest) {
         bot_account_id: accountId,
         status: "PENDING",
       }));
-      await supabase.from("bot_command_status").insert(statusRows);
+      await pg.from("bot_command_status").insert(statusRows);
 
       // Record event
-      await supabase.from("bot_events").insert({
+      await pg.from("bot_events").insert({
         bot_id: bot.id,
         event_type: "AUTO_RECOVERY_TRIGGERED",
         payload: { source: "vercel-cron-auto-recovery", profile, command_id: cmd.id, generated_at: nowIso },
