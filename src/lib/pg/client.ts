@@ -112,7 +112,7 @@ class QueryBuilder {
       if (this.mode === "insert") {
         result = await client`
           INSERT INTO ${client(this.table)} ${client(this.insertRows)}
-          RETURNING ${this.selectCols === "*" ? client`*` : client(this.selectCols.split(","))}
+          RETURNING ${this.selectCols === "*" ? client`*` : client(this.selectCols.split(",").map((s) => s.trim()))}
         `;
       } else if (this.mode === "update") {
         const where = this.buildWhereFragment(client);
@@ -125,7 +125,7 @@ class QueryBuilder {
         const orderFragment = this.orderCol
           ? client`ORDER BY ${client(this.orderCol)} ${this.orderAsc ? client`ASC` : client`DESC`}`
           : client``;
-        const cols = this.selectCols === "*" ? client`*` : client(this.selectCols.split(","));
+        const cols = this.selectCols === "*" ? client`*` : client(this.selectCols.split(",").map((s) => s.trim()));
         result = await client`SELECT ${cols} FROM ${client(this.table)} ${where} ${orderFragment}`;
       }
 
@@ -137,7 +137,6 @@ class QueryBuilder {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       resolve({ data: null, error: { message } });
-      reject?.(err);
     }
   }
 }
