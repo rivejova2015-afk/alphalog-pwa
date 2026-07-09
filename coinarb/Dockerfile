@@ -1,7 +1,16 @@
 FROM node:22-slim AS builder
 WORKDIR /app
 COPY package*.json tsconfig.json ./
-RUN npm ci
+# npm ci (not npm install) here would require package-lock.json to exactly
+# match this build environment's optional-dependency resolution. It doesn't:
+# an optional multi-platform WASM binding transitively pulled in by a
+# devDependency (@rolldown/binding-wasm32-wasi, itself irrelevant at runtime
+# on any real target platform) resolves slightly differently across npm
+# client versions/OSes, so the lockfile drifts between Windows, local Docker,
+# and Fly's remote Depot builder even right after a fresh `npm install`.
+# `npm install` tolerates that drift while still respecting package.json's
+# version ranges.
+RUN npm install
 COPY src/ ./src/
 RUN npm run build
 
@@ -16,7 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev
+# See the builder stage's comment above for why npm install instead of npm ci.
+RUN npm install --omit=dev
 COPY --from=builder /app/dist/ ./dist/
 COPY scripts/ ./scripts/
 RUN chmod +x ./scripts/start-with-tailscale.sh
