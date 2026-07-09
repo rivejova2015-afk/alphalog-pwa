@@ -19,6 +19,13 @@
 FROM node:24-slim AS runner
 WORKDIR /app
 
+# Tailscale (sidecar): conecta el contenedor a la red Headscale propia antes de arrancar la app.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg \
+    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list \
+    && apt-get update && apt-get install -y tailscale \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
@@ -40,11 +47,21 @@ COPY --chown=nextjs:nodejs .next/standalone ./
 # runtime serves them at /_next/static/*.
 COPY --chown=nextjs:nodejs .next/static ./.next/static
 
-USER nextjs
+# Entrypoint que levanta el sidecar de Tailscale antes de arrancar la app.
+# --chown=nextjs:nodejs aqui es cosmetico ahora (el proceso corre como root
+# de punta a punta hasta que start.sh hace `su nextjs` para lanzar node), pero
+# no hace dano: el propio start.sh se ejecuta como root de todas formas.
+COPY --chown=nextjs:nodejs scripts/start-with-tailscale.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# No `USER nextjs` here: tailscaled needs root + CAP_NET_ADMIN for real TUN
+# mode (creates an actual tailscale0 interface). The container now starts as
+# root; start.sh itself drops privileges to nextjs via `su` right before
+# launching the Node process, once the Tailscale sidecar is up.
 EXPOSE 3000
 
 # Health probe used by Fly's [http_service.checks].
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"
 
-CMD ["node", "server.js"]
+CMD ["/app/start.sh"]

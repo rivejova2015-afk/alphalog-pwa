@@ -54,6 +54,7 @@ Thumbs.db
 !README.md
 docs
 scripts
+!scripts/start-with-tailscale.sh
 supabase
 .env.example
 .dockerignore
