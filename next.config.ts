@@ -53,6 +53,16 @@ const nextConfig: NextConfig = {
   // on Vercel since Vercel uses its own build adapter.
   output: 'standalone',
 
+  // Without this, Next.js infers the file-tracing root by walking up looking for
+  // a lockfile/workspace marker, which on this machine resolves above the project
+  // dir and makes `.next/standalone` mirror the full absolute path (e.g.
+  // `.next/standalone/Documents/alphalog-pwa/server.js` instead of
+  // `.next/standalone/server.js`) — silently breaking the Dockerfile's
+  // `CMD ["/app/start.sh"]` -> `exec node server.js`, since that file wouldn't
+  // exist at the expected flat path. Pinning the root to this directory forces
+  // a flat standalone output regardless of what's above it on disk.
+  outputFileTracingRoot: __dirname,
+
   // Limit parallel workers during `next build` to keep memory under ~4GB. Without
   // this Next.js spawns one worker per CPU (Fly's Depot builder reports 16+ CPUs),
   // each loading the full bundle, and OOMs the builder container. 2 workers is
