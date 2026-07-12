@@ -29,5 +29,5 @@ COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=builder /app/dist/ ./dist/
 COPY scripts/ ./scripts/
-RUN chmod +x ./scripts/start-with-tailscale.sh
+RUN chmod +x ./scripts/start-with-tailscale.sh ./scripts/start-local.sh
 CMD ["/app/scripts/start-with-tailscale.sh"]
