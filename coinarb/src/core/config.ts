@@ -89,11 +89,18 @@ export const PD_MACRO_DAYS = 3;  // hardcoded; not user-tunable
 export let SWEEP_CONFIRM_BODY_RATIO = Number(process.env.SWEEP_CONFIRM_BODY_RATIO ?? '0.35');
 
 export const COINARB_AGENT_ID = process.env.ALGORITHM_ID ?? process.env.COINARB_AGENT_ID ?? 'a667d400-065f-4415-9609-373c3749e5fd';
-export const COINARB_USER_ID = process.env.COINARB_USER_ID ?? '';
+// `let`: algo-runner containers don't know their algorithm's owning user at
+// startup (only ALGORITHM_ID is injected), so loadConfigFromDb() rebinds this
+// from algorithms.user_id. Env var still wins when explicitly set (parity tests).
+export let COINARB_USER_ID = process.env.COINARB_USER_ID ?? '';
 
 // Bot identity for the bot_commands lifecycle (Fase C). Defaults match
 // the rows created by migration 099/100; envs override for parity tests.
-export const COINARB_BOT_ID = process.env.COINARB_BOT_ID ?? '11111111-c01a-4b00-9001-000000000001';
+// Prefers ALGORITHM_ID (like COINARB_AGENT_ID above) so each algo-runner
+// container gets a distinct bot_id — without this, every concurrently-running
+// crypto algorithm shares the same placeholder bot_id and would race to
+// claim/execute the same bot_commands rows.
+export const COINARB_BOT_ID = process.env.ALGORITHM_ID ?? process.env.COINARB_BOT_ID ?? '11111111-c01a-4b00-9001-000000000001';
 export const COINARB_BOT_ACCOUNT_ID = process.env.COINARB_BOT_ACCOUNT_ID ?? '22222222-c01a-4b00-9002-000000000001';
 
 // User-driven pause state — set by bot_commands command_type='pause'/'resume'
@@ -159,14 +166,19 @@ export async function loadConfigFromDb(): Promise<void> {
   const { getPg } = await import('../pg-client.js');
   try {
     const pg = getPg();
-    const [data] = await pg<{ parameters: Record<string, unknown> | null; engine_config: Record<string, unknown> | null }[]>`
-      SELECT parameters, engine_config FROM algorithms WHERE id = ${COINARB_AGENT_ID}
+    const [data] = await pg<{ user_id: string | null; parameters: Record<string, unknown> | null; engine_config: Record<string, unknown> | null }[]>`
+      SELECT user_id, parameters, engine_config FROM algorithms WHERE id = ${COINARB_AGENT_ID}
     `;
 
     if (!data) {
       console.warn(`[config] no algorithms row for id=${COINARB_AGENT_ID}, keeping env defaults`);
       return;
     }
+
+    // Env var (COINARB_USER_ID) wins if explicitly set (parity tests); otherwise
+    // pull from the algorithm's own row so algo-runner containers (which only
+    // know ALGORITHM_ID at startup) get a real user_id instead of ''.
+    if (!COINARB_USER_ID && data.user_id) COINARB_USER_ID = data.user_id;
 
     const params = (data.parameters ?? {}) as Record<string, unknown>;
     const engine = (data.engine_config ?? {}) as Record<string, unknown>;

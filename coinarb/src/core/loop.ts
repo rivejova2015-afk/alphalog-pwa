@@ -374,7 +374,6 @@ export class CoinarbCoordinator {
   private async flushTelemetry(fearGreed: number): Promise<void> {
     if (!COINARB_USER_ID) return;
     try {
-      const supabase = getSupabase();
       const pg = getPg();
       const btc = this.coinbase.getPrice('BTC');
 
@@ -462,10 +461,20 @@ export class CoinarbCoordinator {
         `;
       }
       // Mirror heartbeat to coinarb_agents (legacy table still consumed by the
-      // /intelligence/agents dashboard). One write per tick — best-effort.
-      const agentResult = await syncAgentHeartbeat(supabase, COINARB_USER_ID, anyPaused);
-      if (!agentResult.ok && agentResult.error !== 'no user_id') {
-        console.warn('[loop] coinarb_agents heartbeat sync failed:', agentResult.error);
+      // /intelligence/agents dashboard, still Supabase-only — never migrated to
+      // Postgres). One write per tick — best-effort, isolated in its own
+      // try/catch: this table/client is optional (e.g. algo-runner containers
+      // have no Supabase credentials at all) and must never abort the
+      // Postgres-based coinarb_telemetry insert above, which is the bot's real
+      // source of truth.
+      try {
+        const supabase = getSupabase();
+        const agentResult = await syncAgentHeartbeat(supabase, COINARB_USER_ID, anyPaused);
+        if (!agentResult.ok && agentResult.error !== 'no user_id') {
+          console.warn('[loop] coinarb_agents heartbeat sync failed:', agentResult.error);
+        }
+      } catch (err) {
+        console.warn('[loop] coinarb_agents heartbeat sync skipped:', err instanceof Error ? err.message : String(err));
       }
     } catch (err) {
       console.error('[loop] telemetry flush failed:', err);
