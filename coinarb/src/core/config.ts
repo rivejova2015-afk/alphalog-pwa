@@ -88,7 +88,7 @@ export const PD_MACRO_DAYS = 3;  // hardcoded; not user-tunable
 // a sweep is preserved; only the 1m confirmation candle is allowed weaker.
 export let SWEEP_CONFIRM_BODY_RATIO = Number(process.env.SWEEP_CONFIRM_BODY_RATIO ?? '0.35');
 
-export const COINARB_AGENT_ID = process.env.COINARB_AGENT_ID ?? 'a667d400-065f-4415-9609-373c3749e5fd';
+export const COINARB_AGENT_ID = process.env.ALGORITHM_ID ?? process.env.COINARB_AGENT_ID ?? 'a667d400-065f-4415-9609-373c3749e5fd';
 export const COINARB_USER_ID = process.env.COINARB_USER_ID ?? '';
 
 // Bot identity for the bot_commands lifecycle (Fase C). Defaults match
