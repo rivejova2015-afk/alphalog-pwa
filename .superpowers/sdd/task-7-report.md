@@ -270,3 +270,111 @@ npx eslint src/lib/engine/dispatchers/types.ts src/lib/engine/dispatchers/tradov
 inline `eslint-disable-next-line @typescript-eslint/no-explicit-any` comments
 since `src/lib/engine/**` and `src/lib/cme/**` aren't in the eslint config's
 "any allowed" glob list).
+
+## Fix (review finding — test hermeticity)
+
+A follow-up review of this task caught a real regression this report's
+verification had accidentally masked.
+
+**The bug:** `dispatchTradovate` (in `src/lib/engine/dispatchers/tradovate.ts`)
+constructed `const barsClient = createServiceClient() as SupabaseClient;`
+*unconditionally*, near the top of the function, before the code path even
+knew whether ATR computation (and therefore a `historical_bars` read) would
+be reached. `createServiceClient()` (`src/lib/supabase/server.ts`) throws at
+construction time if `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`
+aren't set. Since `dispatchTradovate` calls this before the
+`tickSizeFor(symbol) == null` early-return inside `computeSlTpTicks` even has
+a chance to skip the ATR path, *every* call — including ones that would never
+touch `historical_bars` — required real Supabase env vars to be present just
+to avoid throwing.
+
+This broke `src/lib/engine/dispatchers/index.test.ts`'s hermeticity: that
+file mocks `loadHistoricalBars` ("so tests don't try to hit Supabase") and
+injects its own mock `DispatchDbClient` for everything else, but never mocked
+`@/lib/supabase/server`'s `createServiceClient` — because until this change,
+nothing in the reachable call path needed it mocked. The unconditional
+construction threw before the `loadHistoricalBars` mock ever got a chance to
+help.
+
+This was masked in the original verification above because that test run
+happened with `.env.local` sourced into the shell first (`set -a && source
+.env.local && set +a`), which coincidentally supplied real credentials and
+let `createServiceClient()` succeed. A plain `npx vitest run
+src/lib/engine/dispatchers/index.test.ts` in a fresh clone or in CI — with no
+`.env.local` sourced — fails 30 of 46 tests in this file with `Error: Missing
+Supabase service role configuration...`.
+
+**The fix — two changes:**
+
+1. **`src/lib/engine/dispatchers/tradovate.ts`** — made `barsClient`
+   construction lazy. Removed the `svc: SupabaseClient` parameter from
+   `computeSlTpTicks` and instead construct `createServiceClient()` *inside*
+   the function, right where it's used, immediately before the
+   `loadHistoricalBars(...)` call — i.e. only after the
+   `tickSizeFor(symbol) == null` early-return has already passed. That
+   early-return path (unknown/unsupported contract) now never constructs a
+   Supabase client at all. Updated the call site (`dispatchTradovate`) to
+   call `computeSlTpTicks(rootSym, params)` without passing a client.
+
+2. **`src/lib/engine/dispatchers/index.test.ts`** — added a
+   `vi.mock("@/lib/supabase/server", () => ({ createServiceClient: () => ({}) }))`,
+   matching the exact mock pattern already used for this same function in
+   `src/app/api/cron/algorithms/tradovate-poll/__tests__/route.test.ts`
+   (`vi.mock("@/lib/supabase/server", () => ({ createServiceClient: () =>
+   ({ from: supabaseFromMock }) }))`). Since `loadHistoricalBars` itself is
+   already mocked in this file and never actually uses the client it's
+   handed, an empty stub object is sufficient here.
+
+**Verification (exact commands + output):**
+
+Before the fix (confirming the break), with `.env.local` sourced (matching
+the state this report's original verification ran in) — masked passing:
+```
+set -a && source .env.local && set +a
+npx vitest run src/lib/engine/dispatchers/index.test.ts
+```
+→ 46/46 passed (misleadingly green).
+
+Before the fix, in a genuinely clean shell (no env vars sourced at all —
+the state a fresh clone or CI would actually run in):
+```
+npx vitest run src/lib/engine/dispatchers/index.test.ts
+```
+→ **16 passed, 30 failed** — `Error: Missing Supabase service role
+configuration. Set SUPABASE_SERVICE_ROLE_KEY and
+NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL.` thrown from `createServiceClient()`
+before the `loadHistoricalBars` mock could help.
+
+After the fix, in the same clean shell (`env | grep -i SUPABASE` confirmed
+empty — no `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, or
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` set, no `.env.local` sourced):
+```
+npx vitest run src/lib/engine/dispatchers/index.test.ts
+```
+→ **46 passed, 0 failed.**
+
+Full suite, run the normal way for this project (env sourced), to confirm no
+other regression:
+```
+set -a && source .env.local && set +a && npx vitest run
+```
+→ **269 test files passed, 3050 tests passed, 0 failed** — same totals as
+this report's original verification, no new failures.
+
+Regression check on the file whose mock pattern was reused:
+```
+npx vitest run src/app/api/cron/algorithms/tradovate-poll/__tests__/route.test.ts
+```
+→ **5 passed, 0 failed.**
+
+Type check:
+```
+npx tsc --noEmit
+```
+→ clean, 0 errors.
+
+**Net result:** `dispatchTradovate` no longer requires Supabase env vars to
+be configured on any call path that doesn't actually read `historical_bars`,
+and `index.test.ts` is genuinely hermetic again — it passes with zero
+environment variables set, matching its own stated intent ("mocks
+`loadHistoricalBars` ... so tests don't try to hit Supabase").

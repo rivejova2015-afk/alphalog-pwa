@@ -37,6 +37,16 @@ vi.mock("@/lib/backtest/bars-loader", () => ({
   loadHistoricalBars: (...args: unknown[]) => loadHistoricalBarsMock(...args),
 }));
 
+// computeSlTpTicks constructs its own Supabase client (lazily, only when it
+// actually needs to read historical_bars) via createServiceClient(). Mock it
+// so the ATR path never needs real Supabase env vars — matching the pattern
+// in src/app/api/cron/algorithms/tradovate-poll/__tests__/route.test.ts.
+// The returned client is unused by the mocked loadHistoricalBars above, so
+// an empty stub is enough.
+vi.mock("@/lib/supabase/server", () => ({
+  createServiceClient: () => ({}),
+}));
+
 // Mock the logger so tests don't pollute output.
 vi.mock("@/lib/log", () => ({
   logError: vi.fn(),

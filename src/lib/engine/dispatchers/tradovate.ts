@@ -127,7 +127,6 @@ async function netAccountPosition(
  * defaults if anything is missing — never throws, never blocks the dispatch.
  */
 async function computeSlTpTicks(
-  svc: SupabaseClient,
   symbol: string,
   params: Record<string, unknown>,
 ): Promise<{ slTicks: number; tpTicks: number; method: "atr" | "static" }> {
@@ -146,6 +145,13 @@ async function computeSlTpTicks(
   }
 
   try {
+    // historical_bars stays out of the CME/Tradovate migration scope (still
+    // Supabase-only), so this uses its own Supabase client rather than the
+    // dispatcher's `svc` (which may now be a Postgres client for the migrated
+    // cme_* tables). Constructed lazily, right here, so that calls which never
+    // reach the ATR computation (e.g. unknown tick size, above) never require
+    // Supabase env vars to be configured.
+    const svc = createServiceClient() as SupabaseClient;
     const now = Date.now();
     const to = new Date(now).toISOString();
     const from = new Date(now - ATR_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -291,12 +297,10 @@ export async function dispatchTradovate(
   }
 
   // ATR-derived SL/TP with static fallback. Always returns a valid tick pair.
-  // historical_bars stays out of the CME/Tradovate migration scope (still
-  // Supabase-only), so this uses its own Supabase client rather than `svc`
-  // (which may now be a Postgres client for the migrated cme_* tables).
+  // Constructs its own Supabase client lazily, internally, only if/when it
+  // actually needs to read historical_bars (see computeSlTpTicks).
   const rootSym = rootSymbolOf(contract);
-  const barsClient = createServiceClient() as SupabaseClient;
-  const { slTicks, tpTicks, method } = await computeSlTpTicks(barsClient, rootSym, params);
+  const { slTicks, tpTicks, method } = await computeSlTpTicks(rootSym, params);
 
   // Kelly position sizing — opt-in via algo.parameters.kelly_enabled.
   // When enabled, override `quantity` with `floor(equity × f × frac / risk)`.
