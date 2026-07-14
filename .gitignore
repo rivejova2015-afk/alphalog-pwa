@@ -13,6 +13,10 @@
 # testing
 /coverage
 /test-results/
+
+# volcados de datos/esquema (pueden contener secretos en texto plano de
+# migraciones puntuales — nunca deben commitearse)
+/*.sql
 /playwright-report/
 /blob-report/
 /playwright/.cache/
