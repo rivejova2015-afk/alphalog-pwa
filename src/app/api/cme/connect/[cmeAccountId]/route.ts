@@ -22,7 +22,11 @@ export async function DELETE(
     .maybeSingle();
 
   if (conn) {
-    await deleteCmeAccessToken(conn.id);
+    try {
+      await deleteCmeAccessToken(conn.id);
+    } catch (err) {
+      console.warn('Failed to delete CME vault token for connection', conn.id, err);
+    }
     await svc
       .from('cme_connections')
       .update({ status: 'disconnected', updated_at: new Date().toISOString() })
