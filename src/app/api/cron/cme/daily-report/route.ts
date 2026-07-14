@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { safeCompareTokens } from '@/lib/security/timing';
 import { isMarketHours } from '@/lib/cme/market-hours';
 
@@ -11,34 +11,40 @@ export async function POST(req: NextRequest) {
 
   // Only run near market close (15:55–16:30 ET)
   const now = new Date();
-  const svc = createServiceClient();
+  const pg = getPgClient();
 
-  const { data: connections } = await svc
+  type ConnectionRow = { id: string; user_id: string; cme_account_id: string; daily_pnl_usd: number | null };
+
+  const { data: connectionsRaw } = await pg
     .from('cme_connections')
     .select('id, user_id, cme_account_id, daily_pnl_usd')
     .eq('status', 'connected');
 
-  if (!connections?.length) return NextResponse.json({ sent: 0 });
+  const connections = (connectionsRaw ?? []) as unknown as ConnectionRow[];
+  if (!connections.length) return NextResponse.json({ sent: 0 });
 
   let sent = 0;
 
   for (const conn of connections) {
-    const { data: snapshot } = await svc
+    // El shim no soporta `.limit()` (Ajuste de Task 2) — `.maybeSingle()` ya
+    // toma result[0] sobre el resultado ordenado, equivalente a
+    // `.limit(1).maybeSingle()` sin pérdida de comportamiento (mismo patrón
+    // usado en Task 4 para `account/route.ts`).
+    const { data: snapshot } = await pg
       .from('cme_equity_snapshots')
       .select('equity_usd, daily_pnl_usd, balance_usd')
       .eq('user_id', conn.user_id)
       .eq('cme_account_id', conn.cme_account_id)
       .order('snapshot_at', { ascending: false })
-      .limit(1)
       .maybeSingle();
 
-    const { data: acct } = await svc
+    const { data: acct } = await pg
       .from('algo_cme_accounts')
       .select('label')
       .eq('id', conn.cme_account_id)
       .maybeSingle();
 
-    const { data: trades } = await svc
+    const { data: trades } = await pg
       .from('cme_trades_propfirm')
       .select('pnl_usd, direction')
       .eq('user_id', conn.user_id)
@@ -46,8 +52,10 @@ export async function POST(req: NextRequest) {
       .gte('fill_timestamp', new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString())
       .eq('status', 'closed');
 
-    const tradeCount = trades?.length ?? 0;
-    const pnl = Number(snapshot?.daily_pnl_usd ?? conn.daily_pnl_usd ?? 0);
+    const snapshotRow = snapshot as { equity_usd: number; daily_pnl_usd: number; balance_usd: number } | null;
+    const acctRow = acct as { label: string } | null;
+    const tradeCount = (trades as unknown[] | null)?.length ?? 0;
+    const pnl = Number(snapshotRow?.daily_pnl_usd ?? conn.daily_pnl_usd ?? 0);
 
     const pushUrl = process.env.ALPHALOG_PUSH_NOTIFY_URL;
     const pushToken = process.env.ALPHALOG_PUSH_NOTIFY_TOKEN;
@@ -61,8 +69,8 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           userId: conn.user_id,
-          title: `CME Daily Report — ${acct?.label ?? 'Account'}`,
-          body: `${tradeCount} trades | P&L: $${pnl.toFixed(2)} | Equity: $${Number(snapshot?.equity_usd ?? 0).toFixed(2)}`,
+          title: `CME Daily Report — ${acctRow?.label ?? 'Account'}`,
+          body: `${tradeCount} trades | P&L: $${pnl.toFixed(2)} | Equity: $${Number(snapshotRow?.equity_usd ?? 0).toFixed(2)}`,
         }),
       }).catch(() => {});
     }

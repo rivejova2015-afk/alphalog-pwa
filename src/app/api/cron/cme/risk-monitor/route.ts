@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { safeCompareTokens } from '@/lib/security/timing';
 
 export async function POST(req: NextRequest) {
@@ -8,34 +8,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const svc = createServiceClient();
+  const pg = getPgClient();
 
-  const { data: connections } = await svc
+  type ConnectionRow = { id: string; user_id: string; cme_account_id: string; daily_pnl_usd: number | null };
+
+  const { data: connectionsRaw } = await pg
     .from('cme_connections')
     .select('id, user_id, cme_account_id, daily_pnl_usd')
     .eq('status', 'connected');
 
-  if (!connections?.length) return NextResponse.json({ checked: 0 });
+  const connections = (connectionsRaw ?? []) as unknown as ConnectionRow[];
+  if (!connections.length) return NextResponse.json({ checked: 0 });
 
   let triggered = 0;
 
   for (const conn of connections) {
     const [riskRes, accountRes] = await Promise.all([
-      svc
+      pg
         .from('cme_risk_configs')
         .select('id, enabled, circuit_breaker_pct')
         .eq('user_id', conn.user_id)
         .eq('cme_account_id', conn.cme_account_id)
         .maybeSingle(),
-      svc
+      pg
         .from('algo_cme_accounts')
         .select('max_daily_loss, label')
         .eq('id', conn.cme_account_id)
         .maybeSingle(),
     ]);
 
-    const risk = riskRes.data;
-    const account = accountRes.data;
+    const risk = riskRes.data as { id: string; enabled: boolean; circuit_breaker_pct: number | null } | null;
+    const account = accountRes.data as { max_daily_loss: number | null; label: string } | null;
 
     if (!risk || !account || !risk.enabled) continue;
 
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
     const isCbTriggered = dailyPnl <= -cbThreshold;
 
     if (isCbTriggered) {
-      await svc
+      await pg
         .from('cme_risk_configs')
         .update({
           enabled: false,

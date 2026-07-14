@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { safeCompareTokens } from '@/lib/security/timing';
 import { readCmeAccessToken, storeCmeAccessToken } from '@/lib/cme/vault';
 import { getCashBalance, tradovateRenew } from '@/lib/cme/tradovate';
@@ -10,28 +10,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const svc = createServiceClient();
+  const pg = getPgClient();
 
-  const { data: connections } = await svc
+  type ConnectionRow = { id: string; user_id: string; cme_account_id: string; tradovate_account_id: number; token_expires_at: string | null };
+
+  const { data: connectionsRaw } = await pg
     .from('cme_connections')
     .select('id, user_id, cme_account_id, tradovate_account_id, token_expires_at')
     .eq('status', 'connected')
     .eq('broker_type', 'tradovate');
 
-  if (!connections?.length) return NextResponse.json({ synced: 0 });
+  const connections = (connectionsRaw ?? []) as unknown as ConnectionRow[];
+  if (!connections.length) return NextResponse.json({ synced: 0 });
 
   let synced = 0;
   const errors: string[] = [];
 
   for (const conn of connections) {
     try {
-      const { data: acct } = await svc
+      const { data: acct } = await pg
         .from('algo_cme_accounts')
         .select('is_paper')
         .eq('id', conn.cme_account_id)
         .maybeSingle();
 
-      const isPaper = acct?.is_paper ?? true;
+      const isPaper = (acct as { is_paper: boolean } | null)?.is_paper ?? true;
 
       let token = await readCmeAccessToken(conn.id);
       if (!token) continue;
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
         const renewed = await tradovateRenew(token, isPaper);
         token = renewed.accessToken;
         await storeCmeAccessToken(conn.id, token);
-        await svc
+        await pg
           .from('cme_connections')
           .update({ token_expires_at: renewed.expirationTime })
           .eq('id', conn.id);
@@ -49,7 +52,7 @@ export async function POST(req: NextRequest) {
 
       const cash = await getCashBalance(token, conn.tradovate_account_id, isPaper);
 
-      await svc.from('cme_equity_snapshots').insert({
+      await pg.from('cme_equity_snapshots').insert({
         user_id: conn.user_id,
         cme_account_id: conn.cme_account_id,
         equity_usd: cash.netLiq,
@@ -59,7 +62,7 @@ export async function POST(req: NextRequest) {
         snapshot_at: new Date().toISOString(),
       });
 
-      await svc
+      await pg
         .from('cme_connections')
         .update({
           daily_pnl_usd: cash.realizedPnL,

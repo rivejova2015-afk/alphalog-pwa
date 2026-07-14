@@ -52,7 +52,7 @@ class QueryBuilder {
   private insertRows: Row[] = [];
   private updateRow: Row = {};
   private upsertConflictCols: string[] = [];
-  private wheres: Array<{ col: string; op: "eq" | "is" | "gt"; val: unknown }> = [];
+  private wheres: Array<{ col: string; op: "eq" | "is" | "gt" | "lt" | "gte"; val: unknown }> = [];
   private orderCol: string | null = null;
   private orderAsc = true;
   private wantSingle = false;
@@ -117,6 +117,16 @@ class QueryBuilder {
     return this;
   }
 
+  lt(col: string, val: unknown) {
+    this.wheres.push({ col, op: "lt", val });
+    return this;
+  }
+
+  gte(col: string, val: unknown) {
+    this.wheres.push({ col, op: "gte", val });
+    return this;
+  }
+
   order(col: string, opts?: { ascending?: boolean }) {
     this.orderCol = col;
     this.orderAsc = opts?.ascending ?? true;
@@ -146,6 +156,12 @@ class QueryBuilder {
       }
       if (w.op === "gt") {
         return client`${client(w.col)} > ${w.val as never}`;
+      }
+      if (w.op === "lt") {
+        return client`${client(w.col)} < ${w.val as never}`;
+      }
+      if (w.op === "gte") {
+        return client`${client(w.col)} >= ${w.val as never}`;
       }
       return client`${client(w.col)} = ${w.val as never}`;
     });

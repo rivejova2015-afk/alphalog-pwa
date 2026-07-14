@@ -72,6 +72,104 @@ describe("QueryBuilder — nuevos métodos CME", () => {
     expect(error).toBeNull();
     expect(Array.isArray(data)).toBe(true);
   });
+
+  it("lt() agrega una condición WHERE col < val", async () => {
+    const pg = getPgClient();
+    const { data, error } = await pg
+      .from("cme_signals")
+      .select("id")
+      .eq("status", "pending")
+      .lt("expires_at", new Date(0).toISOString());
+    expect(error).toBeNull();
+    // new Date(0) es 1970 — ninguna señal real debería tener expires_at antes
+    // de eso, así que el resultado esperado es un array vacío (confirma que
+    // el filtro realmente se aplica, no que "cualquier cosa" pasa).
+    expect(data).toEqual([]);
+  });
+
+  it("gte() agrega una condición WHERE col >= val", async () => {
+    const pg = getPgClient();
+    const { data, error } = await pg
+      .from("cme_signals")
+      .select("id")
+      .eq("status", "pending")
+      .gte("expires_at", new Date(0).toISOString());
+    expect(error).toBeNull();
+    expect(Array.isArray(data)).toBe(true);
+  });
+});
+
+describe("QueryBuilder — barrido de señales pending vencidas (expiry sweep)", () => {
+  const CONTRACT = "TEST-EXPIRY-SWEEP";
+  let testAccountId: string;
+
+  beforeAll(async () => {
+    const pg = getPgClient();
+    // cme_signals.cme_account_id tiene FK a algo_cme_accounts(id) — necesita
+    // una cuenta real, no un UUID inventado.
+    const { data } = await pg
+      .from("algo_cme_accounts")
+      .insert({
+        user_id: TEST_USER_ID,
+        account_type: "propfirm",
+        provider_name: "Apex",
+        account_number: "TEST-EXPIRY-SWEEP-ACCT",
+        is_paper: true,
+      })
+      .single();
+    testAccountId = (data as { id: string }).id;
+  });
+
+  afterAll(async () => {
+    const pg = getPgClient();
+    await pg.from("cme_signals").delete().eq("contract", CONTRACT);
+    if (testAccountId) {
+      await pg.from("algo_cme_accounts").delete().eq("id", testAccountId);
+    }
+  });
+
+  it("marca como rejected/expired una señal pending con expires_at en el pasado, sin tocar una pending vigente", async () => {
+    const pg = getPgClient();
+
+    const { error: insertError } = await pg.from("cme_signals").insert([
+      {
+        user_id: TEST_USER_ID,
+        cme_account_id: testAccountId,
+        contract: CONTRACT,
+        direction: "BUY",
+        status: "pending",
+        expires_at: new Date(Date.now() - 60_000).toISOString(), // vencida hace 1 min
+      },
+      {
+        user_id: TEST_USER_ID,
+        cme_account_id: testAccountId,
+        contract: CONTRACT,
+        direction: "SELL",
+        status: "pending",
+        expires_at: new Date(Date.now() + 60_000).toISOString(), // vence en 1 min — vigente
+      },
+    ]);
+    expect(insertError).toBeNull();
+
+    const { error: sweepError } = await pg
+      .from("cme_signals")
+      .update({ status: "rejected", reject_reason: "expired" })
+      .eq("status", "pending")
+      .lt("expires_at", new Date().toISOString());
+    expect(sweepError).toBeNull();
+
+    const { data: rows } = await pg
+      .from("cme_signals")
+      .select("direction, status, reject_reason")
+      .eq("contract", CONTRACT)
+      .order("direction", { ascending: true });
+
+    const typed = rows as { direction: string; status: string; reject_reason: string | null }[];
+    expect(typed).toEqual([
+      { direction: "BUY", status: "rejected", reject_reason: "expired" },
+      { direction: "SELL", status: "pending", reject_reason: null },
+    ]);
+  });
 });
 
 describe("QueryBuilder — range() + select(cols, { count: 'exact' })", () => {
