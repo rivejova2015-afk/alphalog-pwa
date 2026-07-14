@@ -1,68 +1,57 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock supabase server before importing the module
-const mockRpc = vi.fn();
-vi.mock("@/lib/supabase/server", () => ({
-  createServiceClient: () => ({ rpc: mockRpc }),
+// Mock lattice-secrets before importing the module
+const mockGetLatticeSecret = vi.fn();
+const mockSetLatticeSecret = vi.fn();
+const mockDeleteLatticeSecret = vi.fn();
+vi.mock("../../lattice-secrets", () => ({
+  getLatticeSecret: (...args: unknown[]) => mockGetLatticeSecret(...args),
+  setLatticeSecret: (...args: unknown[]) => mockSetLatticeSecret(...args),
+  deleteLatticeSecret: (...args: unknown[]) => mockDeleteLatticeSecret(...args),
 }));
 
 import { storeCmeAccessToken, readCmeAccessToken, deleteCmeAccessToken } from "../vault";
 
 describe("vault", () => {
   beforeEach(() => {
-    mockRpc.mockReset();
+    mockGetLatticeSecret.mockReset();
+    mockSetLatticeSecret.mockReset();
+    mockDeleteLatticeSecret.mockReset();
   });
 
   describe("storeCmeAccessToken", () => {
-    it("llama store_vault_secret con clave cme-access:{connectionId}", async () => {
-      mockRpc.mockResolvedValue({ error: null });
+    it("llama setLatticeSecret con project='alphalog-cme' y name='cme-access:{connectionId}'", async () => {
+      mockSetLatticeSecret.mockResolvedValue(undefined);
       await storeCmeAccessToken("conn-123", "my-token");
-      expect(mockRpc).toHaveBeenCalledWith("store_vault_secret", {
-        p_name: "cme-access:conn-123",
-        p_secret: "my-token",
-      });
+      expect(mockSetLatticeSecret).toHaveBeenCalledWith("alphalog-cme", "cme-access:conn-123", "my-token");
     });
 
-    it("throw cuando RPC retorna error", async () => {
-      mockRpc.mockResolvedValue({ error: { message: "RLS denied" } });
+    it("propaga el error si setLatticeSecret rechaza", async () => {
+      mockSetLatticeSecret.mockRejectedValue(new Error("RLS denied"));
       await expect(storeCmeAccessToken("conn-x", "tok")).rejects.toThrow(/RLS denied/);
     });
   });
 
   describe("readCmeAccessToken", () => {
     it("retorna el token cuando existe", async () => {
-      mockRpc.mockResolvedValue({ data: "stored-token", error: null });
+      mockGetLatticeSecret.mockResolvedValue("stored-token");
       const t = await readCmeAccessToken("conn-1");
       expect(t).toBe("stored-token");
-      expect(mockRpc).toHaveBeenCalledWith("read_vault_secret", { p_name: "cme-access:conn-1" });
+      expect(mockGetLatticeSecret).toHaveBeenCalledWith("alphalog-cme", "cme-access:conn-1");
     });
 
-    it("retorna null cuando data es null", async () => {
-      mockRpc.mockResolvedValue({ data: null, error: null });
-      const t = await readCmeAccessToken("conn-x");
-      expect(t).toBeNull();
-    });
-
-    it("retorna null cuando hay error (fail-soft)", async () => {
-      mockRpc.mockResolvedValue({ data: null, error: { message: "not found" } });
+    it("retorna null cuando no existe", async () => {
+      mockGetLatticeSecret.mockResolvedValue(null);
       const t = await readCmeAccessToken("conn-x");
       expect(t).toBeNull();
     });
   });
 
   describe("deleteCmeAccessToken", () => {
-    it("sobrescribe el secret con cadena vacía", async () => {
-      mockRpc.mockResolvedValue({ error: null });
+    it("llama deleteLatticeSecret con project='alphalog-cme' y name='cme-access:{connectionId}'", async () => {
+      mockDeleteLatticeSecret.mockResolvedValue(undefined);
       await deleteCmeAccessToken("conn-7");
-      expect(mockRpc).toHaveBeenCalledWith("store_vault_secret", {
-        p_name: "cme-access:conn-7",
-        p_secret: "",
-      });
-    });
-
-    it("no propaga errores (catch silently)", async () => {
-      mockRpc.mockReturnValue({ catch: (fn: () => void) => { fn(); return Promise.resolve(); } });
-      await expect(deleteCmeAccessToken("conn-x")).resolves.toBeUndefined();
+      expect(mockDeleteLatticeSecret).toHaveBeenCalledWith("alphalog-cme", "cme-access:conn-7");
     });
   });
 });
