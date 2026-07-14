@@ -63,7 +63,21 @@ dato que lo alimenta.
   guardar el token, usar siempre el único `userId` de lattice-server como
   ancla de la fila (el sistema es de un solo operador; `project`+`name` ya
   desambiguan de sobra sin necesitar el `user_id` de AlphaLog). Esto también
-  implica una **segunda conexión Postgres** (a la base `lattice`, distinta
+  implica dos hallazgos más de infraestructura, confirmados por consulta
+  directa:
+  - El rol `alphalog` (el que ya usa `ALPHALOG_PG_URL` hoy) **puede
+    conectarse** a la base `lattice` (`has_database_privilege = true`) pero
+    **no tiene ningún permiso sobre `"Secret"`** (`SELECT`/`INSERT` =
+    `false`). Hace falta un `GRANT SELECT, INSERT, UPDATE ON "Secret" TO
+    alphalog;` una sola vez, antes de que el código pueda usarla.
+  - `ENCRYPTION_KEY` (la que usa `api/src/lib/crypto.ts` en lattice-server)
+    **no es la misma variable** que `DATA_ENCRYPTION_KEY`, ya deployada como
+    Fly secret en `alphalog-pwa` (para otro propósito, preexistente). Nunca
+    asumir que son intercambiables — hay que tomar el valor real de
+    `ENCRYPTION_KEY` del `.env` de lattice-server y configurarlo como un Fly
+    secret nuevo y claramente nombrado (ej. `LATTICE_ENCRYPTION_KEY`) en
+    `alphalog-pwa`.
+  Esto también implica una **segunda conexión Postgres** (a la base `lattice`, distinta
   de la conexión a `alphalog_bots`) — no se puede hacer un JOIN cruzado en
   una sola query; el código debe leer `cme_connections.id` primero y después
   consultar `"Secret"` por separado.
