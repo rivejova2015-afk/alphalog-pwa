@@ -46,10 +46,30 @@ dato que lo alimenta.
 - **El Vault de Supabase** (`store_vault_secret`/`read_vault_secret`, RPCs
   usadas para cifrar el token OAuth de Tradovate) solo las usa
   `src/lib/cme/vault.ts` — blast radius acotado, reemplazo limpio.
-- **lattice-server ya tiene su propio vault de secretos**: el endpoint
-  `api/src/routes/secrets.ts`, cifrado AES-256-GCM vía `api/src/lib/crypto.ts`
-  con `ENCRYPTION_KEY`. Se reutiliza ese mismo cifrado en vez de inventar uno
-  nuevo.
+- **lattice-server ya tiene su propio vault de secretos**: `api/src/lib/crypto.ts`
+  (AES-256-GCM puro, `node:crypto`, sin dependencia de Prisma/Fastify — se
+  puede copiar/reusar en `alphalog-pwa` sin fricción) y una tabla `"Secret"`
+  ya existente (`userId, project, name, ciphertext, iv, authTag`, única por
+  `(userId, project, name)`), cuyo propio comentario en el schema dice
+  `project: "lattice" | "alphalog" | ...` — **fue diseñada desde el principio
+  para reusarse entre proyectos**. No hace falta crear una tabla nueva:
+  se guarda con `project='alphalog-cme'`, `name=<cme_connections.id>`.
+- **Gotcha real encontrado — la tabla `"Secret"` vive en la base `lattice`,
+  no en `alphalog_bots`, y su FK apunta al `"User"` de lattice-server (un
+  único usuario, `02cea22f-...`), que NO es el mismo UUID que
+  `alphalog_bots.users` (`304a1a34-...`, el usuario real de AlphaLog) — son
+  dos sistemas de usuarios distintos, sin correspondencia de IDs.**
+  Insertar con el `user_id` de AlphaLog violaría la FK. Resolución: al
+  guardar el token, usar siempre el único `userId` de lattice-server como
+  ancla de la fila (el sistema es de un solo operador; `project`+`name` ya
+  desambiguan de sobra sin necesitar el `user_id` de AlphaLog). Esto también
+  implica una **segunda conexión Postgres** (a la base `lattice`, distinta
+  de la conexión a `alphalog_bots`) — no se puede hacer un JOIN cruzado en
+  una sola query; el código debe leer `cme_connections.id` primero y después
+  consultar `"Secret"` por separado.
+- **Sin triggers** en ninguna de las 8 tablas CME (confirmado por consulta
+  directa) — no hay lógica de base de datos oculta que replicar además de
+  columnas/constraints/índices.
 - **No hay suscripciones Realtime de Supabase** en los componentes de
   frontend de CME (`CmePositionsPanel`, `CmeTradesTable`, etc.) — todo es
   polling por `fetch()`, así que no se rompe nada de UI en vivo al migrar.
@@ -67,12 +87,18 @@ Mismo patrón que las dos migraciones anteriores de esta sesión:
    tablas CME, pasando a `getPgClient()` — agregando el chequeo explícito de
    `user_id` donde antes lo daba la RLS.
 4. Reemplazar `lib/cme/vault.ts` (llamadas RPC a Supabase Vault) por
-   `INSERT`/`SELECT` directos contra una tabla `secrets` en el Postgres de
-   lattice-server, cifrando con el mismo AES-256-GCM que ya usa
-   `api/src/lib/crypto.ts` (mismo `ENCRYPTION_KEY`, compartido vía variable
-   de entorno — igual que ya se comparte con otras piezas de este proyecto).
-5. Sin tarea de migración de datos (0 filas) — la única "migración" real es
-   de esquema + código.
+   `INSERT`/`SELECT` directos contra la tabla `"Secret"` **ya existente** en
+   la base `lattice` (no `alphalog_bots` — conexión Postgres separada),
+   usando `project='alphalog-cme'`, `name=<cme_connections.id>`, y el único
+   `userId` de lattice-server como ancla de la fila (ver hallazgo de FK
+   arriba). Cifrado con el mismo AES-256-GCM de `api/src/lib/crypto.ts`
+   (función copiada/reusada tal cual, mismo `ENCRYPTION_KEY` compartido vía
+   variable de entorno).
+5. Sin tarea de migración de datos para las 8 tablas CME (0 filas) — la
+   única "migración" real es de esquema + código. El cliente Postgres para
+   la base `lattice` es nuevo (hoy `alphalog-pwa` solo habla con
+   `alphalog_bots`), así que sí hay una pieza nueva de conexión/config, aunque
+   no de datos.
 
 ## Componentes a tocar
 
@@ -94,8 +120,11 @@ Mismo patrón que las dos migraciones anteriores de esta sesión:
   `/api/cron/algorithms/tradovate-poll` y `/api/cron/bars/tradovate-fetch`,
   que ya viven fuera de `cron/cme/` pero también tocan estas tablas.
 - `data/alphalog/schema.sql` (lattice-server) — 8 tablas nuevas.
-- Una tabla `secrets` (o reutilizar la ya existente de lattice-server, a
-  decidir en el plan de implementación) para el token cifrado de Tradovate.
+- **Sin tabla nueva para secretos** — se reusa `"Secret"` (base `lattice`,
+  ya existente), con `project='alphalog-cme'`. Nuevo: un cliente/pool
+  Postgres en `alphalog-pwa` apuntando a la base `lattice` (hoy solo existe
+  uno apuntando a `alphalog_bots`), y la función `encrypt`/`decrypt` de
+  `api/src/lib/crypto.ts` copiada a `alphalog-pwa` (mismo `ENCRYPTION_KEY`).
 
 ## Manejo de errores
 
