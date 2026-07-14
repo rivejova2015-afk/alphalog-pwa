@@ -177,6 +177,97 @@ toca esa lógica, solo el cliente de datos que recibe como parámetro.
    `crontab`).
 4. Limpieza de la fila de prueba antes de pasar al sub-proyecto 2.
 
+## Ajustes y adiciones incorporadas (aprovechando el ecosistema actual)
+
+Encontrados durante la investigación de este spec y de sesiones anteriores;
+el usuario pidió incorporarlos al plan de este sub-proyecto en vez de
+tratarlos aparte, ya que la tubería que se construye acá (conexión a
+`lattice`, cifrado compartido, patrón de 17 rutas) los vuelve baratos de
+resolver ahora.
+
+**Los 3 ya acordados:**
+1. **`bot_instances.instance_secret` en texto plano** — a diferencia de
+   `pairing_token_hash`/`signal_secret_hash`/`webhook_secret_hash` (ya
+   cifrados/hasheados), este campo quedó sin proteger de una generación
+   anterior del pairing MT5. Migrarlo a la misma tabla `"Secret"`
+   (`project='alphalog-mt5'`) usando la tubería que se construye acá.
+2. **Least-privilege en el `GRANT` sobre `"Secret"`** — en vez de un GRANT
+   plano que le daría al rol `alphalog` acceso a *toda* la tabla (incluidos
+   los secretos propios del dashboard, `project='lattice'`), agregar una
+   política RLS scoped a `project LIKE 'alphalog-%'`.
+3. **CHECK constraint faltante en `algorithms.status`** — hallazgo Minor de
+   la revisión de la Tarea 4 de algo-runner, nunca cerrado. Se agrega ahora
+   que se toca `schema.sql` de todos modos (`draft/paper/approved/live/paused/archived`).
+
+**15 adicionales:**
+
+4. **La "eliminación" de `vault.ts` es un sobrescrito con string vacío, no
+   un DELETE real** (`deleteCmeAccessToken` llama `store_vault_secret` con
+   `p_secret: ''`). Al portar, decidir explícitamente: mantener el mismo
+   comportamiento (sobrescribir) o pasar a un DELETE real de la fila — no
+   copiar la ambigüedad sin decidir.
+5. **`cme_signals.expires_at` vence a los 30 segundos** (default real,
+   confirmado). Verificar que exista un barrido que marque como
+   expirados/rechazados los `pending` vencidos — si no existe, filas viejas
+   podrían quedar en `pending` para siempre, confundiendo el audit trail.
+6. **`bot_accounts.app_account_id`** (uuid nullable, sin FK visible) —
+   propósito no documentado, encontrado durante la exploración de schema.
+   Investigar y documentar (o confirmar que es un campo muerto) ya que se
+   está tocando esta zona de todos modos.
+7. **`/api/cme/kill-switch` es un mecanismo separado de `bot_commands`** (el
+   canal de comandos de MT5). Confirmar que ambos "parar todo ya" están
+   realmente conectados de punta a punta, no solo uno de los dos.
+8. **`cme_signals.parent_signal_id` + `execution_algo` (twap/vwap/is) +
+   `slice_index`/`total_slices`** — una feature de slicing de órdenes ya
+   diseñada en el schema pero que `dispatchTradovate` no puebla hoy.
+   Documentar como "diseñada, no construida" para que no se redescubra como
+   bug más adelante.
+9. **No hay `.wslconfig`** — ya señalado en la discusión del enjambre MT4/MT5.
+   Como esta migración también suma una segunda conexión Postgres en vivo,
+   es un buen momento para fijar un techo explícito de memoria de WSL2 antes
+   de que algo lo necesite silenciosamente.
+10. **Disco al 84% (157GB libres de 952GB)** — no urgente, pero programar la
+    limpieza ya conocida (blobs huérfanos de Ollama) proactivamente en vez de
+    reactivamente en medio de esta migración.
+11. **Extraer un helper `requireOwnership()` compartido** — ya que esta
+    migración toca 17 rutas para el chequeo explícito de `user_id`, conviene
+    un único utilitario reusable en vez de 17 chequeos copiados a mano,
+    reduciendo el riesgo de que el mismo bug de RLS reaparezca en una
+    tercera migración futura.
+12. **Extender el patrón de la tarea programada `coinarb-50x-first-trade-watch`**
+    a la primera cuenta CME real, una vez que el sub-proyecto 2 la conecte —
+    mismo mecanismo (primera operación + salud), mismo costo bajo.
+13. **`CmeRealBrokerWorkspace.client.tsx` dice "Coming soon"** pero el schema
+    para brokers reales (`cme_trades_real`, `broker_type IN (ibkr,
+    tradestation)`) va a quedar listo tras esta migración — nota de
+    documentación de una línea para que no se confunda "schema no listo" con
+    "motor no construido" cuando llegue el sub-proyecto 4.
+14. **`Secret.rotateEveryDays`** ya existe como recordatorio de rotación —
+    ya que esta es la primera vez que se guarda ahí una credencial financiera
+    real (no solo secretos internos), fijar una política de rotación en vez
+    de dejarla en null por default.
+15. **Los tests actuales de `dispatchTradovate` mockean el cliente Supabase
+    por completo** — el brief de la tarea de implementación debe pedir
+    explícitamente un test de integración contra Postgres real (no solo
+    adaptar la forma del mock), siguiendo la misma convención que ya se
+    usó para los shims de `algorithms`/`bot_instances` en la Etapa 1a.
+16. **Revisar los índices de `cme_positions`/`cme_equity_snapshots`** contra
+    el patrón de consulta real de sus crons (`position-sync` cada minuto,
+    `equity-sync` cada 5 min, ambos por `cme_account_id` + recencia) — chequeo
+    de rendimiento proactivo antes de que haya datos reales, no reactivo
+    después.
+17. **Documentar que `"Secret"` tendrá dos vías de acceso desde ahora**: la
+    ruta HTTP (`api/src/routes/secrets.ts`, JWT-scoped, para el dashboard
+    Tauri) y el acceso directo por SQL (nuevo, para AlphaLog) — una nota en
+    el README de lattice-server evita que un futuro mantenedor asuma que la
+    ruta HTTP es la única entrada y se confunda al ver secretos que la API
+    "no conoce".
+18. **Confirmar que `CRON_SECRET`/`OPS_CRON_SECRET` siguen autenticando bien**
+    los 5 crons de CME tras el cambio de cliente de datos — improbable que
+    se rompa (la auth no depende de qué base responde la query), pero barato
+    de incluir explícitamente en la checklist de verificación ya que estos
+    crons corren en producción cada minuto ahora mismo.
+
 ## Fuera de alcance (este spec)
 
 - Conectar una cuenta Tradovate real (sub-proyecto 2, spec aparte).
