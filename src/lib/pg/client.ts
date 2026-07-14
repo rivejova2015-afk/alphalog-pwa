@@ -16,7 +16,15 @@ export type InScopeTable =
   | "coinarb_telemetry"
   | "bot_events"
   | "bot_skills"
-  | "accounts";
+  | "accounts"
+  | "algo_cme_accounts"
+  | "cme_connections"
+  | "cme_equity_snapshots"
+  | "cme_positions"
+  | "cme_risk_configs"
+  | "cme_signals"
+  | "cme_trades_propfirm"
+  | "cme_trades_real";
 
 let sql: ReturnType<typeof postgres> | null = null;
 
@@ -37,11 +45,12 @@ interface PgResult<T> {
 
 class QueryBuilder {
   private table: InScopeTable;
-  private mode: "select" | "insert" | "update" | null = null;
+  private mode: "select" | "insert" | "update" | "delete" | "upsert" | null = null;
   private selectCols = "*";
   private insertRows: Row[] = [];
   private updateRow: Row = {};
-  private wheres: Array<{ col: string; op: "eq" | "is"; val: unknown }> = [];
+  private upsertConflictCols: string[] = [];
+  private wheres: Array<{ col: string; op: "eq" | "is" | "gt"; val: unknown }> = [];
   private orderCol: string | null = null;
   private orderAsc = true;
   private wantSingle = false;
@@ -68,6 +77,18 @@ class QueryBuilder {
     return this;
   }
 
+  delete() {
+    this.mode = "delete";
+    return this;
+  }
+
+  upsert(rows: Row | Row[], opts: { onConflict: string }) {
+    this.mode = "upsert";
+    this.insertRows = Array.isArray(rows) ? rows : [rows];
+    this.upsertConflictCols = opts.onConflict.split(",").map((s) => s.trim());
+    return this;
+  }
+
   eq(col: string, val: unknown) {
     this.wheres.push({ col, op: "eq", val });
     return this;
@@ -75,6 +96,11 @@ class QueryBuilder {
 
   is(col: string, val: unknown) {
     this.wheres.push({ col, op: "is", val });
+    return this;
+  }
+
+  gt(col: string, val: unknown) {
+    this.wheres.push({ col, op: "gt", val });
     return this;
   }
 
@@ -89,12 +115,24 @@ class QueryBuilder {
     return this;
   }
 
+  // Alias — el shim ya trataba single() como "0 filas -> null" (no como error
+  // ante 0/2+ filas, a diferencia de Supabase real). maybeSingle() es el mismo
+  // comportamiento, se agrega el alias para que los call sites que ya llaman
+  // .maybeSingle() no necesiten cambiar de método, solo de import.
+  maybeSingle() {
+    this.wantSingle = true;
+    return this;
+  }
+
   private buildWhereFragment(client: ReturnType<typeof postgres>) {
     if (this.wheres.length === 0) return client``;
     const clauses = this.wheres.map((w) => {
       if (w.op === "is") {
         // "is" is only ever used with null in the audited call sites.
         return client`${client(w.col)} IS NULL`;
+      }
+      if (w.op === "gt") {
+        return client`${client(w.col)} > ${w.val as never}`;
       }
       return client`${client(w.col)} = ${w.val as never}`;
     });
@@ -114,12 +152,25 @@ class QueryBuilder {
           INSERT INTO ${client(this.table)} ${client(this.insertRows)}
           RETURNING ${this.selectCols === "*" ? client`*` : client(this.selectCols.split(",").map((s) => s.trim()))}
         `;
+      } else if (this.mode === "upsert") {
+        const updateCols = Object.keys(this.insertRows[0]).filter((c) => !this.upsertConflictCols.includes(c));
+        const setFragment = updateCols
+          .map((c) => client`${client(c)} = EXCLUDED.${client(c)}`)
+          .reduce((acc, c, i) => (i === 0 ? c : client`${acc}, ${c}`));
+        result = await client`
+          INSERT INTO ${client(this.table)} ${client(this.insertRows)}
+          ON CONFLICT (${client(this.upsertConflictCols)}) DO UPDATE SET ${setFragment}
+          RETURNING *
+        `;
       } else if (this.mode === "update") {
         const where = this.buildWhereFragment(client);
         result = await client`
           UPDATE ${client(this.table)} SET ${client(this.updateRow)} ${where}
           RETURNING *
         `;
+      } else if (this.mode === "delete") {
+        const where = this.buildWhereFragment(client);
+        result = await client`DELETE FROM ${client(this.table)} ${where} RETURNING *`;
       } else {
         const where = this.buildWhereFragment(client);
         const orderFragment = this.orderCol
