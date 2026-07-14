@@ -40,9 +40,23 @@ dato que lo alimenta.
   cualquiera que sí dependa solo de RLS (mismo patrón de bug que se encontró
   una vez en `bot/pair/route.ts` durante la Etapa 1a — no asumir que no va a
   repetirse en alguna de las 15 restantes sin revisar).
-- **Las FK ya están satisfechas**: `cme_trades_propfirm`, `cme_trades_real`,
-  `cme_positions` y `cme_signals` referencian `algorithms.id` (ya migrada);
-  el resto de las FK son internas al propio grupo de tablas CME.
+- **Las FK ya están satisfechas, con un ajuste al escribir el schema**:
+  `cme_trades_propfirm`, `cme_trades_real`, `cme_positions` y `cme_signals`
+  referencian `algorithms.id` (ya migrada); el resto son internas al propio
+  grupo de tablas CME. **Excepción a corregir al portar el schema**:
+  `algo_cme_accounts.user_id` en Supabase referencia `auth.users` (el
+  esquema interno de Supabase Auth, que nunca se migró ni debe recrearse) —
+  en `data/alphalog/schema.sql` esa FK debe apuntar a la tabla espejo
+  `public.users` que ya existe ahí (el mismo patrón que ya usan
+  `algorithms.user_id`/`bot_accounts.user_id`), no a un esquema `auth`
+  literal.
+- Los CHECK constraints existentes (status/direction/broker_type/etc.) son
+  simples `CHECK (col = ANY (ARRAY[...]))` sobre `text` — ningún ENUM nativo
+  de Postgres, se portan tal cual sin conversión especial. Dato lateral útil
+  para el sub-proyecto 2: `algo_cme_accounts_propfirm_provider_check` ya
+  limita `provider_name` a `Apex`, `Lucid Trading`, `MyFundedFutures`,
+  `Tradeify` cuando `account_type='propfirm'` — esa es la lista de firmas
+  ya contempladas por el schema actual.
 - **El Vault de Supabase** (`store_vault_secret`/`read_vault_secret`, RPCs
   usadas para cifrar el token OAuth de Tradovate) solo las usa
   `src/lib/cme/vault.ts` — blast radius acotado, reemplazo limpio.
