@@ -545,7 +545,6 @@ export type Database = {
           created_at: string
           id: string
           instance_id: string
-          instance_secret: string
           is_paper_mode: boolean
           last_heartbeat_at: string | null
           platform: string
@@ -557,7 +556,6 @@ export type Database = {
           created_at?: string
           id?: string
           instance_id: string
-          instance_secret: string
           is_paper_mode?: boolean
           last_heartbeat_at?: string | null
           platform?: string
@@ -569,7 +567,6 @@ export type Database = {
           created_at?: string
           id?: string
           instance_id?: string
-          instance_secret?: string
           is_paper_mode?: boolean
           last_heartbeat_at?: string | null
           platform?: string

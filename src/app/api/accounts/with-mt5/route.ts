@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { accountCreateSchema } from "@/lib/validation/schemas";
 import { logError } from "@/lib/log";
+import { storeInstanceSecret } from "@/lib/mt5/vault";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,13 +126,13 @@ export async function POST(request: NextRequest) {
     const token = generatePairingToken();
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES * 60_000).toISOString();
     const instanceId = crypto.randomUUID();
+    const instanceSecret = crypto.randomBytes(32).toString("hex");
 
     const { data: instance, error: instErr } = await svc
       .from("bot_instances")
       .insert({
         bot_account_id: botAccount.id,
         instance_id: instanceId,
-        instance_secret: crypto.randomBytes(32).toString("hex"),
         platform: mt5.platform,
         is_paper_mode: false,
         status: "pending",
@@ -144,6 +145,10 @@ export async function POST(request: NextRequest) {
     if (instErr || !instance) {
       throw new Error(`bot_instance create failed: ${instErr?.message ?? "unknown"}`);
     }
+
+    // instance_secret no longer stored in plaintext on the row — encrypted in
+    // the lattice vault instead (project='alphalog-mt5', name=<bot_instances.id>).
+    await storeInstanceSecret(instance.id, instanceSecret);
 
     return NextResponse.json({
       account,

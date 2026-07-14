@@ -37,15 +37,17 @@ export async function POST(request: NextRequest) {
     const pg = getPgClient();
 
     // 1. Find the pairing token in bot_instances
+    // (instance_secret is intentionally NOT selected here — it's never read
+    // by this handler; it now lives encrypted in the lattice vault, see
+    // src/lib/mt5/vault.ts, not on this row at all.)
     const { data: instanceRaw, error: findErr } = await pg
       .from("bot_instances")
-      .select("id, bot_account_id, instance_secret, is_paper_mode, status, pairing_token_hash, pairing_token_used_at, pairing_token_expires_at")
+      .select("id, bot_account_id, is_paper_mode, status, pairing_token_hash, pairing_token_used_at, pairing_token_expires_at")
       .eq("pairing_token_hash", hashToken(pairing_token))
       .single();
     const instance = instanceRaw as {
       id: string;
       bot_account_id: string;
-      instance_secret: string;
       is_paper_mode: boolean | null;
       status: string;
       pairing_token_hash: string | null;
