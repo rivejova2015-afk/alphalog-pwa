@@ -1,5 +1,13 @@
+// CME kill-switch (cierre manual de posiciones + pausa de risk config).
+//
+// Es intencionalmente independiente del canal `bot_commands` de MT5: mercados
+// distintos (futuros CME/Tradovate vs. forex MT5), brokers distintos, y sin
+// ningún caller compartido hoy. No es un descuido — no hace falta unificarlos.
+
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+import { requireOwnership } from '@/lib/ownership';
 import { readCmeAccessToken, storeCmeAccessToken } from '@/lib/cme/vault';
 import { closePosition, tradovateRenew } from '@/lib/cme/tradovate';
 import { logAuditFromRequest } from '@/lib/security/auditLog';
@@ -17,26 +25,37 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const { cmeAccountId } = parsed.data;
-  const svc = createServiceClient();
+  const pg = getPgClient();
 
-  const { data: conn } = await svc
+  const { data: connRaw } = await pg
     .from('cme_connections')
-    .select('id, tradovate_account_id, tradovate_account_spec, token_expires_at, status')
+    .select('id, user_id, tradovate_account_id, tradovate_account_spec, token_expires_at, status')
     .eq('user_id', user.id)
     .eq('cme_account_id', cmeAccountId)
     .maybeSingle();
+  const conn = requireOwnership(
+    connRaw as {
+      id: string;
+      user_id: string;
+      tradovate_account_id: number;
+      tradovate_account_spec: string;
+      token_expires_at: string | null;
+      status: string;
+    } | null,
+    user.id
+  );
 
   if (!conn || conn.status !== 'connected') {
     return NextResponse.json({ error: 'Account not connected' }, { status: 422 });
   }
 
-  const { data: acct } = await svc
+  const { data: acct } = await pg
     .from('algo_cme_accounts')
     .select('is_paper')
     .eq('id', cmeAccountId)
     .maybeSingle();
 
-  const isPaper = acct?.is_paper ?? true;
+  const isPaper = (acct as { is_paper: boolean } | null)?.is_paper ?? true;
 
   let token = await readCmeAccessToken(conn.id);
   if (!token) return NextResponse.json({ error: 'No vault token' }, { status: 503 });
@@ -47,20 +66,27 @@ export async function POST(req: NextRequest) {
       const renewed = await tradovateRenew(token, isPaper);
       token = renewed.accessToken;
       await storeCmeAccessToken(conn.id, token);
-      await svc.from('cme_connections').update({ token_expires_at: renewed.expirationTime }).eq('id', conn.id);
+      await pg.from('cme_connections').update({ token_expires_at: renewed.expirationTime }).eq('id', conn.id);
     } catch { /* use existing */ }
   }
 
-  const { data: positions } = await supabase
+  const { data: positionsRaw } = await pg
     .from('cme_positions')
     .select('id, contract, quantity, broker_position_id')
     .eq('user_id', user.id)
     .eq('cme_account_id', cmeAccountId);
 
+  const positions = (positionsRaw ?? []) as unknown as {
+    id: string;
+    contract: string;
+    quantity: number;
+    broker_position_id: string;
+  }[];
+
   let closedCount = 0;
   const errors: string[] = [];
 
-  for (const pos of positions ?? []) {
+  for (const pos of positions) {
     try {
       await closePosition({
         token,
@@ -71,14 +97,14 @@ export async function POST(req: NextRequest) {
         symbol: pos.contract,
         qty: pos.quantity,
       });
-      await supabase.from('cme_positions').delete().eq('id', pos.id);
+      await pg.from('cme_positions').delete().eq('id', pos.id);
       closedCount++;
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
   }
 
-  await svc
+  await pg
     .from('cme_risk_configs')
     .update({
       enabled: false,

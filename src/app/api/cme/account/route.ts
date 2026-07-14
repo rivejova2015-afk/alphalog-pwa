@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+import { requireOwnership } from '@/lib/ownership';
 import { readCmeAccessToken, storeCmeAccessToken } from '@/lib/cme/vault';
 import { getCashBalance, tradovateRenew } from '@/lib/cme/tradovate';
 
@@ -12,25 +14,29 @@ export async function GET(req: NextRequest) {
   const cmeAccountId = searchParams.get('cmeAccountId');
   if (!cmeAccountId) return NextResponse.json({ error: 'cmeAccountId required' }, { status: 400 });
 
-  const svc = createServiceClient();
-  const { data: conn } = await svc
+  const pg = getPgClient();
+  const { data: connRaw } = await pg
     .from('cme_connections')
-    .select('id, tradovate_account_id, token_expires_at, status')
+    .select('id, user_id, tradovate_account_id, token_expires_at, status')
     .eq('user_id', user.id)
     .eq('cme_account_id', cmeAccountId)
     .maybeSingle();
+  const conn = requireOwnership(
+    connRaw as { id: string; user_id: string; tradovate_account_id: number; token_expires_at: string | null; status: string } | null,
+    user.id
+  );
 
   if (!conn || conn.status !== 'connected') {
     return NextResponse.json({ error: 'Not connected' }, { status: 422 });
   }
 
-  const { data: acct } = await svc
+  const { data: acct } = await pg
     .from('algo_cme_accounts')
     .select('is_paper')
     .eq('id', cmeAccountId)
     .maybeSingle();
 
-  const isPaper = acct?.is_paper ?? true;
+  const isPaper = (acct as { is_paper: boolean } | null)?.is_paper ?? true;
 
   let token = await readCmeAccessToken(conn.id);
   if (!token) return NextResponse.json({ error: 'No vault token' }, { status: 503 });
@@ -41,7 +47,7 @@ export async function GET(req: NextRequest) {
       const renewed = await tradovateRenew(token, isPaper);
       token = renewed.accessToken;
       await storeCmeAccessToken(conn.id, token);
-      await svc.from('cme_connections').update({ token_expires_at: renewed.expirationTime }).eq('id', conn.id);
+      await pg.from('cme_connections').update({ token_expires_at: renewed.expirationTime }).eq('id', conn.id);
     } catch { /* use existing */ }
   }
 
@@ -53,14 +59,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  const { data: snapshot } = await supabase
+  const { data: snapshot } = await pg
     .from('cme_equity_snapshots')
     .select('equity_usd, daily_pnl_usd, snapshot_at')
     .eq('user_id', user.id)
     .eq('cme_account_id', cmeAccountId)
     .order('snapshot_at', { ascending: false })
-    .limit(1)
     .maybeSingle();
+
+  const snapshotRow = snapshot as { equity_usd: number; daily_pnl_usd: number; snapshot_at: string } | null;
 
   return NextResponse.json(
     {
@@ -68,7 +75,7 @@ export async function GET(req: NextRequest) {
       balance: balance.cashBalance,
       unrealizedPnl: balance.unrealizedPnL,
       realizedPnl: balance.realizedPnL,
-      dailyPnl: snapshot?.daily_pnl_usd ?? balance.realizedPnL,
+      dailyPnl: snapshotRow?.daily_pnl_usd ?? balance.realizedPnL,
     },
     { headers: { 'Cache-Control': 'private, max-age=30' } }
   );

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+import { requireOwnership } from '@/lib/ownership';
 import { deleteCmeAccessToken } from '@/lib/cme/vault';
 import { logAuditFromRequest } from '@/lib/security/auditLog';
 
@@ -12,14 +14,15 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { cmeAccountId } = await params;
-  const svc = createServiceClient();
+  const pg = getPgClient();
 
-  const { data: conn } = await svc
+  const { data: connRaw } = await pg
     .from('cme_connections')
-    .select('id')
+    .select('id, user_id')
     .eq('user_id', user.id)
     .eq('cme_account_id', cmeAccountId)
     .maybeSingle();
+  const conn = requireOwnership(connRaw as { id: string; user_id: string } | null, user.id);
 
   if (conn) {
     try {
@@ -27,7 +30,7 @@ export async function DELETE(
     } catch (err) {
       console.warn('Failed to delete CME vault token for connection', conn.id, err);
     }
-    await svc
+    await pg
       .from('cme_connections')
       .update({ status: 'disconnected', updated_at: new Date().toISOString() })
       .eq('id', conn.id);

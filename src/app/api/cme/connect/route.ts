@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+import { requireOwnership } from '@/lib/ownership';
 import { tradovateAuth, getAccounts } from '@/lib/cme/tradovate';
 import { storeCmeAccessToken } from '@/lib/cme/vault';
 import { logAuditFromRequest } from '@/lib/security/auditLog';
@@ -28,14 +30,18 @@ export async function POST(req: NextRequest) {
 
   const { cmeAccountId, tradovateUsername, tradovatePassword, appId, appVersion, cid, sec } = parsed.data;
 
-  const { data: acct, error: acctErr } = await supabase
+  const pg = getPgClient();
+  const { data: acctRaw } = await pg
     .from('algo_cme_accounts')
-    .select('id, is_paper, provider_name, account_number')
+    .select('id, user_id, is_paper, provider_name, account_number')
     .eq('id', cmeAccountId)
-    .eq('user_id', user.id)
     .maybeSingle();
+  const acct = requireOwnership(
+    acctRaw as { id: string; user_id: string; is_paper: boolean; provider_name: string; account_number: string } | null,
+    user.id
+  );
 
-  if (acctErr || !acct) {
+  if (!acct) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 });
   }
 
@@ -66,9 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No Tradovate account found for this user' }, { status: 422 });
   }
 
-  const svc = createServiceClient();
-
-  const { data: conn, error: connErr } = await svc
+  const { data: connRaw } = await pg
     .from('cme_connections')
     .upsert(
       {
@@ -86,16 +90,16 @@ export async function POST(req: NextRequest) {
       },
       { onConflict: 'user_id,cme_account_id' }
     )
-    .select('id')
     .single();
 
-  if (connErr || !conn) {
+  if (!connRaw) {
     return NextResponse.json({ error: 'Failed to save connection' }, { status: 500 });
   }
+  const conn = connRaw as unknown as { id: string };
 
   await storeCmeAccessToken(conn.id, authResult.accessToken);
 
-  await svc
+  await pg
     .from('cme_risk_configs')
     .upsert(
       {
