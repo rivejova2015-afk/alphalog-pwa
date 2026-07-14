@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { getPgClient } from '@/lib/pg/client';
 import { checkOrderRisk } from '@/lib/cme/risk-manager';
 import { executeSignal } from '@/lib/cme/order-executor';
@@ -65,7 +65,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const svc = createServiceClient();
   const result = await executeSignal(
     {
       id: signal.id,
@@ -78,7 +77,7 @@ export async function POST(req: NextRequest) {
       takeProfitTicks: tpTicks,
       algorithmId,
     },
-    svc
+    pg
   );
 
   if (!result.success) {
