@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getPgClient } from "@/lib/pg/client";
 import { runEngineV1 } from "@/lib/engine/v1/index";
 import { dispatchSignal, getDispatchMode } from "@/lib/engine/dispatchers/index";
 import { isGlobexOpen } from "@/lib/cme/market-hours";
@@ -80,10 +81,10 @@ function pickSymbol(instrument: string[] | string | null): string | null {
 }
 
 /** Most-recent bar timestamp we have stored for this symbol (any TF). Cheap dedup probe. */
-async function latestBarTs(svc: ReturnType<typeof createServiceClient>, symbol: string): Promise<string | null> {
+async function latestBarTs(supabaseHistorical: ReturnType<typeof createServiceClient>, symbol: string): Promise<string | null> {
   // Use M1 as the freshness signal — it's the engine's smallest TF and what
   // any cron-driven dispatcher cares about ("did a new candle close?").
-  const { data, error } = await svc
+  const { data, error } = await supabaseHistorical
     .from("historical_bars")
     .select("ts")
     .eq("symbol", symbol)
@@ -96,7 +97,8 @@ async function latestBarTs(svc: ReturnType<typeof createServiceClient>, symbol: 
 }
 
 async function processAlgo(
-  svc: ReturnType<typeof createServiceClient>,
+  pg: ReturnType<typeof getPgClient>,
+  supabaseHistorical: ReturnType<typeof createServiceClient>,
   algo: AlgoRow,
 ): Promise<PerAlgoLog> {
   const algoId = algo.id;
@@ -106,9 +108,9 @@ async function processAlgo(
   }
 
   // Dedup: only run when a new bar exists.
-  const latestTs = await latestBarTs(svc, symbol);
+  const latestTs = await latestBarTs(supabaseHistorical, symbol);
   if (!latestTs) {
-    await svc.from("algorithms").update({
+    await pg.from("algorithms").update({
       last_dispatch_at:      new Date().toISOString(),
       last_dispatch_action:  "skipped",
       last_dispatch_reason:  "no_bars_in_db",
@@ -117,20 +119,23 @@ async function processAlgo(
   }
   const prevBarTs = algo.last_signal_bar_ts;
   if (prevBarTs && new Date(latestTs).getTime() <= new Date(prevBarTs).getTime()) {
-    await svc.from("algorithms").update({
+    await pg.from("algorithms").update({
       last_dispatch_at: new Date().toISOString(),
     }).eq("id", algoId);
     return { algoId, symbol, action: "skipped", reason: "no_fresh_bar" };
   }
 
-  // Run engine.
+  // Run engine. Still fed the real SupabaseClient — runEngineV1/dispatchSignal
+  // internally touch historical_bars/ml_models/cme_* tables and are out of
+  // scope for this migration (dispatchTradovate's data client is untouched
+  // per the plan's Global Constraints).
   let signal;
   try {
-    signal = await runEngineV1(svc, algo, { symbol, now: new Date(latestTs) });
+    signal = await runEngineV1(supabaseHistorical, algo, { symbol, now: new Date(latestTs) });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logError("TradovatePoll", { component: "runEngineV1 threw", message: msg, meta: { algoId, symbol } });
-    await svc.from("algorithms").update({
+    await pg.from("algorithms").update({
       last_dispatch_at:      new Date().toISOString(),
       last_dispatch_action:  "failed",
       last_dispatch_reason:  `engine_threw: ${msg.slice(0, 120)}`,
@@ -145,11 +150,11 @@ async function processAlgo(
       signal: { action: signal.action, lots: signal.lots, confidence: signal.confidence, reason: signal.reason },
       currentBarTs: latestTs,
     },
-    svc,
+    supabaseHistorical,
   );
 
   // Telemetry update — always, even on failure.
-  await svc.from("algorithms").update({
+  await pg.from("algorithms").update({
     last_dispatch_at:      new Date().toISOString(),
     last_signal_bar_ts:    latestTs,
     last_dispatch_action:  result.action,
@@ -172,7 +177,11 @@ async function handler(request: NextRequest) {
   }
 
   const startedAt = Date.now();
-  const svc = createServiceClient();
+  const pg = getPgClient();
+  // Acotado únicamente a historical_bars — fuera de alcance de esta migración
+  // (25,111 filas reales, compartida entre forex/crypto/futuros; ver plan
+  // docs/superpowers/plans/2026-07-13-cme-tradovate-migracion.md).
+  const supabaseHistorical = createServiceClient();
   const mode = getDispatchMode();
 
   // Sprint S — short-circuit when CME Globex is closed. The dispatcher cron
@@ -194,7 +203,7 @@ async function handler(request: NextRequest) {
   // Walks every algo whose platform is dispatched server-side (Tradovate
   // futures, IBKR options — both go through src/lib/engine/dispatchers).
   // MT4/MT5 stay EA-driven and are filtered out here.
-  const { data: algos, error: algoErr } = await svc
+  const { data: algosRaw, error: algoErr } = await pg
     .from("algorithms")
     .select("id, user_id, name, status, platform, instrument, parameters, engine_config, lot_size, risk_percent, last_signal_bar_ts")
     .in("platform", ["Tradovate", "IBKR"])
@@ -205,11 +214,12 @@ async function handler(request: NextRequest) {
     logError("TradovatePoll", { component: "select algorithms", message: algoErr.message });
     return NextResponse.json({ error: algoErr.message, mode }, { status: 500 });
   }
+  const algos = (algosRaw ?? []) as unknown as AlgoRow[];
 
   const perAlgo: PerAlgoLog[] = [];
-  for (const algo of (algos ?? []) as AlgoRow[]) {
+  for (const algo of algos) {
     try {
-      perAlgo.push(await processAlgo(svc, algo));
+      perAlgo.push(await processAlgo(pg, supabaseHistorical, algo));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logError("TradovatePoll", { component: "processAlgo threw", message: msg, meta: { algoId: algo.id } });

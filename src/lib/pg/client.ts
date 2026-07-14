@@ -52,7 +52,7 @@ class QueryBuilder {
   private insertRows: Row[] = [];
   private updateRow: Row = {};
   private upsertConflictCols: string[] = [];
-  private wheres: Array<{ col: string; op: "eq" | "is" | "gt" | "lt" | "gte"; val: unknown }> = [];
+  private wheres: Array<{ col: string; op: "eq" | "is" | "gt" | "lt" | "gte" | "in"; val: unknown }> = [];
   private orderCol: string | null = null;
   private orderAsc = true;
   private wantSingle = false;
@@ -127,6 +127,11 @@ class QueryBuilder {
     return this;
   }
 
+  in(col: string, vals: unknown[]) {
+    this.wheres.push({ col, op: "in", val: vals });
+    return this;
+  }
+
   order(col: string, opts?: { ascending?: boolean }) {
     this.orderCol = col;
     this.orderAsc = opts?.ascending ?? true;
@@ -162,6 +167,14 @@ class QueryBuilder {
       }
       if (w.op === "gte") {
         return client`${client(w.col)} >= ${w.val as never}`;
+      }
+      if (w.op === "in") {
+        // Semántica de Supabase: .in(col, []) no matchea ninguna fila — un
+        // "IN ()" vacío es SQL inválido, así que se traduce a una condición
+        // siempre falsa en vez de omitir el filtro.
+        const arr = w.val as unknown[];
+        if (arr.length === 0) return client`FALSE`;
+        return client`${client(w.col)} IN ${client(arr as never)}`;
       }
       return client`${client(w.col)} = ${w.val as never}`;
     });

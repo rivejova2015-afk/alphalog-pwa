@@ -15,16 +15,23 @@
 import { describe, it, expect, vi, beforeAll, afterEach, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { fromMock, isGlobexOpenMock, getDispatchModeMock, dispatchSignalMock, runEngineV1Mock } = vi.hoisted(() => ({
-  fromMock:           vi.fn(),
-  isGlobexOpenMock:   vi.fn(),
+const { pgFromMock, supabaseFromMock, isGlobexOpenMock, getDispatchModeMock, dispatchSignalMock, runEngineV1Mock } = vi.hoisted(() => ({
+  // algorithms is a migrated table (getPgClient) — supabaseFromMock stays
+  // scoped to historical_bars only, per the hybrid-file split (Task 7 of the
+  // CME/Tradovate migration plan).
+  pgFromMock:          vi.fn(),
+  supabaseFromMock:    vi.fn(),
+  isGlobexOpenMock:    vi.fn(),
   getDispatchModeMock: vi.fn(() => "shadow"),
-  dispatchSignalMock: vi.fn(),
-  runEngineV1Mock:    vi.fn(),
+  dispatchSignalMock:  vi.fn(),
+  runEngineV1Mock:     vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createServiceClient: () => ({ from: fromMock }),
+  createServiceClient: () => ({ from: supabaseFromMock }),
+}));
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({ from: pgFromMock }),
 }));
 vi.mock("@/lib/cme/market-hours", () => ({
   isGlobexOpen: isGlobexOpenMock,
@@ -59,7 +66,8 @@ function makeRequest(secret = "test-cron-secret-1234567890"): NextRequest {
 
 describe("/api/cron/algorithms/tradovate-poll — handler", () => {
   beforeEach(() => {
-    fromMock.mockReset();
+    pgFromMock.mockReset();
+    supabaseFromMock.mockReset();
     isGlobexOpenMock.mockReset();
     getDispatchModeMock.mockReset().mockReturnValue("shadow");
     dispatchSignalMock.mockReset();
@@ -78,7 +86,7 @@ describe("/api/cron/algorithms/tradovate-poll — handler", () => {
     expect(body.error).toBe("Unauthorized");
     // Should NEVER reach Globex check or DB on auth fail.
     expect(isGlobexOpenMock).not.toHaveBeenCalled();
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(pgFromMock).not.toHaveBeenCalled();
   });
 
   it("short-circuits with skipped='globex_closed' when market is closed", async () => {
@@ -94,7 +102,7 @@ describe("/api/cron/algorithms/tradovate-poll — handler", () => {
     expect(body.per_algo).toEqual([]);
     // Globex check WAS called, but DB was NOT touched.
     expect(isGlobexOpenMock).toHaveBeenCalledOnce();
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(pgFromMock).not.toHaveBeenCalled();
   });
 
   it("proceeds when SKIP_MARKET_HOURS_CHECK=true even if Globex closed", async () => {
@@ -102,7 +110,7 @@ describe("/api/cron/algorithms/tradovate-poll — handler", () => {
     isGlobexOpenMock.mockReturnValue(false);
 
     // Empty algos list so the loop is a no-op.
-    fromMock.mockReturnValue({
+    pgFromMock.mockReturnValue({
       select: () => ({
         in: () => ({
           in: () => ({
@@ -118,14 +126,14 @@ describe("/api/cron/algorithms/tradovate-poll — handler", () => {
     expect(body.ok).toBe(true);
     expect(body.skipped).toBeUndefined();
     expect(body.counts.algosScanned).toBe(0);
-    // DB WAS touched once for the algorithms select.
-    expect(fromMock).toHaveBeenCalledWith("algorithms");
+    // DB WAS touched once for the algorithms select, via the pg shim.
+    expect(pgFromMock).toHaveBeenCalledWith("algorithms");
   });
 
   it("returns ok with zero counts when Globex is open and no algos exist", async () => {
     isGlobexOpenMock.mockReturnValue(true);
 
-    fromMock.mockReturnValue({
+    pgFromMock.mockReturnValue({
       select: () => ({
         in: () => ({
           in: () => ({
@@ -155,7 +163,7 @@ describe("/api/cron/algorithms/tradovate-poll — handler", () => {
   it("returns 500 when the algorithms select errors out", async () => {
     isGlobexOpenMock.mockReturnValue(true);
 
-    fromMock.mockReturnValue({
+    pgFromMock.mockReturnValue({
       select: () => ({
         in: () => ({
           in: () => ({

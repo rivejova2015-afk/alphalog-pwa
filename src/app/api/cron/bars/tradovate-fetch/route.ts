@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import type { Timeframe } from "@/types/backtest";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getPgClient } from "@/lib/pg/client";
 import { fetchTradovateBars } from "@/lib/cme/tradovate-marketdata";
 import { tradovateRenew } from "@/lib/cme/tradovate";
 import { readCmeAccessToken, storeCmeAccessToken } from "@/lib/cme/vault";
@@ -83,7 +84,7 @@ function strParam(value: unknown): string | null {
 }
 
 async function ensureFreshToken(
-  svc: ReturnType<typeof createServiceClient>,
+  pg: ReturnType<typeof getPgClient>,
   conn: ConnRow,
   isPaper: boolean,
 ): Promise<string | null> {
@@ -97,7 +98,7 @@ async function ensureFreshToken(
       const renewed = await tradovateRenew(token, isPaper);
       token = renewed.accessToken;
       await storeCmeAccessToken(conn.id, token);
-      await svc.from("cme_connections").update({ token_expires_at: renewed.expirationTime }).eq("id", conn.id);
+      await pg.from("cme_connections").update({ token_expires_at: renewed.expirationTime }).eq("id", conn.id);
     } catch (err) {
       logWarn("BarsTradovateFetch", "token renew failed (using existing)", {
         component: "ensureFreshToken",
@@ -109,7 +110,7 @@ async function ensureFreshToken(
 }
 
 async function processPair(
-  svc: ReturnType<typeof createServiceClient>,
+  supabaseHistorical: ReturnType<typeof createServiceClient>,
   token: string,
   isPaper: boolean,
   connectionId: string,
@@ -139,7 +140,7 @@ async function processPair(
       uploaded_by: null,
     }));
 
-    const { error: upErr } = await svc
+    const { error: upErr } = await supabaseHistorical
       .from("historical_bars")
       .upsert(rows, { onConflict: "symbol,timeframe,ts" });
     if (upErr) {
@@ -148,7 +149,7 @@ async function processPair(
 
     // Update coverage row.
     const tsValues = bars.map((b) => new Date(b.ts).getTime());
-    await svc.from("historical_bars_coverage").upsert(
+    await supabaseHistorical.from("historical_bars_coverage").upsert(
       {
         symbol,
         timeframe,
@@ -177,13 +178,18 @@ async function handler(request: NextRequest) {
   }
 
   const startedAt = Date.now();
-  const svc = createServiceClient();
+  const pg = getPgClient();
+  // Acotado únicamente a historical_bars/historical_bars_coverage — fuera de
+  // alcance de esta migración (25,111 filas reales, compartida entre
+  // forex/crypto/futuros; ver plan
+  // docs/superpowers/plans/2026-07-13-cme-tradovate-migracion.md).
+  const supabaseHistorical = createServiceClient();
 
-  const { data: connsRaw } = await svc
+  const { data: connsRaw } = await pg
     .from("cme_connections")
     .select("id, user_id, cme_account_id, tradovate_account_id, token_expires_at")
     .eq("status", "connected");
-  const conns: ConnRow[] = (connsRaw ?? []) as ConnRow[];
+  const conns: ConnRow[] = (connsRaw ?? []) as unknown as ConnRow[];
 
   if (conns.length === 0) {
     return NextResponse.json({ ok: true, connections: 0, results: [], duration_ms: Date.now() - startedAt }, { status: 200 });
@@ -193,7 +199,7 @@ async function handler(request: NextRequest) {
   // = 'futures' OR platform = 'tradovate' to find ones whose dispatcher would
   // benefit from fresh CME bars.
   const userIds = Array.from(new Set(conns.map((c) => c.user_id)));
-  const { data: algosRaw } = await svc
+  const { data: algosRaw } = await pg
     .from("algorithms")
     .select("id, user_id, parameters, engine_config, platform, status")
     .in("user_id", userIds)
@@ -209,14 +215,14 @@ async function handler(request: NextRequest) {
   const results: PairResult[] = [];
 
   for (const conn of conns) {
-    const { data: acct } = await svc
+    const { data: acct } = await pg
       .from("algo_cme_accounts")
       .select("is_paper")
       .eq("id", conn.cme_account_id)
       .maybeSingle();
-    const isPaper = acct?.is_paper ?? true;
+    const isPaper = (acct as { is_paper: boolean } | null)?.is_paper ?? true;
 
-    const token = await ensureFreshToken(svc, conn, isPaper);
+    const token = await ensureFreshToken(pg, conn, isPaper);
     if (!token) {
       results.push({ connectionId: conn.id, symbol: "-", timeframe: "M15", fetched: 0, inserted: 0, error: "no_token" });
       continue;
@@ -235,7 +241,7 @@ async function handler(request: NextRequest) {
 
     for (const symbol of contracts) {
       for (const tf of REFRESH_TIMEFRAMES) {
-        results.push(await processPair(svc, token, isPaper, conn.id, symbol, tf));
+        results.push(await processPair(supabaseHistorical, token, isPaper, conn.id, symbol, tf));
       }
     }
   }

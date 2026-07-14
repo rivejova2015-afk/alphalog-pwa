@@ -97,6 +97,28 @@ describe("QueryBuilder — nuevos métodos CME", () => {
     expect(error).toBeNull();
     expect(Array.isArray(data)).toBe(true);
   });
+
+  it("in() agrega una condición WHERE col IN (...) — matchea solo los valores listados", async () => {
+    const pg = getPgClient();
+    const { data, error } = await pg
+      .from("algo_cme_accounts")
+      .select("account_number")
+      .eq("user_id", TEST_USER_ID)
+      .in("account_number", ["TEST-SHIM-METHODS", "NO-EXISTE"]);
+    expect(error).toBeNull();
+    expect((data as { account_number: string }[]).map((r) => r.account_number)).toEqual(["TEST-SHIM-METHODS"]);
+  });
+
+  it("in() con un array vacío no matchea ninguna fila (no genera 'IN ()' inválido)", async () => {
+    const pg = getPgClient();
+    const { data, error } = await pg
+      .from("algo_cme_accounts")
+      .select("account_number")
+      .eq("user_id", TEST_USER_ID)
+      .in("account_number", []);
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
 });
 
 describe("QueryBuilder — barrido de señales pending vencidas (expiry sweep)", () => {

@@ -14,13 +14,19 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const {
-  fromMock,
+  pgFromMock,
+  supabaseFromMock,
   fetchTradovateBarsMock,
   readTokenMock,
   storeTokenMock,
   tradovateRenewMock,
 } = vi.hoisted(() => ({
-  fromMock:               vi.fn(),
+  // cme_connections/algorithms/algo_cme_accounts are migrated tables
+  // (getPgClient) — supabaseFromMock stays scoped to historical_bars/
+  // historical_bars_coverage only, per the hybrid-file split (Task 7 of the
+  // CME/Tradovate migration plan).
+  pgFromMock:             vi.fn(),
+  supabaseFromMock:       vi.fn(),
   fetchTradovateBarsMock: vi.fn(),
   readTokenMock:          vi.fn(),
   storeTokenMock:         vi.fn(),
@@ -28,7 +34,10 @@ const {
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createServiceClient: () => ({ from: fromMock }),
+  createServiceClient: () => ({ from: supabaseFromMock }),
+}));
+vi.mock("@/lib/pg/client", () => ({
+  getPgClient: () => ({ from: pgFromMock }),
 }));
 vi.mock("@/lib/cme/tradovate-marketdata", () => ({
   fetchTradovateBars: fetchTradovateBarsMock,
@@ -68,7 +77,11 @@ function makeRequest(secret = "test-cron-secret-1234567890"): NextRequest {
 
 describe("/api/cron/bars/tradovate-fetch — handler", () => {
   beforeEach(() => {
-    fromMock.mockReset();
+    pgFromMock.mockReset();
+    // Default: historical_bars/historical_bars_coverage upserts (the only
+    // tables still on this client) succeed with no data — none of these
+    // tests assert on their contents, only on the migrated-table flow.
+    supabaseFromMock.mockReset().mockReturnValue(makeAwaitableChain({ data: null, error: null }));
     fetchTradovateBarsMock.mockReset();
     readTokenMock.mockReset();
     storeTokenMock.mockReset();
@@ -78,11 +91,11 @@ describe("/api/cron/bars/tradovate-fetch — handler", () => {
   it("returns 401 on wrong secret", async () => {
     const res = await POST(makeRequest("wrong"));
     expect(res.status).toBe(401);
-    expect(fromMock).not.toHaveBeenCalled();
+    expect(pgFromMock).not.toHaveBeenCalled();
   });
 
   it("returns ok with connections:0 when no cme_connections exist", async () => {
-    fromMock.mockImplementation((table: string) => {
+    pgFromMock.mockImplementation((table: string) => {
       if (table === "cme_connections") return makeAwaitableChain({ data: [], error: null });
       return makeAwaitableChain({ data: null, error: null });
     });
@@ -94,7 +107,7 @@ describe("/api/cron/bars/tradovate-fetch — handler", () => {
   });
 
   it("returns 'no_token' for connections without a vault token", async () => {
-    fromMock.mockImplementation((table: string) => {
+    pgFromMock.mockImplementation((table: string) => {
       if (table === "cme_connections") return makeAwaitableChain({
         data: [{ id: "conn-1", user_id: "u1", cme_account_id: "cme-1", tradovate_account_id: 12345, token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() }],
         error: null,
@@ -119,7 +132,7 @@ describe("/api/cron/bars/tradovate-fetch — handler", () => {
   });
 
   it("no futures algos → results array stays empty, no fetch attempted", async () => {
-    fromMock.mockImplementation((table: string) => {
+    pgFromMock.mockImplementation((table: string) => {
       if (table === "cme_connections") return makeAwaitableChain({
         data: [{ id: "conn-1", user_id: "u1", cme_account_id: "cme-1", tradovate_account_id: 12345, token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() }],
         error: null,
@@ -140,7 +153,7 @@ describe("/api/cron/bars/tradovate-fetch — handler", () => {
   });
 
   it("happy path: bars returned → historical_bars upsert + coverage upsert", async () => {
-    fromMock.mockImplementation((table: string) => {
+    pgFromMock.mockImplementation((table: string) => {
       if (table === "cme_connections") return makeAwaitableChain({
         data: [{ id: "conn-1", user_id: "u1", cme_account_id: "cme-1", tradovate_account_id: 12345, token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() }],
         error: null,
@@ -170,7 +183,7 @@ describe("/api/cron/bars/tradovate-fetch — handler", () => {
   });
 
   it("fetchTradovateBars THROWS → captured per-pair, loop continues", async () => {
-    fromMock.mockImplementation((table: string) => {
+    pgFromMock.mockImplementation((table: string) => {
       if (table === "cme_connections") return makeAwaitableChain({
         data: [{ id: "conn-1", user_id: "u1", cme_account_id: "cme-1", tradovate_account_id: 12345, token_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() }],
         error: null,
