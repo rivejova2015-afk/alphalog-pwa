@@ -41,12 +41,14 @@ type Row = Record<string, unknown>;
 interface PgResult<T> {
   data: T | null;
   error: { message: string } | null;
+  count?: number | null;
 }
 
 class QueryBuilder {
   private table: InScopeTable;
   private mode: "select" | "insert" | "update" | "delete" | "upsert" | null = null;
   private selectCols = "*";
+  private wantCount = false;
   private insertRows: Row[] = [];
   private updateRow: Row = {};
   private upsertConflictCols: string[] = [];
@@ -54,14 +56,25 @@ class QueryBuilder {
   private orderCol: string | null = null;
   private orderAsc = true;
   private wantSingle = false;
+  private rangeFrom: number | null = null;
+  private rangeTo: number | null = null;
 
   constructor(table: InScopeTable) {
     this.table = table;
   }
 
-  select(cols = "*") {
+  select(cols = "*", opts?: { count?: "exact" }) {
     this.mode = this.mode ?? "select";
     this.selectCols = cols;
+    this.wantCount = opts?.count === "exact";
+    return this;
+  }
+
+  // Semántica de Supabase: rango inclusivo, `.range(0, 19)` devuelve 20 filas
+  // (LIMIT to-from+1 OFFSET from). Solo aplica al branch de select.
+  range(from: number, to: number) {
+    this.rangeFrom = from;
+    this.rangeTo = to;
     return this;
   }
 
@@ -146,6 +159,7 @@ class QueryBuilder {
     try {
       const client = getSql();
       let result: Row[];
+      let count: number | null = null;
 
       if (this.mode === "insert") {
         result = await client`
@@ -177,13 +191,22 @@ class QueryBuilder {
           ? client`ORDER BY ${client(this.orderCol)} ${this.orderAsc ? client`ASC` : client`DESC`}`
           : client``;
         const cols = this.selectCols === "*" ? client`*` : client(this.selectCols.split(",").map((s) => s.trim()));
-        result = await client`SELECT ${cols} FROM ${client(this.table)} ${where} ${orderFragment}`;
+        const rangeFragment =
+          this.rangeFrom !== null && this.rangeTo !== null
+            ? client`LIMIT ${this.rangeTo - this.rangeFrom + 1} OFFSET ${this.rangeFrom}`
+            : client``;
+        result = await client`SELECT ${cols} FROM ${client(this.table)} ${where} ${orderFragment} ${rangeFragment}`;
+
+        if (this.wantCount) {
+          const countResult = await client`SELECT count(*) FROM ${client(this.table)} ${where}`;
+          count = Number((countResult[0] as { count: string | number }).count);
+        }
       }
 
       if (this.wantSingle) {
-        resolve({ data: (result[0] ?? null) as T, error: null });
+        resolve({ data: (result[0] ?? null) as T, error: null, count });
       } else {
-        resolve({ data: result as T, error: null });
+        resolve({ data: result as T, error: null, count });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

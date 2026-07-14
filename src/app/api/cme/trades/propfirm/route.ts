@@ -30,23 +30,18 @@ export async function GET(req: NextRequest) {
   const pg = getPgClient();
   let query = pg
     .from('cme_trades_propfirm')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
 
   if (cmeAccountId) query = query.eq('cme_account_id', cmeAccountId);
 
-  // El shim de Postgres crudo no soporta `.range()` ni `{ count: 'exact' }`
-  // (no existen en el QueryBuilder, a diferencia de supabase-js). Se trae el
-  // set completo ya filtrado/ordenado y se pagina en JS, preservando el
-  // mismo `count` total (no solo el tamaño de la página) que devolvía
-  // Supabase.
-  const { data: allRows, error } = await query;
+  const { data: pageRows, error, count: total } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const matchedRows = (allRows ?? []) as unknown as PropfirmTradeRow[];
-  const count = matchedRows.length;
-  const data = matchedRows.slice(offset, offset + limit);
+  const data = (pageRows ?? []) as unknown as PropfirmTradeRow[];
+  const count = total ?? 0;
 
   if (format === 'csv') {
     const header = 'id,contract,direction,quantity,fill_price,status,pnl_usd,commission_usd,slippage_ticks,close_reason,fill_timestamp\n';

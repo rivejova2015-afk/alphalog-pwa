@@ -73,3 +73,74 @@ describe("QueryBuilder — nuevos métodos CME", () => {
     expect(Array.isArray(data)).toBe(true);
   });
 });
+
+describe("QueryBuilder — range() + select(cols, { count: 'exact' })", () => {
+  // 5 filas de prueba para paginar en páginas de 2 (última página parcial de 1).
+  const ACCOUNT_NUMBERS = Array.from({ length: 5 }, (_, i) => `TEST-PAGINATION-${i}`);
+
+  beforeAll(async () => {
+    const pg = getPgClient();
+    // Limpieza defensiva: si una corrida anterior falló antes de su afterAll,
+    // no debe quedar basura contaminando el conteo de esta corrida.
+    await pg.from("algo_cme_accounts").delete().eq("user_id", TEST_USER_ID);
+
+    for (const accountNumber of ACCOUNT_NUMBERS) {
+      const { error } = await pg.from("algo_cme_accounts").insert({
+        user_id: TEST_USER_ID,
+        account_type: "propfirm",
+        provider_name: "Apex",
+        account_number: accountNumber,
+        is_paper: true,
+      });
+      if (error) throw new Error(error.message);
+    }
+  });
+
+  afterAll(async () => {
+    const pg = getPgClient();
+    await pg.from("algo_cme_accounts").delete().eq("user_id", TEST_USER_ID);
+  });
+
+  it("devuelve la página correcta y el count total a través de 3 páginas", async () => {
+    const pg = getPgClient();
+
+    const page1 = await pg
+      .from("algo_cme_accounts")
+      .select("*", { count: "exact" })
+      .eq("user_id", TEST_USER_ID)
+      .order("account_number", { ascending: true })
+      .range(0, 1);
+    expect(page1.error).toBeNull();
+    expect(page1.count).toBe(5);
+    expect((page1.data as { account_number: string }[]).map((r) => r.account_number)).toEqual([
+      "TEST-PAGINATION-0",
+      "TEST-PAGINATION-1",
+    ]);
+
+    const page2 = await pg
+      .from("algo_cme_accounts")
+      .select("*", { count: "exact" })
+      .eq("user_id", TEST_USER_ID)
+      .order("account_number", { ascending: true })
+      .range(2, 3);
+    expect(page2.error).toBeNull();
+    expect(page2.count).toBe(5);
+    expect((page2.data as { account_number: string }[]).map((r) => r.account_number)).toEqual([
+      "TEST-PAGINATION-2",
+      "TEST-PAGINATION-3",
+    ]);
+
+    // Última página: parcial (1 fila), pero el count total sigue siendo 5.
+    const page3 = await pg
+      .from("algo_cme_accounts")
+      .select("*", { count: "exact" })
+      .eq("user_id", TEST_USER_ID)
+      .order("account_number", { ascending: true })
+      .range(4, 5);
+    expect(page3.error).toBeNull();
+    expect(page3.count).toBe(5);
+    expect((page3.data as { account_number: string }[]).map((r) => r.account_number)).toEqual([
+      "TEST-PAGINATION-4",
+    ]);
+  });
+});

@@ -30,21 +30,18 @@ export async function GET(req: NextRequest) {
   const pg = getPgClient();
   let query = pg
     .from('cme_trades_real')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
 
   if (cmeAccountId) query = query.eq('cme_account_id', cmeAccountId);
 
-  // Ver comentario equivalente en trades/propfirm/route.ts: el shim no
-  // soporta `.range()` ni `{ count: 'exact' }`, se trae todo y se pagina en
-  // JS conservando el `count` total.
-  const { data: allRows, error } = await query;
+  const { data: pageRows, error, count: total } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const matchedRows = (allRows ?? []) as unknown as RealTradeRow[];
-  const count = matchedRows.length;
-  const data = matchedRows.slice(offset, offset + limit);
+  const data = (pageRows ?? []) as unknown as RealTradeRow[];
+  const count = total ?? 0;
 
   if (format === 'csv') {
     const header = 'id,contract,direction,quantity,fill_price,status,pnl_usd,commission_usd,slippage_ticks,close_reason,fill_timestamp\n';
