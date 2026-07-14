@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+import { requireOwnership } from '@/lib/ownership';
 import { logAuditFromRequest } from '@/lib/security/auditLog';
 import { z } from 'zod';
 
@@ -19,7 +21,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const cmeAccountId = searchParams.get('cmeAccountId');
 
-  let query = supabase
+  const pg = getPgClient();
+  let query = pg
     .from('cme_risk_configs')
     .select('*')
     .eq('user_id', user.id);
@@ -46,11 +49,21 @@ export async function POST(req: NextRequest) {
 
   const { cmeAccountId, ...updates } = parsed.data;
 
-  const { data, error } = await supabase
+  const pg = getPgClient();
+
+  const { data: existingRaw } = await pg
+    .from('cme_risk_configs')
+    .select('id, user_id')
+    .eq('cme_account_id', cmeAccountId)
+    .maybeSingle();
+  const existing = requireOwnership(existingRaw as { id: string; user_id: string } | null, user.id);
+
+  if (!existing) return NextResponse.json({ error: 'Risk config not found' }, { status: 404 });
+
+  const { data, error } = await pg
     .from('cme_risk_configs')
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-    .eq('cme_account_id', cmeAccountId)
+    .eq('id', existing.id)
     .select()
     .single();
 

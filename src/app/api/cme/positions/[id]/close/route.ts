@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+import { requireOwnership } from '@/lib/ownership';
 import { readCmeAccessToken, storeCmeAccessToken } from '@/lib/cme/vault';
 import { closePosition, tradovateRenew } from '@/lib/cme/tradovate';
 import { logAuditFromRequest } from '@/lib/security/auditLog';
@@ -14,31 +16,49 @@ export async function POST(
 
   const { id } = await params;
 
-  const { data: pos } = await supabase
+  const pg = getPgClient();
+
+  const { data: posRaw } = await pg
     .from('cme_positions')
-    .select('id, cme_account_id, connection_id, contract, quantity, broker_position_id')
+    .select('id, user_id, cme_account_id, connection_id, contract, quantity, broker_position_id')
     .eq('id', id)
-    .eq('user_id', user.id)
     .maybeSingle();
+  const pos = requireOwnership(
+    posRaw as {
+      id: string;
+      user_id: string;
+      cme_account_id: string;
+      connection_id: string;
+      contract: string;
+      quantity: number;
+      broker_position_id: string;
+    } | null,
+    user.id
+  );
 
   if (!pos) return NextResponse.json({ error: 'Position not found' }, { status: 404 });
 
-  const svc = createServiceClient();
-  const { data: conn } = await svc
+  const { data: connRaw } = await pg
     .from('cme_connections')
     .select('id, tradovate_account_id, tradovate_account_spec, token_expires_at')
     .eq('id', pos.connection_id)
     .maybeSingle();
+  const conn = connRaw as {
+    id: string;
+    tradovate_account_id: number;
+    tradovate_account_spec: string;
+    token_expires_at: string | null;
+  } | null;
 
   if (!conn) return NextResponse.json({ error: 'No connection for position' }, { status: 404 });
 
-  const { data: acct } = await svc
+  const { data: acctRaw } = await pg
     .from('algo_cme_accounts')
     .select('is_paper')
     .eq('id', pos.cme_account_id)
     .maybeSingle();
 
-  const isPaper = acct?.is_paper ?? true;
+  const isPaper = (acctRaw as { is_paper: boolean } | null)?.is_paper ?? true;
 
   let token = await readCmeAccessToken(conn.id);
   if (!token) return NextResponse.json({ error: 'No vault token' }, { status: 503 });
@@ -49,7 +69,7 @@ export async function POST(
       const renewed = await tradovateRenew(token, isPaper);
       token = renewed.accessToken;
       await storeCmeAccessToken(conn.id, token);
-      await svc
+      await pg
         .from('cme_connections')
         .update({ token_expires_at: renewed.expirationTime })
         .eq('id', conn.id);
@@ -71,7 +91,7 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  await supabase.from('cme_positions').delete().eq('id', pos.id);
+  await pg.from('cme_positions').delete().eq('id', pos.id);
   await logAuditFromRequest(
     { userId: user.id, action: 'delete', resourceType: 'trade', resourceId: id, status: 'success' },
     req

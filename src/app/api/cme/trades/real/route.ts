@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
+
+type RealTradeRow = {
+  id: string;
+  contract: string;
+  direction: string;
+  quantity: number;
+  fill_price: number | null;
+  status: string;
+  pnl_usd: number | null;
+  commission_usd: number | null;
+  slippage_ticks: number | null;
+  close_reason: string | null;
+  fill_timestamp: string | null;
+};
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -12,17 +27,24 @@ export async function GET(req: NextRequest) {
   const offset = parseInt(searchParams.get('offset') ?? '0', 10);
   const format = searchParams.get('format');
 
-  let query = supabase
+  const pg = getPgClient();
+  let query = pg
     .from('cme_trades_real')
-    .select('*', { count: 'exact' })
+    .select('*')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    .order('created_at', { ascending: false });
 
   if (cmeAccountId) query = query.eq('cme_account_id', cmeAccountId);
 
-  const { data, error, count } = await query;
+  // Ver comentario equivalente en trades/propfirm/route.ts: el shim no
+  // soporta `.range()` ni `{ count: 'exact' }`, se trae todo y se pagina en
+  // JS conservando el `count` total.
+  const { data: allRows, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const matchedRows = (allRows ?? []) as unknown as RealTradeRow[];
+  const count = matchedRows.length;
+  const data = matchedRows.slice(offset, offset + limit);
 
   if (format === 'csv') {
     const header = 'id,contract,direction,quantity,fill_price,status,pnl_usd,commission_usd,slippage_ticks,close_reason,fill_timestamp\n';

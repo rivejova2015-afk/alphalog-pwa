@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -9,7 +10,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get('type');
 
-  let query = supabase
+  const pg = getPgClient();
+  let query = pg
     .from('algo_cme_accounts')
     .select('id, label, provider_name, account_number, account_type, is_paper, funded_amount, max_daily_loss, max_trailing_dd')
     .eq('user_id', user.id)

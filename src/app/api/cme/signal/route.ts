@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { getPgClient } from '@/lib/pg/client';
 import { checkOrderRisk } from '@/lib/cme/risk-manager';
 import { executeSignal } from '@/lib/cme/order-executor';
 import { logAuditFromRequest } from '@/lib/security/auditLog';
@@ -29,7 +30,12 @@ export async function POST(req: NextRequest) {
 
   const risk = await checkOrderRisk({ userId: user.id, cmeAccountId, direction, quantity });
 
-  const { data: signal } = await supabase
+  const pg = getPgClient();
+
+  // user_id se fuerza al de la sesión (nunca se lee del body / no aceptado
+  // por `schema`) — un caller externo no puede spoofear la señal de otro
+  // usuario insertando manualmente aquí.
+  const { data: signalRaw } = await pg
     .from('cme_signals')
     .insert({
       user_id: user.id,
@@ -47,6 +53,8 @@ export async function POST(req: NextRequest) {
     })
     .select('id')
     .single();
+
+  const signal = signalRaw as { id: string } | null;
 
   if (!signal) return NextResponse.json({ error: 'Failed to create signal' }, { status: 500 });
 
@@ -74,7 +82,7 @@ export async function POST(req: NextRequest) {
   );
 
   if (!result.success) {
-    await supabase
+    await pg
       .from('cme_signals')
       .update({ status: 'rejected', reject_reason: result.error })
       .eq('id', signal.id);
