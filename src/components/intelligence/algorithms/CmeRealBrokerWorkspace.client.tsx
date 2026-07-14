@@ -20,6 +20,11 @@ export default function CmeRealBrokerWorkspace() {
               The database infrastructure is ready. Connect your IBKR or TradeStation account
               once you have API credentials configured.
             </p>
+            <p className="text-sm text-white/50 mt-1">
+              As of 2026-07-13 this also runs on lattice-server&apos;s self-hosted Postgres
+              (no longer Supabase) — only the execution engine (broker order routing) is
+              still pending, as a separate future sub-project.
+            </p>
           </div>
         </div>
       </div>
