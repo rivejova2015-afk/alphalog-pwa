@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { DispatchDbClient } from '@/lib/engine/dispatchers/types';
 import { readCmeAccessToken, storeCmeAccessToken } from './vault';
 import { tradovateRenew, placeMarketOrder } from './tradovate';
 
@@ -23,7 +23,7 @@ export interface ExecutionResult {
 
 export async function executeSignal(
   signal: CmeSignal,
-  svc: SupabaseClient
+  svc: DispatchDbClient
 ): Promise<ExecutionResult> {
   const { data: conn, error: connErr } = await svc
     .from('cme_connections')

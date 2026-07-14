@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { dispatchSignal, getDispatchMode, type DispatchInput } from "./index";
+import { dispatchSignal, getDispatchMode, type DispatchInput, type DispatchDbClient } from "./index";
 
 // Mock the cme executor — we want to verify dispatchTradovate calls it with
 // the right shape in live mode, and that it does NOT call it in shadow mode.
@@ -61,7 +60,7 @@ type Behavior = {
 const behavior: Behavior = {};
 const updateCalls: Array<{ table: string; payload: Record<string, unknown>; eqId?: string }> = [];
 
-function makeSupabaseMock(): SupabaseClient {
+function makeSupabaseMock(): DispatchDbClient {
   const tableBuilder = (table: string) => {
     function selectBuilder() {
       const chain = {
@@ -104,7 +103,7 @@ function makeSupabaseMock(): SupabaseClient {
       }),
     };
   };
-  return { from: (table: string) => tableBuilder(table) } as unknown as SupabaseClient;
+  return { from: (table: string) => tableBuilder(table) } as unknown as DispatchDbClient;
 }
 
 beforeEach(() => {

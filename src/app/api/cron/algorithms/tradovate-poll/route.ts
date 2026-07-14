@@ -125,10 +125,8 @@ async function processAlgo(
     return { algoId, symbol, action: "skipped", reason: "no_fresh_bar" };
   }
 
-  // Run engine. Still fed the real SupabaseClient — runEngineV1/dispatchSignal
-  // internally touch historical_bars/ml_models/cme_* tables and are out of
-  // scope for this migration (dispatchTradovate's data client is untouched
-  // per the plan's Global Constraints).
+  // Run engine. runEngineV1 still gets the real Supabase client — it reads
+  // historical_bars/ml_models, which stay out of this migration's scope.
   let signal;
   try {
     signal = await runEngineV1(supabaseHistorical, algo, { symbol, now: new Date(latestTs) });
@@ -143,14 +141,16 @@ async function processAlgo(
     return { algoId, symbol, action: "failed", reason: "engine_threw", error: msg };
   }
 
-  // Dispatch.
+  // Dispatch. Uses the pg client — cme_connections/algo_cme_accounts/
+  // cme_signals/cme_trades_propfirm (touched by dispatchTradovate ->
+  // executeSignal) all live in the self-hosted Postgres now, not Supabase.
   const result = await dispatchSignal(
     {
       algo: { id: algo.id, user_id: algo.user_id, platform: algo.platform, parameters: algo.parameters },
       signal: { action: signal.action, lots: signal.lots, confidence: signal.confidence, reason: signal.reason },
       currentBarTs: latestTs,
     },
-    supabaseHistorical,
+    pg,
   );
 
   // Telemetry update — always, even on failure.

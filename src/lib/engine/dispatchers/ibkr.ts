@@ -22,9 +22,8 @@
 // Until then: stub. The shape mirrors dispatchTradovate so the swap is
 // mechanical when execution lands.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { logInfo } from "@/lib/log";
-import type { DispatchInput, DispatchResult } from "./types";
+import type { DispatchInput, DispatchResult, DispatchDbClient } from "./types";
 
 function str(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -38,7 +37,7 @@ function str(value: unknown): string | null {
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export async function dispatchIbkr(
   input: DispatchInput,
-  svc: SupabaseClient,
+  svc: DispatchDbClient,
 ): Promise<DispatchResult> {
 /* eslint-enable @typescript-eslint/no-unused-vars */
   const { algo, signal } = input;

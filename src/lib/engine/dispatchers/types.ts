@@ -50,6 +50,60 @@ export interface DispatchResult {
 }
 
 /**
+ * Minimal structural shape of a Postgres query-builder client that the
+ * dispatch chain (dispatchSignal → dispatchTradovate/dispatchIbkr →
+ * executeSignal) actually calls against migrated CME tables (cme_connections,
+ * algo_cme_accounts, cme_signals, cme_trades_propfirm, ...).
+ *
+ * Both a real Supabase `SupabaseClient` and `getPgClient()`'s return value
+ * (src/lib/pg/client.ts) satisfy this shape structurally, so the same
+ * dispatch code can run unmodified against either backend — needed because
+ * the CME/Tradovate tables moved from Supabase to a self-hosted Postgres
+ * while historical_bars/ml_models stayed on Supabase. Deliberately narrow:
+ * only the methods these call sites use.
+ *
+ * Modeled in three stages (mirroring Supabase's own builder staging):
+ *   - `.from()` returns a `DispatchQueryBuilder` (select/insert/update only).
+ *   - Calling one of those returns a `DispatchFilterResult`: chainable via
+ *     `.select()`/`.eq()` and awaitable directly (e.g. a bare
+ *     `.update(...).eq(...)` with no terminal call).
+ *   - `.maybeSingle()`/`.single()` are terminal — they return a plain
+ *     `DispatchTerminal` (thenable only), matching Supabase's real builder
+ *     (its post-`.maybeSingle()` object isn't chainable any further either).
+ * Row/result payloads are untyped (`any`) — neither call site relies on a
+ * typed Database schema, and Supabase's own client defaults to the same
+ * (`SupabaseClient<any, ...>`) when no generated types are wired in.
+ */
+export interface DispatchTerminal {
+  // Loosely-typed on purpose: Supabase's and the pg shim's real `then`
+  // implementations use incompatible generic signatures. Both are awaited
+  // directly by every call site here, never chained further — `any` sidesteps
+  // that mismatch without affecting runtime behavior.
+  then(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolve: (result: { data: any; error: { message: string } | null }) => void,
+    reject?: (err: unknown) => void,
+  ): unknown;
+}
+
+export interface DispatchFilterResult extends DispatchTerminal {
+  select(cols?: string): DispatchFilterResult;
+  eq(col: string, val: unknown): DispatchFilterResult;
+  maybeSingle(): DispatchTerminal;
+  single(): DispatchTerminal;
+}
+
+export interface DispatchQueryBuilder {
+  select(cols?: string): DispatchFilterResult;
+  insert(rows: Record<string, unknown> | Record<string, unknown>[]): DispatchFilterResult;
+  update(row: Record<string, unknown>): DispatchFilterResult;
+}
+
+export interface DispatchDbClient {
+  from(table: string): DispatchQueryBuilder;
+}
+
+/**
  * Reads `DISPATCH_MODE` env var. Defaults to 'shadow' on anything other than
  * the literal string 'live' (case-insensitive). Defensive default — accidental
  * empty/missing env never silently flips to live.

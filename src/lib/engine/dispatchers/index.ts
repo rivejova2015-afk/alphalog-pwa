@@ -16,17 +16,16 @@
 // HOLD signals are filtered here — they short-circuit before any platform
 // branching, so the tradovate dispatcher never sees them.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { dispatchTradovate } from "./tradovate";
 import { dispatchIbkr } from "./ibkr";
-import type { DispatchInput, DispatchResult } from "./types";
+import type { DispatchInput, DispatchResult, DispatchDbClient } from "./types";
 
-export type { DispatchInput, DispatchResult, DispatchMode } from "./types";
+export type { DispatchInput, DispatchResult, DispatchMode, DispatchDbClient } from "./types";
 export { getDispatchMode } from "./types";
 
 export async function dispatchSignal(
   input: DispatchInput,
-  svc: SupabaseClient,
+  svc: DispatchDbClient,
 ): Promise<DispatchResult> {
   if (input.signal.action === "HOLD") {
     return { ok: true, action: "skipped", reason: "engine_hold" };

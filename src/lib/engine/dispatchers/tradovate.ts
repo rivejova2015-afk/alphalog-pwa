@@ -15,6 +15,7 @@
 // cron caller depends on this to keep processing other algos after one fails.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/server";
 import { executeSignal, type CmeSignal } from "@/lib/cme/order-executor";
 import { getPositions, getCashBalance, tradovateRenew } from "@/lib/cme/tradovate";
 import { readCmeAccessToken, storeCmeAccessToken } from "@/lib/cme/vault";
@@ -24,7 +25,7 @@ import { loadHistoricalBars } from "@/lib/backtest/bars-loader";
 import { computeAtrFromBars } from "./atr";
 import { computeKellyContracts } from "../position-sizing/kelly";
 import { logError, logInfo, logWarn } from "@/lib/log";
-import { getDispatchMode, type DispatchInput, type DispatchResult } from "./types";
+import { getDispatchMode, type DispatchInput, type DispatchResult, type DispatchDbClient } from "./types";
 
 // Fallback when ATR or tick size are unavailable (cold start, unknown contract).
 // Conservative enough that an honest shadow run validates the pipeline without
@@ -66,7 +67,7 @@ function str(value: unknown): string | null {
  * the dispatcher on a transient network blip.
  */
 async function netAccountPosition(
-  svc: SupabaseClient,
+  svc: DispatchDbClient,
   algoId: string,
   cmeAccountId: string,
   userId: string,
@@ -178,7 +179,7 @@ async function computeSlTpTicks(
  * but doesn't share state with it to keep both flows independently failure-open.
  */
 async function fetchAccountEquity(
-  svc: SupabaseClient,
+  svc: DispatchDbClient,
   cmeAccountId: string,
   userId: string,
 ): Promise<number | null> {
@@ -224,7 +225,7 @@ async function fetchAccountEquity(
 
 export async function dispatchTradovate(
   input: DispatchInput,
-  svc: SupabaseClient,
+  svc: DispatchDbClient,
 ): Promise<DispatchResult> {
   const { algo, signal } = input;
 
@@ -290,8 +291,12 @@ export async function dispatchTradovate(
   }
 
   // ATR-derived SL/TP with static fallback. Always returns a valid tick pair.
+  // historical_bars stays out of the CME/Tradovate migration scope (still
+  // Supabase-only), so this uses its own Supabase client rather than `svc`
+  // (which may now be a Postgres client for the migrated cme_* tables).
   const rootSym = rootSymbolOf(contract);
-  const { slTicks, tpTicks, method } = await computeSlTpTicks(svc, rootSym, params);
+  const barsClient = createServiceClient() as SupabaseClient;
+  const { slTicks, tpTicks, method } = await computeSlTpTicks(barsClient, rootSym, params);
 
   // Kelly position sizing — opt-in via algo.parameters.kelly_enabled.
   // When enabled, override `quantity` with `floor(equity × f × frac / risk)`.
