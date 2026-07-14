@@ -31,10 +31,15 @@ dato que lo alimenta.
   Supabase). No hay cutover en vivo, no hay riesgo de escritura concurrente,
   no hace falta runbook de migración de datos — solo esquema + código.
 - **Las 8 tablas dependen de RLS de Supabase** (`auth.uid() = user_id` en
-  cada política de SELECT/UPDATE/DELETE). El Postgres crudo no tiene RLS —
-  cada ruta que las toque necesita un chequeo explícito de `user_id` en el
-  código de la aplicación (mismo patrón que ya se aplicó a
-  `bot/pair/route.ts` en la Etapa 1a).
+  cada política de SELECT/UPDATE/DELETE). El Postgres crudo no tiene RLS.
+  Spot-check de 2 de las 17 rutas/crons CME (`cme-accounts`, `cme/connect`)
+  muestra que **ya filtran explícitamente por `.eq('user_id', user.id)`** en
+  la query, no dependen solo de RLS — mejor de lo que se temía. La tarea real
+  no es "agregar el chequeo en todos lados" (como si faltara en todas), sino
+  **verificar las 17 rutas/crons una por una** y arreglar puntualmente
+  cualquiera que sí dependa solo de RLS (mismo patrón de bug que se encontró
+  una vez en `bot/pair/route.ts` durante la Etapa 1a — no asumir que no va a
+  repetirse en alguna de las 15 restantes sin revisar).
 - **Las FK ya están satisfechas**: `cme_trades_propfirm`, `cme_trades_real`,
   `cme_positions` y `cme_signals` referencian `algorithms.id` (ya migrada);
   el resto de las FK son internas al propio grupo de tablas CME.
@@ -76,12 +81,18 @@ Mismo patrón que las dos migraciones anteriores de esta sesión:
   llamada Supabase directa (no solo las que ya reciben `svc` como parámetro).
 - `src/lib/engine/dispatchers/tradovate.ts` — sigue recibiendo `svc` como
   parámetro; cambia qué implementación se le inyecta desde los call sites.
-- Rutas API: `/api/cme/connect`, `/api/cme/connections`,
-  `/api/cme/trades/propfirm`, `/api/intelligence/algorithms/cme-accounts`.
-- Crons (ya corren en vivo en `alphalog-cron`, Fly.io):
+- Rutas API (12, inventario completo — cada una se verifica individualmente
+  por el chequeo explícito de `user_id`, no se asume que ya lo tiene):
+  `/api/cme/connect`, `/api/cme/connect/[cmeAccountId]`, `/api/cme/connections`,
+  `/api/cme/account`, `/api/cme/account/equity-snapshots`, `/api/cme/kill-switch`,
+  `/api/cme/positions`, `/api/cme/positions/[id]/close`, `/api/cme/risk-config`,
+  `/api/cme/signal`, `/api/cme/trades/propfirm`, `/api/cme/trades/real`,
+  `/api/intelligence/algorithms/cme-accounts`.
+- Crons (5, ya corren en vivo en `alphalog-cron`, Fly.io):
   `/api/cron/cme/position-sync`, `risk-monitor`, `equity-sync`,
-  `connection-heartbeat`, `daily-report`, `/api/cron/algorithms/tradovate-poll`,
-  `/api/cron/bars/tradovate-fetch`.
+  `connection-heartbeat`, `daily-report`. Más
+  `/api/cron/algorithms/tradovate-poll` y `/api/cron/bars/tradovate-fetch`,
+  que ya viven fuera de `cron/cme/` pero también tocan estas tablas.
 - `data/alphalog/schema.sql` (lattice-server) — 8 tablas nuevas.
 - Una tabla `secrets` (o reutilizar la ya existente de lattice-server, a
   decidir en el plan de implementación) para el token cifrado de Tradovate.
