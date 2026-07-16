@@ -1052,7 +1052,7 @@ function DeployToAccountSection({
 // handled uniformly for every algorithm by the existing QualityGatesPanel
 // (rendered below regardless of market_type) — no need to duplicate that
 // logic here.
-function CmeDeployToAccountSection({
+export function CmeDeployToAccountSection({
   algorithmId,
   currentStatus,
   onDeployed,
@@ -1070,13 +1070,9 @@ function CmeDeployToAccountSection({
     let cancelled = false;
     (async () => {
       try {
-        const { createClient } = await import("@/lib/supabase/browser");
-        const sb = createClient();
-        const { data } = await sb
-          .from("algo_cme_accounts")
-          .select("id, account_type, provider_name, account_number, label")
-          .is("deleted_at", null);
-        if (!cancelled) setAccounts((data ?? []) as CmeAccountOption[]);
+        const res = await fetch("/api/intelligence/algorithms/cme-accounts");
+        const body = await res.json();
+        if (!cancelled) setAccounts((body.data ?? []) as CmeAccountOption[]);
       } finally {
         if (!cancelled) setLoadingAccs(false);
       }

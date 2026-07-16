@@ -403,10 +403,10 @@ function StepFutures({
               <span className="text-[#475569]">{acc.provider_name}</span>
               <span className="text-[#2d3748]">{acc.account_number}</span>
               {isPropfirm && acc.funded_amount && (
-                <span className="text-[#475569]">Fondeo: <span className="text-[#34d399]">${acc.funded_amount.toLocaleString()}</span></span>
+                <span className="text-[#475569]">Fondeo: <span className="text-[#34d399]">${Number(acc.funded_amount).toLocaleString()}</span></span>
               )}
               {isPropfirm && acc.max_daily_loss && (
-                <span className="text-[#475569]">Pérd. diaria: <span className="text-[#f87171]">${acc.max_daily_loss.toLocaleString()}</span></span>
+                <span className="text-[#475569]">Pérd. diaria: <span className="text-[#f87171]">${Number(acc.max_daily_loss).toLocaleString()}</span></span>
               )}
             </div>
           );
