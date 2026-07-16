@@ -45,6 +45,7 @@ export type AuditResourceType =
   | "treasury_transaction"
   | "cme_signal"
   | "cme_risk_config"
+  | "algo_cme_account"
   | "pairing_token"
   | "business_cost"
   | "business_cost_template"

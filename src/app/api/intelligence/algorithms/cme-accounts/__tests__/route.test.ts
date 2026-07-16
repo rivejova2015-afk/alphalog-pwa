@@ -80,4 +80,23 @@ describe("POST /api/intelligence/algorithms/cme-accounts — integración con Po
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
+
+  it("rechaza provider_name inválido para account_type propfirm (CHECK constraint)", async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: TEST_USER_ID } } });
+
+    const req = new NextRequest("http://localhost/api/intelligence/algorithms/cme-accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account_type: "propfirm",
+        provider_name: "NotARealProvider",
+        account_number: "TEST-CHECK-CONSTRAINT",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBeDefined();
+  });
 });

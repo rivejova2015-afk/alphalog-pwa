@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getPgClient } from '@/lib/pg/client';
+import { logAuditFromRequest } from '@/lib/security/auditLog';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -43,6 +44,20 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const created = data as unknown as { id: string };
+
+  await logAuditFromRequest(
+    {
+      userId: user.id,
+      action: "create",
+      resourceType: "algo_cme_account",
+      resourceId: created.id,
+      status: "success",
+      changes: parsed.data as Record<string, unknown>,
+    },
+    req
+  );
 
   return NextResponse.json({ data }, { status: 201 });
 }
