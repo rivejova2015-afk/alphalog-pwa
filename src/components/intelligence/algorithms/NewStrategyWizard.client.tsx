@@ -735,7 +735,7 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
     Promise.all([
       sb.from('bots').select('id, name'),
       sb.from('bot_accounts').select('id, label, account_id'),
-      sb.from('algo_cme_accounts').select('*').is('deleted_at', null),
+      fetch('/api/intelligence/algorithms/cme-accounts').then((r) => r.json()),
       sb.from('algorithm_templates').select('*').eq('is_active', true).order('sort_index'),
     ]).then(([botsRes, accsRes, cmeRes, tmplRes]) => {
       const accs = (accsRes.data ?? []) as BotAccount[];
@@ -829,24 +829,26 @@ export function NewStrategyWizard({ onClose }: { onClose: () => void }) {
   async function handleAddCmeAccount() {
     if (!newCmeNumber.trim()) { toast.error('El número de cuenta es obligatorio'); return; }
     setAddingCmeAccount(true);
-    const sb = createClient();
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) { toast.error('No autenticado'); setAddingCmeAccount(false); return; }
-    const { data, error } = await sb.from('algo_cme_accounts').insert({
-      user_id:         user.id,
-      account_type:    newCmeType,
-      provider_name:   newCmeProvider,
-      account_number:  newCmeNumber.trim(),
-      label:           newCmeLabel.trim() || null,
-      funded_amount:   newCmeFunded    ? Number(newCmeFunded)    : null,
-      max_daily_loss:  newCmeMaxLoss   ? Number(newCmeMaxLoss)   : null,
-      max_trailing_dd: newCmeTrailingDD ? Number(newCmeTrailingDD) : null,
-    }).select('*').single();
-    if (error) {
-      toast.error('Error al crear cuenta: ' + error.message);
-    } else if (data) {
-      setCmeAccounts((prev) => [...prev, data as CmeAccount]);
-      setCmeAccountId(data.id);
+    const res = await fetch('/api/intelligence/algorithms/cme-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        account_type:    newCmeType,
+        provider_name:   newCmeProvider,
+        account_number:  newCmeNumber.trim(),
+        label:           newCmeLabel.trim() || null,
+        funded_amount:   newCmeFunded    ? Number(newCmeFunded)    : null,
+        max_daily_loss:  newCmeMaxLoss   ? Number(newCmeMaxLoss)   : null,
+        max_trailing_dd: newCmeTrailingDD ? Number(newCmeTrailingDD) : null,
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      const message = typeof body.error === 'string' ? body.error : 'No se pudo guardar la cuenta';
+      toast.error('Error al crear cuenta: ' + message);
+    } else {
+      setCmeAccounts((prev) => [...prev, body.data as CmeAccount]);
+      setCmeAccountId(body.data.id);
       setShowAddCmeAccount(false);
       setNewCmeNumber(''); setNewCmeLabel('');
       setNewCmeFunded(''); setNewCmeMaxLoss(''); setNewCmeTrailingDD('');
