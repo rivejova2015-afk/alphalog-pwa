@@ -164,7 +164,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un rol 'editor' que puede publicar pero no borrar (autorización).",
       "Un log que registra quién accedió a qué y cuándo (accounting).",
     ],
-    related: ["MFA y autenticación moderna", "Principio de mínimo privilegio", "Modelos de autorización"],
+    related: ["MFA y autenticación moderna", "Factores de autenticación", "Principio de mínimo privilegio", "Modelos de autorización"],
   },
   {
     id: 24,
@@ -5756,7 +5756,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Provisioning automático desde RR.HH. → AD/Okta al alta.",
       "Revisión trimestral de accesos (entitlement review).",
     ],
-    related: ["AAA (Autenticación, Autorización, Accounting)", "MFA y autenticación moderna", "PAM (Privileged Access Management)"],
+    related: ["AAA (Autenticación, Autorización, Accounting)", "MFA y autenticación moderna", "Autenticación adaptativa / basada en riesgo", "PAM (Privileged Access Management)"],
   },
   {
     id: 861,
@@ -5775,7 +5775,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Migrar de SMS a una app TOTP y luego a passkeys.",
       "MFA push con number matching para mitigar fatiga.",
     ],
-    related: ["Ciclo de vida de la identidad", "SSO y federación", "Defensas anti-phishing"],
+    related: ["Factores de autenticación", "Passkeys y FIDO2/WebAuthn", "Autenticación passwordless", "Ataques a MFA", "Ciclo de vida de la identidad", "SSO y federación", "Defensas anti-phishing"],
   },
   {
     id: 862,
@@ -5792,7 +5792,7 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Login con Google (OIDC) en una app SaaS.",
       "SAML entre el IdP corporativo y aplicaciones internas.",
     ],
-    related: ["MFA y autenticación moderna", "Modelos de autorización", "Active Directory: dominio, bosque y OU"],
+    related: ["MFA y autenticación moderna", "Autenticación passwordless", "Modelos de autorización", "Active Directory: dominio, bosque y OU"],
   },
   {
     id: 863,
@@ -5827,6 +5827,130 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Rotación automática de la contraseña de una service account.",
     ],
     related: ["Modelos de autorización", "Principio de mínimo privilegio", "Ciclo de vida de la identidad"],
+  },
+  {
+    id: 865,
+    module: 83,
+    term: "Factores de autenticación",
+    short: "Los ingredientes con los que se prueba una identidad: lo que sabes, tienes, eres, dónde estás y cómo te comportas.",
+    detail:
+      "Un **factor** es una categoría de evidencia con la que un usuario demuestra su identidad. Los cinco factores modernos:\n" +
+      "| # | Factor | Ejemplos | Fortaleza típica |\n" +
+      "|---|---|---|---|\n" +
+      "| 1 | **Conocimiento** — algo que sabes | Contraseña, PIN, respuesta a pregunta | Débil (reusable, phishable) |\n" +
+      "| 2 | **Posesión** — algo que tienes | Móvil, token TOTP, llave FIDO2, smart card | Media–alta según el medio |\n" +
+      "| 3 | **Inherencia** — algo que eres | Huella, rostro, iris, voz | Media (no revocable) |\n" +
+      "| 4 | **Ubicación** — dónde estás | IP corporativa, geofence, red confiable | Contextual (complementaria) |\n" +
+      "| 5 | **Comportamiento** — cómo actúas | Ritmo de tecleo, patrón de uso, biometría comportamental | Contextual (continua) |\n" +
+      "> 💡 **MFA de verdad** = combinar factores de **categorías distintas** (ej: contraseña + passkey). Dos contraseñas o dos preguntas de seguridad **no es MFA** — es un solo factor repetido.\n" +
+      "> ⚠️ Los factores 4 y 5 sostienen la **autenticación adaptativa/continua**, no reemplazan a un factor fuerte de posesión o inherencia en el login inicial.",
+    examples: [
+      "Contraseña (1) + passkey en el móvil (2) = MFA fuerte y phishing-resistant.",
+      "PIN (1) + huella (3) al desbloquear un dispositivo con Windows Hello / Face ID.",
+      "Contraseña (1) + geofence corporativo (4) → alto riesgo si el login viene de un país nuevo.",
+    ],
+    related: ["MFA y autenticación moderna", "AAA (Autenticación, Autorización, Accounting)", "Passkeys y FIDO2/WebAuthn", "Autenticación adaptativa / basada en riesgo"],
+  },
+  {
+    id: 866,
+    module: 83,
+    term: "Passkeys y FIDO2/WebAuthn",
+    short: "Autenticación con criptografía asimétrica ligada al origen: sin secreto compartido, inmune al phishing y a AiTM.",
+    detail:
+      "Las **passkeys** son credenciales basadas en un par de claves generado por el dispositivo del usuario:\n" +
+      "• **Registro** — el dispositivo crea un par (privada + pública). La **privada nunca sale**; la pública se guarda en el servicio.\n" +
+      "• **Login** — el servicio manda un *challenge*; el dispositivo lo firma con la privada; el servicio verifica con la pública.\n" +
+      "• **Ligadura al origen** — la credencial está atada al dominio (`example.com`). Un dominio phishing (`examp1e.com`) no puede reutilizarla.\n" +
+      "• **WebAuthn** (W3C) es la API del navegador; **FIDO2** (Alianza FIDO) el stack completo (CTAP2 + WebAuthn).\n" +
+      "\n**Variantes:**\n" +
+      "| Tipo | Sincronización | Recuperación | Uso |\n" +
+      "|---|---|---|---|\n" +
+      "| **Sync passkeys** | iCloud Keychain / Google / 1Password | Alta (backup en la nube) | Consumer |\n" +
+      "| **Device-bound** | No sale del dispositivo | Baja (requiere segunda credencial) | Empresa / alto riesgo |\n" +
+      "| **Attestation** | El servicio verifica el fabricante | — | Regulado (banca, gobierno) |\n" +
+      "> 💡 Son la **única MFA con inmunidad demostrada** a **adversary-in-the-middle** (evilginx/Modlishka): el proxy no puede reproducir la firma porque el origen no coincide.",
+    examples: [
+      "Login con passkey en Google, GitHub o Apple: ni contraseña ni OTP, solo Face ID / huella.",
+      "YubiKey (device-bound FIDO2) como segundo factor obligatorio para admins.",
+      "Enterprise attestation: exigir passkeys emitidas por un fabricante certificado.",
+    ],
+    related: ["MFA y autenticación moderna", "Factores de autenticación", "Autenticación passwordless", "Ataques a MFA", "Cifrado asimétrico y par de claves"],
+  },
+  {
+    id: 867,
+    module: 83,
+    term: "Autenticación passwordless",
+    short: "Login sin contraseña reusable: passkeys, magic links, biometría o push verificado — más UX y menos superficie robable.",
+    detail:
+      "**Passwordless** significa eliminar el secreto memorizable como credencial primaria. Las vías principales:\n" +
+      "• **Passkeys / FIDO2** — la referencia moderna: clave asimétrica, sin secreto compartido, phishing-resistant.\n" +
+      "• **Magic links** — enlace único enviado por email; útil como fallback, débil como único método (depende del canal email).\n" +
+      "• **One-tap push** con *number matching* — el servicio muestra un número; el usuario lo confirma en la app. Mitiga MFA fatigue.\n" +
+      "• **Biometría local** — huella o cara desbloquean una clave local; el secreto **nunca deja el dispositivo**.\n" +
+      "• **Certificados** (mTLS, smart card, PIV/CAC) — típico en entornos regulados.\n" +
+      "\n> ⚠️ **Trampa común:** \"passwordless\" no es lo mismo que \"MFA fuerte\". Un magic link vía email con la cuenta comprometida es **más débil** que contraseña + passkey.\n" +
+      "> 💡 El objetivo no es la ausencia de contraseña sino que **no haya un secreto reusable** que pueda ser robado, phisheado o filtrado en una brecha.\n" +
+      "\n**Retos:** recuperación (¿qué pasa si perdés el dispositivo?), account bootstrap, soporte cross-device y el pasillo de **downgrade** a método más débil.",
+    examples: [
+      "Login en Microsoft/Google con passkey: la contraseña queda como recovery-only.",
+      "Slack: magic link como primer factor + passkey como segundo.",
+      "Banca online con smart card + PIN → password-less pero MFA fuerte.",
+    ],
+    related: ["Passkeys y FIDO2/WebAuthn", "MFA y autenticación moderna", "Factores de autenticación", "Ataques a MFA"],
+  },
+  {
+    id: 868,
+    module: 83,
+    term: "Autenticación adaptativa / basada en riesgo",
+    short: "El sistema evalúa contexto en cada intento y decide dinámicamente: permitir, pedir step-up o bloquear.",
+    detail:
+      "En vez de aplicar la **misma política** a todos los logins, la auth adaptativa **puntúa el riesgo** de cada intento y **decide**:\n" +
+      "\n**Señales típicas:**\n" +
+      "• **Dispositivo** — reconocido, jailbroken, versión de SO, EDR presente.\n" +
+      "• **Red** — IP corporativa, VPN, país nuevo, proxy/Tor.\n" +
+      "• **Comportamiento** — hora habitual, ritmo, geo velocity imposible (login en Madrid y Tokio en 10 min).\n" +
+      "• **Recurso** — un dashboard interno pesa menos que la consola de admin.\n" +
+      "• **Identity Threat Intel** — credenciales filtradas, cuentas expuestas en dumps.\n" +
+      "\n**Decisiones posibles:**\n" +
+      "| Puntaje | Acción |\n" +
+      "|---|---|\n" +
+      "| Bajo | Login directo (SSO transparente) |\n" +
+      "| Medio | Step-up: pedir un factor adicional (MFA, passkey) |\n" +
+      "| Alto | Bloquear + alertar al SOC / obligar reset |\n" +
+      "\n> 💡 **Conditional Access** de Entra ID y las policies de Okta / Ping son las implementaciones enterprise más maduras. Se combinan con **continuous authentication** (biometría comportamental durante la sesión).\n" +
+      "> ⚠️ Cuidado: reglas mal calibradas generan **fricción excesiva** (usuarios evaden con VPN personal) o **falsa sensación** (permitir por IP corporativa cuando el atacante ya está adentro).",
+    examples: [
+      "Entra Conditional Access: si el usuario está fuera de la red corporativa Y accede al portal financiero → exigir passkey.",
+      "Okta Risk Engine bloquea un login que viene de un país nuevo con un browser sin cookies.",
+      "Session risk sube durante la sesión (comportamiento anómalo) → forzar re-login.",
+    ],
+    related: ["MFA y autenticación moderna", "Factores de autenticación", "Ciclo de vida de la identidad", "Ataques a MFA"],
+  },
+  {
+    id: 869,
+    module: 83,
+    term: "Ataques a MFA",
+    short: "Cómo se rompe MFA en el mundo real: fatiga, SIM swap, proxy phishing (AiTM), consent phishing e interceptación de push.",
+    detail:
+      "La MFA no es infalible. Los vectores más frecuentes:\n" +
+      "\n**1. MFA fatigue / prompt bombing** — el atacante ya tiene la contraseña (dump o phishing) y **bombardea con pushes**. Un empleado cansado acepta uno. → **Uber (2022)** y **Cisco (2022)** cayeron por acá.\n" +
+      "\n**2. SIM swapping** — el atacante convence al carrier de portar el número a su SIM y recibe los **SMS OTP**. Ataque clásico contra cripto y banca.\n" +
+      "\n**3. Adversary-in-the-middle (AiTM) / proxy phishing** — herramientas como **evilginx** o **Modlishka** proxean el sitio real, capturan credenciales **y el token de sesión post-MFA**. TOTP y push SMS caen; **FIDO2/passkeys no** (origin binding).\n" +
+      "\n**4. Consent phishing (illicit consent grant)** — no roba credenciales: engaña al usuario para que **conceda permisos OAuth** a una app maliciosa. Salta MFA porque no la necesita; obtiene tokens persistentes.\n" +
+      "\n**5. Push interception / token replay** — apps mal implementadas, deeplinks abusables o malware en el móvil que aprueba el push sin interacción.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Number matching** en push (Microsoft, Google) — el usuario tipea un número mostrado en la pantalla.\n" +
+      "• **FIDO2 / passkeys** obligatorias para admins y accesos privilegiados.\n" +
+      "• **Bloqueo de SMS OTP** para cuentas de alto valor; migrar a app authenticator o passkey.\n" +
+      "• **Consent governance** — revisar apps con permisos peligrosos, alertas por consentimientos nuevos.\n" +
+      "• **Verified push** — atado a dispositivo confiable + señal de riesgo del contexto.\n" +
+      "> 💡 La lección de Uber/Cisco: MFA débil + un solo usuario cansado = compromiso. FIDO2 corta esa cadena.",
+    examples: [
+      "Uber 2022: contractor pusheado hasta que aceptó → tokens robados → acceso a Slack, HackerOne, etc.",
+      "Reddit 2023: empleados cayeron en AiTM phishing; passkeys mitigan.",
+      "Cripto: SIM swap masivo en 2020–2022 vaciando cuentas con solo SMS 2FA.",
+    ],
+    related: ["MFA y autenticación moderna", "Passkeys y FIDO2/WebAuthn", "Factores de autenticación", "Ingeniería social", "Defensas anti-phishing"],
   },
 
   // ── M84 · Arquitectura de Seguridad y Patrones de Diseño ─────────────────
