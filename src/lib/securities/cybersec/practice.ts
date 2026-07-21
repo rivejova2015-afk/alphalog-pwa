@@ -1077,15 +1077,20 @@ export const PRACTICE: PracticeExercise[] = [
   {
     id: 83,
     lesson: 83,
-    title: "Clasifica el control IAM",
+    title: "Identifica el control, factor o ataque de auth",
     items: [
       { s: "Exigir app autenticadora además de contraseña", a: "MFA" },
       { s: "Un login para Gmail, Slack y Jira", a: "SSO" },
       { s: "Bóveda con rotación para la cuenta de admin de dominio", a: "PAM" },
       { s: "Permisos según el rol 'Contabilidad'", a: "RBAC" },
       { s: "Revisar trimestralmente quién tiene acceso a qué", a: "Recertificación" },
+      { s: "Huella dactilar o reconocimiento facial", a: "Factor de inherencia" },
+      { s: "Credencial de clave asimétrica ligada al dominio, sin secreto compartido", a: "Passkey / FIDO2" },
+      { s: "Bombardear al usuario con notificaciones push hasta que acepte una", a: "MFA fatigue" },
+      { s: "Evaluar dispositivo, red y comportamiento para pedir factor extra solo cuando el riesgo sube", a: "Autenticación adaptativa" },
+      { s: "Proxy que replica el sitio real y roba credenciales + token de sesión post-MFA (evilginx)", a: "AiTM phishing" },
     ],
-    opts: ["MFA", "SSO", "PAM", "RBAC", "Recertificación"],
+    opts: ["MFA", "SSO", "PAM", "RBAC", "Recertificación", "Factor de inherencia", "Passkey / FIDO2", "MFA fatigue", "Autenticación adaptativa", "AiTM phishing"],
   },
   {
     id: 84,
