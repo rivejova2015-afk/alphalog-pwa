@@ -16,6 +16,7 @@ declare global {
       render: (container: HTMLElement, params: Record<string, unknown>) => number;
       reset: (widgetId?: number) => void;
     };
+    __alphalogHcaptchaOnLoad?: () => void;
   }
 }
 
@@ -33,6 +34,7 @@ export default function AuthPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaWidgetId, setCaptchaWidgetId] = useState<number | null>(null);
+  const [captchaApiReady, setCaptchaApiReady] = useState(false);
 
   useEffect(() => {
     document.title = mode === "signup" ? "Signup | AlphaLog" : "Login | AlphaLog";
@@ -82,38 +84,48 @@ export default function AuthPage() {
     setCanUseFaceId(isAppleMobile && webAuthnSupported);
   }, []);
 
+  // Carga el script de hCaptcha. Usamos el parametro oficial `onload=` (no el
+  // evento `script.onload` del navegador): hCaptcha solo llama a ese callback
+  // cuando su API interna termino de inicializarse de verdad. Renderizar con
+  // `render=explicit` antes de eso deja el widget en un estado a medio
+  // inicializar -- visualmente parece resuelto pero el `callback` que guarda
+  // el token nunca se dispara ("[hCaptcha] should not render before js api is
+  // fully loaded" en consola).
   useEffect(() => {
-    if (!hcaptchaSiteKey || !captchaRef.current) return;
-
-    const renderCaptcha = () => {
-      if (!window.hcaptcha || !captchaRef.current) return;
-      if (captchaWidgetId !== null) return;
-      const widgetId = window.hcaptcha.render(captchaRef.current, {
-        sitekey: hcaptchaSiteKey,
-        callback: (token: string) => setCaptchaToken(token),
-        "expired-callback": () => setCaptchaToken(null),
-        "error-callback": () => setError("No se pudo validar el captcha"),
-      });
-      setCaptchaWidgetId(widgetId);
-      setCaptchaReady(true);
-    };
+    if (!hcaptchaSiteKey) return;
 
     if (window.hcaptcha) {
-      renderCaptcha();
+      setCaptchaApiReady(true);
       return;
     }
 
+    window.__alphalogHcaptchaOnLoad = () => setCaptchaApiReady(true);
+
     const script = document.createElement("script");
-    script.src = "https://js.hcaptcha.com/1/api.js?render=explicit";
+    script.src = "https://js.hcaptcha.com/1/api.js?onload=__alphalogHcaptchaOnLoad&render=explicit";
     script.async = true;
     script.defer = true;
-    script.onload = renderCaptcha;
     document.body.appendChild(script);
 
     return () => {
+      delete window.__alphalogHcaptchaOnLoad;
       script.remove();
     };
-  }, [hcaptchaSiteKey, captchaWidgetId]);
+  }, [hcaptchaSiteKey]);
+
+  useEffect(() => {
+    if (!captchaApiReady || !hcaptchaSiteKey || !captchaRef.current) return;
+    if (!window.hcaptcha || captchaWidgetId !== null) return;
+
+    const widgetId = window.hcaptcha.render(captchaRef.current, {
+      sitekey: hcaptchaSiteKey,
+      callback: (token: string) => setCaptchaToken(token),
+      "expired-callback": () => setCaptchaToken(null),
+      "error-callback": () => setError("No se pudo validar el captcha"),
+    });
+    setCaptchaWidgetId(widgetId);
+    setCaptchaReady(true);
+  }, [captchaApiReady, hcaptchaSiteKey, captchaWidgetId]);
 
   // Email/password form
   const [email, setEmail] = useState("");
