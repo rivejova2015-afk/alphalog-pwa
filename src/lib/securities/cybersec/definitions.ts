@@ -3376,6 +3376,114 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["VPC y security groups", "IAM y políticas", "SIEM"],
   },
+  {
+    id: 485,
+    module: 45,
+    term: "IMDSv2 y SSRF a metadata",
+    short: "El endpoint 169.254.169.254 filtra credenciales si la app tiene un SSRF; IMDSv2 lo blinda.",
+    detail:
+      "Cada EC2 puede consultar sus propias credenciales IAM en un endpoint interno **link-local**: `http://169.254.169.254/latest/meta-data/`. Si la app tiene un **SSRF**, el atacante consulta ese endpoint desde el servidor y **roba el rol IAM completo** (access key + secret + session token).\n" +
+      "\n**Caso emblemático: Capital One 2019** — un WAF con SSRF sirvió las credenciales de un rol con acceso a S3 → 106M de registros filtrados, ~$270M en multas.\n" +
+      "\n**IMDSv1 vs IMDSv2:**\n" +
+      "| | IMDSv1 | IMDSv2 |\n" +
+      "|---|---|---|\n" +
+      "| Método | GET simple | PUT para token + GET con header |\n" +
+      "| Vulnerable a SSRF | Sí | No (SSRF típico solo hace GET) |\n" +
+      "| Hop limit | Sin límite | Configurable (`--http-put-response-hop-limit 1`) |\n" +
+      "> 💡 **Hop limit = 1** impide que un contenedor Docker con NAT consulte el IMDS del host (contramedida clave post-Capital One).\n" +
+      "> ⚠️ En 2023 AWS empezó a hacer IMDSv2 **el default** en nuevos AMIs, pero cuentas viejas siguen con IMDSv1 disponible. Auditar con `aws ec2 describe-instances --query 'Reservations[].Instances[].MetadataOptions'`.",
+    examples: [
+      "Enforcement con SCP: `ec2:MetadataHttpTokens = required` a nivel de organización.",
+      "Bloqueo con security-hub check `EC2.8` que alerta si alguna instancia sigue con IMDSv1.",
+      "Auditoría con AWS Config Rule `ec2-imdsv2-check`.",
+    ],
+    related: ["IAM y políticas", "Cross-account roles y confused deputy", "STS y credenciales temporales", "SSRF y metadata cloud"],
+  },
+  {
+    id: 486,
+    module: 45,
+    term: "Cross-account roles y confused deputy",
+    short: "El sts:AssumeRole entre cuentas es la vía moderna; sin ExternalId, un tercero puede engañarlo.",
+    detail:
+      "Un **rol cross-account** deja que un principal de otra cuenta AWS asuma un rol en la tuya. El *trust policy* declara quién puede hacer `sts:AssumeRole`:\n" +
+      "\n```json\n{ \"Effect\": \"Allow\", \"Principal\": { \"AWS\": \"arn:aws:iam::CUENTA_TERCERO:root\" }, \"Action\": \"sts:AssumeRole\", \"Condition\": { \"StringEquals\": { \"sts:ExternalId\": \"UUID-SECRETO\" } } }\n```\n" +
+      "\n**El confused deputy problem:** un proveedor SaaS (Datadog, Terraform Cloud) atiende a **múltiples clientes**. Si el trust policy solo verifica la cuenta del proveedor, **cualquier cliente del proveedor** puede pedirle que asuma **tu** rol.\n" +
+      "\n**Fix: `sts:ExternalId`** — un UUID acordado entre tú y el proveedor; el proveedor lo incluye en el AssumeRole solo para ti. Sin ese ID exacto, la asunción falla.\n" +
+      "> 💡 AWS documentó el confused deputy en 2011 y `sts:ExternalId` es la contramedida oficial de AWS Security Hub check.\n" +
+      "> ⚠️ Nunca aceptes un ExternalId que el proveedor 'te sugiera' sin verificar — el UUID debe ser secreto y no compartido con otros clientes.",
+    examples: [
+      "Datadog integration: acepta el ExternalId único que Datadog genera para tu tenant.",
+      "Rol de auditoría cross-account con `ExternalId` + `MFA` + `SourceIp` restringido.",
+      "AWS Access Analyzer detectando trust policies con Principal amplio sin ExternalId.",
+    ],
+    related: ["IAM y políticas", "IMDSv2 y SSRF a metadata", "STS y credenciales temporales", "iam:PassRole y privilege escalation"],
+  },
+  {
+    id: 487,
+    module: 45,
+    term: "iam:PassRole y privilege escalation",
+    short: "El permiso para 'pasar' un rol a un servicio es un vector clásico de escalada en AWS.",
+    detail:
+      "Cuando lanzas una EC2, un Lambda o una tarea ECS, le **asignas un rol IAM**. La API requiere el permiso **`iam:PassRole`** sobre ese rol. Es el punto de escalada más común de AWS: si un usuario tiene `iam:PassRole` amplio + `lambda:CreateFunction`, puede crear una Lambda con el rol `AdministratorAccess` y ejecutar código como admin.\n" +
+      "\n**Cadenas típicas de escalada:**\n" +
+      "• `iam:PassRole` + `ec2:RunInstances` → EC2 con rol admin.\n" +
+      "• `iam:PassRole` + `lambda:CreateFunction` + `lambda:InvokeFunction` → RCE con rol admin.\n" +
+      "• `iam:PassRole` + `cloudformation:CreateStack` → provisiona lo que sea con un rol privilegiado.\n" +
+      "• `iam:PassRole` + `codebuild:CreateProject` + `codebuild:StartBuild` → build con rol admin.\n" +
+      "\n**Fix:** restringir `iam:PassRole` a **roles específicos** con `Resource: arn:aws:iam::*:role/RolExacto`, nunca `Resource: *`. Añadir la condición `iam:PassedToService` para limitar a qué servicio se puede pasar.\n" +
+      "> 💡 Herramientas como **Pacu** (AWS pentest framework) y **CloudSplaining** enumeran automáticamente cadenas de PassRole.\n" +
+      "> ⚠️ Un permiso `iam:PassRole` con `Resource: *` es equivalente a admin latente.",
+    examples: [
+      "CloudSplaining detectando un rol de developer con `iam:PassRole: *` explotable.",
+      "SCP que veta `iam:PassRole` sobre roles con etiqueta `Sensitivity=high`.",
+      "Access Analyzer generando la política mínima con solo los roles que realmente se pasan.",
+    ],
+    related: ["IAM y políticas", "Cross-account roles y confused deputy", "STS y credenciales temporales", "Principio de mínimo privilegio", "Service Control Policies (SCPs)"],
+  },
+  {
+    id: 488,
+    module: 45,
+    term: "STS y credenciales temporales",
+    short: "AWS STS emite credenciales de vida corta; role chaining, session tags y source identity son las herramientas del oficio.",
+    detail:
+      "**AWS STS** (*Security Token Service*) es el emisor de credenciales **temporales** de AWS. Todos los mecanismos modernos las usan: `AssumeRole`, `AssumeRoleWithWebIdentity` (para OIDC), `GetSessionToken` (para MFA).\n" +
+      "\n**Ventaja vs IAM user con access keys estáticas:** las credenciales de STS **caducan** (15 min a 12 h) y se pueden revocar por rol/sesión, no por rotación manual.\n" +
+      "\n**Conceptos clave:**\n" +
+      "| Concepto | Qué es | Cuándo usarlo |\n" +
+      "|---|---|---|\n" +
+      "| **Role chaining** | Un rol asume otro | Restringido a 1 hop, session ≤ 1h |\n" +
+      "| **Session policies** | Política inline que reduce permisos del rol para esta sesión | Least privilege dinámico |\n" +
+      "| **Session tags** | Tags que viajan con la sesión para ABAC | ABAC por session |\n" +
+      "| **Source identity** | Identidad del principal original, inmutable a través de la cadena | Auditoría, no repudio |\n" +
+      "\n> 💡 **`sts:SourceIdentity`** es crítico: sin él, un CloudTrail muestra 'el rol X hizo Y' pero no **qué usuario humano** activó al rol. Con Source Identity forzada por el trust policy, el humano queda pegado a cada acción.\n" +
+      "> ⚠️ Las session policies pueden **reducir** permisos pero nunca ampliarlos. Útil para dar al cliente un token que solo puede hacer una acción específica.",
+    examples: [
+      "Federación SAML → AssumeRoleWithSAML → sesión de 8h con SourceIdentity = email del empleado.",
+      "GitHub Actions → OIDC → AssumeRoleWithWebIdentity → session policy que restringe al bucket del proyecto.",
+      "Rol de auditor con session tag `Environment=prod` para ABAC.",
+    ],
+    related: ["IAM y políticas", "Cross-account roles y confused deputy", "iam:PassRole y privilege escalation", "Workload Identity Federation (WIF)"],
+  },
+  {
+    id: 489,
+    module: 45,
+    term: "Service Control Policies (SCPs)",
+    short: "Guardrails a nivel de AWS Organization: lo que ninguna cuenta de la OU puede hacer, sin importar sus permisos IAM.",
+    detail:
+      "Un **SCP** es una política que se aplica a nivel de **AWS Organization / OU / cuenta** y actúa como **techo máximo**: define lo que las identidades de esas cuentas **pueden llegar a hacer**, incluso si su IAM policy dice que sí.\n" +
+      "\n**Regla mental:** `Permisos efectivos = IAM policy ∩ SCP`. Si el SCP deniega, gana el SCP.\n" +
+      "\n**Guardrails típicos:**\n" +
+      "```json\n// Prohibir salir de una región\n{ \"Effect\": \"Deny\", \"NotAction\": [\"iam:*\", \"organizations:*\"], \"Resource\": \"*\", \"Condition\": { \"StringNotEquals\": { \"aws:RequestedRegion\": [\"us-east-1\", \"eu-west-1\"] } } }\n\n// Vetar la creación de IAM users (forzar SSO)\n{ \"Effect\": \"Deny\", \"Action\": [\"iam:CreateUser\", \"iam:CreateAccessKey\"], \"Resource\": \"*\" }\n\n// Forzar IMDSv2 en todas las EC2 nuevas\n{ \"Effect\": \"Deny\", \"Action\": \"ec2:RunInstances\", \"Resource\": \"arn:aws:ec2:*:*:instance/*\", \"Condition\": { \"StringNotEquals\": { \"ec2:MetadataHttpTokens\": \"required\" } } }\n```\n" +
+      "\n**Condición central para blast radius:** `aws:PrincipalOrgID` — solo permite acciones de identidades de tu propia organización. Cierra la puerta al confused deputy externo.\n" +
+      "> 💡 SCPs **no** conceden permisos, solo los limitan. Un SCP que solo dice `Allow *` no hace nada por sí solo — necesita IAM policy.\n" +
+      "> ⚠️ SCP mal escrito puede romper toda la organización. Siempre probar con `aws organizations describe-effective-policy` antes de aplicar.",
+    examples: [
+      "SCP de la OU `Prod`: deny a cualquier `ec2:RunInstances` que no exija IMDSv2.",
+      "SCP root: deny a `s3:PutBucketPublicAccessBlock` con `Effect=Disabled`.",
+      "SCP con `aws:PrincipalOrgID` para prevenir que un rol asumido desde una cuenta externa haga daño.",
+    ],
+    related: ["IAM y políticas", "iam:PassRole y privilege escalation", "IMDSv2 y SSRF a metadata", "Cloud hardening y CSPM"],
+  },
 
   // ── M46 · Cloud Security: Azure y GCP ────────────────────────────────────
   {
@@ -3431,6 +3539,144 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un CSPM único que cubre las tres nubes con una sola consola.",
     ],
     related: ["Cloud hardening y CSPM", "Azure AD / Entra ID y RBAC", "GCP IAM"],
+  },
+  {
+    id: 494,
+    module: 46,
+    term: "Workload Identity Federation (WIF)",
+    short: "Federar identidad OIDC de un CI o cluster externo a GCP/Azure sin claves de service account.",
+    detail:
+      "Un pipeline de GitHub Actions o un cluster on-prem tradicionalmente accede a la nube con una **clave de service account** guardada como secret. Esas claves **no caducan**, se filtran en logs y son objetivo #1 de exfiltración.\n" +
+      "\n**Workload Identity Federation** cambia el modelo:\n" +
+      "1. El CI ya tiene una **identidad OIDC** propia (GitHub Actions emite un JWT por cada job).\n" +
+      "2. Configuras GCP/Azure para **confiar** en ese IdP externo con un mapeo de claim → identidad cloud.\n" +
+      "3. El job intercambia su JWT por credenciales cloud **temporales**.\n" +
+      "\nResultado: **cero secretos long-lived** en el repo del CI.\n" +
+      "\n**Ejemplo GCP:**\n" +
+      "```yaml\n- uses: google-github-actions/auth@v2\n  with:\n    workload_identity_provider: 'projects/12345/locations/global/workloadIdentityPools/github-pool/providers/github-provider'\n    service_account: 'ci-deployer@my-project.iam.gserviceaccount.com'\n```\n" +
+      "\n**Condiciones críticas en el mapeo** — sin ellas, cualquier repo de GitHub del mundo puede impersonar:\n" +
+      "```\nattribute.repository == 'miorg/mirepo'\nattribute.ref == 'refs/heads/main'\nattribute.environment == 'production'\n```\n" +
+      "> 💡 AWS tiene el equivalente vía `AssumeRoleWithWebIdentity`; Azure lo llama **Federated Credentials**.\n" +
+      "> ⚠️ Sin `attribute_condition` explícita, un WIF pool acepta CUALQUIER repo con OIDC de GitHub. Ha habido incidentes públicos (2023) por esto.",
+    examples: [
+      "GitHub Actions → GCP: deploy sin JSON keys, con condition `repository == 'miorg/mirepo'`.",
+      "Terraform Cloud → AWS con OIDC en vez de access keys estáticas.",
+      "GKE cluster on-prem → BigQuery vía Workload Identity Federation.",
+    ],
+    related: ["STS y credenciales temporales", "GCP IAM", "OIDC federation en CI/CD", "Cross-account roles y confused deputy"],
+  },
+  {
+    id: 495,
+    module: 46,
+    term: "Azure AD B2C y CIAM en cloud",
+    short: "IAM para tus clientes finales (no empleados): registro social, MFA, self-service, escalado a millones.",
+    detail:
+      "**CIAM** (*Customer Identity and Access Management*) es la contraparte del IAM interno: gestiona identidades de **usuarios finales** (millones de consumidores) en vez de empleados. Requisitos distintos:\n" +
+      "\n| Aspecto | Enterprise IAM | CIAM |\n" +
+      "|---|---|---|\n" +
+      "| Escala | Miles | Millones+ |\n" +
+      "| UX | Fricción aceptable | Fricción = churn |\n" +
+      "| Login social | Raro | Central (Google, Apple, etc.) |\n" +
+      "| Consent | Interno | GDPR/CCPA compliance |\n" +
+      "| Self-service | Limitado | Total (registro, reset, borrado) |\n" +
+      "\n**Servicios cloud gestionados:**\n" +
+      "• **Azure AD B2C** — tenant separado del Entra corporativo, custom policies (XML/YAML), user flows.\n" +
+      "• **GCP Identity Platform** — Firebase Auth como base, escala a millones, MFA, phone auth.\n" +
+      "• **AWS Cognito User Pools** — el equivalente en AWS, con Lambda triggers para custom flows.\n" +
+      "• **Auth0** / **Okta CIC** — SaaS neutrales, muy usados por PYMEs sin infra cloud fuerte.\n" +
+      "\n> 💡 Un error común: usar el Entra ID corporativo (para empleados) como IdP de la app pública. Termina en confusión de tenants, políticas cruzadas y problemas de GDPR.\n" +
+      "> ⚠️ CIAM requiere **passkeys / passwordless** desde el diseño: los clientes olvidan contraseñas mucho más que los empleados y los resets débiles son vector de ATO (account takeover).",
+    examples: [
+      "App SaaS con Cognito User Pool + Google/Apple SSO + passkeys.",
+      "E-commerce con Azure AD B2C: registro con teléfono, MFA opcional, borrado GDPR self-service.",
+      "Fintech con Identity Platform + step-up MFA solo en pagos.",
+    ],
+    related: ["Azure AD / Entra ID y RBAC", "Autenticación passwordless", "SSO y federación", "MFA y autenticación moderna"],
+  },
+  {
+    id: 496,
+    module: 46,
+    term: "Consent phishing (illicit OAuth grant)",
+    short: "El atacante no roba credenciales: engaña al usuario para que consienta permisos OAuth a una app maliciosa.",
+    detail:
+      "En vez de robar contraseña + MFA, el atacante monta una app OAuth registrada en el tenant (Entra, Google) o convence al usuario de instalar una app externa. El flujo:\n" +
+      "\n1. Víctima recibe email: *\"Instala este addon de Outlook Analytics\"*.\n" +
+      "2. Click → pantalla legítima de Microsoft: *\"¿Concedes a X los permisos: `Mail.Read`, `Files.Read.All`, `offline_access`?\"*.\n" +
+      "3. Víctima acepta (pantalla oficial, MFA ya cumplido).\n" +
+      "4. Atacante obtiene **refresh token** con esos permisos. **Persiste sin necesitar contraseña ni MFA jamás**.\n" +
+      "\n**Por qué es devastador:**\n" +
+      "• MFA no ayuda — el usuario ya estaba autenticado cuando consintió.\n" +
+      "• Cambio de contraseña no revoca — el refresh token vive por su cuenta.\n" +
+      "• Difícil de detectar sin auditoría de app consents.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Admin consent workflow** — solo apps aprobadas por IT pueden ser consentidas por usuarios.\n" +
+      "• **Consent policies** que restringen scopes peligrosos (`Mail.Read.All`, `Directory.Read.All`).\n" +
+      "• **Auditoría de app registrations** con Microsoft Graph / Google Admin.\n" +
+      "• **Revocación** desde `oauth2PermissionGrants` en Entra.\n" +
+      "> 💡 Casos reales: campañas Konni (2023), OceanLotus (2022), varias contra Ucrania (2022) usaron consent phishing.\n" +
+      "> ⚠️ En Entra por defecto **cualquier usuario** puede consentir apps de terceros. Hay que ir a Entra → Enterprise Applications → Consent and permissions → configurar restricted.",
+    examples: [
+      "Campaign Konni 2023: app OAuth 'Mail Analyzer' con permisos Mail.ReadWrite + offline_access.",
+      "Restricted consent policy en Entra: solo scopes de baja severidad son user-consentable.",
+      "Detección: alerta si aparece una app OAuth nueva con >10 consents en un día.",
+    ],
+    related: ["Ataques a MFA", "Azure AD / Entra ID y RBAC", "Ingeniería social", "MFA y autenticación moderna"],
+  },
+  {
+    id: 497,
+    module: 46,
+    term: "VPC Service Controls y Private Endpoints",
+    short: "Perímetros lógicos que impiden que un actor autorizado exfiltre datos fuera del perímetro cloud.",
+    detail:
+      "IAM contesta *¿quién puede acceder?*. Pero un usuario legítimo con acceso legítimo puede **filtrar datos fuera de la organización** (insider threat, credenciales robadas). Los perímetros lógicos cierran esa vía:\n" +
+      "\n**GCP VPC Service Controls (VPC-SC):**\n" +
+      "• Define un **service perimeter** (BigQuery, Cloud Storage, etc.).\n" +
+      "• Requests que **cruzan el perímetro** son bloqueadas: aunque tengas IAM, un `gsutil cp` desde tu laptop de casa a un bucket protegido falla.\n" +
+      "• Combinable con **access levels** (contexto: IP, device state, geo, hora).\n" +
+      "\n**Azure Private Endpoints + Private Link:**\n" +
+      "• El recurso (Storage, SQL) se accede vía una IP privada de tu VNet.\n" +
+      "• El endpoint público se puede **desactivar** (deny public network access).\n" +
+      "• El tráfico nunca sale a Internet.\n" +
+      "\n**AWS: VPC Endpoints + endpoint policies:**\n" +
+      "• Los servicios AWS se acceden por endpoints privados con policies restrictivas.\n" +
+      "• `aws:PrincipalOrgID` en la endpoint policy corta exfiltración a otras orgs.\n" +
+      "\n> 💡 Sin perímetros, un pentester que obtiene una IAM key filtra a un bucket propio con `aws s3 cp`. Con VPC-SC / private endpoints, ese `cp` no sale del perímetro aunque la IAM key sea válida.\n" +
+      "> ⚠️ Los perímetros bloquean también accesos legítimos mal configurados. Piloto en modo **dry-run** primero, revisar los logs de bloqueo, luego enforce.",
+    examples: [
+      "VPC-SC alrededor de BigQuery de producción: exportación bloqueada aunque el user tenga BQ Admin.",
+      "Azure SQL con `publicNetworkAccess: Disabled` + private endpoint desde la VNet.",
+      "AWS S3 con endpoint policy: `Deny` si `aws:PrincipalOrgID != o-mi-org`.",
+    ],
+    related: ["Cloud hardening y CSPM", "GCP IAM", "Cross-account roles y confused deputy", "Service Control Policies (SCPs)"],
+  },
+  {
+    id: 498,
+    module: 46,
+    term: "Managed Identities y abuso de IMDS",
+    short: "En Azure, las Managed Identities son el equivalente al rol IAM de EC2; el mismo SSRF a metadata las expone.",
+    detail:
+      "Una **Managed Identity** en Azure es una identidad automática asignada a una VM, App Service, Function o cualquier recurso que necesite hablar con otros recursos Azure. Elimina el problema de guardar credenciales, pero introduce el **mismo vector que IMDSv1 en AWS**: el endpoint IMDS.\n" +
+      "\n**Endpoint IMDS de Azure:** `http://169.254.169.254/metadata/identity/oauth2/token`\n" +
+      "\n**Diferencias con AWS:**\n" +
+      "| | AWS IMDS | Azure IMDS |\n" +
+      "|---|---|---|\n" +
+      "| Endpoint | Mismo IP link-local | Mismo IP link-local |\n" +
+      "| Header requerido | v1: ninguno / v2: `X-aws-ec2-metadata-token` | `Metadata: true` en el request |\n" +
+      "| SSRF típico | Muchos bypass IMDSv1 | El header `Metadata: true` es raro que un SSRF pueda inyectar |\n" +
+      "| Bypass | Hop limit >1 en Docker/K8s | Similares con pods en AKS sin restricciones |\n" +
+      "\n**Contramedidas:**\n" +
+      "• Preferir **User-Assigned Managed Identity** (asignable a varios recursos, se puede revocar sin borrar la VM) sobre System-Assigned.\n" +
+      "• Restringir con **Azure Policy** los recursos que pueden tener MI con roles privilegiados.\n" +
+      "• Auditar con **Defender for Cloud** logs de `ManagedIdentityTokenAcquired` fuera del contexto esperado.\n" +
+      "• En AKS: usar **Azure AD Workload Identity** (basado en OIDC federation) en vez de MSI, para pods.\n" +
+      "> 💡 En 2021 un SSRF en Azure Functions vía Node.js permitió leer el MSI token; hoy los runtimes filtran el header por defecto.\n" +
+      "> ⚠️ Igual que en AWS, un contenedor con acceso al IMDS del host hereda su Managed Identity. Trailblazer/Kubelet configs deben aislar 169.254.169.254.",
+    examples: [
+      "AKS con Azure AD Workload Identity: pod pide token OIDC → intercambia por token Managed → sin exposición IMDS del nodo.",
+      "Function App con MSI que solo puede leer un Key Vault específico (RBAC scoped).",
+      "Defender alert: MSI token adquirido desde un IP externa al recurso.",
+    ],
+    related: ["IMDSv2 y SSRF a metadata", "Azure AD / Entra ID y RBAC", "Workload Identity Federation (WIF)", "Workload Identity en Kubernetes (IRSA / GKE WI / AKS Pod Identity)"],
   },
 
   // ── M47 · Container Security ──────────────────────────────────────────────
@@ -3493,6 +3739,145 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Bloquear pods privilegiados con Pod Security Admission.",
     ],
     related: ["Kubernetes security (RBAC)", "DMZ y segmentación de red", "Seguridad de Docker e imágenes"],
+  },
+  {
+    id: 504,
+    module: 47,
+    term: "Workload Identity en Kubernetes (IRSA / GKE WI / AKS Pod Identity)",
+    short: "Los pods asumen roles cloud sin credenciales estáticas: el mismo patrón de WIF, dentro del cluster.",
+    detail:
+      "Un pod en Kubernetes tradicionalmente accede a AWS/GCP/Azure usando **credenciales del nodo** (rol de la EC2/VM) o una **key montada en un secret**. Ambos son inseguros: cualquier pod hereda todos los permisos del nodo, o las keys viven eternamente en etcd.\n" +
+      "\n**Workload Identity** — cada pod obtiene su **propia identidad cloud** derivada de su ServiceAccount K8s:\n" +
+      "\n**AWS: IRSA (IAM Roles for Service Accounts)**\n" +
+      "```yaml\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: mi-sa\n  annotations:\n    eks.amazonaws.com/role-arn: arn:aws:iam::123:role/pod-role\n```\n" +
+      "El pod recibe un JWT proyectado que intercambia por credenciales STS vía `AssumeRoleWithWebIdentity`.\n" +
+      "\n**GCP: Workload Identity**\n" +
+      "```yaml\nmetadata:\n  annotations:\n    iam.gke.io/gcp-service-account: mi-gsa@proyecto.iam.gserviceaccount.com\n```\n" +
+      "El KSA (Kubernetes SA) impersona el GSA (Google SA) automáticamente.\n" +
+      "\n**Azure: AAD Workload Identity** (successor de Pod Identity, deprecado en 2023)\n" +
+      "```yaml\nmetadata:\n  labels:\n    azure.workload.identity/use: 'true'\n  annotations:\n    azure.workload.identity/client-id: <UUID>\n```\n" +
+      "OIDC federation entre AKS y Entra.\n" +
+      "\n> 💡 Antes de Workload Identity, un pod hostile en un cluster podía llegar al IMDS del nodo (169.254.169.254) y **heredar el rol admin del nodo entero**. Workload Identity aisla cada pod a su propio rol.\n" +
+      "> ⚠️ Solo funciona si el cluster tiene OIDC issuer expuesto y el trust policy en cloud referencia ese issuer + el sub del SA. Un error tipográfico en el `sub` deja el rol asumible por cualquier SA.",
+    examples: [
+      "EKS pod app-a → rol S3-read-only, pod app-b → rol S3-write, sin compartir el rol del nodo.",
+      "GKE pod → BigQuery: el KSA impersona el GSA solo si su namespace es 'production'.",
+      "AKS + Azure Workload Identity → Key Vault reads sin secrets en pod spec.",
+    ],
+    related: ["Kubernetes security (RBAC)", "Workload Identity Federation (WIF)", "STS y credenciales temporales", "Managed Identities y abuso de IMDS"],
+  },
+  {
+    id: 505,
+    module: 47,
+    term: "Admission controllers (OPA/Kyverno)",
+    short: "Política declarativa en el ingreso del cluster: rechaza el YAML que no cumple antes de que se despliegue.",
+    detail:
+      "Un **admission controller** intercepta cada request al API server de Kubernetes **antes** de que el objeto se persista en etcd. Puede **validar** (`ValidatingAdmissionWebhook`) o **mutar** (`MutatingAdmissionWebhook`). Es la última línea de defensa antes de que un pod problemático corra.\n" +
+      "\n**Herramientas modernas:**\n" +
+      "| Herramienta | Lenguaje | Fortaleza |\n" +
+      "|---|---|---|\n" +
+      "| **OPA + Gatekeeper** | Rego | Ecosistema maduro, políticas complejas |\n" +
+      "| **Kyverno** | YAML (nativo K8s) | UX simple, curva plana |\n" +
+      "| **Kubernetes ValidatingAdmissionPolicy** | CEL | Nativo desde 1.30, sin webhook externo |\n" +
+      "\n**Políticas típicas:**\n" +
+      "• Ningún pod con `hostNetwork: true`, `privileged: true`, ni root user.\n" +
+      "• Todas las imágenes deben venir del registry `ghcr.io/miorg/*` (no Docker Hub).\n" +
+      "• Todos los deployments deben tener `resources.limits` y `livenessProbe`.\n" +
+      "• Bloquear service accounts sin `automountServiceAccountToken: false` cuando no lo necesitan.\n" +
+      "• Requerir firmas cosign en imágenes de producción.\n" +
+      "\n> 💡 Los admission controllers reemplazan a **Pod Security Policies** (deprecadas en K8s 1.25). Kyverno + PSA (Pod Security Admission built-in) es el reemplazo canónico.\n" +
+      "> ⚠️ Un admission webhook caído o mal configurado puede **bloquear el cluster entero**. Configurar `failurePolicy: Ignore` para políticas no críticas y `Fail` solo para las que realmente lo requieran.",
+    examples: [
+      "Gatekeeper policy: rechaza deployment sin `runAsNonRoot: true`.",
+      "Kyverno mutación: agrega automáticamente `imagePullSecrets` al deploy.",
+      "ValidatingAdmissionPolicy (CEL): bloquea PVC > 100Gi sin aprobación.",
+    ],
+    related: ["Kubernetes security (RBAC)", "Pod security y network policies", "Supply chain de imágenes (cosign / Sigstore / SLSA)", "Runtime detection (Falco)"],
+  },
+  {
+    id: 506,
+    module: 47,
+    term: "Runtime detection (Falco)",
+    short: "Detecta comportamiento anómalo del contenedor en runtime: syscalls, exec inesperados, escritura a paths sensibles.",
+    detail:
+      "El **image scanning** y los **admission controllers** operan **antes** del deploy. Falco opera **en runtime**: monitoriza syscalls a través de eBPF (o kernel module) y dispara alertas cuando detecta comportamiento anómalo.\n" +
+      "\n**Reglas built-in típicas (Falco default rules):**\n" +
+      "• Shell interactiva dentro de un contenedor (`bash`, `sh` en un pod que no debería tener shell).\n" +
+      "• Escritura a `/etc/`, `/bin/`, `/sbin/` desde un contenedor.\n" +
+      "• Conexión de red hacia un endpoint no whitelisted.\n" +
+      "• Lectura de secretos de service account cuando no debería.\n" +
+      "• Ejecución de binarios sospechosos (`nc`, `nmap`, `curl` en containers que no los tienen).\n" +
+      "• Contenedor escapando (mounts en `/proc/self/mem`).\n" +
+      "\n**Sintaxis de una regla:**\n" +
+      "```yaml\n- rule: Shell en contenedor de producción\n  desc: Detectar exec de shell en pods de producción\n  condition: >\n    container.image.repository startswith 'ghcr.io/miorg/' and\n    proc.name in (shell_binaries) and\n    k8s.ns.name = 'production'\n  output: 'Shell en pod prod (%container.name %proc.cmdline)'\n  priority: WARNING\n```\n" +
+      "\n**Integraciones:** Falco → Falcosidekick → Slack / SIEM / SOAR. Nube: **AWS GuardDuty runtime monitoring** usa Falco under the hood; **GCP Security Command Center** tiene equivalente; **Sysdig Secure** es el fork comercial con más features.\n" +
+      "> 💡 Falco es **CNCF Graduated** desde 2024 — es el estándar de facto para runtime detection en K8s.\n" +
+      "> ⚠️ Falco genera ruido si no se tunea. Priorizar rules por criticidad y filtrar contenedores conocidos (log collectors, monitoring) que legítimamente hacen syscalls raros.",
+    examples: [
+      "Alerta Falco: 'Shell en pod prod' cuando alguien hace `kubectl exec`.",
+      "Detección de crypto miner: proceso con >90% CPU + conexión a pool conocido.",
+      "Cryptojacking en un pod comprometido: Falco alerta antes que el billing.",
+    ],
+    related: ["Kubernetes security (RBAC)", "Admission controllers (OPA/Kyverno)", "Seguridad de Docker e imágenes", "Pod security y network policies"],
+  },
+  {
+    id: 507,
+    module: 47,
+    term: "Supply chain de imágenes (cosign / Sigstore / SLSA)",
+    short: "Firmar criptográficamente las imágenes y verificar procedencia al desplegar: la respuesta a SolarWinds en el mundo de contenedores.",
+    detail:
+      "Post-SolarWinds (2020) el foco se desplazó a la **cadena de suministro**: ¿cómo sé que la imagen `myapp:v1.2.3` es la que compiló mi CI y no la que un atacante inyectó en el registry?\n" +
+      "\n**cosign** (parte de Sigstore) firma imágenes con un par de claves o con **identidad OIDC** (keyless signing):\n" +
+      "```bash\ncosign sign --identity-token $OIDC_TOKEN registry/miapp:v1.2.3\ncosign verify --certificate-identity-regexp='https://github.com/miorg/.*' registry/miapp:v1.2.3\n```\n" +
+      "\n**Keyless signing** — sin gestionar claves privadas. El JWT del CI se firma; Sigstore emite un certificado corto (10 min) y lo publica en el **transparency log público (Rekor)**. Cualquiera puede verificar sin credenciales.\n" +
+      "\n**SLSA** (Supply-chain Levels for Software Artifacts) — framework de niveles:\n" +
+      "| Nivel | Requisito clave |\n" +
+      "|---|---|\n" +
+      "| L1 | Build automatizado, provenance existe |\n" +
+      "| L2 | Build service, provenance firmado |\n" +
+      "| L3 | Build platform aislada, source hermético |\n" +
+      "| L4 | Two-party review, reproducibilidad (aspiracional) |\n" +
+      "\n**Enforcement en el deploy:**\n" +
+      "• Kyverno / Gatekeeper policy: rechaza pods cuya imagen no tenga firma cosign válida del CI oficial.\n" +
+      "• Sigstore policy-controller (nativo K8s admission) verifica automáticamente.\n" +
+      "\n> 💡 GitHub, Kubernetes, Distroless, npm/PyPI ya publican con provenance SLSA L3.\n" +
+      "> ⚠️ Firmar la imagen no es suficiente — hay que verificar en el deploy. Muchas orgs firman pero nunca configuran el admission controller para bloquear las no firmadas.",
+    examples: [
+      "GitHub Actions con cosign keyless → firma cada imagen build → Kyverno policy en prod rechaza no firmadas.",
+      "SLSA provenance L3: `cosign download attestation` muestra el commit, el workflow y el builder.",
+      "Auditoría con `rekor-cli` para ver quién firmó una imagen y cuándo.",
+    ],
+    related: ["Seguridad de Docker e imágenes", "Image scanning", "SLSA (Supply-chain Levels for Software Artifacts)", "Admission controllers (OPA/Kyverno)"],
+  },
+  {
+    id: 508,
+    module: 47,
+    term: "Secrets externos (Vault CSI / External Secrets Operator)",
+    short: "Los pods leen secretos de un vault externo (Vault, AWS Secrets Manager) en runtime, no los tienen en el YAML.",
+    detail:
+      "Los Kubernetes Secrets son `base64` (no cifrado real) en etcd. Aunque etcd esté cifrado en reposo, los secrets siguen visibles para cualquiera con `kubectl get secret`. Peor: los secrets en el repo (aunque cifrados con SOPS/SealedSecrets) siguen expuestos al pipeline.\n" +
+      "\n**El patrón moderno: leer secrets de un vault externo en runtime.**\n" +
+      "\n**Vault CSI Provider** (HashiCorp):\n" +
+      "```yaml\nkind: SecretProviderClass\nspec:\n  provider: vault\n  parameters:\n    vaultAddress: 'https://vault.miorg.com'\n    roleName: 'app-role'\n    objects: |\n      - objectName: 'db-password'\n        secretPath: 'secret/data/prod/db'\n        secretKey: 'password'\n```\n" +
+      "El pod monta el secret como archivo o env var. El vault autentica al pod con su ServiceAccount K8s.\n" +
+      "\n**External Secrets Operator (ESO):**\n" +
+      "• Sincroniza secretos de AWS Secrets Manager / GCP Secret Manager / Azure Key Vault / Vault a Kubernetes Secrets.\n" +
+      "• Ventaja: apps existentes leen del K8s Secret normal, sin cambios de código.\n" +
+      "• Trade-off: el secret sí toca etcd (aunque con TTL y rotación automática).\n" +
+      "\n**Comparación:**\n" +
+      "| | Vault CSI | ESO |\n" +
+      "|---|---|---|\n" +
+      "| Secret en etcd | No (memoria del pod) | Sí (sincronizado) |\n" +
+      "| Rotación | Automática al restart | Sync interval |\n" +
+      "| Cambio de app | Puede requerir refactor | Ninguno |\n" +
+      "\n> 💡 Combinado con **Workload Identity** en el cluster, el pod autentica al vault sin credenciales estáticas.\n" +
+      "> ⚠️ SealedSecrets/SOPS cifran el YAML en el repo pero el secret desencriptado vive en etcd. Vault CSI es la única forma real de mantenerlo fuera del cluster.",
+    examples: [
+      "AKS pod → Azure Key Vault via CSI + Workload Identity: DB password nunca toca YAML ni etcd.",
+      "EKS pod → AWS Secrets Manager vía ESO: rotación cada 24h automática, app inconsciente.",
+      "GKE pod → GCP Secret Manager con CSI: secret montado como `/etc/secrets/db-pass`.",
+    ],
+    related: ["Kubernetes security (RBAC)", "Workload Identity en Kubernetes (IRSA / GKE WI / AKS Pod Identity)", "Seguridad de Docker e imágenes", "Seguridad del pipeline y secretos"],
   },
 
   // ── M48 · DevSecOps y CI/CD ──────────────────────────────────────────────
@@ -3572,6 +3957,156 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Revisar el plan de Terraform en el PR antes del apply.",
     ],
     related: ["Seguridad del pipeline y secretos", "Cloud hardening y CSPM", "Shift-left"],
+  },
+  {
+    id: 515,
+    module: 48,
+    term: "OIDC federation en CI/CD",
+    short: "GitHub Actions / GitLab / CircleCI emiten un JWT por job y lo federan a cloud: cero secrets long-lived.",
+    detail:
+      "El paradigma pre-2021: cada pipeline guarda una **access key long-lived** de AWS/GCP/Azure como secret. Problemas: keys rotan raramente, filtran en logs, se comparten entre workflows.\n" +
+      "\n**El nuevo paradigma:** cada plataforma CI moderna emite un **JWT firmado** por cada job. Ese JWT contiene claims verificables (`repo`, `ref`, `workflow`, `actor`). Cloud confía en el issuer y intercambia el JWT por credenciales temporales.\n" +
+      "\n**GitHub Actions → AWS:**\n" +
+      "```yaml\n- name: Configure AWS credentials\n  uses: aws-actions/configure-aws-credentials@v4\n  with:\n    role-to-assume: arn:aws:iam::123:role/gha-deployer\n    aws-region: us-east-1\n```\nBackend: `AssumeRoleWithWebIdentity` con el JWT como asertion. El trust policy del rol IAM confía en `token.actions.githubusercontent.com` y filtra por `repo:miorg/mirepo:ref:refs/heads/main`.\n" +
+      "\n**Ejemplos por plataforma:**\n" +
+      "| CI | JWT issuer | Cloud |\n" +
+      "|---|---|---|\n" +
+      "| GitHub Actions | `token.actions.githubusercontent.com` | AWS/GCP/Azure/HashiCorp |\n" +
+      "| GitLab CI | `<gitlab-url>` | Idem |\n" +
+      "| CircleCI | `oidc.circleci.com/org/<org-id>` | Idem |\n" +
+      "| Buildkite | `agent.buildkite.com` | Idem |\n" +
+      "\n**Claims que hay que filtrar en el trust policy** — sin ellos, cualquier repo puede impersonar:\n" +
+      "```json\n\"StringEquals\": {\n  \"token.actions.githubusercontent.com:sub\": \"repo:miorg/mirepo:environment:production\",\n  \"token.actions.githubusercontent.com:aud\": \"sts.amazonaws.com\"\n}\n```\n" +
+      "> 💡 **GitHub Environments** protegen el OIDC: un job solo obtiene claims de `environment:production` si el workflow declara ese environment (y GitHub aplica reglas de approval).\n" +
+      "> ⚠️ Un trust policy con `\"sub\": \"repo:miorg/*\"` (comodín) permite a **cualquier repo** de la org asumir el rol — hallazgo real en varios pentests 2023.",
+    examples: [
+      "Migración de AWS access keys → OIDC en 200 repos: cero secretos guardados en GitHub.",
+      "GitLab → GCP con WIF: deploy solo si `ref == 'refs/heads/main'` y `project_path == 'miorg/prod'`.",
+      "Rotación de crisis: comprometido un access key → borrar el rol OIDC, no rotar 50 secrets.",
+    ],
+    related: ["Workload Identity Federation (WIF)", "STS y credenciales temporales", "Seguridad del pipeline y secretos", "Cross-account roles y confused deputy"],
+  },
+  {
+    id: 516,
+    module: 48,
+    term: "SCIM SaaS-to-SaaS provisioning",
+    short: "Un IdP sincroniza altas/bajas de usuarios a decenas de SaaS automáticamente, cerrando el gap del deprovisioning.",
+    detail:
+      "**SCIM** (*System for Cross-domain Identity Management*, RFC 7644) es una API REST estandarizada para gestionar identidades entre sistemas. Cada SaaS (Slack, GitHub, Notion, AWS SSO, Jira) expone un endpoint SCIM; el IdP (Okta, Entra, Google Workspace, JumpCloud) escribe ahí.\n" +
+      "\n**Endpoints SCIM estándar:**\n" +
+      "```\nPOST /Users              → crear usuario\nPATCH /Users/{id}        → modificar (grupos, atributos)\nDELETE /Users/{id}       → desactivar (soft-delete)\nGET /Users               → listar/sincronizar\nPOST /Groups             → gestionar grupos\n```\n" +
+      "\n**El problema que resuelve — deprovisioning:**\n" +
+      "Un empleado se va. IT desactiva Okta. Sin SCIM, ese ex-empleado sigue teniendo cuenta activa en Slack, GitHub, Notion, Datadog… durante semanas. Con SCIM: la desactivación en Okta se propaga a los 40 SaaS en minutos.\n" +
+      "\n**Además del ciclo de vida, SCIM gestiona:**\n" +
+      "• **Group membership** — grupos del IdP se replican como equipos en cada SaaS.\n" +
+      "• **Just-in-time provisioning** — el usuario se crea al primer login (SSO) sin config manual.\n" +
+      "• **Atributos** — email, department, manager viajan con el user.\n" +
+      "\n> 💡 SCIM + SSO (SAML/OIDC) es la combinación estándar de zero-friction identity en enterprise. SSO autentica; SCIM provisiona.\n" +
+      "> ⚠️ SCIM en SaaS free tiers suele estar detrás de *enterprise plans*. La 'SSO tax' es real y desincentiva la seguridad en PYMEs.",
+    examples: [
+      "Empleado renuncia → HR cierra en Workday → sync a Entra → SCIM propaga a 30 SaaS → cero cuentas huérfanas.",
+      "Grupo Okta 'engineering' → SCIM → team 'engineering' en GitHub con permisos preconfigurados.",
+      "Auditoría: reporte de 'usuarios en SaaS sin match en IdP' — expone huérfanas de deprovisioning fallado.",
+    ],
+    related: ["Ciclo de vida de la identidad", "SSO y federación", "Autenticación passwordless", "MFA y autenticación moderna"],
+  },
+  {
+    id: 517,
+    module: 48,
+    term: "SLSA (Supply-chain Levels for Software Artifacts)",
+    short: "Framework de 4 niveles para dar garantías de integridad y procedencia a un artefacto software.",
+    detail:
+      "**SLSA** (*se lee 'salsa'*) es un framework de Google/OpenSSF que define **niveles de garantía** (L1 → L4) sobre cómo se construye y distribuye un artefacto de software. Nace post-SolarWinds como respuesta a los ataques a la supply chain.\n" +
+      "\n**Los 4 niveles:**\n" +
+      "| Nivel | Build | Provenance | Aislamiento | Ejemplo |\n" +
+      "|---|---|---|---|---|\n" +
+      "| **L1** | Automatizado | Existe | — | Makefile en un repo |\n" +
+      "| **L2** | Build service hospedado | Firmado | — | GitHub Actions con provenance |\n" +
+      "| **L3** | Build platform aislada | No falsificable | Source hermético (locked deps) | Google Cloud Build + SLSA generator |\n" +
+      "| **L4** | Two-party review | Reproducible bit-a-bit | Build reproducible | Aspiracional; sistemas de misión crítica |\n" +
+      "\n**Provenance = declaración firmada** que dice: *'este artefacto fue construido por builder X, desde source Y (commit Z), con dependencias W, siguiendo build script V'*. Sin provenance no hay auditabilidad.\n" +
+      "\n**Cómo se implementa en la práctica (SLSA L3 con GitHub):**\n" +
+      "```yaml\n- uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.9.0\n  with:\n    base64-subjects: ${{ steps.hash.outputs.hashes }}\n```\n" +
+      "El generator corre en un runner GitHub aislado, no accesible por el workflow del proyecto — cierra el vector de un action malicioso falsificando la provenance.\n" +
+      "\n**Ecosistemas con SLSA:**\n" +
+      "• **npm** — provenance automática desde 2023 en `npm publish --provenance`.\n" +
+      "• **PyPI** — provenance con trusted publishers (OIDC) desde 2024.\n" +
+      "• **Distroless, Kubernetes, GitHub** — publican con SLSA L3.\n" +
+      "> 💡 SLSA es **complementario** a cosign/Sigstore: Sigstore firma, SLSA da el contenido de la firma (qué se construyó, dónde, cómo).\n" +
+      "> ⚠️ SLSA no protege contra bugs en el código fuente ni contra un mantenedor malicioso — protege contra la manipulación entre commit y artefacto publicado.",
+    examples: [
+      "npm package con provenance SLSA L3: `npm view <pkg>` muestra el commit + workflow que lo publicó.",
+      "PyPI con Trusted Publishers: solo el workflow oficial del proyecto puede publicar (sin API token robable).",
+      "Auditoría de dependencias: rechazar builds que consumen packages sin provenance L2+.",
+    ],
+    related: ["Supply chain de imágenes (cosign / Sigstore / SLSA)", "Seguridad del pipeline y secretos", "Dependency confusion", "OIDC federation en CI/CD"],
+  },
+  {
+    id: 518,
+    module: 48,
+    term: "Dependency confusion",
+    short: "Publicar un package con el mismo nombre que uno interno en el registry público: el resolver del CI se confunde y usa el malicioso.",
+    detail:
+      "**Ataque publicado por Alex Birsan (2021)** — comprometió Apple, Microsoft, PayPal, Netflix, Uber, Yelp, Shopify y decenas más con un solo bug conceptual.\n" +
+      "\n**Cómo funciona:**\n" +
+      "1. Empresa X tiene un paquete interno `@empresa/utils` publicado en su registry privado.\n" +
+      "2. Atacante inventa un package con **el mismo nombre** en npm público, versión `99.99.99`.\n" +
+      "3. Los package managers (npm, pip, gem) por defecto usan la **versión más alta** de los registries configurados.\n" +
+      "4. Un CI mal configurado que consulta ambos registries baja la del atacante.\n" +
+      "5. El `postinstall` script del atacante ejecuta arbitrariamente durante `npm install`.\n" +
+      "\n**Vectores por ecosistema:**\n" +
+      "| Ecosistema | Vector | Contramedida |\n" +
+      "|---|---|---|\n" +
+      "| npm | Scope público con mismo nombre | `.npmrc` con `@scope:registry=` explícito |\n" +
+      "| pip | Nombre igual en PyPI vs pypi corp | `--index-url` (no `--extra-index-url`) |\n" +
+      "| RubyGems | Similar a npm | `Gemfile` con sources bloqueadas |\n" +
+      "| NuGet | package sources ordered | Package source mapping |\n" +
+      "| Go modules | GOPROXY chain | `GONOSUMCHECK` + private module proxy |\n" +
+      "\n**Fix duradero:**\n" +
+      "• **Namespacing** — usar scopes (`@empresa/utils`) reservados en npm público.\n" +
+      "• **Namespace claims** — pip Trusted Publishers, npm scope registration.\n" +
+      "• **Registry único** — el CI solo puede resolver desde tu proxy, que mirrorea npm sin permitir override de packages internos.\n" +
+      "• **Provenance verification** — solo aceptar packages con SLSA de builders conocidos.\n" +
+      "\n> 💡 Birsan cobró $130K+ en bug bounties del ataque original en 2021. Se ha extendido a **typosquatting** (`reqeusts` en vez de `requests`) y **starjacking** (fake stars para dar confianza).\n" +
+      "> ⚠️ El bug de config del CI está en muchas orgs: revisar HOY con `npm config get registry` en cada workflow.",
+    examples: [
+      "Auditoría: buscar nombres de packages internos en npm/PyPI públicos → si existen, son sospechosos.",
+      "npmrc corp: `@miorg:registry=https://npm.miorg.com` + `registry=https://npm.miorg.com/proxy`.",
+      "Detección: alert si el CI baja un package con >100 versiones publicadas el mismo día.",
+    ],
+    related: ["Dependency scanning (SCA)", "SLSA (Supply-chain Levels for Software Artifacts)", "Supply chain de imágenes (cosign / Sigstore / SLSA)", "Vulnerable and Outdated Components"],
+  },
+  {
+    id: 519,
+    module: 48,
+    term: "pull_request_target abuse en GitHub Actions",
+    short: "El trigger que corre con secrets sobre código de un fork: usado mal, escalada trivial a admin del repo.",
+    detail:
+      "GitHub Actions tiene dos triggers para PRs:\n" +
+      "\n| Trigger | Contexto | Secrets |\n" +
+      "|---|---|---|\n" +
+      "| **`pull_request`** | Código del fork | **NO** disponibles (safe) |\n" +
+      "| **`pull_request_target`** | Código del **base branch** | **SÍ** disponibles |\n" +
+      "\nEl segundo se creó para casos legítimos: comentar el PR, aplicar labels, verificar CLA. Pero es el **vector clásico** cuando un maintainer distraído hace:\n" +
+      "\n```yaml\non: pull_request_target\njobs:\n  ci:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}  # <-- BUG\n      - run: npm test                                    # <-- corre código del fork con secrets\n```\n" +
+      "\nEl bug: `ref` apunta al SHA del fork (código untrusted), pero el workflow está en modo `pull_request_target` (secrets disponibles). Un atacante abre un PR que modifica `npm test` para exfiltrar `GITHUB_TOKEN` y publicar como el repo.\n" +
+      "\n**Casos reales:**\n" +
+      "• 2022: repo de Google Cloud Platform tuvo esta vulnerability, reportada por seguridad interna.\n" +
+      "• 2023: múltiples proyectos OSS grandes (más de 50 documentados por Trail of Bits).\n" +
+      "• Ha permitido publicar packages npm/PyPI maliciosos con la credencial del maintainer.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **NUNCA `checkout` el head del PR en `pull_request_target`** — dejarlo con el default (base branch).\n" +
+      "• Si necesitas ver el fork code, hacerlo en un workflow separado con `pull_request` (sin secrets).\n" +
+      "• Restringir el token con `permissions:` mínimas (default es cambiar a read-only en 2023).\n" +
+      "• Usar `environments` con approval para jobs que necesitan escribir.\n" +
+      "\n> 💡 GitHub agregó una gran advertencia en 2023: si un workflow con `pull_request_target` hace checkout del PR, aparece un warning UI.\n" +
+      "> ⚠️ Herramientas: **actionlint** detecta patterns peligrosos; **GitHub CodeQL** tiene queries para esto; **Trail of Bits' Semgrep rules** cubren el catálogo completo.",
+    examples: [
+      "Audit GitHub org: `gh api repos/miorg/*/actions/workflows` → grep `pull_request_target` → verificar cada uno.",
+      "Ejemplo bueno: workflow con `pull_request_target` que solo etiqueta el PR según regex, sin checkout.",
+      "Migración segura: mover CI a `pull_request` (fork code sin secrets) + comentarios via workflow separado.",
+    ],
+    related: ["Seguridad del pipeline y secretos", "OIDC federation en CI/CD", "Dependency confusion", "SAST y DAST"],
   },
 
   // ── M49 · IoT y Mobile Security ──────────────────────────────────────────
