@@ -57,6 +57,9 @@ yarn-error.log*
 # PERMITIR el template sin valores
 !.env.example
 
+# Lattice self-deploy state (local to that machine, not repo config)
+deploy/lattice/.last-deployed-sha
+
 
 # vercel
 .vercel

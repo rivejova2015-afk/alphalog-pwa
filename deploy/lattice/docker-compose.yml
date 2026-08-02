@@ -12,8 +12,9 @@
 #     are Linux-based (node:24-slim, debian:bookworm-slim).
 #   - A `.env` file in this directory (gitignored via the repo's `.env*`
 #     rule) with the same vars as `.fly-secrets.example.sh` plus
-#     CLOUDFLARE_TUNNEL_TOKEN. The deploy workflow writes this from GitHub
-#     Actions secrets; for a manual local run, copy the values yourself.
+#     CLOUDFLARE_TUNNEL_TOKEN. You create this by hand once, directly on
+#     this machine — deploy.ps1 reads it too (for the Next.js build step),
+#     nothing GitHub-side is involved.
 #
 # The `cron` service is gated behind the `cron` profile — it does NOT start
 # with a plain `docker compose up -d`. Bring it up explicitly
