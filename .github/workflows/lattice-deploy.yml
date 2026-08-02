@@ -1,0 +1,151 @@
+name: Lattice Deploy (self-hosted)
+
+# Deploys alphalog-pwa (web + cron) to the owner's own Windows server
+# ("Lattice") via a GitHub Actions self-hosted runner, running alongside
+# Fly.io — additive, not a replacement, until the Lattice stack is proven
+# stable and DNS is deliberately cut over. coinarb-50x/polyarb stay on Fly.
+#
+# PREREQUISITES (owner, one-time, before this workflow can safely run):
+#   1. Repo must be PRIVATE. A self-hosted runner on a public repo lets any
+#      PR author execute code on your machine via pull_request_target /
+#      issue_comment-triggered workflows — do this before registering the
+#      runner, not after. Settings → Danger Zone → Change visibility.
+#   2. Register the runner: Settings → Actions → Runners → New self-hosted
+#      runner → Windows. During config.cmd, pass --labels lattice so this
+#      workflow only ever targets that machine.
+#   3. Docker Desktop on the runner machine, in *Linux containers* mode
+#      (default) — deploy/lattice/*.Dockerfile are Linux-based.
+#   4. Create a Cloudflare Tunnel (Cloudflare Zero Trust dashboard →
+#      Networks → Tunnels), point its public hostname to http://web:3000,
+#      and add its token as the repo secret CLOUDFLARE_TUNNEL_TOKEN.
+#   5. All secrets already used by fly-deploy.yml / .fly-secrets.example.sh
+#      must exist as repo secrets (Settings → Secrets and variables →
+#      Actions) — reused as-is below, nothing new to create except
+#      CLOUDFLARE_TUNNEL_TOKEN.
+#
+# The `cron` container is NOT started by this workflow (docker compose
+# profile gate in deploy/lattice/docker-compose.yml) — bring it up manually
+# on the runner only at DNS-cutover time, so business/CME/bars crons don't
+# fire twice against both Fly and Lattice while both run in parallel.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'coinarb/**'
+      - 'polyarb/**'
+      - 'lattice-desktop/**'
+      - 'bots/**'
+      - '**.md'
+      - '.github/workflows/coinarb-deploy.yml'
+      - '.github/workflows/quality-gate.yml'
+      - '.github/workflows/heartbeat.yml'
+      - '.github/workflows/cme-crons.yml'
+      - '.github/workflows/bot-*.yml'
+      - 'docs/**'
+  workflow_dispatch: {}
+
+concurrency:
+  group: lattice-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build + deploy on Lattice
+    runs-on: [self-hosted, lattice]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (same pre-built strategy as Fly — see Dockerfile)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          NEXT_PUBLIC_HCAPTCHA_SITE_KEY: ${{ secrets.NEXT_PUBLIC_HCAPTCHA_SITE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_CANONICAL_HOST: ${{ secrets.NEXT_PUBLIC_CANONICAL_HOST }}
+          NEXT_PUBLIC_SECURE_MAIL_DOMAIN: ${{ secrets.NEXT_PUBLIC_SECURE_MAIL_DOMAIN }}
+          NEXT_PUBLIC_SECURE_MAIL_MAX_EMAIL_ATTACHMENT_BYTES: ${{ secrets.NEXT_PUBLIC_SECURE_MAIL_MAX_EMAIL_ATTACHMENT_BYTES }}
+          NEXT_PUBLIC_ENABLE_AAB: ${{ secrets.NEXT_PUBLIC_ENABLE_AAB }}
+          NEXT_PUBLIC_ENABLE_SYSTEM_LOGS: ${{ secrets.NEXT_PUBLIC_ENABLE_SYSTEM_LOGS }}
+          NEXT_PUBLIC_ENABLE_SW: ${{ secrets.NEXT_PUBLIC_ENABLE_SW }}
+          NEXT_PUBLIC_BUILD_VERSION: ${{ github.sha }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: npm run build
+
+      - name: Write deploy/lattice/.env (runtime secrets, gitignored)
+        shell: bash
+        run: |
+          cat > deploy/lattice/.env <<EOF
+          NODE_ENV=production
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_FUNCTIONS_URL=${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          DATA_ENCRYPTION_KEY=${{ secrets.DATA_ENCRYPTION_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY=${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
+          POSTMARK_SERVER_TOKEN=${{ secrets.POSTMARK_SERVER_TOKEN }}
+          POSTMARK_INBOUND_WEBHOOK_SECRET=${{ secrets.POSTMARK_INBOUND_WEBHOOK_SECRET }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          QSTASH_TOKEN=${{ secrets.QSTASH_TOKEN }}
+          QSTASH_CURRENT_SIGNING_KEY=${{ secrets.QSTASH_CURRENT_SIGNING_KEY }}
+          QSTASH_NEXT_SIGNING_KEY=${{ secrets.QSTASH_NEXT_SIGNING_KEY }}
+          QSTASH_BASE_URL=${{ secrets.QSTASH_BASE_URL }}
+          CRON_SECRET=${{ secrets.CRON_SECRET }}
+          OPS_CRON_SECRET=${{ secrets.OPS_CRON_SECRET }}
+          OPS_ALERT_TOKEN=${{ secrets.OPS_ALERT_TOKEN }}
+          MT5_WEBHOOK_SECRET=${{ secrets.MT5_WEBHOOK_SECRET }}
+          BOT_OPS_USER_ID=${{ secrets.BOT_OPS_USER_ID }}
+          ALPHALOG_PUSH_NOTIFY_URL=${{ secrets.ALPHALOG_PUSH_NOTIFY_URL }}
+          ALPHALOG_PUSH_NOTIFY_TOKEN=${{ secrets.ALPHALOG_PUSH_NOTIFY_TOKEN }}
+          NEXT_PUBLIC_HCAPTCHA_SITE_KEY=${{ secrets.NEXT_PUBLIC_HCAPTCHA_SITE_KEY }}
+          NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+          NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NEXT_PUBLIC_CANONICAL_HOST=${{ secrets.NEXT_PUBLIC_CANONICAL_HOST }}
+          NEXT_PUBLIC_SECURE_MAIL_DOMAIN=${{ secrets.NEXT_PUBLIC_SECURE_MAIL_DOMAIN }}
+          SECURE_MAIL_DOMAIN=${{ secrets.SECURE_MAIL_DOMAIN }}
+          RUNWAY_THRESHOLD_MONTHS=${{ secrets.RUNWAY_THRESHOLD_MONTHS }}
+          RATE_LIMIT_WINDOW_SECONDS=${{ secrets.RATE_LIMIT_WINDOW_SECONDS }}
+          RATE_LIMIT_MAX=${{ secrets.RATE_LIMIT_MAX }}
+          BOT_HEARTBEAT_STALE_SECONDS=${{ secrets.BOT_HEARTBEAT_STALE_SECONDS }}
+          CLOUDFLARE_TUNNEL_TOKEN=${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          EOF
+
+      - name: Build + restart containers (web only — cron stays off until cutover)
+        shell: bash
+        working-directory: deploy/lattice
+        run: |
+          docker compose build web cloudflared
+          docker compose up -d --remove-orphans web cloudflared
+
+      - name: Health check
+        shell: bash
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:3000/api/health; then exit 0; fi
+            sleep 3
+          done
+          echo "::error::Health check failed after deploy — see 'docker compose logs web'."
+          exit 1

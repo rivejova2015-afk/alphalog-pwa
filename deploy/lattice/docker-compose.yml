@@ -1,0 +1,61 @@
+# AlphaLog PWA — self-hosted stack for the Lattice server.
+#
+# Mirrors the Fly.io topology (web app + cron sidecar) as sibling containers
+# on one Docker network instead of two separate Fly apps talking over the
+# 6PN private network — `cron` reaches `web` by its Compose service name
+# (`web:3000`) instead of `alphalog-pwa.internal:3000`.
+#
+# coinarb-50x and polyarb stay on Fly — not part of this stack.
+#
+# Prereqs:
+#   - Docker Desktop in *Linux containers* mode (default) — these images
+#     are Linux-based (node:24-slim, debian:bookworm-slim).
+#   - A `.env` file in this directory (gitignored via the repo's `.env*`
+#     rule) with the same vars as `.fly-secrets.example.sh` plus
+#     CLOUDFLARE_TUNNEL_TOKEN. The deploy workflow writes this from GitHub
+#     Actions secrets; for a manual local run, copy the values yourself.
+#
+# The `cron` service is gated behind the `cron` profile — it does NOT start
+# with a plain `docker compose up -d`. Bring it up explicitly
+# (`docker compose --profile cron up -d`) only once this stack is the one
+# serving real traffic (DNS cutover), so business/CME/bars crons don't fire
+# twice against both Fly and Lattice while both are running in parallel
+# during validation.
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(r.status>=500)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  cron:
+    profiles: ["cron"]
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - web
+
+  # Ingress: Cloudflare Tunnel. Create the tunnel + point its public hostname
+  # (alphalog.io) to http://web:3000 once, via the Cloudflare Zero Trust
+  # dashboard (Networks → Tunnels) — no local ingress config needed here,
+  # routing lives in Cloudflare's side. Works with or without a public IP.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    env_file: .env
+    depends_on:
+      - web

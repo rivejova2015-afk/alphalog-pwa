@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+#
+# AlphaLog cron sidecar — Lattice variant.
+# Same supercronic pattern as the root Dockerfile.cron, packaging the
+# adapted `crontab` in this directory (targets `web:3000` on the Compose
+# network instead of Fly's private 6PN). No git/flyctl here — coinarb-50x
+# auto-deploy stays Fly's alphalog-cron's job.
+
+FROM debian:bookworm-slim
+
+ENV SUPERCRONIC_VERSION=v0.2.33
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL -o /usr/local/bin/supercronic \
+        "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+    && chmod +x /usr/local/bin/supercronic
+
+WORKDIR /app
+COPY crontab /app/crontab
+
+ENV TZ=UTC
+
+CMD ["/usr/local/bin/supercronic", "-passthrough-logs", "/app/crontab"]
