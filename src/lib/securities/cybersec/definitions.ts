@@ -9655,11 +9655,630 @@ export const DEFINITIONS: ConceptDefinition[] = [
     related: ["Autenticación", "MFA", "OAuth 2.0 y OpenID Connect", "Zero Trust"],
   },
 
-  // ── M38 · Respuesta a Incidentes y Análisis Forense ────────────────────
+  // ── M39 · Forense Digital: Fundamentos ─────────────────────────────────
   {
-    id: 414,
-    module: 38,
-    term: "Respuesta a Incidentes (IR)",
+    id: 420,
+    module: 39,
+    term: "Cadena de custodia",
+    short: "Documentación rigurosa de quién, cuándo, dónde y por qué se manipuló evidencia digital para validez legal.",
+    detail:
+      "La **cadena de custodia** es la **columna vertebral** de la admisibilidad en juicio. Cada mano que toque la evidencia debe quedar registrada. **Ruptura = inadmisibilidad**.\n" +
+      "\\n**Requisitos fundamentales**:\n" +
+      "→ **Integridad** — evidencia no fue modificada (hash criptográfico idéntico)\n" +
+      "→ **Autenticidad** — es real y vinculado al incidente (firmas, testigos)\n" +
+      "→ **Trazabilidad** — quién accedió cuándo y por qué (acta de custodia)\n" +
+      "\\n**Orden de Volatilidad** (capturar de más volátil a más persistente):\n" +
+      "1. CPU registers, cache (segundos)\n" +
+      "2. **RAM** (procesos, claves, malware)\n" +
+      "3. Conexiones de red, tablas ARP\n" +
+      "4. **Disco** (filesystem, archivos borrados)\n" +
+      "5. Logs remotos, backups, archivos históricos\n" +
+      "> ⚠️ Apagar un sistema antes de capturar RAM = pérdida de evidencia clave. La orden importa.",
+    examples: [
+      "Disk clonado a las 14:30 UTC. Hash SHA256 registrado. Sello de tamper tape. Acta firmada por 3 testigos.",
+      "Ruptura de cadena: alguien modificó el disco sin registrar. La evidencia es rechazada en corte.",
+    ],
+    related: ["Investigación forense", "Adquisición de evidencia", "Estándares forenses"],
+  },
+  {
+    id: 421,
+    module: 39,
+    term: "Adquisición de evidencia forense",
+    short: "Proceso de clonar/capturar datos de un sistema comprometido sin alterarlos.",
+    detail:
+      "**Adquisición** = crear una **copia forense bit-a-bit** del original. Herramientas:\n" +
+      "• **dd** (Linux) — comando básico, genera imagen raw\n" +
+      "• **ddrescue / dcfldd** — copian y reportan errores, intentan recuperación\n" +
+      "• **FTK Imager** — GUI, computa hashes en tiempo real\n" +
+      "• **Guymager** — Linux, interfaz amigable\n" +
+      "• **EnCase** — estándar industria, genera archivos .E01 (comprimido, segmentado)\n" +
+      "\\n**Método seguro**:\n" +
+      "1. **Write-blocker** (hardware o software) — impide escrituras al original\n" +
+      "2. Conectar original a máquina forense vía blocker\n" +
+      "3. Clonar a un disco limpio y certificado\n" +
+      "4. Hashear original y copia (deben coincidir)\n" +
+      "5. Documentar: fecha, hora, herramienta, versión, operador\n" +
+      "6. Sellar físicamente (tamper tape) y digitalmente (firma criptográfica)",
+    examples: [
+      "Servidor comprometido: usamos FTK Imager + write-blocker USB. Imagen a disco externo. SHA256 verificado. Acta de custodia.",
+      "Laptop encriptado: sin decryption, clonamos el disco physicamente. Post-incidente, el dueño proporciona credenciales.",
+    ],
+    related: ["Cadena de custodia", "Write-blockers", "Hashing de integridad"],
+  },
+  {
+    id: 422,
+    module: 39,
+    term: "Herramientas forenses",
+    short: "Software de análisis de imagen, extracción de artefactos y documentación de hallazgos.",
+    detail:
+      "**Suite forense completa**:\n" +
+      "| Herramienta | Función | Plataforma |\n" +
+      "|---|---|---|\n" +
+      "| **Autopsy / FTK** | GUI, análisis de image, file carving, keyword search | Windows, Linux, macOS |\n" +
+      "| **The Sleuth Kit (TSK)** | CLI, toolkit base, manejo de filesystems | Windows, Linux |\n" +
+      "| **Volatility** | Memory forensics, análisis de volcado RAM | Windows, Linux |\n" +
+      "| **Wireshark** | Análisis PCAP, reconstructor de streams | Windows, Linux, macOS |\n" +
+      "| **EnCase** | Investigación end-to-end, legal admisible | Windows |\n" +
+      "| **SANS DFIR Toolkit** | Suite integrado (múltiples herramientas) | Windows, Linux |\n" +
+      "\\n**Operación típica en Autopsy**:\n" +
+      "1. Importar imagen forense (.raw, .E01, .dd)\n" +
+      "2. Analizar filesystems (NTFS, ext4, APFS)\n" +
+      "3. Recuperar archivos borrados via artefactos MFT\n" +
+      "4. Búsqueda por keywords (C2 domains, attacker names)\n" +
+      "5. Timeline: M/A/C times → secuencia de eventos\n" +
+      "6. Generar reporte con hallazgos indexados",
+    examples: [
+      "Autopsy encontró 47 archivos .jpg borrados en $Recycle.Bin. Carving recuperó 43. Screenshots de C2 panel.",
+      "Volatility extrajo tabla de procesos de volcado RAM: svchost.exe fake ejecutando powershell remotamente.",
+    ],
+    related: ["Análisis de disco", "Análisis de memoria", "File carving"],
+  },
+  {
+    id: 423,
+    module: 39,
+    term: "Documentación y reporte forense",
+    short: "Registro detallado, reproducible y defendible de hallazgos forenses para auditoría y litigio.",
+    detail:
+      "El **reporte forense** es la salida de toda la investigación. Requisitos legales:\n" +
+      "\\n**Estructura del reporte**:\n" +
+      "1. **Resumen ejecutivo** — qué pasó en alto nivel (no técnico)\n" +
+      "2. **Alcance y metodología** — qué se examinó, herramientas, estándares seguidos (NIST, SANS)\n" +
+      "3. **Hallazgos** — evidencia presentada de forma clara, con capturas y timeline\n" +
+      "4. **Cadena de custodia** — registro de quién tocó qué cuándo\n" +
+      "5. **Conclusiones** — responder preguntas de investigación planteadas\n" +
+      "6. **Apéndices** — detalles técnicos, hashes, reglas YARA, salidas de herramientas\n" +
+      "\\n**Princ ipios de redacción**:\n" +
+      "→ **Objetividad** — solo hechos, no especulaciones\n" +
+      "→ **Reproducibilidad** — otro forense podría corroborar pasos y resultados\n" +
+      "→ **Completitud** — responder todas las preguntas de investigación\n" +
+      "→ **Legibilidad** — sin jerga, explica conceptos técnicos\n" +
+      "→ **Trazabilidad** — cada hallazgo vinculado a fuente (archivo, hash, timestamp)\n" +
+      "> 💡 El reporte se defiende en cross-examination. Debe ser impecable.",
+    examples: [
+      "Reporte concluye: 'Atacante accedió vía RDP el 2024-03-15 a las 02:30 UTC desde IP 185.220.102.4 (Tor exit node)' con 15 evidencias citadas.",
+      "Cross-exam: 'Did you verify the system clock was correct?' → Sí, verificamos offset via NTP logs.",
+    ],
+    related: ["Cadena de custodia", "Investigación forense", "Admisibilidad en juicio"],
+  },
+
+  // ── M40 · Forense: Disco y Memoria ──────────────────────────────────────
+  {
+    id: 430,
+    module: 40,
+    term: "Análisis de filesystem",
+    short: "Examinar la estructura lógica del disco: archivos, carpetas, permisos, timeline y artefactos.",
+    detail:
+      "**Filesystem** es la organización lógica del disco. Análisis busca:\n" +
+      "\\n**Artefactos Windows (NTFS)**:\n" +
+      "→ **MFT** (Master File Table) — registro de todos los archivos, incluyendo borrados\n" +
+      "→ **$LogFile** — transacciones NTFS (intent log), recupera secuencia de cambios\n" +
+      "→ **$UsnJrnl** — Change Journal, qué cambió y cuándo\n" +
+      "→ **Prefetch** (C:\\Windows\\Prefetch) — qué exes se ejecutaron (nombre, timestamp, ruta)\n" +
+      "→ **Registry Hives** — NTLM hashes, configuración de persistencia, USB history\n" +
+      "\\n**Artefactos Linux**:\n" +
+      "→ **ext4 Superblock + Inodes** — metadatos de archivos\n" +
+      "→ **/var/log/** — auth.log (SSH, sudo), syslog (eventos del sistema)\n" +
+      "→ **.bash_history** — comandos ejecutados\n" +
+      "→ **Journald** — systemd logs (binarios, pero indexados)\n" +
+      "\\n**Timeline reconstruction**:\n" +
+      "→ M/A/C times: Modified / Accessed / Changed\n" +
+      "→ Autopsy / FTK generan timeline visual (gráfico vs tiempo)\n" +
+      "→ Identifica patrones: ataque a las 02:30, cleanup a las 03:15, etc.",
+    examples: [
+      "MFT muestra archivo 'dump_hashes.exe' borrado a las 14:45. $LogFile confirma el comando de delete y quién lo ejecutó (SYSTEM).",
+      "ext4 timeline: 100+ archivos modificados en /var/www/ a las 02:10 UTC (defacement). Log muestra Apache crash en ese momento.",
+    ],
+    related: ["Herramientas forenses", "Recuperación de datos", "Análisis de timeline"],
+  },
+  {
+    id: 431,
+    module: 40,
+    term: "Análisis de memoria (RAM)",
+    short: "Examinar procesos, credenciales, conexiones y código inyectado capturado en el volcado de RAM.",
+    detail:
+      "**Volatility 3** es el estándar. Plugins clave:\n" +
+      "\\n**Procesos**:\n" +
+      "→ `windows.pslist` — árbol de procesos (parent-child)\n" +
+      "→ `windows.pstree` — vista jerárquica\n" +
+      "→ `windows.malfind` — identifica código inyectado (anomalías de memoria, regiones no-mapped)\n" +
+      "\\n**Red**:\n" +
+      "→ `windows.netscan` — conexiones TCP/UDP, puertos locales y remotos\n" +
+      "→ `windows.netstat` — versión clásica (deprecated pero funciona)\n" +
+      "\\n**Credenciales**:\n" +
+      "→ `windows.hashdump` — extrae hashes NTLM de SAM (crackeable offline)\n" +
+      "→ `windows.lsadump` — extrae claves de cifrado LSA (Kerberos keys, cached credencials)\n" +
+      "→ `windows.cachedump` — cached credentials de logons locales\n" +
+      "\\n**Información del Sistema**:\n" +
+      "→ `windows.envars` — variables de entorno (paths, usernames)\n" +
+      "→ `windows.registry` — hives cargados en RAM\n" +
+      "→ `windows.handles` — archivos abiertos, registry keys abiertos\n" +
+      "→ `windows.dlllist` — DLLs cargadas por proceso\n" +
+      "\\n**Ventaja**: código descifrado en RAM (no hay que desempacar binarios), malware vivo, credenciales en claro.",
+    examples: [
+      "Volatility encontró proceso 'svchost.exe' (PID 1234) con DLL maliciosa cargada. Memory dump del proceso contiene 'evil.com' (C2).",
+      "hashdump extrajo hash NTLM de admin. John crackea en 2 minutos: password123. Esa fue la contraseña comprometida.",
+    ],
+    related: ["Adquisición de RAM", "Volatility Framework", "Malware detection"],
+  },
+  {
+    id: 432,
+    module: 40,
+    term: "Volatility Framework",
+    short: "Herramienta de análisis de memoria con plugins especializados por sistema operativo y propósito.",
+    detail:
+      "**Volatility 3** reemplazó Volatility 2 (legacy). Diseño modular:\n" +
+      "→ Plugins por SO: windows.*, linux.*, mac.*\n" +
+      "→ Profiles detectan versión del SO automáticamente\n" +
+      "\\n**Instalación y uso**:\n" +
+      "```bash\npip install volatility3\nvol -f memory.dmp windows.info         # detecta SO, build, plugins disponibles\nvol -f memory.dmp windows.pslist      # lista procesos\nvol -f memory.dmp -p PID windows.memmap  # mapea memoria del PID\nvol -f memory.dmp -p PID windows.vadinfo # anota regiones de memoria\n```\n" +
+      "\\n**Workflow típico**:\n" +
+      "1. Volcado de RAM (WinPmem/LiME/osxpmem)\n" +
+      "2. Correr `windows.info` para entender el profile\n" +
+      "3. `pslist` → identificar procesos sospechosos\n" +
+      "4. `netscan` → conexiones C2\n" +
+      "5. `malfind` → inyección de código\n" +
+      "6. Dump del proceso malicioso (`windows.dumpfiles`) → análisis estático en Ghidra\n" +
+      "7. Reporting de hallazgos\n" +
+      "> ⚠️ Volatility es poderoso pero lento (GB de RAM = minutos de análisis). Optimiza plugins para PID específicos.",
+    examples: [
+      "vol -f dump.dmp windows.malfind encontró memoria anómala en PID 5432 (PowerShell). Dumpeamos, analizamos en Ghidra.",
+      "vol -f dump.dmp windows.netscan mostró 50+ conexiones a 192.0.2.1:443 desde PID 1337 cada 5 segundos (beaconing C2).",
+    ],
+    related: ["Análisis de memoria", "Procesos y threads", "Inyección de código"],
+  },
+  {
+    id: 433,
+    module: 40,
+    term: "File carving y recuperación",
+    short: "Técnica de recuperar archivos borrados buscando firmas de archivo (magic bytes) sin depender del filesystem.",
+    detail:
+      "**File carving** ignora el filesystem e identifica archivos por su **estructura interna** (magic bytes):\n" +
+      "→ PDF comienza con `%PDF-`\n" +
+      "→ PNG: `89 50 4E 47` (magic bytes)\n" +
+      "→ JPEG: `FF D8 FF E0` (SOI marker)\n" +
+      "\\n**Herramientas**:\n" +
+      "| Herramienta | Uso |\n" +
+      "|---|---|\n" +
+      "| **Foremost** | CLI, clásica, configurable |\n" +
+      "| **Scalpel** | CLI, más rápida, regex support |\n" +
+      "| **Autopsy** | GUI integrada, file carving automático |\n" +
+      "| **Stellar** | Comercial, orientada a usuario |\n" +
+      "\\n**Proceso**:\n" +
+      "1. Copiar imagen forense a disco temporario\n" +
+      "2. `scalpel -i image.dd -o output_dir/` (scan completo)\n" +
+      "3. Carving encuentra `recovered_files/`\n" +
+      "4. Clasificar por tipo (jpg, pdf, docx, zip, etc)\n" +
+      "5. Validar integridad (algunos fragmentos pueden ser corruptos)\n" +
+      "\\n**Limitaciones**:\n" +
+      "→ No recupera el nombre de archivo original (renombrado a hash)\n" +
+      "→ Archivos comprimidos/cifrados: solo recuperas el contenedor, no contenido\n" +
+      "→ Falsos positivos: datos que coinciden con magic bytes pero no son archivo real\n" +
+      "> 💡 Complementa el análisis de filesystem (algunos archivos borrados quedan en sectores no asignados).",
+    examples: [
+      "Scalpel en disco de suspect: encontró 237 JPEGs borrados en /dev/sda3. 15 eran screenshots de C2 panel.",
+      "Carving en zona no-asignada: archivo Office docx donde atacante escribió instrucciones (cifrado destruido, contenido recuperado).",
+    ],
+    related: ["Análisis de disco", "Recuperación de datos", "Herramientas forenses"],
+  },
+
+  // ── M41 · Forense de Red ────────────────────────────────────────────────
+  {
+    id: 440,
+    module: 41,
+    term: "Análisis de PCAP",
+    short: "Inspeccionar tráfico capturado (Wireshark, NetworkMiner) para reconstruir flujo de ataques.",
+    detail:
+      "**PCAP** (packet capture) es el registro de todo lo que pasó por el cable. Análisis permite:\n" +
+      "→ Identificar atacante (IP, puertos, User-Agent)\n" +
+      "→ Mapear lateral movement (conexiones inter-host)\n" +
+      "→ Detectar exfiltración (volumen/destino de datos saliente)\n" +
+      "→ Encontrar C2 (beaconing, DNS tunneling)\n" +
+      "→ Recuperar payloads (archivos transferidos en texto claro o zip)\n" +
+      "\\n**Herramientas**:\n" +
+      "| Herramienta | Función |\n" +
+      "|---|---|\n" +
+      "| **Wireshark** | GUI, análisis granular, búsqueda, coloreado por protocolo |\n" +
+      "| **tshark** | CLI, automatizable |\n" +
+      "| **NetworkMiner** | Extrae automáticamente IPs, dominios, archivos |\n" +
+      "| **Zeek (Bro)** | IDS + parser, genera logs estructurados (conn.log, dns.log, http.log) |\n" +
+      "| **Suricata** | IDS/IPS, reglas Yara, JSON output |\n" +
+      "\\n**Workflow en Wireshark**:\n" +
+      "1. Cargar PCAP (File → Open)\n" +
+      "2. Filtros: `ip.src == 192.0.2.5` (solo origen específico)\n" +
+      "3. Right-click → Follow TCP Stream (ver conversación completa)\n" +
+      "4. Statistics → Conversations (top talkers)\n" +
+      "5. File → Export → Objects → HTTP (descargar archivos capturados)",
+    examples: [
+      "Wireshark Follow Stream: 10 comandos PowerShell bajados vía HTTP desde evil.com. Scripts salvados.",
+      "NetworkMiner automáticamente extrajo 47 archivos: EXE malicioso, DLLs, credential dump en TXT.",
+    ],
+    related: ["Detección de C2", "Forense de red", "Zeek / Bro"],
+  },
+  {
+    id: 441,
+    module: 41,
+    term: "Detección de Command & Control (C2)",
+    short: "Identificar comunicación entre malware y servidor controlado por atacante en el tráfico de red.",
+    detail:
+      "**C2 detection** busca patrones del malware llamando 'a casa':\n" +
+      "\\n**Patrones típicos**:\n" +
+      "→ **Beaconing** — conexiones periódicas y regulares (cada 5 min exacto → sospechoso)\n" +
+      "→ **DNS tunneling** — subdominios aleatorios/largos (ej: aB3xY9z.c2domain.com)\n" +
+      "→ **HTTP User-Agent raro** — (ej: Mozilla/1.0 bot)\n" +
+      "→ **Conexiones a puertos no-standard** (ej: 443 pero plaintext HTTP)\n" +
+      "→ **DGA** (Domain Generation Algorithm) — dominio que cambia diariamente\n" +
+      "→ **HTTPS con certificado auto-signed** (sin CA chain válida)\n" +
+      "\\n**Herramientas de detección**:\n" +
+      "• **RITA** (Real Intelligence Threat Analytics) — detecta beaconing por análisis estadístico\n" +
+      "• **JA3/JA3S** — fingerprint de handshakes TLS (identifica cliente malicioso aunque cifre)\n" +
+      "• **Zeek DNS log** — query a IPs en blocklists (abuse.ch, VirusTotal)\n" +
+      "• **YARA rules** — pattern matching en payloads\n" +
+      "\\n**Análisis en PCAP**:\n" +
+      "1. `tshark -r pcap -n -q -z io,stat,1 | grep C2IP` (volumen por IP)\n" +
+      "2. Suricata con ET Malware ruleset (activar alertas)\n" +
+      "3. NetworkMiner auto-marca conexiones a IPs en blocklists",
+    examples: [
+      "RITA analizó Zeek logs: IP 185.220.102.4 enviaba HTTPS a 192.0.2.1:8443 cada 300 segundos (beaconing detectado).",
+      "DNS query a mínisuciosamente.ru, y a los 5 min exacto se repite (DGA behavior). IP destino en abuse.ch.",
+    ],
+    related: ["Análisis de PCAP", "Indicadores de compromiso", "Threat intelligence"],
+  },
+  {
+    id: 442,
+    module: 41,
+    term: "Zeek (Bro) para análisis de red",
+    short: "Framework de monitoreo de red que genera logs estructurados (JSON/TSV) de conexiones, DNS, HTTP.",
+    detail:
+      "**Zeek** (antes 'Bro') es el **parser de tráfico de referencia**. Monitorea en tiempo real y genera **logs**:\n" +
+      "\\n**Logs principales**:\n" +
+      "→ **conn.log** — todas las conexiones (IP, puerto, protocolo, bytes, timestamp)\n" +
+      "→ **dns.log** — queries/responses DNS (dominio, tipo, TTL, respuesta)\n" +
+      "→ **http.log** — requests HTTP (método, URI, referrer, User-Agent, status code)\n" +
+      "→ **ssl.log** — handshakes HTTPS (cipher, versión TLS, certificado)\n" +
+      "→ **files.log** — archivos transferidos (hash, MIME type)\n" +
+      "→ **notice.log** — alertas según políticas\n" +
+      "\\n**Instalación y uso**:\n" +
+      "```bash\nzeek -i eth0 -r pcap.pcapng -C              # offline analysis, ignore checksums\ncat conn.log | zeek-cut ts id.orig_h id.orig_p id.resp_h id.resp_p proto service bytes  # formato tabular\n```\n" +
+      "\\n**Ventajas frente a Wireshark**:\n" +
+      "→ Automatizado (no GUI, scripting de políticas)\n" +
+      "→ Logs estructurados (fácil de parsear en SIEM)\n" +
+      "→ Detección de anomalías integrada\n" +
+      "→ Escalable a millones de conexiones/día\n" +
+      "→ Integrable con SIEM (Splunk, ELK)",
+    examples: [
+      "Zeek conn.log: 10,000 conexiones a 185.220.102.4:8443 en 1 hora (volumen anómalo). Alerta disparada.",
+      "http.log muestra 50 GET a /api/cmd?id=BOTID (pattern matching identifica bot callback).",
+    ],
+    related: ["Análisis de PCAP", "IDS/IPS", "Logs estructurados"],
+  },
+  {
+    id: 443,
+    module: 41,
+    term: "Correlación de eventos forenses",
+    short: "Unir artefactos de disco, memoria y red en una timeline para reconstruir el ataque completo.",
+    detail:
+      "La **reconstrucción del incidente** requiere **correlacionar** todas las fuentes:\n" +
+      "\\n**Fuentes de datos**:\n" +
+      "1. **Disco**: MFT timestamps, $UsnJrnl, prefetch, registry\n" +
+      "2. **Memoria**: procesos, conexiones, credenciales, código inyectado\n" +
+      "3. **Red**: PCAP (conexiones, DNS, HTTP, C2)\n" +
+      "4. **Logs**: syslog, auth.log, Event Viewer, Apache, firewall\n" +
+      "5. **SIEM**: correlación de alertas pre-existentes\n" +
+      "\\n**Metodología**:\n" +
+      "1. **Crear timeline unificada** (convertir todos los timestamps a UTC)\n" +
+      "2. **Marcar eventos clave**:\n" +
+      "   - 02:10 UTC: archivo exploit.exe descargado (PCAP HTTP.log)\n" +
+      "   - 02:12 UTC: exploit.exe ejecutado (prefetch timestamp)\n" +
+      "   - 02:15 UTC: procesos sospechosos creados (volatility pslist, Event ID 4688)\n" +
+      "   - 02:16 UTC: conexión a 185.220.102.4 (PCAP netscan, netstat.log)\n" +
+      "   - 02:20 UTC: datos copiados a C:\\temp (MFT $UsnJrnl)\n" +
+      "   - 02:25 UTC: datos exfiltrados via HTTPS (conn.log, volumen anómalo)\n" +
+      "3. **Responder preguntas de investigación**:\n" +
+      "   - ¿Quién compromete? (IP, geoip, user-agent)\n" +
+      "   - ¿Cuándo? (timestamp first/last contact)\n" +
+      "   - ¿Qué accedió? (datos identificados en exfil)\n" +
+      "   - ¿Cómo persiste? (scheduled task, registry Run key)\n" +
+      "   - ¿Evidencia de movimiento lateral? (conexiones inter-host)\n" +
+      "\\n**Herramientas**:\n" +
+      "• **Timeline maker** (Autopsy) — genera CSV de timeline\n" +
+      "• **Excel** — PivotTables y gráficos\n" +
+      "• **Splunk** — ingesta de múltiples logs, correlación en queries",
+    examples: [
+      "Timeline correlacionada de 12 horas muestra 89 eventos. Patrón claro: 14 horas entre primer acceso y exfiltración total.",
+      "Evento de sysmon (Process Creation ID 1) en 02:12 vs memory dump: mismo hash EXE. Confirmación de ejecución.",
+    ],
+    related: ["Análisis de disco", "Análisis de memoria", "Análisis de PCAP"],
+  },
+
+  // ── M42 · SIEM y Monitoreo ──────────────────────────────────────────────
+  {
+    id: 450,
+    module: 42,
+    term: "SIEM (Security Information and Event Management)",
+    short: "Plataforma centralizada que ingesta logs de toda la infraestructura, correlaciona y alerta sobre incidentes.",
+    detail:
+      "Un **SIEM** es el **corazón del SOC**. Centraliza:\n" +
+      "→ Logs de firewall (denies, connections)\n" +
+      "→ Logs de servidor (acceso, errores, cambios)\n" +
+      "→ Logs de seguridad (windows Event logs, Linux syslog)\n" +
+      "→ Logs de aplicación (autenticación, transacciones)\n" +
+      "→ Logs de endpoint (EDR, antivirus detecciones)\n" +
+      "\\n**Funciones principales**:\n" +
+      "1. **Ingesta** — recolectar logs (TCP/syslog, HTTP, agentes)\n" +
+      "2. **Normalización** — formatear a campo común (timestamp, user, action, outcome)\n" +
+      "3. **Correlación** — activar alertas cuando múltiples eventos encajan\n" +
+      "4. **Búsqueda** — investigación retroactiva (\"qué pasó hace 3 días?\")\n" +
+      "5. **Retención** — almacenar 90-365 días para auditoría\n" +
+      "6. **Reporte** — dashboards, compliance reports\n" +
+      "\\n**Plataformas**:\n" +
+      "| SIEM | Costo | Escalabilidad | Ease of Use |\n" +
+      "|---|---|---|---|\n" +
+      "| **Splunk** | $$$$ (muy caro) | ★★★★★ | ★★★ (SPL potente) |\n" +
+      "| **Microsoft Sentinel** | $$$ (cloud) | ★★★★★ | ★★★★ (KQL similar a SQL) |\n" +
+      "| **ELK/Elastic** | $ (open) | ★★★★ | ★★★★ (Kibana bueno) |\n" +
+      "| **Wazuh** | $ (open) | ★★★ | ★★★ (buena comunidad) |\n" +
+      "| **QRadar** | $$$$ | ★★★★ | ★★ (complejo) |\n" +
+      "> 💡 Costo típico: 1-3 USD por GB ingested (Splunk), cloud mide por usuarios/eventos.",
+    examples: [
+      "SIEM correlaciona: 10 fallidos de login + 1 éxito + cambio de grupo = account compromise probable → alerta automatizada.",
+      "Query retroactiva: \"source_ip=192.0.2.5 AND action=accessed AND object=/secret\" → auditoría de quién vio datos sensibles.",
+    ],
+    related: ["Logs estructurados", "Reglas de correlación", "Dashboards"],
+  },
+  {
+    id: 451,
+    module: 42,
+    term: "Reglas de correlación SIEM",
+    short: "Definiciones de patrones multi-evento que disparan alertas cuando un ataque probable se detecta.",
+    detail:
+      "Una **regla de correlación** dice: \"si suceden estos eventos en este orden/ventana, es sospechoso\".\n" +
+      "\\n**Tipos de reglas**:\n" +
+      "| Tipo | Ejemplo | Evasión |\n" +
+      "|---|---|---|\n" +
+      "| **Brute force** | >20 login fails en 5 min → alerta | Espaciar intentos (1 por minuto) |\n" +
+      "| **Privilege escalation** | User agregado a Administrators → alerta | Ejecutar comando sin UAC (require credencial) |\n" +
+      "| **Data exfiltration** | >1 GB saliendo a IP externa → alerta | Comprimir, encriptar, mezclar con tráfico legítimo |\n" +
+      "| **Lateral movement** | SMB connection de user X a 10+ hosts → alerta | Usar credencial robada vs nuevo host |\n" +
+      "| **Malware C2** | Conexión a IP en blocklist → alerta | Usar dominio legitimate (typosquatting) |\n" +
+      "\\n**Escritura en Splunk SPL (Search Processing Language)**:\n" +
+      "```spl\n# Detectar brute force SSH\nevent_type=ssh action=failed | stats count by src_ip | where count > 20\n\n# Detectar lateral movement\nevent_type=smbconnect | stats dc(dest_host) as unique_hosts by user | where unique_hosts > 10\n\n# Detectar descarga de malware conocido\nevent_type=file_downloaded filename=* | lookup malware_hashes hash | where status=known_malware\n```\n" +
+      "\\n**En Microsoft Sentinel (KQL)**:\n" +
+      "```kql\nSecurityEvent | where EventID == 4625 | summarize FailureCount=count() by AccountName, SourceIP | where FailureCount > 20\n```",
+    examples: [
+      "Regla: 4+ conexiones fallidas SSH (Event ID 4625) + 1 éxito (4624) en 10 min = credencial robada probable.",
+      "Regla: proceso descendiente de WINWORD.exe ejecutando powershell.exe = inyección Office macro maliciosa.",
+    ],
+    related: ["SIEM", "Detección de amenazas", "Falsos positivos"],
+  },
+  {
+    id: 452,
+    module: 42,
+    term: "Dashboards y visualización",
+    short: "Interfaz visual en tiempo real de métricas de seguridad, alertas y KPIs para toma de decisiones.",
+    detail:
+      "Un **dashboard SIEM** muestra:\n" +
+      "→ Alertas en cola (criticidad rojo/amarillo/verde)\n" +
+      "→ Eventos por hora (spike detecta ataques DDoS)\n" +
+      "→ Top 10 atacantes (IPs, users, hosts)\n" +
+      "→ Eventos por tipo (login, file access, malware)\n" +
+      "→ Compliance: % uptime, % eventos logeados, MTTR (mean time to respond)\n" +
+      "\\n**Ejemplo de KPI**:\n" +
+      "• **MTTD** (Mean Time to Detect) — promedio: 45 minutos\n" +
+      "• **MTTR** (Mean Time to Respond) — promedio: 2 horas\n" +
+      "• **Alert Accuracy** — % de alerts true positive vs false positive (target: >70%)\n" +
+      "• **Coverage** — % de hosts/apps con logs forwarded (target: >95%)\n" +
+      "\\n**Reducir ruido (alert fatigue)**:\n" +
+      "→ Tuning: threshold de reglas (si >100 falsos positivos/día, subir threshold)\n" +
+      "→ Whitelisting: IPs legales (backup scripts, scanners)\n" +
+      "→ Suppression: alerts conocidas de mantenimiento programado\n" +
+      "→ Correlación: no alertar en N eventos aislados, solo si N+M ocurren juntos\n" +
+      "> ⚠️ Alert fatigue hace que L1 ignore reales alertas. Un bien tuned SIEM es diferencia entre SOC efectivo e inútil.",
+    examples: [
+      "Dashboard muestra 347 alerts hoy. 330 son backup job timeout (whitelist). 17 reales. L1 triage los 17.",
+      "KPI: MTTD subió a 2 horas (fue 45 min). Síntoma: crecimiento de eventos no procesados (capacity issue → agregar parsers).",
+    ],
+    related: ["SIEM", "Métricas de seguridad", "Reportes de compliance"],
+  },
+  {
+    id: 453,
+    module: 42,
+    term: "SOAR (Security Orchestration, Automation, Response)",
+    short: "Plataforma que automatiza respuesta a incidentes: aisla hosts, bloquea IPs, abre tickets, sin intervención manual.",
+    detail:
+      "**SOAR** es el siguiente paso después del SIEM. Automatiza la **respuesta**:\n" +
+      "\\n**Ejemplo: Alert de malware detectado**\n" +
+      "1. SIEM dispara: \"hash malicioso encontrado en procesos\"\n" +
+      "2. SOAR playbook automático:\n" +
+      "   - Aisla host de la red (desconectar del VLAN productivo)\n" +
+      "   - Mata el proceso (rundll32.exe malicioso)\n" +
+      "   - Extrae memory dump para análisis\n" +
+      "   - Crea ticket en Jira/ServiceNow → L2 investigación\n" +
+      "   - Notifica al CISO por Slack\n" +
+      "   - Busca otros hosts con mismo hash (threat hunt)\n" +
+      "\\n**Ventajas**:\n" +
+      "→ **Tiempo**: MTTR de 2 horas → 5 minutos (sin esperar L1 que vea el alert)\n" +
+      "→ **Consistencia**: el playbook siempre hace lo mismo (sin olvidos)\n" +
+      "→ **Escalabilidad**: procesa 10 alerts paralelos sin 10 L1s\n" +
+      "→ **Cumplimiento**: auditoría automática de cada acción (quién ordenó qué)\n" +
+      "\\n**Plataformas SOAR**:\n" +
+      "• **Splunk Phantom** (ahora Splunk Enterprise Security)\n" +
+      "• **Palo Alto Cortex XSOAR**\n" +
+      "• **ServiceNow Security Operations**\n" +
+      "• **Tines** (open-source, startup friendly)\n" +
+      "\\n**Riesgo**: playbook automático aisla host legítimo por falso positivo → downtime. Validación vs velocidad.",
+    examples: [
+      "Alert: credential stuffing contra SSH. SOAR: bloquea IP atacante en firewall + abre ticket + notification CISO — todo en <1 min.",
+      "False positive: backup job parece exfil (10 GB a IP remota). SOAR aisló host. Después se descubre: es backup legítimo. Downtime: 30 min. Acción: whitelist IP backup.",
+    ],
+    related: ["SIEM", "Playbooks de respuesta", "Automatización"],
+  },
+
+  // ── M43 · Incident Response ────────────────────────────────────────────
+  {
+    id: 460,
+    module: 43,
+    term: "Ciclo de Respuesta a Incidentes (IR)",
+    short: "6 fases: Preparación → Identificación → Contención → Erradicación → Recuperación → Lecciones aprendidas.",
+    detail:
+      "**NIST SP 800-61** define el ciclo:\n" +
+      "\\n**1. Preparación**\n" +
+      "→ Políticas y procedimientos escritos\n" +
+      "→ Equipo IR entrenado (técnico + legal + comunicaciones)\n" +
+      "→ Herramientas pre-instaladas (Wireshark, Volatility, Autopsy)\n" +
+      "→ Relaciones pre-establecidas (ISP, law enforcement, abogados)\n" +
+      "→ Playbooks para ataques comunes (ransomware, breach, DDoS)\n" +
+      "\\n**2. Identificación** (DETECTAR)\n" +
+      "→ SIEM alerta / usuario reporta / análisis forense\n" +
+      "→ Triage: ¿es verdadero incidente o falso positivo?\n" +
+      "→ Iniciar caso en ticket system\n" +
+      "→ Activar equipo IR\n" +
+      "\\n**3. Contención** (FRENAR)\n" +
+      "• **Corto plazo**: desconectar del cable / matar el proceso / bloquear IP\n" +
+      "• **Largo plazo**: parcheado, cambio de credenciales, reglas firewall\n" +
+      "\\n**4. Erradicación** (REMOVER)\n" +
+      "→ Remover malware completamente\n" +
+      "→ Cerrar la puerta de entrada (patch, credencial fuerte, MFA)\n" +
+      "→ Validar no persiste (check artefactos persistencia)\n" +
+      "\\n**5. Recuperación** (RECUPERAR)\n" +
+      "→ Restaurar sistemas desde backups limpios\n" +
+      "→ Validar estabilidad (monitoreo intenso por 2 semanas)\n" +
+      "→ Gradualmente volver a producción\n" +
+      "\\n**6. Post-Incidente** (APRENDER)\n" +
+      "→ Tabletop exercise: simular el mismo ataque, mejorar respuesta\n" +
+      "→ Actualizar playbooks\n" +
+      "→ Capacitación: qué pasó, cómo lo detectamos, qué cambió\n" +
+      "\\n> ⚠️ Tiempo es crítico: cada minuto = más datos exfiltrados / spread.",
+    examples: [
+      "Ransomware detectado (identification). 1 host aislado (containment). Ransomware removido (eradication). Datos restaurados de backup (recovery).",
+      "Post-incident: se descubre entrada via RDP débil. GPO implementa MFA en todos los RDP. Capacitación passwords fuertes.",
+    ],
+    related: ["Preparación de IR", "Playbooks", "Comunicación de crisis"],
+  },
+  {
+    id: 461,
+    module: 43,
+    term: "Contención de incidentes",
+    short: "Acciones inmediatas para frenar la propagación del ataque y minimizar daño mientras se investiga.",
+    detail:
+      "**Contención = SPEED**. Decisiones en minutos, no horas.\n" +
+      "\\n**Contención corto plazo** (primeros 15 minutos):\n" +
+      "→ **Aislar el host** — desconectar del cable (no shutdown, podrías perder evidencia en RAM)\n" +
+      "→ **Bloquear el atacante** — IPs conocidas en firewall / WAF\n" +
+      "→ **Revocar credenciales** — resets password sospechosa si no está comprometida la root\n" +
+      "→ **Detener procesos** — matar malware observable (pero ejecutar en foremost para volcado)\n" +
+      "→ **Notificar al CISO** — escalación inmediata\n" +
+      "\\n**Contención largo plazo** (horas a días):\n" +
+      "→ **Parchear** — aplicar security patch de vulnerabilidad explotada\n" +
+      "→ **Cambio de credenciales** — toda persona cuyo password podría estar comprometida\n" +
+      "→ **Actualizar reglas** — firewall, WAF, EDR adicionales\n" +
+      "→ **Segmentación** — si movimiento lateral, aislar subredes\n" +
+      "→ **Monitoreo intensivo** — EDR, SIEM, netflow en máxima sensibilidad\n" +
+      "\\n**Trade-off crítico: Preservación de evidencia vs Contención**\n" +
+      "→ Apagar máquina contamina escena (volátil desaparece)\n" +
+      "→ Dejar activo permite propagación\n" +
+      "→ Decisión: depende de severidad (ransomware = aisla ASAP, espía silencioso = congelá primero para volcado)",
+    examples: [
+      "Ransomware hits: 500 máquinas infectadas en 2 min. Acción: bloquea dominio C2 en firewall central (frenar el spread). Luego: isolate 50 primeras máquinas.",
+      "Espía detectado en servidor: antes de matar, VOLATILITY volcado de RAM (captura credenciales en memoria, conexiones C2). Luego aislamiento.",
+    ],
+    related: ["Ciclo de IR", "Erradicación", "Preservación de evidencia"],
+  },
+  {
+    id: 462,
+    module: 43,
+    term: "Erradicación y validación",
+    short: "Remover completamente el malware, cerrar la puerta de entrada y verificar no persiste.",
+    detail:
+      "**Erradicación** es eliminar la causa raíz, no solo los síntomas.\n" +
+      "\\n**Pasos**:\n" +
+      "1. **Identificar ALL instances** — búsqueda en toda la red, no solo el host origen\n" +
+      "   - Scan de hashes malware en todos los endpoints\n" +
+      "   - Búsqueda de IoCs: IPs C2, dominios, rutas de archivo, registry keys\n" +
+      "   - YARA rules en PCAP histórico\n" +
+      "\\n2. **Remover**:\n" +
+      "   - Borrar archivos maliciosos (manual + antivirus scan)\n" +
+      "   - Eliminar claves persistencia (registry Run keys, scheduled tasks, WMI, LSA)\n" +
+      "   - Killswitch en firewall si es comando remoto\n" +
+      "   - Si ransomware cifró datos: restaurar de backup (sin malware)\n" +
+      "\\n3. **Cerrar puerta de entrada**:\n" +
+      "   - Patch de vulnerabilidad (si exploit conocido)\n" +
+      "   - MFA obligatorio (si credentials robadas)\n" +
+      "   - Monitoreo permanente de credenciales en dark web\n" +
+      "\\n4. **Validación post-erradicación**:\n" +
+      "   - Rescan de todos los hosts (confirma 0 detecciones)\n" +
+      "   - Verificar persistencia (registry, cron, startup folders)\n" +
+      "   - Monitoreo 72 horas intenso (si re-aparece = no erradicó completamente)\n" +
+      "   - Análisis de artefactos: ¿quedaron dropper, backdoor secundario?",
+    examples: [
+      "Emotet removido de host inicial pero aún en 40 máquinas. Búsqueda SIEM: _all_ hosts con archivo EXE de hash. Limpieza masiva + patch.",
+      "Ransomware erradicado de archivo, datos restaurados. 2 días después re-aparece en máquina diferente. Indicador: backdoor secondary no removida. Segunda ronda erradicación.",
+    ],
+    related: ["Contención", "Recuperación", "Threat hunting"],
+  },
+  {
+    id: 463,
+    module: 43,
+    term: "Post-Incidente y Lessons Learned",
+    short: "Análisis retrospectivo: qué salió mal, qué salió bien, cómo mejoramos defensas y procesos.",
+    detail:
+      "**Post-incident review** (PIR) es el aprendizaje institucional del incidente.\n" +
+      "\\n**Timeline**:\n" +
+      "→ **Dentro de 48 horas**: briefing rápido (CISO, IT, Legal, Comms)\n" +
+      "→ **Dentro de 1 semana**: full meeting (técnicos detallan)\n" +
+      "→ **Dentro de 1 mes**: informe final + acciones correctivas\n" +
+      "\\n**Preguntas a responder**:\n" +
+      "1. **¿Qué pasó?** — Timeline de eventos, de quién a quién, atacante/víctima/datos\n" +
+      "2. **¿Por qué no lo detectamos antes?** — Análisis de gaps (SIEM no loguea evento, EDR no instalado)\n" +
+      "3. **¿Por qué sucedió?** — Causa raíz\n" +
+      "   - Vulnerabilidad sin parchear\n" +
+      "   - Credencial débil reutilizada\n" +
+      "   - Insider malicioso\n" +
+      "   - Falta de segmentación\n" +
+      "4. **¿Qué haríamos diferente?** — Acciones mejora:\n" +
+      "   - Patch en 2 días vs 30 días\n" +
+      "   - MFA obligatorio vs opcional\n" +
+      "   - SIEM con EDR (visibilidad endpoint)\n" +
+      "   - Tabletop ejercicios trimestrales\n" +
+      "\\n**Tabletop Exercise**:\n" +
+      "→ Simula el mismo ataque (\"si volviera a pasar hoy...\")\n" +
+      "→ Identifica qué cambios funcionarían\n" +
+      "→ Entrena al equipo (sin presión real)\n" +
+      "→ Mejora de documentación de playbooks\n" +
+      "\\n**Comunicación de hallazgos**:\n" +
+      "→ Técnico: a IT/Sec team (detalles)\n" +
+      "→ Ejecutivo: a Junta directiva (riesgo, $ impacto, acciones correctivas, timeline)\n" +
+      "→ Público: statement (si breach de PII) → notificación regulatoria",
+    examples: [
+      "PIR: ransomware por RDP expuesto. Raíz: firewall permitía 3389 de anywhere. Acción: 1) MFA, 2) IP whitelist, 3) educ. Validación: tabletop en 3 meses.",
+      "Insider vio datos sensibles. PIR identifica: SIEM no loguea acceso a DB, DLP ausente. Acción: instalar Imperva DLP + capacitación de datos. Cost $200K pero PII breach evitada.",
+    ],
+    related: ["Ciclo de IR", "Tabletop exercises", "Compliance y notificación"],
+  },
+];
+
+export function definitionsByModule(moduleId: number): ConceptDefinition[] {
+  return DEFINITIONS.filter((d) => d.module === moduleId);
+}
     short: "Proceso estructurado para contener, erradicar y recuperarse de un evento de seguridad.",
     detail:
       "Un **incidente** es un evento que **compromete la confidencialidad, integridad o disponibilidad** de la información. Fases del **IR**:\n" +
