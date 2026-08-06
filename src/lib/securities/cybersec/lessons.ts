@@ -814,6 +814,78 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 58,
+    title: "Arquitectura Segura y Zero Trust",
+    sub: "M54",
+    dur: "65m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Principios de Diseño Seguro", c: "🏗️ La **arquitectura de seguridad** define cómo los componentes de un sistema se conectan, se comunican y se protegen:\n\n**Defensa en Profundidad** → Múltiples capas redundantes:\n• Perímetro (firewall, WAF) → Red (IDS/IPS, segmentación) → Host (EDR, hardening) → App (validación) → Datos (cifrado)\n\n**Menor Privilegio (PoLP)** → Cada componente/usuario solo accede a lo mínimo necesario. Revisar periódicamente.\n\n**Fail-Safe/Secure** → Ante falla, el sistema queda en estado seguro, no abierto.\n\n**Economía de Mecanismo** → Diseño simple = menos superficies de ataque, más auditable.\n\n**Mediación Completa** → Validar CADA acceso, sin atajos o bypasses." },
+      { h: "Zero Trust Architecture (NIST 800-207)", c: "🚫 **Principio:** \"Never trust, always verify\"\n\nNo hay perímetro de confianza. Cada petición (incluso desde adentro de la red) se autentica y autoriza como si viniera de la internet hostil.\n\n**Componentes:**\n→ **PDP (Policy Decision Point)** — evalúa si permitir la petición (identidad + contexto + riesgo)\n→ **PEP (Policy Enforcement Point)** — aplica la decisión (permite/deniega)\n→ **Microsegmentación** — aislar recursos por carga de trabajo, no por ubicación\n→ **Identity fabric** — autenticación continua (contexto adaptativo)\n\n**Beneficio:** Un atacante que compromete un dispositivo de la red corporativa **NO gana acceso automático** a todos los demás; debe saltar cada control." },
+      { h: "Segmentación de Red", c: "🧱 Dividir la red en zonas de confianza diferentes:\n\n**DMZ** (Demilitarized Zone) → Servidores públicos (web, email), aislados de las redes internas. Si se comprometen, el atacante no accede directamente a BD/sistemas.\n\n**Redes internas segmentadas** → Por función: usuarios, servidores de BD, sistemas de admin, desarrollo. Firewalls entre ellas.\n\n**VLAN** → Aislamiento lógico en un mismo switch (tráfico no cross-VLAN sin router).\n\n**Subnet** → Límite IP (CIDR /24, /25). Un DDoS a una subnet no afecta otras.\n\n**Air-gap** → Aislamiento físico completo (sin red). Usado en SCADA/ICS críticos.\n\nCombinación: DMZ + segmentación interna + ACLs firewalls = blast radius limitado." },
+      { h: "Encriptación en Tránsito y en Reposo", c: "🔐 **En tránsito** (data en movimiento):\n→ **TLS 1.3** para HTTPS (reemplazó HTTP, SSH)\n→ **IPSec** / **WireGuard** para VPN\n→ **Perfect Forward Secrecy (PFS)** — sesión no se ve comprometida aunque la clave privada del servidor se robe\n\n**En reposo** (data almacenada):\n→ **AES-256-GCM** para datos en BD\n→ **FDE (Full Disk Encryption)** en servidores (LUKS en Linux, BitLocker en Windows)\n→ **Key management:** nunca hardcodear keys en código; bóvedas (Vault, AWS KMS, Azure Key Vault)\n\n**Ciclo de vida de claves:**\n• Generar (random source, suficiente entropía)\n• Almacenar (bóveda, HSM para cripto)\n• Rotación (cada N meses o si sospehas compromiso)\n• Revocación (si alguien la ve)" },
+      { h: "Secure Coding y OWASP Top 10", c: "💻 **Secure by design** — la seguridad es parte de la especificación desde el inicio, no agregada al final.\n\n**OWASP Top 10 de Web Apps (2021):**\n1️⃣ **Broken Access Control** → Falta PoLP (autorización)\n2️⃣ **Cryptographic Failures** — Datos senibles sin cifrado o con algoritmos débiles\n3️⃣ **Injection** — SQL, command, XML (input no validado)\n4️⃣ **Insecure Design** — Falta de threat modeling\n5️⃣ **Security Misconfiguration** — Defaults inseguros\n6️⃣ **Vulnerable/Outdated Components** — Dependencies sin parchear\n7️⃣ **Identification/Authentication** — Passwords débiles, MFA ausente, session handling pobre\n8️⃣ **Software/Data Integrity Failures** — Descargas/updates sin firma\n9️⃣ **Logging/Monitoring Failures** — No hay auditoría de eventos críticos\n🔟 **SSRF** — Server-side request forgery (servidor hace requests no autorizadas)\n\n**Mitigación:**\n• Validación en el servidor (nunca confiar en el cliente)\n• Parametrización de queries (prepared statements vs string concat)\n• Encoding de output (previene XSS)\n• CORS restrictivo\n• CSP headers\n• Rate limiting" },
+      { h: "Threat Modeling (STRIDE)", c: "🎯 Identificar amenazas antes de programar:\n\n**STRIDE** — 6 categorías de amenaza (Microsoft):\n\n**S**poofing (suplantación) → Alguien se hace pasar por otro. Mitigación: autenticación fuerte (MFA, PKI).\n\n**T**ampering (manipulación) → Modificar datos/código en tránsito. Mitigación: integridad (HMAC, firmas digitales).\n\n**R**epudiation (repudio) → Negar que hizo algo. Mitigación: logging/auditoría (prueba irrefutable).\n\n**I**nformation Disclosure (revelación) → Acceso no autorizado a datos. Mitigación: ACL, cifrado, clasificación.\n\n**D**enial of Service → Sistema no disponible. Mitigación: redundancia, rate limiting, WAF.\n\n**E**levation of Privilege → Escalar de usuario a admin. Mitigación: PoLP, hardening, revisión código.\n\n**Proceso:**\n1. Dibujar arquitectura (componentes, flujos)\n2. Aplicar STRIDE a cada componente/límite de confianza\n3. Listar amenazas concretas\n4. Priorizar por probabilidad × impacto\n5. Decidir mitigación (reducir / transferir / aceptar)\n6. Documentar supuestos (y revisarlos)" },
+      { h: "Casos Prácticos: Netflix y GitHub", c: "🎬 **Netflix Zero Trust:**\n→ Antes: VPN corporativa daba acceso a toda la red\n→ Después: cada microservicio se autentica con mTLS (mutual TLS), solo comunica con servicios autorizados\n→ Beneficio: empleado compromietido ≠ red comprometida\n\n🐙 **GitHub:**\n→ Segmentación: users repo ≠ internal infra ≠ production runners\n→ Runners efímeros (se destruyen después de cada job, evita acumulación de secretos)\n→ OIDC tokens (OWASP prefiere sobre secrets hardcodeados en CI/CD)\n→ Branch protection + required reviews + status checks → merge seguro" },
+    ],
+  },
+  {
+    id: 59,
+    title: "SOAR y Respuesta Automatizada",
+    sub: "M55",
+    dur: "70m",
+    diff: "Avanzado",
+    sections: [
+      { h: "¿Qué es SOAR?", c: "🤖 **Security Orchestration, Automation and Response** — plataforma que orquesta herramientas de seguridad y automatiza respuestas.\n\n**3 pilares:**\n→ **Orchestration** — conectar SIEM, antivirus, cloud providers, ticketing (APIs, webhooks)\n→ **Automation** — playbooks (flujos de trabajo) que ejecutan sin intervención humana\n→ **Response** — acciones: contención (desconectar dispositivo), investigación (reunir logs), remediación (desinstalar malware)\n\n**Matriz SIEM vs SOAR:**\n| | SIEM | SOAR |\n|---|---|---|\n| **Detecta** | ✅ | ❌ (depende de SIEM) |\n| **Investiga** | Parcial (logs) | ✅ (orquesta herramientas) |\n| **Actúa** | ❌ (solo alertas) | ✅ (automation) |\n| **Escala de respuesta** | Manual (1 analista = varios eventos) | Automática (1 playbook = N eventos) |\n\n**Plataformas SOAR populares:** Splunk Phantom, Palo Alto XSOAR, Siemplify, Rara Security." },
+      { h: "Playbooks y Orquestación", c: "📋 Un **playbook** es un flujo de trabajo (como un Zapier/IFTTT pero para seguridad):\n\n**Ejemplo: Alerta de descarga malware en endpoint**\n```\nTrigger: SIEM detecta hash conocido en endpoint\n├─ Action 1: Obtener detalles de proceso (EDR API)\n├─ Action 2: Isolar red del endpoint (firewall API)\n├─ Action 3: Obtener logs de red últimas 24h (proxy log query)\n├─ Action 4: Alertar al SOC (enviar email/Slack)\n├─ Action 5: Crear ticket en Jira\n└─ Action 6: Si malware crítico → kill process (endpoint agent API)\n```\n\n**Construcción:**\n→ **No-code/low-code:** visual editor (drag-drop, condicionales)\n→ **Condicionales:** if riesgo alto → isolate; elif riesgo medio → monitor; else → log\n→ **Loops:** for each affected user → revoke sessions\n→ **Errores:** retry, fallback, escalation a humano\n\n**Ventajas:**\n• Reducir MTTR (Mean Time To Respond) de horas a minutos\n• Consistencia (mismo proceso siempre)\n• Escala sin más analistas" },
+      { h: "Integración SIEM-SOAR-EDR", c: "🔗 Las 3 herramientas trabajo juntas:\n\n**Flujo completo:**\n```\nEDR (endpoint detect)\n  ↓ (alerta de comportamiento sospechoso)\nSIEM (correlaciona eventos)\n  ↓ (enriches con contexto, aplica regla)\nSOAR (playbook triggered)\n  ↓ (orquesta acciones)\nEDR, Firewall, Cloud, Ticketing (actúan)\n```\n\n**Ejemplo real:**\n1. **EDR:** Detecta `powershell.exe` con flageo de supresor de logs (`Set-MpPreference -DisableRealtimeMonitoring`)\n2. **SIEM:** Correlaciona con login fallido previo → probable compromiso\n3. **SOAR:** Playbook activado\n   - Query EDR: ¿otros procesos del mismo usuario?\n   - Query SIEM: ¿lateral movement?\n   - Query Cloud: ¿acceso a data storage?\n   - Si evidencia de exfil → aislá red + notify CISO\n\n**Datos para enriquecimiento:**\n→ **Threat intel feeds:** Is IP in blocklist? (VirusTotal, AbuseIPDB)\n→ **Asset DB:** Is endpoint critical? (Treat differently)\n→ **User directory:** Is user admin? (Escalate urgencia)" },
+      { h: "ML y Detección Anomalías", c: "🧠 Machine Learning en SOAR para reducir ruido de falsas alarmas:\n\n**Uso cases:**\n→ **Baseline behavior:** usuario X típicamente accede a 10 apps; hoy 50 → anomalía\n→ **Peer analysis:** employee at same level típicamente viaja 5 veces/año; hoy login desde 3 países en 1 hora → impossible travel\n→ **Unsupervised clustering:** agrupa eventos similares → detecta new attack patterns (malware variants)\n\n**Ejemplo Splunk Phantom:**\n```\nTraining data: 6 meses de eventos normales\n  ↓\nML model detecta patrones\n  ↓\nNuevo evento similar a 99.9% = normal\nNuevo evento similar a 23% = anomalía → escalate\n```\n\n**Riesgos:**\n→ **False positives:** modelo entrenado en datos dirty → falsas alarmas\n→ **Evasión:** atacante aprende patrón normal y lo imita\n→ **Drift:** modelo envejece (comportamiento usuario cambia)\n\n**Mitigación:** reentrenar periódico (mensual), feedback loop (analista marca false positive → se reajusta)" },
+      { h: "Threat Hunting Activo", c: "🔍 No esperes a que SIEM alerte; busca activamente amenazas:\n\n**Proceso:**\n1. **Hipótesis:** basada en threat intel (\"APT28 típicamente usa X tool en fase Y\")\n2. **Búsqueda:** query SIEM/EDR/logs por indicadores (archivo IOC, proceso, conexión)\n3. **Investigación:** si encuentras evidencia, expand scope (¿qué más pasó?)\n4. **Documentación:** qué encontraste, cómo, timeline\n5. **Remediación:** playbook automático o manual según severidad\n\n**Ejemplos de hipótesis:**\n→ \"Insider exfiltrating data\" — busca uploads a personal cloud (Dropbox, OneDrive) desde employee PC\n→ \"Supply chain attack\" — busca ejecuciones de software que fue actualizado hace <7 días\n→ \"Cryptominer\" — busca alto CPU/GPU, conexiones a known mining pools\n\n**Herramientas:**\n• **SIEM native language** (Splunk SPL, ELK Kibana, Elastic Query)\n• **EDR EIDR search** (Cortex XDR, Microsoft Defender)\n• **OSINT** (shodan, GreyNoise, Censys) para external recon" },
+    ],
+  },
+  {
+    id: 60,
+    title: "Compliance, Auditoría y GRC",
+    sub: "M56",
+    dur: "65m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Marcos Normativos Principales", c: "📜 Distintos sectores, distintas reglas. Las 5 que más importan hoy:\n\n**🇪🇺 GDPR (RGPD en ES)**\n→ Datos personales de residentes EU\n→ Derechos ARCO: Acceso, Rectificación, Cancelación, Oposición + portabilidad\n→ Brechas: notificar en 72h a autoridad + afectados\n→ Multas: hasta 4% de facturación anual (€20M o 4%, lo que sea mayor)\n→ DPO obligatorio si procesás >1000 personas o datos sensibles\n\n**🏥 HIPAA (USA)**\n→ Registros médicos electrónicos\n→ Encriptación y audit logs obligatorios\n→ Business associate agreements (si tercero toca datos de salud)\n→ Notificación de brechas: >500 personas → aviso a prensa\n\n**💳 PCI-DSS (pagos)**\n→ Datos de tarjetas de crédito\n→ 12 requisitos: firewall, no hardcodear credenciales, encripción, etc.\n→ Niveles 1-4 según volumen transacciones\n→ Auditoría anual (SAQ o QSA)\n\n**☁️ SOC 2 (SaaS providers)**\n→ No es ley, pero clientes enterprise lo piden\n→ Auditoría independiente sobre 5 categorías (Security, Availability, Processing Integrity, Confidentiality, Privacy)\n→ Type I (diseño) vs Type II (operativa durante 6+ meses)\n\n**🇪🇸 ENS (sector público ES)**\n→ Equivalente a GDPR pero para gobierno\n→ 3 niveles básico/intermedio/alto\n→ Obligatorio para toda administración pública" },
+      { h: "ISO 27001 y SGSI", c: "🏆 El estándar de facto para gestionar seguridad informática.\n\n**¿Qué es?** Framework certificable de un SGSI (Sistema de Gestión de Seguridad de la Información).\n\n**Ciclo PDCA:**\n→ **Plan** — definir política, scope, activos, riesgos\n→ **Do** — implementar controles\n→ **Check** — auditar, revisar\n→ **Act** — mejorar, corregir\n\n**Anexo A** — catálogo de 114 controles (A.5 a A.18):\n• Gobernanza (políticas, roles)\n• Asset management (inventario)\n• Acceso (autenticación, PoLP)\n• Criptografía (keys, algoritmos)\n• Física (cerraduras, CCTV)\n• Incidentes (proceso IR)\n• Continuidad (backups, DR)\n• Cumplimiento (auditoría, legal)\n\n**SoA (Declaración de Aplicabilidad)** — documento que dice qué controles aplican y por qué. Si un control no aplica, se justifica.\n\n**Certificación:** auditor externo verifica que la implementación cumple la norma (costo ~€5k-50k según tamaño)." },
+      { h: "Auditoría Interna vs Externa", c: "📋 **Auditoría interna:**\n→ Realizada por tu equipo o consultores\n→ Frecuencia: tipicamente anual o semestral\n→ Scope: verificar que controles existen y se documentan\n→ Resultado: no conformidades (mayor = falla sistémica, menor = desviación puntual)\n→ CAPA (Plan de Acción Correctiva): cómo vas a arreglarlo\n\n**Auditoría externa:**\n→ Tercero independiente (Big 4 accounting, boutiques de seguridad)\n→ Scope más amplio: también evalúa eficacia operativa (Type II de SOC 2)\n→ Resultado: dictamen certificable (\"sí, ISO 27001 compliant\")\n→ Cost/benefit: certifik es valioso para contratos enterprise\n\n**¿Qué se evalúa?**\n→ Políticas documentadas\n→ Evidencias de implementación (logs de cambios, credenciales generadas, etc.)\n→ Testing: ¿el control realmente funciona? (e.g., intentar loguear con password vieja → debe fallar)\n→ Interviews: ¿la gente sigue los procesos?" },
+      { h: "Brechas y Notificación", c: "🚨 Cuando algo sale mal — procesos legales y éticos.\n\n**Definición de brecha:** acceso no autorizado a datos personales, confidenciales o sensibles. Puede ser malicioso (ataque) o accidental (mail a destinatario equivocado).\n\n**Pasos post-brecha:**\n1. **Detectar** — SOC alerta, empleado reporta\n2. **Contener** — aislar sistemas afectados (no se expanda)\n3. **Investigar** — qué fue comprometido, cuándo, quién accedió\n4. **Notificar** — dentro del plazo (GDPR 72h; HIPAA días; otros según ley)\n5. **Remediar** — parche, resetear credenciales\n6. **Lecciones aprendidas** — qué falló, cómo prevenirlo\n\n**Chain of Custody:**\n→ Procedimiento forense para preservar evidencia (logs, dumps, discos)\n→ Cadena documentada de quién tocó qué, cuándo\n→ Crucial para poder procesar penalmente (abogados pedirán CoC)\n→ Herramientas: copias con hash criptográfico (SHA256) para verificar no fue modificado" },
+      { h: "GRC Platform y Governance", c: "🎯 **GRC** = Gobernanza, Riesgo, Cumplimiento (integrado).\n\n**Gobernanza:** estructura de decisión\n→ Chief Information Security Officer (CISO) reporta a CTO/CEO\n→ Comité de riesgo (exec + IT + legal + audit) revisa riesgos\n→ Políticas: aprobadas por board, comunicadas al personal\n→ Roles: quién es responsible del qué (matriz RACI)\n\n**Riesgo:**\n→ Registro de riesgos: activo/vulnerabilidad/amenaza/probabilidad/impacto\n→ KRIs (Key Risk Indicators): señales tempranas que riesgo sube\n→ Risk appetite: cuánto riesgo tolera la org? (e.g., \"máximo 3% de uptime loss anual\")\n→ Revisión periódica (trimestral o anual)\n\n**Plataformas GRC:** Domo, LogicGate, RSA Archer, Vanta (automated compliance)\n→ Dashboard centralizado\n→ Workflows (evidence collection, approval)\n→ Reporting para auditoría" },
+    ],
+  },
+  {
+    id: 61,
+    title: "Análisis Forense Avanzado",
+    sub: "M57",
+    dur: "70m",
+    diff: "Doctorado",
+    sections: [
+      { h: "Forense de Disco y Filesystems", c: "💾 Analizar un disco comprometido para recuperar evidencia.\n\n**Niveles de recuperación:**\n1. **Archivos vivos** — en el filesystem, accesibles\n2. **Archivos borrados** — entrada removida de directory, clusters aún en el disco (recoverable)\n3. **Slack space** — datos \"sobrantes\" en clusters (último 512 bytes útiles)\n4. **File carving** — buscar headers/footers de archivos conocidos (JPEG, PDF) en raw data\n\n**Herramientas:**\n• **ddrescue / dd** — clonar disco bit-a-bit (preservar todos los datos, incluso corrupted sectors)\n• **Autopsy** (GUI) / **The Sleuth Kit (TSK)** (CLI) — análisis filesystem, carving, timeline\n• **EnCase / FTK** — herramientas forenses profesionales ($$$$)\n• **strings** — extraer texto en ASCII/Unicode de binarios\n\n**Análisis:**\n```bash\n# Listar archivos borrados en ext4\nsleuthkit-based tools on /dev/sdb1\n\n# Buscar archivos JPEG por signature (FFD8 FF)\nscalpel image.dd -o output/\n\n# Timeline de acceso (MAC times = Modified, Accessed, Changed)\nmactime -b bodyfile.txt\n```\n\n**Evidencia típica:**\n→ Ejecutables descargados (wallpaper.exe que era malware)\n→ Historiales de navegación (IE, Chrome, Firefox)\n→ Temp files (Windows \\\\Users\\\\AppData\\\\Local\\\\Temp)\n→ Swap/hiberfil.sys (memoria volcada al disco)" },
+      { h: "Análisis de Memoria (Volatility)", c: "🧠 Volátil = RAM se borra al apagar. Antes que se vaya, hay que dumparla.\n\n**¿Por qué importa?** \n→ Malware en memoria sin tocar disco (fileless)\n→ Credenciales activas (en buffer, plaintext o encriptadas)\n→ Conexiones abiertas (sockets TCP, destinos de C2)\n→ Procesos en ejecución (PID, comando, parent process tree)\n→ Hooks (malware que modifica kernel para esconderse)\n\n**Herramientas:**\n• **Volatility3** — framework Python, 30+ plugins\n• **WinDbg** / **LLDB** — debuggers del SO\n• **Rekall** — alternativa a Volatility (deprecated, pero útil para dumps viejos)\n\n**Flujo análisis:**\n```bash\nvol3 -f memory.dmp windows.pslist  # lista procesos\nvol3 -f memory.dmp windows.cmdline # argumentos de línea de comando\nvol3 -f memory.dmp windows.netscan # conexiones de red activas\nvol3 -f memory.dmp filescan       # archivos abiertos\nvol3 -f memory.dmp hivelist       # registros de Windows en memoria\nvol3 -f memory.dmp handles        # file handles abiertos\nvol3 -f memory.dmp sockets        # sockets TCP/UDP\nvol3 -f memory.dmp vadscan        # mapeos de memoria (detectar shellcode)\n```\n\n**Análisis de logs:**\n→ Event logs (Windows): Security, System, Application\n→ Bash history (~/.bash_history en Linux)\n→ Syslog (/var/log/) con timestamps\n→ Correlation: IP origen + timestamp → quién estaba donde cuándo" },
+      { h: "Forense de Logs", c: "📝 Los logs son el registro de transacción de la seguridad.\n\n**Tipos de logs que importan:**\n1. **Auth logs** — intentos de login (su, sudo, ssh, RDP)\n2. **Web server logs** — requests HTTP, User-Agent, IP origen\n3. **Database logs** — queries ejecutadas, users\n4. **Firewall logs** — permitido/denegado, protocolo, destino\n5. **IDS/IPS logs** — alertas, payloads sospechosos\n6. **DNS logs** — dominios resueltos (detectar C2 domains)\n7. **Application logs** — errores, excepciones\n\n**Análisis de Timeline:**\n```\nLunes 10:00 — SSH login fallido desde 192.168.1.50\nLunes 10:01 — SSH login exitoso (password correcto) desde 192.168.1.50\nLunes 10:05 — User ejecuta sudo whoami\nLunes 10:06 — Archivos privados accedidos (SSH keys)\nLunes 10:10 — Conexión outbound a 1.2.3.4:443 (C2 server)\nLunes 10:15 — Archivos de confidencial copiados a /tmp\n```\n\n→ Timeline reconstruido: ataque sistemático (reconocimiento → lateral movement → exfiltración)\n\n**Herramientas:**\n• **Log parsers** — parse logs de múltiples fuentes (Splunk, ELK)\n• **Timeline makers** — Plaso, Log2Timeline\n• **Grep/awk** — búsquedas simples en logs de texto" },
+      { h: "Análisis de Malware", c: "🦠 Diseccionar un binario malicioso.\n\n**Análisis estático:**\n→ **strings** — buscar texto en el binario (URLs, IPs, mensajes)\n→ **file** — identificar tipo (ELF, Mach-O, PE)\n→ **nm / objdump** — símbolos y funciones\n→ **PE explorer / IDA (ida-free)** — disassembler (mostrar assembly)\n→ **YARA** — buscar patrones conocidos de malware (signatures)\n\n```bash\nstrings malware.exe | grep -i http  # ¿hay URLs de C2?\nfile malware.exe                    # ¿es ejecutable?\nstrings malware.exe | grep HKEY     # ¿accede registry?\n```\n\n**Análisis dinámico (sandboxed):**\n→ **Cuckoo** — sandbox que vira malware en VM aislada, graba API calls\n→ **Any.run** — online sandboxing (más UI-friendly)\n→ **Procmon** (Windows) — monitorea file/registry/network I/O en tiempo real\n\n```\nProcmon output:\nmalware.exe → CreateFileA(\"C:\\\\System32\\\\drivers\\\\etc\\\\hosts\")\nmalware.exe → WriteFile(\"127.0.0.1 google.com\")\n  → Malware está modificando DNS (hosts file) → malicious intent confirmado\n```\n\n**Detonación responsable:**\n→ **Siempre en sandbox**, nunca en máquina de producción\n→ **Network aislada** (VM sin internet, o proxy que bloquea C2)\n→ **Backup antes** (snapshots)" },
+      { h: "Casos Reales: Análisis Post-Brecha", c: "📚 Dos breaches reales analizados:\n\n**Caso 1: NotPetya (2017)**\n→ **Indicador inicial:** sistema de actualización de software (M.E. Doc) fue comprometido\n→ **Hallazgo:** versión \"legítima\" descargada incluía malware que se auto-propagaba\n→ **Análisis:** reverse-engineering mostró que buscaba PsExec + SMB para lateral movement\n→ **Timeline:** 10 minutos desde infección hasta desastres en múltiples países\n→ **Lección:** supply chain attacks escalan exponencialmente; confiar en updates debe ir acompañado de integridad checks (SBOM, code signing)\n\n**Caso 2: SolarWinds (2020)**\n→ **Indicador:** tráfico HTTPS \"normal\" a N-able.com (SolarWinds) con beacon characteristics\n→ **Análisis PCAP:** decrypted TLS traffic mostró un JSON con comandos de C2\n→ **Logística:** APT (Cozy Bear / SVR) reemplazó DLL legítima (`SolarWinds.Orion.Core.BusinessLayer.dll`) con backdoor\n→ **Hallazgo en memoria:** comportamiento de reverse shell, exfiltración de AD data\n→ **Alcance:** 18.000 SolarWinds clientes potencialmente comprometidos (aunque no todos exfiltrados)\n→ **Lección:** auditar supply chain; confiar pero verificar; IR plan debe cubrir compromiso de herramientas centrales" },
+    ],
+  },
+  {
+    id: 62,
+    title: "Cultura de Seguridad y Gestión",
+    sub: "M58",
+    dur: "65m",
+    diff: "Avanzado",
+    sections: [
+      { h: "Entrenamiento de Usuarios y Phishing", c: "👥 Los usuarios son la primera línea de defensa y el eslabón más débil.\n\n**Capacitación obligatoria:**\n→ **Inicial** — onboarding: políticas de contraseña, phishing, clean desk\n→ **Anual** — repaso y nuevas amenazas\n→ **Rol específico** — admins/developers necesitan entrenamiento más profundo\n→ **Lingüistica:** capacitación en español, idioma del usuario\n\n**Simulación de phishing:**\n→ Enviar emails falsos internos → medir % de clicks/credentials ingresadas\n→ Feedback inmediato si cae: \"Esta fue una prueba. Aquí está lo que debería buscar: ...\"\n→ Repetir, ir aumentando sofisticación\n→ Resultados: típicamente 30-50% en primer round, 5-10% después de entrenamiento\n\n**Signos de alerta:**\n• URL sospechosa (dominio similar pero typo: gg00gle.com)\n• Urgencia artificial (\"Confirma contraseña en 1 hora o account bloqueado\")\n• Solicitud de datos sensibles por email (bank, govt, empresa legítima NO lo hace)\n• Attachments inesperados de remitentes conocidos (compromiso de email)\n• Pobre ortografía/gramática (automated scams)\n• Logo de empresa pero hosted en servidor ajeno (verificar headers de email)\n\n**Reportar sin castigo:** crear un canal seguro para que empleados reporten phishing recibido sin miedo (psicología, no punitivo)" },
+      { h: "Vulnerability Management", c: "🔍 Gestionar el ciclo de vida de vulnerabilidades.\n\n**Proceso:**\n1. **Identificación** — scanners automáticos (Nessus, OpenVAS, Qualys) + manual testing\n2. **Clasificación** — CVSS score, severidad (crítica/alta/media/baja)\n3. **Priorización** — crítica + explotada activamente (CISA KEV) → immediate; media → 30 días\n4. **Asignación** — teams responsables (aplicaciones, infraestructura)\n5. **Remediación** — parchar, configurar, mitigar con controles\n6. **Verificación** — re-scan confirma fix\n7. **Documentación** — registro de todo para auditoría\n\n**SLA típico:**\n• Crítica: 24-48h\n• Alta: 7 días\n• Media: 30 días\n• Baja: best effort (6 meses)\n\n**Herramientas:**\n• **Scanners:** Nessus, OpenVAS, Qualys, Rapid7 InsightVM\n• **SBOM tracking:** CycloneDX, SPDX (saber qué componentes tiene tu software)\n• **VRM platform:** Tenable.sc, Qualys VMDR, Rapid7 InsightVM (correlaciona de múltiples fuentes)\n\n**Desafío:** falsos positivos (scanner reporta vulns que en tu contexto no son explotables) → requiere expertise para triajear" },
+      { h: "Estrategia de Seguridad y Roadmap", c: "🗺️ Visión a largo plazo (1-3 años).\n\n**Componentes:**\n1. **Diagnóstico** — dónde estamos (audit, risk assessment)\n2. **Visión** — dónde queremos llegar (e.g., ISO 27001 certified, Zero Trust)\n3. **Roadmap** — hitos iterativos\n   - Año 1: SIEM + EDR + MFA obligatorio\n   - Año 2: Microsegmentación + threat hunting capability\n   - Año 3: Managed SOC / SOAR + AI-driven detection\n4. **Presupuesto** — costs de herramientas, personal, consultores\n5. **Métricas de éxito** — KPIs: MTTR, # incidentes, audit findings, etc.\n\n**Comunicación:**\n→ Ejecutivos: traducir a risk/business impact (\"2025: 80% reducción en breach likelihood\")\n→ Technical teams: detalles de implementación\n→ Board: portfolio view (security != blockers, es enabler de negocio)\n\n**Actualización:** revisa anualmente, roadmap puede cambiar por:\n• Nuevas amenazas (ransomware trends)\n• M&A (fusión adquiere empresa con sistemas legacy)\n• Regulación (nuevas leyes)\n• Budget constraints" },
+      { h: "Carreras en Ciberseguridad", c: "🎓 Especialidades y trayectorias:\n\n**Paths técnicos:**\n→ **Pentester** — offensive security, salary €60-90k, requiere OSCP/GPEN + portfolio PoCs\n→ **Security Engineer** — diseña sistemas seguros, €70-100k, requiere arquitectura + coding\n→ **SOC Analyst** — monitoreo 24/7, €40-60k (entry), escalable a senior\n→ **Threat Hunter** — investigación proactiva, €80-120k, requiere malware/logs/OSINT expertise\n→ **GRC Consultant** — compliance/auditoría, €70-110k, requiere certif + comunicación\n→ **CISO** — liderazgo, €120-200k+, requiere 10+ años de experiencia\n\n**Certificaciones recomendadas:**\n• Entry: Security+, Google Cyber, CompTIA Network+\n• Intermediate: CEH, CySA+, Pentest+\n• Advanced: OSCP (muy respetado, difícil), CISSP (gerencial), GPEN\n• Especializado: GCIH (incident handling), GCIA (IDS), ECPPT (evasión)\n\n**Soft skills que importan:**\n→ Comunicación (traducir técnico a ejecutivo)\n→ Gestión de estrés (on-call incidents)\n→ Curiosidad (el campo cambia constantemente)\n→ Mentalidad de learning (dedicar 5-10h/semana a leer/labs)" },
+      { h: "Futuro de la Ciberseguridad", c: "🔮 Tendencias próximos años:\n\n**Amenazas emergentes:**\n→ **Quantum computing** — romperá RSA/ECC actuales; transición a post-quantum criptografía (NIST acaba de standarizar)\n→ **Deepfakes + adversarial ML** — ataques contra modelos ML, videos falsos de ejecutivos\n→ **Supplychain attacks** — compromiso de software/hardware populares (vimos SolarWinds, KeepTrucking, 3CX)\n→ **Ransomware evolution** — data exfiltration + encryptión + extorsión en negocio\n→ **Zero-days con IA assistance** — ML para fuzzing automático, descubrimiento de vulns escalado\n\n**Defensa + Oportunidades:**\n→ **SASE (Secure Access Service Edge)** — reemplaza VPN + firewall en borde (Cloudflare, Zscaler lideran)\n→ **EDR + XDR** — desde endpoint a toda la infraestructura (Crowdstrike, Microsoft, Palo Alto)\n→ **CASM (Cyber Asset Shadow Management)** — descubrir y monitorear assets en shadow IT\n→ **Automación masiva de IR** — menos analysts, más SOAR + playbooks\n→ **Purple teaming operacionalizado** — red + blue teams en ciclo continuo\n\n**Cambio cultural:**\n→ Seguridad ya NO es un cost center, es strategic (competitividad, confianza del cliente)\n→ Supply chain security es obligatorio (no solo recomendado)\n→ Zero Trust ya no es aspiracional, es standard corporativo\n\n**Para el learner:**\n→ Especialízate en lo que te fascina (ofensiva/defensiva/threat intel/governance) pero entiende el ecosistema completo\n→ Construye portfolio (GitHub con tools, certif, PoCs públicos de bugs responsablemente disclosed)\n→ Network (conferencias, comunidades, CTFs) — muchos trabajos se llenan por referral\n→ Nunca pares de aprender — el field avanza rápido" },
+    ],
+  },
+  {
+    id: 63,
     title: "HTML/CSS y Seguridad Frontend",
     sub: "M58",
     dur: "30m",
@@ -825,7 +897,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 59,
+    id: 63,
     title: "Heap Exploitation",
     sub: "M59",
     dur: "55m",
@@ -838,7 +910,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 60,
+    id: 64,
     title: "Kernel Exploitation",
     sub: "M60",
     dur: "55m",
@@ -851,7 +923,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 61,
+    id: 65,
     title: "Browser Exploitation",
     sub: "M61",
     dur: "55m",
@@ -864,7 +936,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 62,
+    id: 66,
     title: "ROP/JOP Avanzado y Bypass de Mitigaciones",
     sub: "M62",
     dur: "50m",
@@ -877,7 +949,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 63,
+    id: 67,
     title: "Criptoanálisis",
     sub: "M63",
     dur: "55m",
@@ -890,7 +962,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 64,
+    id: 68,
     title: "Criptografía Post-Cuántica",
     sub: "M64",
     dur: "50m",
@@ -903,7 +975,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 65,
+    id: 69,
     title: "Zero-Knowledge Proofs y MPC",
     sub: "M65",
     dur: "55m",
@@ -916,7 +988,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 66,
+    id: 70,
     title: "Cifrado Homomórfico",
     sub: "M66",
     dur: "50m",
@@ -929,7 +1001,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 67,
+    id: 71,
     title: "Adversarial Machine Learning",
     sub: "M67",
     dur: "50m",
@@ -942,7 +1014,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 68,
+    id: 72,
     title: "Privacy Attacks on ML",
     sub: "M68",
     dur: "50m",
@@ -955,7 +1027,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 69,
+    id: 73,
     title: "LLM Security",
     sub: "M69",
     dur: "55m",
@@ -968,7 +1040,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 70,
+    id: 74,
     title: "MLSecOps y ML Supply Chain",
     sub: "M70",
     dur: "45m",
@@ -981,7 +1053,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 71,
+    id: 75,
     title: "Side-Channels Microarquitectónicos",
     sub: "M71",
     dur: "55m",
@@ -994,7 +1066,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 72,
+    id: 76,
     title: "Fault Injection y Hardware Attacks",
     sub: "M72",
     dur: "50m",
@@ -1007,7 +1079,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 73,
+    id: 77,
     title: "Firmware, UEFI y Secure Boot",
     sub: "M73",
     dur: "50m",
@@ -1020,7 +1092,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 74,
+    id: 78,
     title: "Trusted Execution y Roots of Trust",
     sub: "M74",
     dur: "50m",
@@ -1033,7 +1105,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 75,
+    id: 79,
     title: "Reverse Engineering Avanzado",
     sub: "M75",
     dur: "55m",
@@ -1046,7 +1118,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 76,
+    id: 80,
     title: "Ejecución Simbólica y Concólica",
     sub: "M76",
     dur: "50m",
@@ -1059,7 +1131,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 77,
+    id: 81,
     title: "Rootkits y Bootkits",
     sub: "M77",
     dur: "55m",
@@ -1072,7 +1144,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 78,
+    id: 82,
     title: "Implants, C2 y Evasión de EDR",
     sub: "M78",
     dur: "55m",
@@ -1085,7 +1157,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 79,
+    id: 83,
     title: "Vulnerability Research y Fuzzing",
     sub: "M79",
     dur: "55m",
@@ -1098,7 +1170,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 80,
+    id: 84,
     title: "Threat Intelligence y APT Tracking",
     sub: "M80",
     dur: "50m",
@@ -1111,7 +1183,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 81,
+    id: 85,
     title: "Metodología de Security Research",
     sub: "M81",
     dur: "45m",
@@ -1124,7 +1196,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 82,
+    id: 86,
     title: "Formal Methods y Verificación",
     sub: "M82",
     dur: "50m",
@@ -1137,7 +1209,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 83,
+    id: 87,
     title: "Gestión de Identidades y Accesos (IAM)",
     sub: "M83",
     dur: "20m",
@@ -1154,7 +1226,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 84,
+    id: 88,
     title: "Arquitectura de Seguridad y Patrones de Diseño",
     sub: "M84",
     dur: "22m",
@@ -1166,7 +1238,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 85,
+    id: 89,
     title: "Gobernanza y Gestión de Riesgos",
     sub: "M85",
     dur: "20m",
@@ -1178,7 +1250,7 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
-    id: 86,
+    id: 90,
     title: "Cumplimiento Normativo y Auditoría",
     sub: "M86",
     dur: "22m",
