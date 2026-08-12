@@ -7615,6 +7615,32 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Side-channel attacks", "Modos de operación", "Modelos de ataque criptográfico"],
   },
+  {
+    id: 664,
+    module: 63,
+    term: "Herramientas y pruebas de criptoanálisis",
+    short: "Software, benchmarks y metodología para evaluar la seguridad criptográfica en la práctica.",
+    detail:
+      "El criptoanálisis moderno combina **herramientas automáticas**, **benchmarks** y **pruebas empíricas**:\n" +
+      "| Herramienta | Uso |\n" +
+      "|---|---|\n" +
+      "| **CryptoMiniSat, Z3** | SAT/SMT solvers para hallar colisiones y debilidades |\n" +
+      "| **Sage, SageMath** | Matemática simbólica para análisis teórico |\n" +
+      "| **angr** | Ejecución simbólica de binarios criptográficos |\n" +
+      "| **Cryptool** | Suite interactiva de ataques visualizados |\n" +
+      "| **OpenSSL benchmarks** | Rendimiento de primitivas (clave en side-channels) |\n" +
+      "> 💡 La práctica: medir timing en el target real (hardware y SO), no solo simulaciones, porque los ataques explotan **variancia concreta**.\n\nMétodos de prueba:\n" +
+      "• **Diferencial** — inyectar faults (glitches, radiación) y analizar salidas\n" +
+      "• **Estadístico** — chi-square y Tests de aleatoriedad (NIST 800-22)\n" +
+      "• **Reverse-engineering** — desmontar y validar contra la especificación\n" +
+      "• **Fuzzing criptográfico** — inputs aleatorios masivos en búsqueda de anomalías",
+    examples: [
+      "Usar CryptoMiniSat para hallar colisiones en una variante debilitada de SHA-1 en horas.",
+      "Medir timing de AES en microcontrolador real vs simulador para confirmar side-channel.",
+      "Ejecutar FIPS 140-2 randomness tests en un TRNG sospechoso.",
+    ],
+    related: ["Criptoanálisis diferencial y lineal", "Side-channel attacks", "Testing y validación de cripto"],
+  },
 
   // ── M64 · Criptografía Post-Cuántica ─────────────────────────────────────
   {
@@ -7684,6 +7710,30 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Estándares NIST PQC", "Familias de criptografía post-cuántica", "Gestión de claves"],
   },
+  {
+    id: 674,
+    module: 64,
+    term: "Implementación práctica de PQC",
+    short: "Híbridos, compatibilidad, overhead y casos de uso en producción.",
+    detail:
+      "La adopción real de PQC enfrenta desafíos prácticos:\n" +
+      "**Híbridos (Classical + PQC):**\n" +
+      "```\nTLS 1.3 hybrid: X25519 || Kyber768 en key agreement\n→ Resistencia a ambas amenazas si uno falla\n→ Sin penalidad si el cuántico no aparece pronto\n```\n" +
+      "**Incompatibilidad:**\n" +
+      "• Los certificados NIST PQC usan OIDs nuevos → renovar PKI\n" +
+      "• Tamaños grandes (Kyber: ~2.4 KB de clave pública) → handshakes más lentos\n" +
+      "• Compatibilidad hacia atrás (hardware viejo) → fase de transición larga\n" +
+      "**Implementaciones ready:**\n" +
+      "• **liboqs** (Open Quantum Safe) — librería de referencia, soporta ML-KEM, ML-DSA\n" +
+      "• **Chromium/TLS 1.3** — ya hace handshakes PQC híbridos experimentales\n" +
+      "• **AWS** — Ofrece key agreement híbrido en KMS\n" +
+      "> ⚠️ No está todo estandarizado aún; cambios esperables en los próximos 2-3 años.",
+    examples: [
+      "TLS 1.3 post-handshake con Kyber768+X25519 en producción en Google/AWS.",
+      "Calcular el overhead de storage para claves PQC de 3 GB de datos.",
+    ],
+    related: ["Amenaza cuántica", "Migración y cripto-agilidad", "Estándares NIST PQC"],
+  },
 
   // ── M65 · Zero-Knowledge Proofs y MPC ────────────────────────────────────
   {
@@ -7749,6 +7799,30 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["zk-SNARKs y zk-STARKs", "Secure Multi-Party Computation (MPC)", "Cifrado homomórfico"],
   },
+  {
+    id: 684,
+    module: 65,
+    term: "Limitaciones y desafíos de ZKP/MPC",
+    short: "Costo computacional, complejidad de implementación y casos donde aún no son prácticos.",
+    detail:
+      "A pesar del potencial, ZKP y MPC enfrentan barreras:\n" +
+      "**Costo:**\n" +
+      "• Probar un programa de 1 millón de gates toma 100+ ms (viable); un programa con loops complejos → exponencial\n" +
+      "• MPC con N partes: comunicación y rondas crecen con N\n" +
+      "**Complejidad de implementación:**\n" +
+      "• Escribir código 'ZK-friendly' (sin branching dinámico, loops acotados, operaciones de campo) es no-trivial\n" +
+      "• Auditar proofs complejos requiere expertise rara\n" +
+      "**Casos donde aún falla:**\n" +
+      "• Sistemas real-time (latencia < 100 ms) → MPC puede ser lento\n" +
+      "• Datos dinámicos (insertions/updates) → el proof debe recomputarse\n" +
+      "• Equipamiento heterogéneo (partes muy lentes) → MPC bottleneck\n" +
+      "> 💡 La tendencia es **ZKPs especializados** (por tipo de computación) en vez de probadores universales caros.",
+    examples: [
+      "Proof de un programa de ML costo ~10s; para time-series real-time necesitarías aprox 100ms.",
+      "MPC entre 100 hospitales compartiendo datos → comunicación es el cuello de botella.",
+    ],
+    related: ["Pruebas de conocimiento cero (ZKP)", "Secure Multi-Party Computation (MPC)", "Verificabilidad y escalabilidad"],
+  },
 
   // ── M66 · Cifrado Homomórfico ────────────────────────────────────────────
   {
@@ -7811,6 +7885,26 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Procesar datos regulados en un cloud no confiable.",
     ],
     related: ["Desafíos de performance", "Esquemas FHE", "Aplicaciones de ZKP/MPC"],
+  },
+  {
+    id: 694,
+    module: 66,
+    term: "Comparación: FHE vs MPC vs ZKP vs TEE",
+    short: "Cada técnica tiene un perfil de confianza, rendimiento y costo distinto.",
+    detail:
+      "| Técnica | Confianza | Rendimiento | Tamaño | Latencia | Mejor para |\n" +
+      "|---|---|---|---|---|---|\n" +
+      "| **FHE** | Cómputo caja-negra | Muy lento (100×) | Enorme | Segundos | Análisis batch en nube |\n" +
+      "| **MPC** | N-de-N honesto | Lento (10×) | Medio | Cientos ms | Cómputo colaborativo |\n" +
+      "| **ZKP** | Prueba verificable | Medio | Compacto | Milisegundos | Privacidad selectiva |\n" +
+      "| **TEE/Enclave** | Hardware confiado | Rápido (1×) | Pequeño | Milisegundos | Aplicaciones sensibles |\n" +
+      "> 💡 La elección depende del modelo de amenaza: ¿confías en el hardware? ¿Necesitas interactividad? ¿El dato tiene vida útil corta o larga?",
+    examples: [
+      "Analytics batch mensual en datos médicos → FHE justificable.",
+      "Subastas en tiempo real → ZKP; cómputo de payoffs → posiblemente TEE.",
+      "Custodia distribuida de claves → MPC.",
+    ],
+    related: ["Cifrado homomórfico", "Pruebas de conocimiento cero (ZKP)", "Secure Multi-Party Computation (MPC)"],
   },
 
   // ── M67 · Adversarial Machine Learning ───────────────────────────────────
@@ -7875,6 +7969,30 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Ataques de evasión", "Adversarial examples", "Data poisoning y backdoors"],
   },
+  {
+    id: 704,
+    module: 67,
+    term: "Testing y validación de robustez",
+    short: "Frameworks y benchmarks para verificar que un modelo resiste ataques adversariales.",
+    detail:
+      "Validar la robustez es crítico; existen **frameworks estandarizados**:\n" +
+      "| Framework | Alcance | Lenguaje |\n" +
+      "|---|---|---|\n" +
+      "| **Adversarial Robustness Toolbox (ART)** | Detecta adversarial examples | Python (TensorFlow, PyTorch) |\n" +
+      "| **CleverHans** | Ataques y defensas | Python (TF) |\n" +
+      "| **TRADES** | Entrenamiento robusto | PyTorch |\n" +
+      "| **Robustness Benchmark** | MNIST, CIFAR-10 corrupted | Python |\n" +
+      "**Métricas:**\n" +
+      "• **Certified robustness** — prueba formal de que una perturbación ≤ε no cambia la clasificación\n" +
+      "• **Robustness accuracy** — % de predicciones correctas bajo ataque\n" +
+      "• **Attack success rate (ASR)** — % de ejemplos adversariales que engañan al modelo\n" +
+      "> 💡 Un modelo que parecía robusto en tests internos puede caer a ataques adaptativos no anticipados.",
+    examples: [
+      "Correr RobustBench (suite SOTA) contra nuestro modelo de clasificación.",
+      "Entrenar con TRADES para balancear accuracy vs robustness certificada.",
+    ],
+    related: ["Defensas y robustez", "Adversarial examples", "Metrics y evaluación en ML"],
+  },
 
   // ── M68 · Privacy Attacks on ML ──────────────────────────────────────────
   {
@@ -7932,6 +8050,33 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Estadísticas agregadas con ruido para no exponer a nadie.",
     ],
     related: ["Membership inference", "Model inversion", "Cifrado homomórfico"],
+  },
+  {
+    id: 714,
+    module: 68,
+    term: "Mitigaciones de privacy attacks",
+    short: "Defensas integradas: DP-SGD, data minimization, output filtering, auditoría de modelos.",
+    detail:
+      "Combinar múltiples defensas reduce el riesgo:\n" +
+      "**En el entrenamiento:**\n" +
+      "• **DP-SGD** — Entrenar con gradientes con ruido diferencial (coste: precisión menor)\n" +
+      "• **Deduplicación** — Eliminar datos duplicados reduce sobreajuste (obvio pero efectivo)\n" +
+      "• **Early stopping** — No entrenar indefinidamente (controla el overfitting)\n" +
+      "**En la API/despliegue:**\n" +
+      "• **Rate limiting** — Prevenir model extraction masiva\n" +
+      "• **Output filtering** — Detectar y ocultar datos privados del training set (nombres, emails)\n" +
+      "• **Watermarking** — Marcar el modelo para detectar copias\n" +
+      "• **Auditoría regular** — Tests de membership inference y model inversion\n" +
+      "**A nivel organizacional:**\n" +
+      "• **Data governance** — Inventariar sensibilidad de cada dataset\n" +
+      "• **Retención limitada** — Borrar logs de queries tras tiempo T\n" +
+      "• **Consent y transparencia** — Informar al usuario cómo se usarán sus datos\n" +
+      "> 💡 No hay defensa perfecta; el riesgo es el producto de probabilidad × impacto.",
+    examples: [
+      "Aplicar DP-SGD con ε=3 para entrenar un modelo con privacidad formal.",
+      "Output filtering que detecta números de seguridad social en las salidas del LLM.",
+    ],
+    related: ["Differential privacy", "Membership inference", "Model extraction"],
   },
 
   // ── M69 · LLM Security ───────────────────────────────────────────────────
