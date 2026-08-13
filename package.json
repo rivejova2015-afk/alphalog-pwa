@@ -46,7 +46,7 @@
     "@react-pdf/renderer": "^3.4.5",
     "@sentry/nextjs": "^10.53.1",
     "@serwist/next": "^9.5.11",
-    "@simplewebauthn/browser": "^11.0.0",
+    "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^11.0.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
