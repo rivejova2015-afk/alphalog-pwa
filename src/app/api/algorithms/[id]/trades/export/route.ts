@@ -10,11 +10,12 @@
 // Branches by market_type since trade history lives in a different table
 // per market — there's no unified "algorithm trades" table:
 //   forex   → algorithm_trades (algorithm_id)
-//   crypto  → coinarb_positions (agent_id — algorithms.id IS the agent id
-//             for the coinarb-50x singleton, see migration 099)
 //   futures → algo_cme_accounts (resolved via parameters.cme_account_num,
 //             same lookup /connections already does) → account_type decides
 //             cme_trades_propfirm vs cme_trades_real (cme_account_id)
+//
+// Crypto (Coinarb) support was removed 2026-07-14 along with the bot
+// itself — coinarb_positions no longer exists.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -70,17 +71,6 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         .eq("algorithm_id", id)
         .eq("user_id", user.id)
         .order("opened_at", { ascending: false });
-      if (error) throw error;
-      rows = (data ?? []) as unknown as Record<string, unknown>[];
-    } else if (algo.market_type === "crypto") {
-      headers = ["id", "symbol", "direction", "entry_price", "exit_price", "size_usd", "pnl_usd", "pnl_percent", "status", "exit_reason", "opened_at", "closed_at"];
-      const { data, error } = await supabase
-        .from("coinarb_positions")
-        .select(headers.join(","))
-        .eq("agent_id", id)
-        .eq("user_id", user.id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
       if (error) throw error;
       rows = (data ?? []) as unknown as Record<string, unknown>[];
     } else if (algo.market_type === "futures") {

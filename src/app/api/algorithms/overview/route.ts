@@ -1,19 +1,18 @@
 // GET /api/algorithms/overview — cross-market P&L/exposure aggregation
-// (Wave 5 item 21). No endpoint aggregated MT5 + CME + crypto before this;
-// each market's data lives in a different table with a different shape:
+// (Wave 5 item 21). Aggregates MT5 + CME; each market's data lives in a
+// different table with a different shape:
 //   forex   → bot_telemetry (via algorithms.linked_bot_account_id → bot_accounts.id)
 //   futures → cme_equity_snapshots + cme_positions (via algorithms.parameters
 //             .cme_account_num → algo_cme_accounts.account_number, same
 //             resolution path /connections already uses)
-//   crypto  → coinarb_telemetry (algorithms.id IS coinarb_telemetry.agent_id
-//             for the coinarb-50x singleton, migration 099)
 //
-// "P&L" is intentionally NOT labeled "today" — the three sources don't
-// share a common "daily" semantic. forex/futures report unrealized P&L of
-// currently-open positions; crypto's coinarb_telemetry only exposes a
-// cumulative total_pnl_usd (no separate "today" field today). Mixing them
-// under one honest "P&L" label, with per-market breakdown so the caveat is
-// visible, beats fabricating a false apples-to-apples "today" number.
+// "P&L" is intentionally NOT labeled "today" — forex/futures report
+// unrealized P&L of currently-open positions, not a daily delta. One
+// honest "P&L" label, with per-market breakdown, beats fabricating a false
+// "today" number.
+//
+// Crypto (Coinarb) support was removed 2026-07-14 along with the bot
+// itself — coinarb_telemetry no longer exists.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +22,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface MarketBreakdown {
-  marketType: "forex" | "futures" | "crypto";
+  marketType: "forex" | "futures";
   algorithmCount: number;
   equityUsd: number;
   pnlUsd: number;
@@ -51,7 +50,6 @@ export async function GET(_req: NextRequest) {
 
     const forexAlgos = (algos ?? []).filter((a) => a.market_type === "forex");
     const futuresAlgos = (algos ?? []).filter((a) => a.market_type === "futures");
-    const cryptoAlgos = (algos ?? []).filter((a) => a.market_type === "crypto");
 
     // ── Forex ──────────────────────────────────────────────────────────
     const forex: MarketBreakdown = { marketType: "forex", algorithmCount: forexAlgos.length, equityUsd: 0, pnlUsd: 0, openPositions: 0 };
@@ -106,30 +104,7 @@ export async function GET(_req: NextRequest) {
       }
     }
 
-    // ── Crypto ─────────────────────────────────────────────────────────
-    const crypto: MarketBreakdown = { marketType: "crypto", algorithmCount: cryptoAlgos.length, equityUsd: 0, pnlUsd: 0, openPositions: 0 };
-    const cryptoAlgoIds = cryptoAlgos.map((a) => a.id as string);
-    if (cryptoAlgoIds.length > 0) {
-      const { data: tele } = await supabase
-        .from("coinarb_telemetry")
-        .select("agent_id, equity_usd, total_pnl_usd, open_positions_count, last_heartbeat_at")
-        .in("agent_id", cryptoAlgoIds)
-        .order("last_heartbeat_at", { ascending: false });
-      const latestByAgent = new Map<string, { equity: number; pnl: number; positions: number }>();
-      for (const t of tele ?? []) {
-        const agentId = t.agent_id as string;
-        if (!latestByAgent.has(agentId)) {
-          latestByAgent.set(agentId, { equity: num(t.equity_usd), pnl: num(t.total_pnl_usd), positions: num(t.open_positions_count) });
-        }
-      }
-      for (const v of latestByAgent.values()) {
-        crypto.equityUsd += v.equity;
-        crypto.pnlUsd += v.pnl;
-        crypto.openPositions += v.positions;
-      }
-    }
-
-    const byMarket = [forex, futures, crypto];
+    const byMarket = [forex, futures];
     const totals = byMarket.reduce(
       (acc, m) => ({
         algorithmCount: acc.algorithmCount + m.algorithmCount,

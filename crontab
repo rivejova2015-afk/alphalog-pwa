@@ -15,11 +15,10 @@
 
 # Bot / algo runtime monitoring (every minute for heartbeat = OK for supercronic)
 # NOTE: despite living under /api/ops/cron/*, bot-heartbeat-monitor validates against
-# CRON_SECRET (not OPS_CRON_SECRET). Audit showed only coinarb-heartbeat, polyarb-heartbeat
-# and polyarb-daily-report actually use OPS_CRON_SECRET. CLAUDE.md was misleading on this.
+# CRON_SECRET (not OPS_CRON_SECRET). Audit showed only polyarb-heartbeat and
+# polyarb-daily-report actually use OPS_CRON_SECRET. CLAUDE.md was misleading on this.
 */2  *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $CRON_SECRET"     http://alphalog-pwa.internal:3000/api/ops/cron/bot-heartbeat-monitor
 *    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-heartbeat
-*    *    *  *  *   curl --fail --max-time 30 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/coinarb-heartbeat
 0    22   *  *  *   curl --fail --max-time 60 -X POST -H "Authorization: Bearer $OPS_CRON_SECRET" http://alphalog-pwa.internal:3000/api/ops/cron/polyarb-daily-report
 
 # Bot ops monitoring + recovery (Plan v2 — Bloque B)
@@ -85,12 +84,3 @@
 # redundantes conservando mejor-por-lección + ≥1 por día con actividad (maestría/XP
 # y racha quedan idénticas). Semanal (domingo 03:30 UTC), el crecimiento es lento.
 30   3    *  *  0   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/quiz-dedup
-
-# Coinarb auto-deploy — reemplaza al workflow de GitHub Actions. Cada 5 min:
-# fetch origin/main, diff coinarb/, si hay commits nuevos hace
-# `flyctl deploy --app coinarb-50x`. Token vive como Fly secret
-# FLY_API_TOKEN_COINARB en alphalog-cron.
-# Setup inicial UNA vez por owner desde laptop:
-#   fly tokens create deploy --app coinarb-50x --expiry 8760h
-#   flyctl secrets set FLY_API_TOKEN_COINARB="FlyV1 fm2_..." --app alphalog-cron
-*/5  *    *  *  *   /app/scripts/cron-coinarb-deploy.sh

@@ -52,39 +52,27 @@ export async function POST(request: NextRequest) {
     // bot_accounts / bot_instances / bot_command_status are in-scope (pg client).
     const [
       { data: bots, error: botsErr },
-      { data: botAccounts, error: accountsErr },
-      { data: instances, error: instancesErr },
-      { data: pendingCmds, error: cmdsErr },
-      { data: cryptoAlgos, error: cryptoAlgosErr },
+      { data: botAccountsRaw, error: accountsErr },
+      { data: instancesRaw, error: instancesErr },
+      { data: pendingCmdsRaw, error: cmdsErr },
     ] = await Promise.all([
       supabase.from("bots").select("id,name,user_id"),
-      supabase.from("bot_accounts").select("id,bot_id"),
-      supabase.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
-      supabase.from("bot_command_status").select("id,bot_account_id,status,created_at").eq("status", "PENDING"),
-      // Crypto bots (coinarb) don't populate bot_instances and their bot name
-      // ('coinarb-50x') doesn't match resolveProfile()'s forex/futuros keywords —
-      // identify them via algorithms.market_type='crypto' instead.
-      supabase.from("algorithms").select("id,linked_bot_account_id").eq("market_type", "crypto").is("deleted_at", null),
+      pg.from("bot_accounts").select("id,bot_id"),
+      pg.from("bot_instances").select("id,bot_account_id,status,last_heartbeat_at"),
+      pg.from("bot_command_status").select("id,bot_account_id,status,created_at").eq("status", "PENDING"),
     ]);
 
     if (botsErr) throw botsErr;
     if (accountsErr) throw accountsErr;
     if (instancesErr) throw instancesErr;
     if (cmdsErr) throw cmdsErr;
-    if (cryptoAlgosErr) throw cryptoAlgosErr;
-
-    const cryptoAlgoByBotAccountId = new Map(
-      (cryptoAlgos ?? [])
-        .filter((a): a is { id: string; linked_bot_account_id: string } => Boolean(a.linked_bot_account_id))
-        .map((a) => [a.linked_bot_account_id, a.id]),
-    );
 
     const botAccounts = botAccountsRaw as unknown as { id: string; bot_id: string }[] | null;
     const instances = instancesRaw as unknown as { id: string; bot_account_id: string; status: string; last_heartbeat_at: string | null }[] | null;
     const pendingCmds = pendingCmdsRaw as unknown as { id: string; bot_account_id: string; status: string; created_at: string }[] | null;
 
     const results: {
-      profile: "forex" | "futuros" | "crypto";
+      profile: "forex" | "futuros";
       botId: string;
       userId: string;
       overallStatus: string;
@@ -94,48 +82,27 @@ export async function POST(request: NextRequest) {
     }[] = [];
 
     for (const bot of bots ?? []) {
-      const accountIds = (botAccounts ?? []).filter((a) => a.bot_id === bot.id).map((a) => a.id);
-      const cryptoAlgoId = accountIds.map((id) => cryptoAlgoByBotAccountId.get(id)).find(Boolean) ?? null;
-      const profile = cryptoAlgoId ? "crypto" : resolveProfile(bot.name);
+      const profile = resolveProfile(bot.name);
       if (!profile) continue;
 
+      const accountIds = (botAccounts ?? []).filter((a) => a.bot_id === bot.id).map((a) => a.id);
       const botInstances = (instances ?? []).filter((i) => accountIds.includes(i.bot_account_id));
       const botPendingCmds = (pendingCmds ?? []).filter((c) => accountIds.includes(c.bot_account_id));
 
       const checks: { code: string; severity: string; detail: string }[] = [];
 
-      if (profile === "crypto") {
-        // Heartbeat lives in coinarb_telemetry (keyed by algorithm id), not bot_instances.
-        const { data: tele } = await supabase
-          .from("coinarb_telemetry")
-          .select("last_heartbeat_at")
-          .eq("agent_id", cryptoAlgoId as string)
-          .order("last_heartbeat_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (!tele?.last_heartbeat_at) {
-          checks.push({ code: "NO_HEARTBEAT", severity: "S2", detail: `Agent ${cryptoAlgoId} never sent heartbeat` });
+      // Health: heartbeat (MT5 — bot_instances)
+      for (const inst of botInstances) {
+        if (!inst.last_heartbeat_at) {
+          checks.push({ code: "NO_HEARTBEAT", severity: "S2", detail: `Instance ${inst.id} never sent heartbeat` });
         } else {
-          const ageSec = (nowMs - new Date(tele.last_heartbeat_at).getTime()) / 1000;
+          const ageSec = (nowMs - new Date(inst.last_heartbeat_at).getTime()) / 1000;
           if (ageSec > HEARTBEAT_THRESHOLD_SEC) {
-            checks.push({ code: "STALE_HEARTBEAT", severity: ageSec > 300 ? "S1" : "S2", detail: `Heartbeat stale for ${Math.round(ageSec)}s` });
+            checks.push({ code: "STALE_HEARTBEAT", severity: ageSec > 300 ? "S1" : "S2", detail: `Instance stale for ${Math.round(ageSec)}s` });
           }
         }
-      } else {
-        // Health: heartbeat (MT5 — bot_instances)
-        for (const inst of botInstances) {
-          if (!inst.last_heartbeat_at) {
-            checks.push({ code: "NO_HEARTBEAT", severity: "S2", detail: `Instance ${inst.id} never sent heartbeat` });
-          } else {
-            const ageSec = (nowMs - new Date(inst.last_heartbeat_at).getTime()) / 1000;
-            if (ageSec > HEARTBEAT_THRESHOLD_SEC) {
-              checks.push({ code: "STALE_HEARTBEAT", severity: ageSec > 300 ? "S1" : "S2", detail: `Instance stale for ${Math.round(ageSec)}s` });
-            }
-          }
-          if (inst.status !== "ACTIVE") {
-            checks.push({ code: "NOT_ACTIVE", severity: "S3", detail: `Instance status is ${inst.status}` });
-          }
+        if (inst.status !== "ACTIVE") {
+          checks.push({ code: "NOT_ACTIVE", severity: "S3", detail: `Instance status is ${inst.status}` });
         }
       }
 

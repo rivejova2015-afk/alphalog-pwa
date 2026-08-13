@@ -107,28 +107,14 @@ async function loadLatestBacktest(sb: SupabaseClient, algorithmId: string, userI
 }
 
 async function loadTelemetry(sb: SupabaseClient, algo: AlgorithmRow): Promise<TelemetrySnapshot> {
-  // Crypto (coinarb) escribe a coinarb_telemetry, no a bot_telemetry — no
-  // está atado a linked_bot_account_id sino al user_id del owner del bot.
-  // No trackea execution_latency_ms hoy, así que ese gate queda N/A.
-  if (algo.market_type === 'crypto') {
-    const { data: latest } = await sb
-      .from('coinarb_telemetry')
-      .select('last_heartbeat_at')
-      .eq('user_id', algo.user_id)
-      .order('last_heartbeat_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return {
-      last_heartbeat_ts: (latest?.last_heartbeat_at as string | null) ?? null,
-      execution_latency_p99_ms: null,
-      heartbeat_applicable: true,
-      latency_applicable: false,
-    };
-  }
-
+  // Crypto (Coinarb) had its own heartbeat source (coinarb_telemetry) until
+  // the bot was retired 2026-07-14 — the table no longer exists. Crypto
+  // algorithms today have no execution backend, so both gates are N/A,
+  // same as futures below.
+  //
   // CME (futures) no tiene una fuente de heartbeat/latencia wireada todavía
   // (ver auditoría 2026-07) — ambos gates quedan N/A hasta que se implemente.
-  if (algo.market_type === 'futures') {
+  if (algo.market_type === 'futures' || algo.market_type === 'crypto') {
     return {
       last_heartbeat_ts: null,
       execution_latency_p99_ms: null,

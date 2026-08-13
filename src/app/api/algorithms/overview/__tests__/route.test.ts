@@ -4,9 +4,9 @@
 // Covers: 401, 500 (algorithms query error), zero-algorithms (all-zero
 // totals, no crash), forex aggregation via bot_telemetry, futures
 // aggregation via algo_cme_accounts → cme_equity_snapshots/cme_positions
-// (latest snapshot per account, not a naive sum), crypto aggregation via
-// coinarb_telemetry (latest row per agent, not a naive sum), and the
-// combined totals across all 3 markets.
+// (latest snapshot per account, not a naive sum), and the combined totals
+// across both markets. Crypto (Coinarb) aggregation was removed 2026-07-14
+// along with the bot itself.
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -77,7 +77,7 @@ describe("/api/algorithms/overview — GET", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.totals).toEqual({ algorithmCount: 0, equityUsd: 0, pnlUsd: 0, openPositions: 0 });
-    expect(body.byMarket).toHaveLength(3);
+    expect(body.byMarket).toHaveLength(2);
   });
 
   it("aggregates forex via bot_telemetry (equity, equity-balance as pnl proxy, positions_total)", async () => {
@@ -133,50 +133,22 @@ describe("/api/algorithms/overview — GET", () => {
     expect(futures).toMatchObject({ algorithmCount: 1, equityUsd: 52000, pnlUsd: 100, openPositions: 2 });
   });
 
-  it("aggregates crypto via coinarb_telemetry, using the latest row per agent_id (not a sum across history)", async () => {
-    setupAuth();
-    fromMock.mockImplementation((table: string) => {
-      if (table === "algorithms") {
-        return makeAwaitableChain({
-          data: [{ id: "algo-crypto-1", market_type: "crypto", linked_bot_account_id: null, parameters: {} }],
-          error: null,
-        });
-      }
-      if (table === "coinarb_telemetry") {
-        return makeAwaitableChain({
-          data: [
-            { agent_id: "algo-crypto-1", equity_usd: 123.45, total_pnl_usd: 23.45, open_positions_count: 2, last_heartbeat_at: "2026-07-03T12:00:00Z" },
-            { agent_id: "algo-crypto-1", equity_usd: 100, total_pnl_usd: 0, open_positions_count: 0, last_heartbeat_at: "2026-07-02T12:00:00Z" },
-          ],
-          error: null,
-        });
-      }
-      return makeAwaitableChain({ data: [], error: null });
-    });
-    const res = await GET(makeRequest());
-    const body = await res.json();
-    const crypto = body.byMarket.find((m: { marketType: string }) => m.marketType === "crypto");
-    expect(crypto).toMatchObject({ algorithmCount: 1, equityUsd: 123.45, pnlUsd: 23.45, openPositions: 2 });
-  });
-
-  it("combines totals across all 3 markets", async () => {
+  it("combines totals across both markets", async () => {
     setupAuth();
     fromMock.mockImplementation((table: string) => {
       if (table === "algorithms") {
         return makeAwaitableChain({
           data: [
             { id: "a1", market_type: "forex", linked_bot_account_id: "ba-1", parameters: {} },
-            { id: "a2", market_type: "crypto", linked_bot_account_id: null, parameters: {} },
           ],
           error: null,
         });
       }
       if (table === "bot_telemetry") return makeAwaitableChain({ data: [{ equity: 1000, balance: 900, positions_total: 1 }], error: null });
-      if (table === "coinarb_telemetry") return makeAwaitableChain({ data: [{ agent_id: "a2", equity_usd: 200, total_pnl_usd: 10, open_positions_count: 1, last_heartbeat_at: "2026-07-03T00:00:00Z" }], error: null });
       return makeAwaitableChain({ data: [], error: null });
     });
     const res = await GET(makeRequest());
     const body = await res.json();
-    expect(body.totals).toEqual({ algorithmCount: 2, equityUsd: 1200, pnlUsd: 110, openPositions: 2 });
+    expect(body.totals).toEqual({ algorithmCount: 1, equityUsd: 1000, pnlUsd: 100, openPositions: 1 });
   });
 });

@@ -10,7 +10,6 @@ import AuditTrailTimeline from "./AuditTrailTimeline.client";
 import { AlgorithmShadowInbox } from "./AlgorithmShadowInbox.client";
 import TradovateConnectModal from "./TradovateConnectModal.client";
 import { InfoBanner } from "./InfoBanner.client";
-import CoinarbControlPanel from "./CoinarbControlPanel.client";
 import { ResearchModeBanner } from "./ResearchModeBanner.client";
 
 type ConnectionStatus = "live" | "stale" | "synced" | "pending";
@@ -149,8 +148,6 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
     setError(null);
     try {
       // Always fetch the canonical algorithm row to decide which section to render.
-      // For crypto we skip the connections endpoint (it normalizes market_type to
-      // forex|futures|options and doesn't know about Fly bots).
       const algoRes = await fetch(`/api/algorithms/${algorithmId}`, { cache: "no-store" });
       if (!algoRes.ok) {
         const body = await algoRes.json().catch(() => ({}));
@@ -159,11 +156,6 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
       const algoJson = await algoRes.json();
       const algo = algoJson.algorithm as AlgorithmRow;
       setAlgorithm(algo);
-
-      if (algo.market_type === "crypto") {
-        setData(null);  // crypto section pulls everything from the algorithm row directly
-        return;
-      }
 
       const res = await fetch(`/api/algorithms/${algorithmId}/connections`, { cache: "no-store" });
       if (!res.ok) {
@@ -277,11 +269,7 @@ export default function AlgorithmDetailsModal({ algorithmId, algorithmName, onCl
               />
             )}
 
-            {!loading && !error && algorithm?.market_type === "crypto" && (
-              <CoinarbControlPanel algorithmId={algorithm.id} onSaved={fetchAll} />
-            )}
-
-            {!loading && !error && data && algorithm?.market_type !== "crypto" && (
+            {!loading && !error && data && (
               <>
                 {data.algorithm.market_type === "forex" && data.mt5 && (
                   <Mt5Section

@@ -518,14 +518,20 @@ replicada (decisión documentada en `docs/research/map-hot-xp-v2.md`).
 | `GET/POST /api/intelligence/capital-accounts` | GET, POST | Capital accounts |
 | `GET/PUT/DELETE /api/intelligence/capital-accounts/[id]` | — | CRUD capital account |
 
-### Algorithms (canonical strategy registry — incluye coinarb desde Fase A)
+### Algorithms (canonical strategy registry — MT5 / CME / options)
+> El bot crypto Coinarb (`coinarb-50x`) fue retirado por completo el 2026-07-13
+> (commit `25932a6`): código, contenedor Docker, app de Fly.io y fila en
+> `algorithms` borrados. `market_type='crypto'` ya no tiene ningún algoritmo
+> activo. El endpoint `/telemetry` y la tabla `coinarb_telemetry` siguen
+> existiendo en el código pero no tienen consumidor real.
+
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
-| `GET/POST /api/algorithms` | GET, POST | Lista/crea algoritmos (MT5 / CME / crypto) |
+| `GET/POST /api/algorithms` | GET, POST | Lista/crea algoritmos (MT5 / CME) |
 | `GET/PUT/DELETE /api/algorithms/[id]` | — | CRUD. PUT con `parameters` dispara `bot_commands.update_parameters` |
-| `GET /api/algorithms/[id]/connections` | GET | Estado de pairing MT5/CME/options (no crypto) |
+| `GET /api/algorithms/[id]/connections` | GET | Estado de pairing MT5/CME/options |
 | `POST /api/algorithms/[id]/control` | POST | `{action:'pause'\|'resume'}` → `bot_commands` |
-| `GET /api/algorithms/[id]/telemetry` | GET | Snapshot live `coinarb_telemetry` (solo crypto) |
+| `GET /api/algorithms/[id]/telemetry` | GET | Snapshot `coinarb_telemetry` — sin consumidor desde el retiro de Coinarb (2026-07-13) |
 | `POST /api/algorithms/[id]/deploy` | POST | Crea `algorithm_deployments` (algo → bot_account) |
 | `POST /api/algorithms/[id]/approve` | POST | Lifecycle status transition |
 | `POST /api/algorithms/[id]/promote-to-live` | POST | paper → live |
@@ -563,7 +569,7 @@ replicada (decisión documentada en `docs/research/map-hot-xp-v2.md`).
 ### Ops / Cron
 
 **Naming convention** (no migrar — la inconsistencia es semántica):
-- `/api/ops/cron/*` — crons que monitorean **bots** (heartbeat, SLO, recovery, daily verify). Auth: mayoría `Authorization: Bearer ${OPS_CRON_SECRET}` — **excepción documentada**: `bot-heartbeat-monitor` valida contra `CRON_SECRET` pese a vivir bajo `/ops/cron/*` (solo `coinarb-heartbeat`, `polyarb-heartbeat` y `polyarb-daily-report` usan `OPS_CRON_SECRET` de verdad).
+- `/api/ops/cron/*` — crons que monitorean **bots** (heartbeat, SLO, recovery, daily verify). Auth: mayoría `Authorization: Bearer ${OPS_CRON_SECRET}` — **excepción documentada**: `bot-heartbeat-monitor` valida contra `CRON_SECRET` pese a vivir bajo `/ops/cron/*` (solo `polyarb-heartbeat` y `polyarb-daily-report` usan `OPS_CRON_SECRET` de verdad; `coinarb-heartbeat` era la tercera excepción hasta que se removió el 2026-07-14).
 - `/api/cron/*` — crons de **dominio de negocio** (business alerts, treasury reminders, terminal fetchers). Auth: `x-cron-secret` header con `CRON_SECRET`.
 - Schedule real en `crontab` (supercronic, corre en la app Fly `alphalog-cron`, ver sección 14). `vercel.json` es legado de la era Vercel (pre 2026-05-25) — `crontab` fue "ported from vercel.json" y es la fuente de verdad actual; `vercel.json` queda sin uso en producción.
 
@@ -573,10 +579,10 @@ replicada (decisión documentada en `docs/research/map-hot-xp-v2.md`).
 | `GET /api/ops/bot-daily-report/history` | GET | Histórico de reportes |
 | `POST /api/ops/bot-slo-alert` | POST | Alerta SLO (autenticado por token) |
 | `POST /api/ops/cron/bot-slo-monitor` | POST | Monitor SLO programado |
-| `POST /api/ops/cron/bot-auto-recovery` | POST | Auto-recuperación del bot — **MT5-only**: dispatcha `bot_commands.RESTART_LOGIC`, que solo el EA MT4/MT5 polea. Coinarb no tiene canal de restart remoto wireado (su command-poller solo entiende pause/resume/update_parameters) — su staleness se cubre solo con alerta (`coinarb-heartbeat`), sin auto-remediación (Wave 3 item 7, decisión explícita para no fabricar un comando sin consumidor) |
-| `POST /api/ops/cron/bot-daily-verify` | POST | Verificación diaria del bot — cubre MT5 (`bot_instances`) y crypto (`coinarb_telemetry`, agregado en Wave 3 item 7; identifica bots crypto vía `algorithms.market_type='crypto'`, no por nombre) |
+| `POST /api/ops/cron/bot-auto-recovery` | POST | Auto-recuperación del bot — **MT5-only**: dispatcha `bot_commands.RESTART_LOGIC`, que solo el EA MT4/MT5 polea |
+| `POST /api/ops/cron/bot-daily-verify` | POST | Verificación diaria del bot — cubre MT5 (`bot_instances`); la rama crypto (`coinarb_telemetry`, `algorithms.market_type='crypto'`) queda sin datos desde el retiro de Coinarb (2026-07-13) |
 | `POST /api/ops/cron/polyarb-heartbeat` | POST | Polyarb heartbeat stale → push |
-| `POST /api/ops/cron/coinarb-heartbeat` | POST | Coinarb heartbeat stale → push (dedup 30min vía app_logs.fingerprint) |
+| ~~`POST /api/ops/cron/coinarb-heartbeat`~~ | — | Removido del `crontab` y del repo el 2026-07-14, junto con el resto del retiro de Coinarb (ver "Coinarb — RETIRADO", §11) |
 | `POST /api/cron/business/alerts` | POST | Alertas de negocio (recurring costs, LLC) |
 | `POST /api/cron/business/recurring-costs` | POST | Genera costos recurrentes del mes |
 | `POST /api/cron/treasury/withdrawal-reminders` | POST | Recordatorios de retiro push |
@@ -737,9 +743,9 @@ PLAYWRIGHT_BASE_URL=http://localhost:3000
 
 ### Adicionales descubiertas via grep (2026-06-20 audit)
 
-Los siguientes nombres aparecen en `process.env.X` dentro de `src/` o
-`coinarb/src/` pero faltaban del listado anterior. Documentadas para que
-rotaciones de secretos las cubran:
+Los siguientes nombres aparecen en `process.env.X` dentro de `src/` pero
+faltaban del listado anterior. Documentadas para que rotaciones de secretos
+las cubran:
 
 ```bash
 # Cron / ops (mencionados antes en otras secciones, formalizados acá)
@@ -759,28 +765,21 @@ ENCRYPTION_KEY_JOURNAL=         # base64-32: journal content/title
 ENCRYPTION_KEY_MAIL=            # base64-32: secure mail bodies
 ENCRYPTION_KEY_VERSION=v2       # cuál key activa (DATA_ENCRYPTION_KEY=v1)
 
-# Bot / market data providers (validators del Signal Engine + Coinarb)
+# Bot / market data providers (validators del Signal Engine)
 BOT_SIGNAL_SECRET=              # firma señales del bot al persistir en DB
 ALPHA_VANTAGE_API_KEY=          # market data fallback
 FINNHUB_API_KEY=                # market data fallback
 POLYGON_API_KEY=                # historical bars + intraday
 TWELVEDATA_API_KEY=             # market data fallback
-COINGLASS_API_KEY=              # liquidation-heatmap validator (Coinarb)
-CRYPTOQUANT_API_KEY=            # exchange-flows validator (Coinarb)
 LATTICE_API_TOKEN=              # Lattice options chain
-COINBASE_CDP_KEY_NAME=          # Coinbase Developer Platform (live spot orders)
-COINBASE_CDP_PRIVATE_KEY=       # CDP EC private key (PEM)
 
-# Coinarb runtime
-COINARB_50X_PAPER_MODE=         # 'true' = paper mode, otherwise live
-COINARB_AGENT_ID=               # UUID en coinarb_agents
-COINARB_BOT_ACCOUNT_ID=         # UUID en bot_accounts
-COINARB_BOT_ID=                 # UUID en bots
-COINARB_USER_ID=                # owner uuid (auth.users)
-COINARB_STARTING_CAPITAL=100    # USD inicial (default 100)
-COINARB_PUSH_ENABLED=           # 'true' para enviar pushes desde el bot
-MTF_CONFIDENCE_MIN=0.12         # Coinarb tunable (también en algorithms.parameters)
-SWEEP_CONFIRM_BODY_RATIO=0.35   # Coinarb tunable
+# Retiradas 2026-07-13 junto con el bot Coinarb (commit 25932a6) — ya no se
+# usan en src/, documentadas acá solo por si aparecen en Fly secrets viejos
+# y hay que limpiarlas: COINGLASS_API_KEY, CRYPTOQUANT_API_KEY,
+# COINBASE_CDP_KEY_NAME, COINBASE_CDP_PRIVATE_KEY, COINARB_50X_PAPER_MODE,
+# COINARB_AGENT_ID, COINARB_BOT_ACCOUNT_ID, COINARB_BOT_ID, COINARB_USER_ID,
+# COINARB_STARTING_CAPITAL, COINARB_PUSH_ENABLED, MTF_CONFIDENCE_MIN,
+# SWEEP_CONFIRM_BODY_RATIO.
 
 # Algorithms / risk
 PD_MACRO_BAND=                  # premium-discount band (macro TF)
@@ -845,8 +844,8 @@ VERCEL_ENV=                     # legado pre-Fly, ya no se setea
 
 **Testing**
 - Vitest: **1356 unit tests across 106 files** — incluye toda la cobertura previa + sprint 2026-06 (offline-first journal/trades + conflicts UI + QStash terminal reports verify/helpers).
-- Coinarb subproject: 140 tests across 14 files
-- Playwright E2E: 21 specs (auth, smoke, navigation, mobile-layout-fit, api-health, wizard-strategy, intelligence, dispatcher-smoke, polyarb, coinarb-unified-flow, tradehub, bot-control-selector, securities, inbox, **backtest-advanced**)
+- ~~Coinarb subproject: 140 tests across 14 files~~ — subproyecto `coinarb/` eliminado por completo el 2026-07-13 (commit `25932a6`), sus tests se fueron con él.
+- Playwright E2E: 21 specs (auth, smoke, navigation, mobile-layout-fit, api-health, wizard-strategy, intelligence, dispatcher-smoke, polyarb, coinarb-unified-flow, tradehub, bot-control-selector, securities, inbox, **backtest-advanced**) — **`coinarb-unified-flow.spec.ts` quedó huérfano** (el bot que ejercita ya no existe) y probablemente falla; pendiente de borrar o adaptar.
 
 **Features**
 - DashboardPerformancePanel: métricas reales (winRate, drawdown, topSetup, P&L períodos)
@@ -996,52 +995,116 @@ VERCEL_ENV=                     # legado pre-Fly, ya no se setea
 - Heartbeat: `bot_instances.last_heartbeat_at`, threshold configurable por env
 - Copy Groups: sistema de mirroring de trades entre cuentas con árbol de descendientes
 
-### Coinarb ↔ Algorithms unification (Fase A/B/C — 2026-05)
-Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentro del framework `algorithms`** desde la Fase A. No es un sistema paralelo.
+### Coinarb — RETIRADO (2026-07-13)
+El bot crypto Coinarb (app Fly `coinarb-50x`, repo `/coinarb/`, fila en
+`algorithms` con `id='a667d400-065f-4415-9609-373c3749e5fd'`) que hasta el
+2026-07-12 vivía dentro del framework `algorithms` (Fases A/B/C: config flow
+DB→ES-module bindings, hot-rotate de parámetros vía `bot_commands`, status
+sync en `flushTelemetry()`) fue **retirado por completo** en el commit
+`25932a6` ("eliminar bot coinarb (Coinarb 50x) por completo"): código
+(`coinarb/`), contenedor + imágenes Docker, app de Fly.io, y su fila en
+`algorithms`/`bots`/`bot_accounts` (esta última limpiada en Supabase el
+2026-07-14, un día después, porque el chore no había tocado la DB).
 
-**Identidad:**
-- Una fila en `public.algorithms` con `id='a667d400-065f-4415-9609-373c3749e5fd'`, `kind='coinarb'` (en `engine_config`), `market_type='crypto'`, `platform='fly'`, `status='live'|'paused'`.
-- `bot` + `bot_account` + `algorithm_deployments` (active) creados por migrations 099 + 100. IDs deterministas: bot `11111111-c01a-4b00-9001-000000000001`, bot_account `22222222-c01a-4b00-9002-000000000001`, deployment `33333333-c01a-4b00-9003-000000000001`.
+**Debt operativo que quedó pendiente tras el retiro — resuelto 2026-07-14:**
+detectado y limpiado el mismo día. `crontab` disparaba `POST
+/api/ops/cron/coinarb-heartbeat` cada minuto (inofensivo, no-op) y
+`/app/scripts/cron-coinarb-deploy.sh` cada 5 min contra `alphalog-cron`, y
+este último SÍ fallaba en cada corrida (detectaba el diff de la propia
+eliminación de `coinarb/` como "cambios que tocan coinarb/", intentaba `cd
+$REPO/coinarb` inexistente y abortaba bajo `set -e`, clonando el repo
+público completo cada 5 min para nada). Fix: ambas líneas removidas de
+`crontab`; borrados `scripts/cron-coinarb-deploy.sh`,
+`src/app/api/ops/cron/coinarb-heartbeat/` y
+`tests/e2e/coinarb-unified-flow.spec.ts`; `Dockerfile.cron` ya no instala
+`git`/`flyctl` (solo existían para ese script) — imagen bajó a 35 MB;
+redeploy de `alphalog-cron` confirmado sano, sin referencias a coinarb en
+logs.
 
-**Config flow (Fase B):**
-- `coinarb/src/core/index.ts` await `loadConfigFromDb()` antes de `buildLoop()`.
-- Lee `algorithms.parameters` (4 thresholds tunables + `arb_gap_min` jsonb) y muta `let` exports en `coinarb/src/core/config.ts`. ES module live bindings hacen que loop.ts/smc-detector.ts/etc lean el valor nuevo sin refactor.
-- `PAPER_MODE` sigue siendo env-only (`COINARB_50X_PAPER_MODE`) como safety brake.
-- **Defaults vigentes (2026-06-19):** `MTF_CONFIDENCE_MIN=0.12`, `SWEEP_CONFIRM_BODY_RATIO=0.35`. Bajados desde 0.30/0.40 para destrabar trades — el resto del filter chain (premium-discount, CHOCH, R:R≥2.0) sigue actuando como filtro de calidad. `scripts/check-backtest-threshold.ts` (`winRate≥30%`) actúa como red de regresiones **manual/local** — corregido en Wave 3 item 9 (2026-07): NO está wireado a ningún workflow de CI (el workflow de GitHub Actions de coinarb fue eliminado a propósito, ver §14 — deploys son vía Fly-cron), se corre a mano antes de un deploy manual.
-- **Tier `$20-testing`** (primer escalón de `PHASES`): risk 5% → $1/trade, pensado para validar el pipeline live con bankroll mínimo sin que el sizing colapse contra `baseMinSize` de Coinbase. `coinbase-spot-orders.ts:placeLimit` ahora pre-chequea el size contra `getProduct().baseMinSize` y devuelve `{ skipped: true, reason: 'below-min-notional' }` antes de POST, evitando 400s ruidosos.
+**Segunda pasada — resuelto 2026-07-14:** `algorithm_alert_preferences`
+(tabla creada en migration 135, dropeada en `20260714210235_drop_algorithm_alert_preferences`),
+`/api/algorithms/alert-preferences` y `AlertPreferencesPanel.client.tsx`
+(y su import/render en `src/app/intelligence/algorithms/page.tsx`) eran un
+panel de settings completo dedicado únicamente a
+`coinarb_heartbeat_stale_sec`/`coinarb_heartbeat_dedup_minutes` — borrados.
+También se removió el secret `FLY_API_TOKEN_COINARB` de `alphalog-cron`
+(ya sin uso tras borrar el script de deploy).
 
-**Hot-rotate flow (Fase C):**
-- `PUT /api/algorithms/[id]` con `parameters` jsonb dispara `bot_commands.insert(command_type='update_parameters', payload={algorithm_id, parameters})`.
-- `coinarb/src/ops/command-poller.ts` polea cada 30s: maneja `update_parameters` / `pause` / `resume`. Mutación in-memory via `applyParameters()` / `setTradingPaused()`. Ack en `bot_commands.status` + `bot_command_status` row.
-- Tiempo total UI→bot: ≤30s sin restart/redeploy.
+**Tercera pasada — auditoría completa y borrado total, resuelto 2026-07-14:**
+lo marcado arriba como "fuera de alcance" resultó ser mucho más grande de
+lo estimado: no era deuda muerta, era un dashboard histórico completo y
+funcional (`/intelligence/agents` → `/intelligence/agents/coinarb` →
+`CoinarbDashboard.client.tsx`, 1868 líneas) respaldado por 17 tablas
+`coinarb_*` con **datos reales**: 903 trades ejecutados
+(`coinarb_trades`), 80327 decisiones (`coinarb_decisions`), 59299 señales
+SMC (`coinarb_smc_signals`), 641 calibraciones, 262 posiciones, etc. El
+owner confirmó explícitamente borrar todo, incluidos los 903 trades reales,
+después de que se le mostraran los conteos exactos y se le advirtiera que
+no era deuda sino historial. Alcance final del borrado:
 
-**Status sync (Fase #11):**
-- En cada `flushTelemetry()`, si circuit-breaker disparó / daily cap alcanzado / `TRADING_PAUSED`, el bot escribe `algorithms.status='paused'`. Sin esos: `'live'`. Debounce in-memory: solo escribe en flip.
+- **Supabase**: las 17 tablas `coinarb_*` dropeadas (migration
+  `20260714213339_drop_coinarb_data_tables`) — `coinarb_agents`,
+  `coinarb_calibration(_data)`, `coinarb_circuit_breaker_events`,
+  `coinarb_compliance_audit`, `coinarb_daily_stats`, `coinarb_decisions`,
+  `coinarb_equity_snapshots`, `coinarb_liquidity_map`, `coinarb_phase_log`,
+  `coinarb_positions`, `coinarb_regime_snapshots`, `coinarb_signal_memory`,
+  `coinarb_smc_signals`, `coinarb_telemetry`, `coinarb_trades`,
+  `coinarb_50x_validation_checkpoints`.
+- **Rutas API borradas enteras** (100% coinarb-only, ya no tenían destino
+  de datos): `src/app/api/coinarb/**` (15 endpoints: agents, agents/[id],
+  decisions, decisions/skip-reasons, positions, telemetry, trades,
+  stats/{calibration,correlation,drawdown,execution,exposure-heatmap,pnl,regime-history,regime-snapshots}),
+  `/api/algorithms/[id]/telemetry`, `/api/algorithms/[id]/monitoring`
+  (backing de la "Coinarb Monitoring tab").
+- **UI borrada entera**: `CoinarbDashboard.client.tsx`,
+  `CoinarbControlPanel.client.tsx` (+ `RegimePill` que vivía adentro),
+  `CoinarbMonitoringPanel.client.tsx`, `src/app/intelligence/agents/coinarb/page.tsx`,
+  la tarjeta "Coinbase Agents" + query a `coinarb_agents` en
+  `/intelligence/agents/page.tsx` (PolyArb queda 100% intacto), y el branch
+  `market_type === 'crypto'` en `AlgorithmDetailsModal.client.tsx` que
+  renderizaba `CoinarbControlPanel`.
+- **Endpoints compartidos MT5/CME "desenganchados" de coinarb** (dejaron de
+  leer tablas dropeadas, sin tocar su lógica forex/futures):
+  `/api/algorithms/overview` (aggregation ahora solo forex+futures),
+  `/api/algorithms/[id]/connections` (`market_type='crypto'` cae al mismo
+  bucket `{available:false}` que cualquier tipo no reconocido, en vez de
+  colapsar a un bloque MT5 engañoso o leer `coinarb_telemetry`),
+  `/api/algorithms/[id]/trades/export` (crypto → 400, igual que options),
+  `/api/ops/cron/bot-daily-verify` (ya no identifica bots crypto vía
+  `algorithms.market_type`), `src/lib/quality-gates/runner.ts`
+  (`loadTelemetry` trata crypto igual que futures: gates N/A), `src/lib/pg/client.ts`
+  (las 4 tablas `coinarb_*` salieron del union tipado `InScopeTable`).
+- **Tests**: 4 archivos con casos rotos arreglados (`overview`,
+  `[id]/connections`, `[id]/trades/export`, `bot-daily-verify` — sus
+  describe/it de crypto removidos o reescritos para el nuevo fallback), +
+  `RegimePill.test.tsx` borrado (importaba de `CoinarbControlPanel.client`,
+  ya no existe). 2959 unit tests verdes post-cleanup (las 3 fallas
+  restantes son preexistentes, tests de integración contra Postgres real
+  sin `ALPHALOG_PG_URL`/`LATTICE_PG_URL` en el entorno local, no
+  relacionadas).
+- **Fly**: secret `FLY_API_TOKEN_COINARB` removido de `alphalog-cron`
+  (segunda pasada, documentado arriba).
 
-**Endpoints nuevos en este sprint:**
-| Ruta | Método | Descripción |
-|---|---|---|
-| `/api/algorithms/[id]/control` | POST | `{action:'pause'\|'resume'}` → bot_commands |
-| `/api/algorithms/[id]/telemetry` | GET | Latest `coinarb_telemetry` row (crypto-only) |
-| `/api/ops/cron/coinarb-heartbeat` | POST | Cron cada minuto (supercronic en `alphalog-cron`), dedup 30min via app_logs.fingerprint, push si heartbeat >5min stale |
+**Deliberadamente NO tocado (decisión de producto, no deuda mecánica):**
+`CoinarbParametersSchema` / `CoinarbEngineConfigSchema` en
+`src/lib/validations/engine-config.ts`, el branch de validación en
+`PUT /api/algorithms/[id]/route.ts` que las usa, y el paso "Crypto" del
+wizard de nueva estrategia (`NewStrategyWizard.client.tsx`) que registra
+algoritmos `market_type='crypto'` en modo research (sin bot vinculado, solo
+para backtesting). Ninguno de los tres está roto — no leen ninguna tabla
+dropeada — pero seguir permitiendo crear algoritmos "crypto" sin ningún
+backend de ejecución real es una decisión de producto (¿tiene sentido el
+research-mode sin venue real?) que no se tomó unilateralmente en este
+cleanup. Comentarios sueltos que mencionan "coinarb" sin tocar código
+funcional (en `global-halt/route.ts`, `[id]/commands/recent/route.ts`,
+`bot-auto-recovery/route.ts`, `engine/v1/quality-gates.ts`, `sentry.ts`,
+`CommandCenterPanel.client.tsx`) tampoco se tocaron — son texto histórico,
+no comportamiento.
 
-**Componentes nuevos:**
-- `AlgorithmDetailsModal.client.tsx` → `CoinarbSection` con 3 paneles: status+ControlButton, TelemetryPanel (refresh 15s), Tunables form (4 scalars + 3 per-symbol arb gaps).
-- `ControlButton` POST a `/control`. `TelemetryPanel` GET a `/telemetry` con auto-refresh.
-
-**Resiliencia (Fase #7):**
-- `coinbase-ws.ts` + `binance-ws.ts`: silent-hang watchdog (60s sin mensaje → force close → reconnect) + reconnect jitter (±1s) sobre el exponential backoff existente.
-
-**Backtest (Fase #8):**
-- `coinarb/scripts/backtest.ts --days=N`: replay de N días con forward TP/SL scoring. Usa `loadHistoricalCandlesForDays()` (nuevo) que pagina vía Coinbase REST. 1m capped a 7d.
-
-**UI dual `/intelligence/agents` + `/intelligence/algorithms` — recomendación KEEP both (2026-05-17 análisis):**
-- **No son duplicados** — sirven propósitos complementarios:
-  - `/intelligence/agents` (lee `coinarb_agents` + `polyarb_agents`): **fleet overview**. Muestra PolyArb + Coinarb con detalle granular de estado (PAPER+Day N/14, PAPER+OFFLINE, LIVE+REAL$, OFFLINE), heartbeat 30s, badges. La pantalla "¿están vivos mis bots y a qué fase del trial llegaron?".
-  - `/intelligence/algorithms` (lee `algorithms`): **per-algorithm deep control**. Registry unificado de TODOS los algos (MT5/CME/options/crypto), modal con tunables editables, pause/resume, telemetry live. La pantalla "¿cómo está configurado y operando un algo específico?".
-- Dropear `/intelligence/agents` perdería: visibilidad PolyArb (no hay fila para polyarb en `algorithms`), contador de días PAPER trial (1-14), taxonomía detallada del proceso del bot.
-- Acción ideal a futuro: integrar el panel de tunables + telemetry de algorithms dentro del sub-page `/intelligence/agents/coinarb` para que el usuario tenga ambas superficies sin cambiar de URL.
-- `coinarb_agents` table queda viva — es la fuente de verdad para `/intelligence/agents`.
+**`/intelligence/agents` vs `/intelligence/algorithms` (2026-05-17, sigue vigente para PolyArb):**
+- `/intelligence/agents` (lee `polyarb_agents`, antes también `coinarb_agents`): fleet overview con estado granular (PAPER+Day N/14, LIVE+REAL$, OFFLINE), heartbeat 30s.
+- `/intelligence/algorithms` (lee `algorithms`): per-algorithm deep control — registry unificado MT5/CME/options, tunables, pause/resume.
+- Con Coinarb fuera, `/intelligence/agents` hoy solo tiene contenido de PolyArb; se mantiene KEEP both por la taxonomía de trial (1-14 días) que `algorithms` no modela.
 
 ### Validación en capas
 1. **Zod schema** — valida shape y tipos del request body
@@ -1049,21 +1112,22 @@ Coinarb (bot crypto en Fly.io, app `coinarb-50x`, repo `/coinarb/`) **vive dentr
 3. **contractGuard** — verifica que la respuesta cumple el schema antes de devolverla al cliente
 4. **nullGuards** — helpers para castear `unknown` a string/number de forma segura
 
-### Quality gates — 3 sistemas independientes (intencional, no deuda técnica)
+### Quality gates — 2 sistemas independientes (intencional, no deuda técnica)
 
-Auditado a fondo en Wave 3 item 9 (2026-07). Hay 3 sistemas con "quality gate"
-en el nombre que **no se llaman ni se leen entre sí** — verificado por grep
-cruzado de sus identificadores. No es duplicación accidental: cada uno gatea
-una etapa de vida completamente distinta, y consolidarlos sería un rewrite
-grande y riesgoso sin beneficio claro. Se documentan acá para que sesiones
-futuras no las re-descubran como "deuda" y traten de fusionarlas sin leer
-primero:
+Auditado a fondo en Wave 3 item 9 (2026-07), cuando todavía había 3 sistemas
+con "quality gate" en el nombre (el tercero, `coinarb/scripts/check-backtest-threshold.ts`,
+se fue junto con el retiro completo de Coinarb el 2026-07-13 — ver
+"Coinarb — RETIRADO"). Los 2 que quedan **no se llaman ni se leen entre sí**
+— verificado por grep cruzado de sus identificadores. No es duplicación
+accidental: cada uno gatea una etapa de vida completamente distinta, y
+consolidarlos sería un rewrite grande y riesgoso sin beneficio claro. Se
+documentan acá para que sesiones futuras no las re-descubran como "deuda" y
+traten de fusionarlas sin leer primero:
 
 | Sistema | Trigger | Persistencia | Gatea |
 |---|---|---|---|
-| `src/lib/quality-gates/runner.ts` (`computeGates`) | `POST /promote-to-live`, `POST /quality-gates/recompute` | DB: `algorithm_quality_gate_results` + `algorithm_quality_gate_definitions` + vista `algorithm_quality_score` | Deploy-time, 20 checks Tier-1, framework `algorithms` (MT5/CME/crypto) |
+| `src/lib/quality-gates/runner.ts` (`computeGates`) | `POST /promote-to-live`, `POST /quality-gates/recompute` | DB: `algorithm_quality_gate_results` + `algorithm_quality_gate_definitions` + vista `algorithm_quality_score` | Deploy-time, 20 checks Tier-1, framework `algorithms` (MT5/CME) |
 | `src/lib/engine/v1/quality-gates.ts` (`ENGINE_V1_GATES`) | Solo `POST /api/algorithms/[id]/engine-backtest` | Ninguna — efímero, vive en la respuesta JSON de ese request | Auto-promoción draft→paper del simulador Engine v1 (in-memory, sobre backtest recién corrido) |
-| `coinarb/scripts/check-backtest-threshold.ts` | Manual/local únicamente — **no está wireado a CI** (el workflow de GitHub Actions de coinarb fue eliminado, ver §14) | Ninguna — exit code + stdout | Red de regresión manual antes de un `flyctl deploy --app coinarb-50x` a mano |
 
 ### Backtest engines — 2 motores, coexistencia intencional (no deuda técnica)
 
@@ -1201,9 +1265,9 @@ npm run audit:sprints            # Auditoría de sprints completados
 - **Supabase**: `jgkvnnlodwdtjsmmzwry` (us-east-2, PostgreSQL 17.6, ACTIVE_HEALTHY)
 - **CI/CD GitHub Actions** (`.github/workflows/`):
   - `quality-gate.yml` — lint + build en cada PR/push a main (sin deploy)
-  - `fly-deploy.yml` — **auto-deploy a Fly** en push a main (web + cron en paralelo). Skip si solo cambian `coinarb/`, `polyarb/`, `lattice-desktop/`, `bots/`, `docs/`, o `**.md`. Manual trigger via `workflow_dispatch` con choice de strategy (rolling/immediate/bluegreen). Concurrency lock `fly-deploy-alphalog` para evitar deploys solapados. Requiere secret `FLY_API_TOKEN` (obtenible con `fly tokens create deploy -x 8760h`).
-  - `coinarb-deploy.yml` — deploy de `coinarb-50x` (app Fly aparte) cuando cambia `coinarb/**`
+  - `fly-deploy.yml` — **auto-deploy a Fly** en push a main (web + cron en paralelo). Skip si solo cambian `polyarb/`, `lattice-desktop/`, `bots/`, `docs/`, o `**.md` (el skip de `coinarb/` quedó sin efecto — el directorio fue eliminado el 2026-07-13). Manual trigger via `workflow_dispatch` con choice de strategy (rolling/immediate/bluegreen). Concurrency lock `fly-deploy-alphalog` para evitar deploys solapados. Requiere secret `FLY_API_TOKEN` (obtenible con `fly tokens create deploy -x 8760h`).
   - `bot-maintenance.yml`, `bot-command-timeout.yml`, `cme-crons.yml`, `heartbeat.yml` — utilidades de bot, no relacionadas con deploy del web
+  - Coinarb (app `coinarb-50x`) tenía su propio deploy — no vía GitHub Actions sino vía `scripts/cron-coinarb-deploy.sh` corriendo en `alphalog-cron`. Script, entrada de `crontab` y el `git`/`flyctl` que instalaba `Dockerfile.cron` solo para él fueron removidos el 2026-07-14 (ver "Coinarb — RETIRADO", §11).
 - **Deploy manual** (fallback si CI falla): `npm run build && flyctl deploy --app alphalog-pwa --remote-only` desde la máquina del dev.
 
 ---

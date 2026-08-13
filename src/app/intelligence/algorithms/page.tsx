@@ -7,7 +7,6 @@ import { DispatchModeChip } from "@/components/intelligence/algorithms/DispatchM
 import { DispatchModeBanner } from "@/components/intelligence/algorithms/DispatchModeBanner.client";
 import { GlobexStatusBanner } from "@/components/intelligence/algorithms/GlobexStatusBanner";
 import { CrossMarketOverviewStats } from "@/components/intelligence/algorithms/CrossMarketOverviewStats.client";
-import { AlertPreferencesPanel } from "@/components/intelligence/algorithms/AlertPreferencesPanel.client";
 
 export default async function AlgorithmsPage() {
   const supabase = await createClient();
@@ -88,7 +87,6 @@ export default async function AlgorithmsPage() {
       <div className="mb-4 space-y-2">
         <GlobexStatusBanner />
         <DispatchModeBanner />
-        <AlertPreferencesPanel />
       </div>
 
       <CrossMarketOverviewStats activeStrategies={active.length} />

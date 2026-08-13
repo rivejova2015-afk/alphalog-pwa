@@ -4,9 +4,10 @@
 // hit once in this repo, see src/lib/polyarb/archive.tsx).
 //
 // Covers: 401, 404 (algorithm not found), forex branch (algorithm_trades),
-// crypto branch (coinarb_positions), futures branch (resolves cme_account_num
-// → algo_cme_accounts → propfirm/real table), futures with no linked CME
-// account (empty CSV, not an error), unsupported market_type → 400.
+// futures branch (resolves cme_account_num → algo_cme_accounts →
+// propfirm/real table), futures with no linked CME account (empty CSV, not
+// an error), unsupported market_type → 400 (covers 'options' and 'crypto'
+// — Coinarb export support was removed 2026-07-14 along with the bot).
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -92,26 +93,6 @@ describe("/api/algorithms/[id]/trades/export — GET", () => {
     expect(body).toContain("t1,BUY,XAUUSD");
   });
 
-  it("crypto: exports coinarb_positions as CSV", async () => {
-    setupAuth();
-    fromMock.mockImplementation((table: string) => {
-      if (table === "algorithms") {
-        return makeAwaitableChain({ data: { id: "algo-1", name: "Coinarb", market_type: "crypto", parameters: {} }, error: null });
-      }
-      if (table === "coinarb_positions") {
-        return makeAwaitableChain({
-          data: [{ id: "p1", symbol: "BTC-USD", direction: "long", entry_price: 65000, exit_price: 66000, size_usd: 100, pnl_usd: 1.5, pnl_percent: 1.5, status: "CLOSED", exit_reason: "tp", opened_at: "2026-01-01", closed_at: "2026-01-01" }],
-          error: null,
-        });
-      }
-      return makeAwaitableChain({ data: null, error: null });
-    });
-    const res = await GET(makeRequest(), CTX);
-    expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("p1,BTC-USD,long");
-  });
-
   it("futures: resolves cme_account_num → algo_cme_accounts → propfirm table", async () => {
     setupAuth();
     fromMock.mockImplementation((table: string) => {
@@ -155,6 +136,13 @@ describe("/api/algorithms/[id]/trades/export — GET", () => {
   it("returns 400 for an unsupported market_type", async () => {
     setupAuth();
     fromMock.mockReturnValue(makeAwaitableChain({ data: { id: "algo-1", name: "X", market_type: "options", parameters: {} }, error: null }));
+    const res = await GET(makeRequest(), CTX);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for market_type=crypto (Coinarb export removed 2026-07-14)", async () => {
+    setupAuth();
+    fromMock.mockReturnValue(makeAwaitableChain({ data: { id: "algo-1", name: "Coinarb", market_type: "crypto", parameters: {} }, error: null }));
     const res = await GET(makeRequest(), CTX);
     expect(res.status).toBe(400);
   });
