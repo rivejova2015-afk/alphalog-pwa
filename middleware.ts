@@ -57,7 +57,13 @@ export async function middleware(request: NextRequest) {
     // Fail open: do not block requests if redirect logic errors
   }
 
-  const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/map");
+  const isDashboard =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/map") ||
+    pathname.startsWith("/business") ||
+    pathname.startsWith("/intelligence") ||
+    pathname.startsWith("/inbox") ||
+    pathname.startsWith("/securities");
   const isApi = pathname.startsWith("/api");
 
   const publicApiPrefixes = [
