@@ -47,7 +47,7 @@ async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: st
   if (error || !data) throw new Error(`Algorithm ${algorithmId} not found: ${error?.message ?? 'no row'}`);
 
   const row = data as unknown as {
-    id: string; user_id: string; name: string; status: string;
+    id: string; user_id: string; name: string; status: string; market_type: string | null;
     parameters: Record<string, unknown> | null; risk_percent: number | string | null;
     max_drawdown_pct: number | string | null; linked_bot_account_id: string | null;
     scan_config: Record<string, unknown> | null;
@@ -66,14 +66,14 @@ async function loadAlgorithm(sb: SupabaseClient, algorithmId: string, userId: st
     typeof v === 'number' && Number.isFinite(v) ? v : null;
 
   return {
-    id:                    data.id as string,
-    user_id:               data.user_id as string,
-    name:                  data.name as string,
-    status:                data.status as string,
-    market_type:           (data.market_type as string | null) ?? 'forex',
-    risk_percent:          num(data.risk_percent),
-    max_drawdown_pct:      num(data.max_drawdown_pct),
-    linked_bot_account_id: (data.linked_bot_account_id as string | null) ?? activeDep?.bot_account_id ?? null,
+    id:                    row.id,
+    user_id:               row.user_id,
+    name:                  row.name,
+    status:                row.status,
+    market_type:           row.market_type ?? 'forex',
+    risk_percent:          num(row.risk_percent),
+    max_drawdown_pct:      num(row.max_drawdown_pct),
+    linked_bot_account_id: row.linked_bot_account_id ?? activeDep?.bot_account_id ?? null,
     parameters:            params,
     scan_config:           row.scan_config ?? null,
   };
