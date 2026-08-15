@@ -105,17 +105,20 @@ export async function getUnsentLogs(): Promise<QueuedLog[]> {
     const db = await initDB();
     const tx = db.transaction([STORE_NAME], 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const index = store.index('sent');
 
+    // Booleans are not a valid IDBKeyRange key type (spec allows only
+    // number/string/Date/ArrayBuffer/Array), so IDBKeyRange.only(false)
+    // against the `sent` index throws DataError on every call. Read all
+    // rows and filter in JS instead — queue is capped at MAX_QUEUE_SIZE.
     return new Promise((resolve, reject) => {
-      const request = index.getAll(IDBKeyRange.only(false)); // false = unsent
+      const request = store.getAll();
 
       request.onerror = () => {
         reject(new Error('Failed to get unsent logs'));
       };
 
       request.onsuccess = () => {
-        resolve(request.result as QueuedLog[]);
+        resolve((request.result as QueuedLog[]).filter((log) => !log.sent));
       };
     });
   } catch (error) {
@@ -275,13 +278,13 @@ async function cleanupOldLogs(): Promise<void> {
         const count = countRequest.result;
 
         if (count > MAX_QUEUE_SIZE) {
-          // Delete sent logs first (oldest first)
-          const index = store.index('sent');
-          const range = IDBKeyRange.only(true);
-          const getAllRequest = index.getAll(range);
+          // Delete sent logs first (oldest first). Same IDBKeyRange caveat
+          // as getUnsentLogs() — filter in JS instead of querying the
+          // `sent` index with a boolean key range.
+          const getAllRequest = store.getAll();
 
           getAllRequest.onsuccess = () => {
-            const sentLogs = getAllRequest.result as QueuedLog[];
+            const sentLogs = (getAllRequest.result as QueuedLog[]).filter((log) => log.sent);
             const toDelete = sentLogs
               .sort((a, b) => a.timestamp - b.timestamp)
               .slice(0, sentLogs.length - 50); // Keep last 50 sent
