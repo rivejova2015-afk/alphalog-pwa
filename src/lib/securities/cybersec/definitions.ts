@@ -9567,6 +9567,97 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Marcos regulatorios clave", "Gobernanza de seguridad", "Políticas y no conformidades"],
   },
+  // ── M5 · Modelo OSI (continuación) ──────────────────────────────────────
+  {
+    id: 910,
+    module: 5,
+    term: "Unidad de Datos del Protocolo (PDU)",
+    short: "Datos con headers de cada capa del modelo OSI: datos, segmento, paquete, trama, bits.",
+    detail:
+      "Cada capa del modelo OSI agrega su propio **PDU (Protocol Data Unit)** — formato específico de datos:\n" +
+      "• **7-Aplicación**: **Datos** (crudo, texto, JSON, etc.)\n" +
+      "• **6-Presentación**: **Datos** (encriptado, comprimido)\n" +
+      "• **5-Sesión**: **Datos** (con control de sesión)\n" +
+      "• **4-Transporte**: **Segmento** (TCP header + datos) o **Datagrama** (UDP header + datos)\n" +
+      "• **3-Red**: **Paquete** (IP header + segmento)\n" +
+      "• **2-Enlace**: **Trama** (Ethernet/WiFi header + paquete)\n" +
+      "• **1-Física**: **Bits** (señales eléctricas, luz, ondas de radio)\n" +
+      "**Encapsulación**: cada capa envuelve el PDU anterior. **Desencapsulación**: al recibir, se quita capa por capa.",
+    examples: [
+      "HTTP GET → segmento TCP (puerto 80) → paquete IP (192.168.1.100→1.1.1.1) → trama Ethernet (MAC:00:11:22...) → bits en cable.",
+      "Wireshark muestra todas las capas: Ethernet II (trama) → IP (paquete) → TCP (segmento) → HTTP (datos).",
+    ],
+    related: ["Modelo OSI", "Encapsulamiento", "Protocolos por capa"],
+  },
+  {
+    id: 911,
+    module: 5,
+    term: "Ataques Cross-Layer (entre capas)",
+    short: "Explotar dependencias entre capas del OSI: fragmentación IP, TCP RST injection, ARP spoofing + DNS.",
+    detail:
+      "Los ataques más efectivos cruzan capas porque **ninguna capa confía en la siguiente**:\n" +
+      "**Capa 2 + 3**: ARP spoofing (L2) + IP spoofing (L3) = MITM invisible\n" +
+      "**Capa 3 + 4**: Fragmentación IP + TCP windows → evitar IDS\n" +
+      "**Capa 4 + 7**: TCP RST injection (enviar RST falso en L4) + HTTP session hijacking (L7)\n" +
+      "**Capa 2 + 3 + 7**: ARP poisoning → MITM en red local → MitM proxy (Burp, mitmproxy) captura HTTP crudo\n" +
+      "**Defensa**: validar en múltiples capas; no asumir que una capa protegió;\n" +
+      "usar HTTPS (L7) incluso con VPN (L3), porque ambas capas pueden caer.",
+    examples: [
+      "Atacante: ARP spoof (L2) → redirige tráfico → captura credenciales HTTP (L7) → crack offline.",
+      "Defensa: HTTPS (L7 encrypts) + VPN (L3 encrypts) + IEEE 802.1X (L2 auth) = 3 capas de seguridad.",
+    ],
+    related: ["Modelo OSI", "MITM attacks", "Defensa en profundidad"],
+  },
+  // ── M8 · Wireshark (continuación) ────────────────────────────────────────
+  {
+    id: 912,
+    module: 8,
+    term: "Wireshark para Resolución de Problemas de Red",
+    short: "Diagnosticar problemas de conectividad, latencia, pérdida de paquetes y comportamiento anómalo.",
+    detail:
+      "**Wireshark como herramienta de troubleshooting**:\n" +
+      "**Problema: Lentitud en conectar a servidor**\n" +
+      "→ Captura de tráfico TCP → analiza SYN/SYN-ACK/ACK handshake → mide latencia (RTT)\n" +
+      "→ Si RTT alto: problema de red/ISP; si 3-way handshake tarda mucho: servidor lento\n" +
+      "**Problema: Conexión cae frecuentemente**\n" +
+      "→ Filtro: tcp.flags.reset==1 (TCP RST) → quién envía RST? Cliente o servidor?\n" +
+      "→ Si servidor: problema de aplicación; si cliente: intermitencia de red\n" +
+      "**Problema: DNS no resuelve**\n" +
+      "→ Filtro: dns → verifica si queries llegan a servidor DNS; si replies vacías → servidor DNS caído\n" +
+      "**Problema: Pérdida de paquetes**\n" +
+      "→ Statistics → IO Graphs → ve dónde cae tráfico; retransmisiones excesivas = red congestionada",
+    examples: [
+      "Usuario reporta: \"Mi app es lenta\". Captura Wireshark → TCP RTT = 500ms (normal <50ms) → ISP o geografía.",
+      "SSH connection drops. Filtro tcp.flags.reset → servidor envía RST → SSH daemon restarteó o timeout.",
+    ],
+    related: ["Wireshark", "Herramientas de red", "Performance analysis"],
+  },
+  {
+    id: 913,
+    module: 8,
+    term: "Integración de Wireshark con Threat Hunting",
+    short: "Usar capturas PCAP para detectar anomalías, C2 beaconing, exfiltración de datos y comportamiento malicioso.",
+    detail:
+      "**Wireshark + Threat Intelligence**:\n" +
+      "**Detección de C2 (Command & Control)**\n" +
+      "• Patrones de beaconing: conexiones periódicas a IP sospechosa cada 30s/5m\n" +
+      "• Filtro: tcp.stream contains \"user-agent\" && ip.dst==evil.com → extrae payloads de C2\n" +
+      "**Detección de Exfiltración**\n" +
+      "• DNS tunneling: queries con subdominios largos (encoding datos en DNS)\n" +
+      "• HTTPS con certificados self-signed a IPs no confiables → proxy malicioso\n" +
+      "• Filtro: dns.qry.name matches \"([a-z0-9]{32,})\" → detecta encoding\n" +
+      "**Integración con YARA/Snort**\n" +
+      "• Exporta PCAP → tshark extrae payloads → grep/YARA busca malware signatures\n" +
+      "• Ejemplo: `tshark -r capture.pcap -Y 'http.request' -T fields -e http.request.full_uri`\n" +
+      "**Integración con Suricata/Zeek**\n" +
+      "• Carga PCAP en Zeek → genera logs JSON → correlaciona conexiones, DNS, arquivos\n" +
+      "• Busca patrones: IPs resolving a dominios nuevos + POST requests inmediatamente después",
+    examples: [
+      "Captura de red: detecta beacon cada 300s a 203.0.113.99 → whois / VirusTotal confirma APT C2.",
+      "DNS query: muy.largo.encoding.beacon.com → decode base64 → comando 'exfil /home/user/passwords'.",
+    ],
+    related: ["Wireshark", "SIEM y monitoreo", "Threat Intelligence"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
