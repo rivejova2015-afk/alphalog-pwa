@@ -10864,24 +10864,6 @@ export const DEFINITIONS: ConceptDefinition[] = [
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
   return DEFINITIONS.filter((d) => d.module === moduleId);
 }
-    short: "Proceso estructurado para contener, erradicar y recuperarse de un evento de seguridad.",
-    detail:
-      "Un **incidente** es un evento que **compromete la confidencialidad, integridad o disponibilidad** de la información. Fases del **IR**:\n" +
-      "\\n1. **Preparación** — políticas, herramientas, equipo entrenado, respuesta pre-plan.\n" +
-      "2. **Identificación** — detección de anormalías (alertas SIEM, reportes de usuarios, pruebas).\n" +
-      "3. **Contención**:\n" +
-      "   - Corto plazo: aislar el sistema comprometido de la red (kill the connection).\n" +
-      "   - Largo plazo: parcheado, cambio de credenciales, reglas firewall.\n" +
-      "4. **Erradicación** — remover el malware, cerrar la puerta de entrada (patch vulnerabilidad).\n" +
-      "5. **Recuperación** — restaurar sistemas a estado limpio, validar estabilidad.\n" +
-      "6. **Análisis post-incidente** — **lecciones aprendidas**, mejorar controles.\n" +
-      "> ⚠️ El tiempo es vida en IR: cada minuto de downtime o exfiltración cuenta.",
-    examples: [
-      "Phishing → delivery de payload → detección en 3 horas → aislamiento 5 horas → recuperación 24 horas.",
-      "Breach no detectado en meses: inicio 2023-01-15, descobrimiento 2023-06-30 = 166 días de exposición.",
-    ],
-    related: ["Investigación forense", "Indicadores de compromiso", "Plan de continuidad"],
-  },
   {
     id: 415,
     module: 38,

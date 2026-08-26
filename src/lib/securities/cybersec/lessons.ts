@@ -1,4 +1,6 @@
-import type 
+import type { Lesson } from "./types";
+
+export const LESSONS: Lesson[] = [
   {
     id: 63,
     title: "Heap Exploitation",
