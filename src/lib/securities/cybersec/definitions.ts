@@ -9246,6 +9246,28 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Hacer investigación en seguridad", "Responsible disclosure", "Portfolio y carrera"],
   },
+  {
+    id: 844,
+    module: 81,
+    term: "Herramientas y automatización para investigación",
+    short: "Scripts, frameworks y entornos para automatizar búsqueda de vulns, análisis dinámico y reproducción escalable.",
+    detail:
+      "La investigación moderna depende de **automatización**: no se descubren clases de vulns a mano.\n" +
+      "| Categoría | Ejemplos |\n" +
+      "|---|---|\n" +
+      "| **Fuzzing** | libFuzzer, AFL++, Honggfuzz (corpus, coverage-guided) |\n" +
+      "| **Análisis dinámico** | Frida, DBI (Pin, Dynamorio), taint tracking |\n" +
+      "| **Ejecución simbólica** | angr, Triton (explore path space y generar inputs) |\n" +
+      "| **Emulación y sandboxes** | QEMU, Unicorn, Docker + Seccomp (contención segura) |\n" +
+      "| **Reproducción escalable** | containers, CI pipelines, testbeds elásticos (AWS) |\n" +
+      "> 💡 Un buen harness de fuzzing descubre más en una semana que meses de reversing manual.",
+    examples: [
+      "Usar libFuzzer + sanitizers (ASAN/UBSAN) para hallar memory issues en una biblioteca C.",
+      "Frida hook en una app para trazar llamadas cripto y detectar weak RNG.",
+      "Cadena de Ghidra + angr para symbex automático y generar inputs que alcancen una condición específica.",
+    ],
+    related: ["Fuzzing y testing de seguridad", "Análisis dinámico y sandboxes", "Ejecución simbólica y model checking"],
+  },
 
   // ── M82 · Formal Methods y Verificación ──────────────────────────────────
   {
@@ -9307,6 +9329,29 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un bug fuera de la spec verificada que igual causa una vuln.",
     ],
     related: ["Sistemas verificados", "Por qué formal methods", "Hacer investigación en seguridad"],
+  },
+  {
+    id: 854,
+    module: 82,
+    term: "Herramientas y asistentes de verificación",
+    short: "Coq, Lean, Isabelle/HOL, TLA+, Z3: lenguajes y solvers donde se escriben demostraciones formales.",
+    detail:
+      "Herramientas concretas del oficio formal:\n" +
+      "| Herramienta | Uso | Curva |\n" +
+      "|---|---|---|\n" +
+      "| **TLA+** | Especificación + model checking de protocolos y sistemas distribuidos | Media |\n" +
+      "| **Coq** | Theorem proving interactivo — demostraciones de propiedades de código | Alta |\n" +
+      "| **Lean 4** | Lenguaje de programa + pruebas — más moderno que Coq | Alta |\n" +
+      "| **Isabelle/HOL** | Demostrador similar a Coq, amplio corpus matemático | Alta |\n" +
+      "| **Z3 / SMT solvers** | Solvers automáticos de satisfacibilidad — usado por model checkers y análisis estático | Media |\n" +
+      "| **Dafny** | Lenguaje con verificación integrada — más cercano a programación práctica | Baja |\n" +
+      "> 💡 TLA+ es el punto de entrada más suave; Coq es la herramienta más poderosa pero requiere dedicación.",
+    examples: [
+      "Especificar un consenso distribuido en TLA+ y ejecutar model checker.",
+      "Demostrar en Coq que una función de criptografía preserva una invariante.",
+      "Usar Z3 desde un verificador de programas (ej: Viper) para validar pre/postcondiciones.",
+    ],
+    related: ["Model checking y theorem proving", "Sistemas verificados", "Ejecución simbólica y model checking"],
   },
 
   // ── M83 · Gestión de Identidades y Accesos (IAM) ─────────────────────────
@@ -9680,6 +9725,25 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Tratamiento del riesgo", "ISO/IEC 27001", "NIST Cybersecurity Framework (CSF)"],
   },
+  {
+    id: 884,
+    module: 85,
+    term: "Scoring de riesgos y priorización",
+    short: "Cuantificar impacto y probabilidad para ordenar tratamientos; CVSS, FAIR y modelos cuantitativos.",
+    detail:
+      "Una vez identificados los riesgos, hay que **priorizarlos** para gastar budget donde más importa. Modelos:\n" +
+      "• **CVSS v3.1** — puntuación de vulnerabilidades (0–10) basada en: accesibilidad, complejidad, privilegios, confidencialidad, integridad, disponibilidad. Usado por CVE, pero limitado a vulns técnicas.\n" +
+      "• **FAIR (Factor Analysis of Information Risk)** — cuantificación: `Risk = Threat × Vulnerability × Asset Value × Probability`. Busca **valores monetarios** realistas.\n" +
+      "• **Risk heat maps** — eje X: probabilidad, eje Y: impacto. Riesgos en esquina superior derecha = máxima prioridad.\n" +
+      "• **Modelos Bayesianos** — actualizar probabilidades a la luz de controles nuevos, incidentes históricos.\n" +
+      "> 💡 Sin scoring, la gestión de riesgos es política y presupuesto; con scoring, es matemática defendible.",
+    examples: [
+      "CVSS 9.8 en un servicio crítico → prioridad inmediata vs CVSS 5.0 en un sistema marginal.",
+      "FAIR: si una brecha cuesta €1M y tiene 5% probabilidad anual, riesgo puro = €50K → justifica invertir €30K en controles.",
+      "Heat map: riesgos 'alta prob, bajo impacto' pueden aceptarse; 'baja prob, alto impacto' requieren transferencia (seguro).",
+    ],
+    related: ["Tratamiento del riesgo", "Identificación y análisis de riesgos", "Metodologías de riesgo"],
+  },
 
   // ── M86 · Cumplimiento Normativo y Auditoría ─────────────────────────────
   {
@@ -9753,6 +9817,28 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "No conformidad: la política exige MFA y un sistema crítico no lo tiene.",
     ],
     related: ["Proceso de auditoría", "ISO 27001, SGSI y SoA", "Gobernanza de seguridad"],
+  },
+  {
+    id: 894,
+    module: 86,
+    term: "Automatización de evidencias y auditoría continua",
+    short: "Herramientas y workflows para generar auditable trail automático — logs, reportes, alertas — sin intervención manual.",
+    detail:
+      "La auditoría tradicional es **puntual**: auditor llega, revisor de 3 semanas de logs. La **auditoría continua** es **online**: controles son sensores, evidencias fluyen a un dashboard, alertas disparan ante anomalías.\n" +
+      "| Nivel | Herramienta |\n" +
+      "|---|---|\n" +
+      "| **SIEM / Log aggregation** | Splunk, Datadog, ELK, Sumo Logic — centralizar logs de todos los sistemas |\n" +
+      "| **ITSM / GRC platforms** | ServiceNow, Archer, LogicGate — workflows de auditoría, seguimiento de hallazgos |\n" +
+      "| **Automated compliance checking** | CloudSploit, Prowler, Dome9 — scans periódicos de cloud/infra contra estándares |\n" +
+      "| **Change tracking & config audit** | osquery, Wazuh — monitorear cambios no autorizados en real-time |\n" +
+      "| **Access reviews automáticas** | Okta, Azure AD reports — generar listados de privilegios para que el negocio certifique |\n" +
+      "> ⚠️ Auditoría continua no elimina auditoría externa, pero **reduce sorpresas** y **carga operacional**.",
+    examples: [
+      "Dashboard Splunk con alertas automáticas: 'acceso fuera de horario a BD crítica'.",
+      "Script cron que corre Prowler cada noche, compara con baseline, reporta desviaciones.",
+      "Okta sync de permisos: una vez al mes genera reporte de 'quién tiene acceso a qué', manager certifica on-click.",
+    ],
+    related: ["Proceso de auditoría", "ISO 27001, SGSI y SoA", "Marcos regulatorios clave"],
   },
 
   // ── M34 · Ingeniería Social y Phishing ──────────────────────────────────
