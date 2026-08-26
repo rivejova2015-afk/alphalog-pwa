@@ -9255,6 +9255,318 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Proceso de auditoría", "ISO 27001, SGSI y SoA", "Gobernanza de seguridad"],
   },
+  // ── M1 · Fundamentos (continuación) ──────────────────────────────────────
+  {
+    id: 894,
+    module: 1,
+    term: "Tríada CIA",
+    short: "Confidentiality, Integrity, Availability: los tres pilares de la seguridad de la información.",
+    detail:
+      "La **Tríada CIA** es el marco conceptual fundamental de la ciberseguridad:\n" +
+      "• **Confidencialidad** — garantizar que solo usuarios autorizados accedan a los datos.\n" +
+      "• **Integridad** — asegurar que los datos no se modifiquen sin autorización.\n" +
+      "• **Disponibilidad** — garantizar que los datos y servicios sean accesibles cuando se necesiten.\n" +
+      "> 💡 Cada seguridad tiene un equilibrio: más cifrado = menos disponibilidad; más acceso = menos confidencialidad.",
+    examples: [
+      "Cifrado TLS protege confidencialidad en tránsito.",
+      "Firmas digitales protegen integridad de documentos.",
+      "Redundancia y backups aseguran disponibilidad.",
+    ],
+    related: ["Ciberseguridad", "Autenticación y Autorización", "Defensa en profundidad"],
+  },
+  {
+    id: 895,
+    module: 1,
+    term: "Gestión de riesgos",
+    short: "Proceso de identificar, evaluar y mitigar riesgos de seguridad.",
+    detail:
+      "La **gestión de riesgos** es el ciclo continuo:\n" +
+      "1. **Identificar** — qué podría salir mal (activos, amenazas, vulnerabilidades).\n" +
+      "2. **Evaluar** — qué probabilidad e impacto tiene cada riesgo.\n" +
+      "3. **Responder** — mitigar (reducir), aceptar (monitorear), evitar o transferir (seguros).\n" +
+      "4. **Monitorear** — revisar regularmente si la postura mejoró.\n" +
+      "> ⚠️ La gestión de riesgos nunca elimina los riesgos; los lleva a un nivel aceptable según el negocio.",
+    examples: [
+      "Un servidor sin parches = vulnerabilidad conocida con alto impacto → parchar urgente.",
+      "Un empleado con acceso a datos financieros = insider threat → segregar tareas, auditar.",
+    ],
+    related: ["Superficie de ataque", "Vector de ataque", "Evaluación de riesgos"],
+  },
+  {
+    id: 896,
+    module: 1,
+    term: "Ciclo de vida seguro del software (SSDLC)",
+    short: "Integrar seguridad en cada fase del desarrollo: diseño, codificación, testing, deploy.",
+    detail:
+      "El **Secure Software Development Lifecycle (SSDLC)** introduce controles de seguridad **desde el inicio**:\n" +
+      "• **Diseño** — threat modeling, arquitectura segura.\n" +
+      "• **Desarrollo** — código seguro, OWASP Top 10, input validation.\n" +
+      "• **Testing** — pruebas de penetración, fuzzing, análisis estático.\n" +
+      "• **Deploy** — principio de mínimo privilegio, secrets en vault, auditoría de cambios.\n" +
+      "> 💡 Arreglar un bug de seguridad en producción es 10x más costoso que en diseño.",
+    examples: [
+      "Validar inputs en backend para prevenir inyección SQL.",
+      "Usar SAST (Static Application Security Testing) en CI/CD.",
+    ],
+    related: ["Defensa en profundidad", "Validación de entrada", "DevSecOps"],
+  },
+  {
+    id: 897,
+    module: 1,
+    term: "Gestión de incidentes",
+    short: "Plan y proceso para detectar, contener, erradicar y recuperarse de incidentes de seguridad.",
+    detail:
+      "La **Gestión de Incidentes (Incident Response)** define roles, herramientas y procedimientos:\n" +
+      "1. **Preparación** — equipo IR, herramientas, playbooks.\n" +
+      "2. **Detección y análisis** — identificar que algo malo ocurrió.\n" +
+      "3. **Contención** — aislar el daño (cortocircuitar la amenaza activa).\n" +
+      "4. **Erradicación** — eliminar la causa raíz.\n" +
+      "5. **Recuperación** — restaurar sistemas a estado limpio.\n" +
+      "6. **Post-incidente** — lecciones aprendidas, mejora del proceso.\n" +
+      "> ⚠️ 90% de los incidentes se detectan por terceros (clientes, autoridades) — mejorar detección es clave.",
+    examples: [
+      "Playbook para ransomware: desconectar red → snapshot forensic → restaurar de backup limpio.",
+      "Post-incidente: parchar vulnerabilidad explotada, entrenar personal, actualizar firewalls.",
+    ],
+    related: ["SIEM y monitoreo", "Detección y respuesta", "Defensa en profundidad"],
+  },
+  // ── M2 · Gobernanza y Riesgos (continuación) ─────────────────────────────
+  {
+    id: 898,
+    module: 2,
+    term: "Evaluación de riesgos",
+    short: "Proceso cuantitativo o cualitativo para medir probabilidad e impacto de amenazas.",
+    detail:
+      "Una **Evaluación de Riesgos (Risk Assessment)** usa matrices de riesgo:\n" +
+      "| Impacto / Probabilidad | Baja | Media | Alta |\n" +
+      "|---|---|---|---|\n" +
+      "| **Baja** | Bajo | Bajo-Medio | Medio |\n" +
+      "| **Media** | Bajo-Medio | Medio | Medio-Alto |\n" +
+      "| **Alta** | Medio | Medio-Alto | Alto |\n" +
+      "**Metodologías**:\n" +
+      "• **Cualitativa** — expertos califican (alto/medio/bajo).\n" +
+      "• **Cuantitativa** — ALE (Annual Loss Expectancy) = Probabilidad × Impacto en €/$.",
+    examples: [
+      "Base de datos sin cifrado + acceso desde Internet = probabilidad: media, impacto: crítico → riesgo alto.",
+      "ALE = 0.1 (1 brecha/10 años) × €1M (datos financieros) = €100K anuales → invertir en defensa si cuesta menos.",
+    ],
+    related: ["Gestión de riesgos", "Integridad", "Confidencialidad"],
+  },
+  {
+    id: 899,
+    module: 2,
+    term: "Marcos regulatorios clave",
+    short: "Leyes y directivas que obligan a organizaciones a proteger datos: GDPR, HIPAA, PCI-DSS.",
+    detail:
+      "Los **marcos regulatorios** vienen de distintas jurisdicciones y sectores:\n" +
+      "• **GDPR (UE)** — protección de datos personales, derecho al olvido, consentimiento explícito.\n" +
+      "• **HIPAA (USA)** — datos de salud, encriptación, auditoría.\n" +
+      "• **PCI-DSS** — datos de pago (tarjetas), estándar de industria obligatorio.\n" +
+      "• **LGPD (Brasil)** — similar a GDPR, datos personales.\n" +
+      "> ⚠️ No cumplir regulaciones = multas masivas (GDPR: hasta 4% del revenue global) + sanciones penales.",
+    examples: [
+      "Startup fintech con UE: debe cumplir GDPR o riesga €20M de multa.",
+      "Hospital: HIPAA exige auditoría de acceso a historiales médicos cada trimestre.",
+    ],
+    related: ["Gobernanza de seguridad", "Cumplimiento normativo", "ISO/IEC 27001"],
+  },
+  {
+    id: 900,
+    module: 2,
+    term: "Modelos de control de acceso",
+    short: "Mecanismos para decidir quién accede a qué: DAC, MAC, RBAC, ABAC.",
+    detail:
+      "Los **Modelos de Control de Acceso** definen *cómo se decide* quién entra:\n" +
+      "• **DAC (Discretionary)** — el dueño del recurso decide (Windows NTFS).\n" +
+      "• **MAC (Mandatory)** — el sistema decide por etiquetas de seguridad (nivel secreto, compartimentado).\n" +
+      "• **RBAC (Role-Based)** — permisos asociados a roles (admin, user, guest).\n" +
+      "• **ABAC (Attribute-Based)** — decisión basada en atributos dinámicos (hora, ubicación, dispositivo).\n" +
+      "El **Principio de Mínimo Privilegio** aplica a todos: solo los permisos necesarios.",
+    examples: [
+      "RBAC: solo admins pueden crear usuarios; users solo ven sus propios datos.",
+      "ABAC: acceso a datos sensibles solo desde VPN corporativa en horario laboral.",
+    ],
+    related: ["Principio de mínimo privilegio", "AAA", "Segmentación de red"],
+  },
+  {
+    id: 901,
+    module: 2,
+    term: "Gobernanza de seguridad",
+    short: "Estructura de decisión que asegura que la seguridad alinea con objetivos del negocio.",
+    detail:
+      "La **Gobernanza de Seguridad** es el nivel estratégico de toma de decisiones:\n" +
+      "• **Dirección / CISO** — define política y presupuesto de seguridad.\n" +
+      "• **Comités (Risk Committee, Security Steering)** — revisan riesgos trimestrales.\n" +
+      "• **Marcos de referencia** — NIST, ISO 27001, COBIT; auditorías independientes.\n" +
+      "• **Métricas y reporte** — KPIs: número de CVEs parchadas, MTTR incidentes, training completado.\n" +
+      "> 💡 Gobernanza sin cumplimiento operativo = teatro de seguridad; gobernanza + ops = transformación real.",
+    examples: [
+      "CISO propone presupuesto: €5M/año para EDR en 10K devices (€500/device).",
+      "Risk Committee aprueba y requiere reportes trimestrales de ROI.",
+    ],
+    related: ["Marcos regulatorios clave", "Políticas y no conformidades", "NIST Cybersecurity Framework"],
+  },
+  // ── M3 · Amenazas y Malware (continuación) ───────────────────────────────
+  {
+    id: 902,
+    module: 3,
+    term: "Tipos de malware",
+    short: "Clasificación de software malicioso: virus, gusano, troyano, spyware, adware, rootkit.",
+    detail:
+      "El **malware** se clasifica por método de propagación y daño:\n" +
+      "• **Virus** — se replica y requiere ejecución humana (adjunto, USB).\n" +
+      "• **Gusano (Worm)** — se autoreplica sin intervención (red).\n" +
+      "• **Troyano (Trojan)** — se disfraza de legítimo, hace un backdoor.\n" +
+      "• **Rootkit** — oculta código en kernel del SO; muy persistente.\n" +
+      "• **Spyware / Adware** — espía datos personales o muestra publicidad.\n" +
+      "• **Botnet** — red de dispositivos comprometidos, controlada remotamente (C&C).\n" +
+      "> ⚠️ Una máquina en botnet puede enviar millones de spam sin que el dueño lo sepa.",
+    examples: [
+      "Emotet: gusano bancario con spyware + backdoor + downloader (2021).",
+      "Stuxnet: gusano + rootkit que atacó infraestructura nuclear (2010).",
+    ],
+    related: ["Exploit y Payload", "Ransomware", "Actor de amenaza"],
+  },
+  {
+    id: 903,
+    module: 3,
+    term: "MITRE ATT&CK Framework",
+    short: "Base de conocimiento global de tácticas y técnicas reales usadas por adversarios.",
+    detail:
+      "**MITRE ATT&CK** es una matriz que cataloga ataques reales observados:\n" +
+      "• **Tácticas** — objetivos de alto nivel: Inicial Access, Execution, Persistence, Defense Evasion, Credential Access, Discovery, Lateral Movement, Collection, Command & Control, Exfiltration, Impact.\n" +
+      "• **Técnicas** — métodos concretos bajo cada táctica (ej: T1566 Phishing bajo Inicial Access).\n" +
+      "• **Procedimientos** — casos reales de APTs usando esa técnica (ej: APT28 usa T1071 Application Layer Protocol).\n" +
+      "**Uso**: mapear ataques observados, diseñar defensas contra técnicas, simular adversarios (red team).",
+    examples: [
+      "Detecto IoC en red → busco en ATT&CK → descubro que es TTP de APT29 → ajusto defensas.",
+      "Red team: simulo los 15 TTP más comunes en mi industria → identifico brechas de defensa.",
+    ],
+    related: ["TTP (Tácticas, Técnicas y Procedimientos)", "Amenaza, Vulnerabilidad y Riesgo", "OSINT"],
+  },
+  {
+    id: 904,
+    module: 3,
+    term: "Inteligencia de amenazas",
+    short: "Recopilar, analizar y compartir información sobre amenazas actuales y actores de amenaza.",
+    detail:
+      "La **Threat Intelligence (TI)** es el ciclo de análisis:\n" +
+      "1. **Recopilación** — OSINT, feeds públicos, dark web, honeypots, socios.\n" +
+      "2. **Análisis** — correlacionar IoCs, mapear TTPs, identificar motivación del actor.\n" +
+      "3. **Difusión** — reportes a equipos (SOC, desarrollo, dirección).\n" +
+      "4. **Integración** — acciones defensivas (bloquear IPs/dominios, parchear CVEs conocidas).\n" +
+      "**Niveles**: Operativo (IoCs inmediatos), Táctico (técnicas del adversario), Estratégico (riesgos a largo plazo).",
+    examples: [
+      "Feed de malware: nueva campaña de Emotet → IOCs → integrar en firewall en 2 horas.",
+      "Reporte estratégico: APT chino enfocado en telecomunicaciones → presupuesto para EDR detecta esa TTP.",
+    ],
+    related: ["OSINT", "TTP (Tácticas, Técnicas y Procedimientos)", "MITRE ATT&CK Framework"],
+  },
+  // ── M4 · Estándares y Marcos (continuación) ──────────────────────────────
+  {
+    id: 905,
+    module: 4,
+    term: "SOC 2 y SOC 3",
+    short: "Certificaciones de auditoría que prueban seguridad, disponibilidad y confidencialidad operacionales.",
+    detail:
+      "**SOC (Service Organization Control)** emitida por AICPA:\n" +
+      "• **SOC 2 Type I** — evaluación de controles en un día específico (snapshot).\n" +
+      "• **SOC 2 Type II** — auditoría de 6+ meses de que los controles funcionan sostenidamente (preferido).\n" +
+      "• **SOC 3** — versión pública resumida de SOC 2 para marketing.\n" +
+      "**Trust Service Categories (TSC)**:\n" +
+      "• **CC (Common Criteria)**: seguridad.\n" +
+      "• **A (Availability)**: disponibilidad.\n" +
+      "• **PI (Processing Integrity)**: exactitud de datos.\n" +
+      "• **C (Confidentiality)**: confidencialidad.\n" +
+      "• **PO (Privacy)**: privacidad según GDPR/CCPA.\n" +
+      "> 💡 SaaS que procesa datos sensibles casi siempre necesita SOC 2 Type II.",
+    examples: [
+      "Startup cloud: SOC 2 Type II → cliente empresarial confía en datos → firma contrato.",
+      "AWS, Salesforce, etc. publican SOC 3 para atraer clientes.",
+    ],
+    related: ["ISO/IEC 27001", "HIPAA", "GDPR y regulaciones de datos"],
+  },
+  {
+    id: 906,
+    module: 4,
+    term: "COBIT",
+    short: "Marco de gobernanza de TI que alinea objetivos del negocio con controles de TI y riesgos.",
+    detail:
+      "**COBIT (Control Objectives for Information and Related Technology)** de ISACA:\n" +
+      "• **5 dominios principales** (COBIT 2019):\n" +
+      "  - Evaluate, Direct, Supervise (Gobernanza).\n" +
+      "  - Align, Plan, Organize (Administración).\n" +
+      "  - Build, Acquire, Implement (Implementación).\n" +
+      "  - Deliver, Service, Support (Operación).\n" +
+      "  - Monitor, Evaluate, Assure (Monitoreo).\n" +
+      "• **Matricidad**: cada proceso tiene objetivos, riesgos, controles y métricas.\n" +
+      "• **Integración con NIST/ISO**: COBIT toma objetivos de NIST/ISO 27001 y detalla cómo lograrlo.",
+    examples: [
+      "Banco: COBIT para alinear estrategia de transformación digital con riesgos de fraude.",
+      "Empresa regulada: auditor externo usa COBIT como referencia de buenas prácticas.",
+    ],
+    related: ["NIST Cybersecurity Framework", "ISO/IEC 27001", "Gobernanza de seguridad"],
+  },
+  {
+    id: 907,
+    module: 4,
+    term: "PCI-DSS e HIPAA",
+    short: "Estándares verticales de seguridad obligatorios en pagos (PCI-DSS) y salud (HIPAA).",
+    detail:
+      "Dos marcos altamente específicos por sector:\n" +
+      "**PCI-DSS (Payment Card Industry)** — procesar/almacenar datos de tarjeta:\n" +
+      "• 12 requisitos: firewall, no contraseñas por defecto, proteger datos en tránsito/reposo, testeo anual, política de seguridad.\n" +
+      "• Niveles 1-4 según volumen de transacciones; nivel 1 exige auditor externo anualmente.\n" +
+      "• Violación: €5-10 por transacción o 1% de revenue anual (lo que sea mayor).\n" +
+      "**HIPAA (Health Insurance Portability and Accountability)** — datos médicos USA:\n" +
+      "• 3 reglas: Privacy Rule (acceso autorizado), Security Rule (cifrado, auditoría), Breach Notification (avisar en 60 días).\n" +
+      "• HITECH Act: multas €100-1.5M + penales criminales (hasta €250K + 10 años cárcel).",
+    examples: [
+      "E-commerce: procesa 1M transacciones/año → PCI-DSS nivel 2 → auditoría externa anual.",
+      "Hospital: breach de 1000 historiales → notificar + reportar a HHS + multa potencial €150K+.",
+    ],
+    related: ["Marcos regulatorios clave", "ISO/IEC 27001", "SOC 2 y SOC 3"],
+  },
+  {
+    id: 908,
+    module: 4,
+    term: "GDPR y regulaciones de datos",
+    short: "Leyes de protección de datos personales (GDPR UE, LGPD Brasil, CCPA USA) con privacidad como derecho.",
+    detail:
+      "**Regulaciones de datos personales**:\n" +
+      "• **GDPR (General Data Protection Regulation, UE)** — sujetos de datos tienen derechos: acceso, rectificación, olvido, portabilidad. Consentimiento explícito obligatorio. Hasta 4% revenue anual de multa.\n" +
+      "• **LGPD (Lei Geral de Proteção de Dados, Brasil)** — casi idéntica a GDPR; sanciones €2-50M anual.\n" +
+      "• **CCPA (California Consumer Privacy Act, USA)** — residentes californianos: derecho a saber qué datos se recopilan, borrar datos, opt-out de venta. Multa €5K por violación.\n" +
+      "• **DPA de UK, Australia, Singapur**: similares, con variaciones locales.\n" +
+      "**Implementación**: Privacy by Design, Data Minimization, Purpose Limitation, Retention, consent management, DPO.",
+    examples: [
+      "SaaS EU: almacena datos en server USA sin Privacy Shield/SCCs → violación GDPR → auditoría, multa, legal.",
+      "Startup: recopila email de usuarios → debe tener política de privacidad visible, checkbox de opt-in, derecho a borrar.",
+    ],
+    related: ["Marcos regulatorios clave", "Confidencialidad", "Gobernanza de seguridad"],
+  },
+  {
+    id: 909,
+    module: 4,
+    term: "Auditoría de seguridad",
+    short: "Evaluación independiente y verificable de que los controles de seguridad funcionan y cumplen regulaciones.",
+    detail:
+      "Una **Auditoría de Seguridad** es el proceso de terceros (interno o externo) que verifica:\n" +
+      "1. **Compliance** — ¿se cumple regulación/estándar/política?\n" +
+      "2. **Efectividad** — ¿funcionan los controles como están diseñados?\n" +
+      "3. **Brecha** — ¿qué se implementó vs. qué está documentado?\n" +
+      "**Tipos**:\n" +
+      "• **Auditoría de Cumplimiento** — PCI-DSS, HIPAA, ISO 27001 (certificación).\n" +
+      "• **Auditoría de Seguridad Integral** — evaluación global de postura de seguridad.\n" +
+      "• **Auditoría Interna** — equipo propio, menos credibilidad ante reguladores.\n" +
+      "• **Auditoría Externa** — tercera parte independiente, requisito legal en bancos, salud.\n" +
+      "**Resultado**: reporte con hallazgos, severidad (crítico/alto/medio/bajo), plan de remediación.",
+    examples: [
+      "Banco: auditoría externa anual = reporte de 200 páginas, 15 hallazgos críticos, remediar en 90 días.",
+      "Startup SaaS: auditoría ISO 27001 para certificación (12 meses), inversión €50-200K.",
+    ],
+    related: ["Marcos regulatorios clave", "Gobernanza de seguridad", "Políticas y no conformidades"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
