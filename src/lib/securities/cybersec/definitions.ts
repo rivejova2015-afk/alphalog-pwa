@@ -8141,6 +8141,36 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Prompt injection y jailbreaks", "OWASP LLM Top 10", "Principio de mínimo privilegio"],
   },
+  {
+    id: 724,
+    module: 69,
+    term: "Defensa contra ataques a LLMs",
+    short: "Hardening de LLMs en producción: rate limiting, auditoría, sandbox, detección de adversarial inputs.",
+    detail:
+      "La defensa en profundidad contra ataques a LLMs combina:\n" +
+      "**Input / Output Filtering:**\n" +
+      "• Detectar patrones de inyección (palabras clave, estructura sospechosa)\n" +
+      "• Sanitizar y escapar output antes de renderizar (evita XSS)\n" +
+      "• Limitar la longitud de input/output\n" +
+      "**Monitoreo y Rate Limiting:**\n" +
+      "• Rate limit por usuario/IP para frenar scraping y fuerza bruta\n" +
+      "• Detectar patrones anómalos (queries muy similares, volumen)\n" +
+      "• Log auditable de todas las queries sensibles\n" +
+      "**Arquitectura segura:**\n" +
+      "• **Sandbox**: correr el LLM en contenedor aislado con recursos limitados\n" +
+      "• **Mínimo privilegio**: las herramientas (agents) solo tienen permisos para su función\n" +
+      "• **Human-in-the-loop**: revisión manual antes de acciones críticas\n" +
+      "• **Versionado y rollback**: poder revertir a una versión anterior si se detecta cambio de comportamiento\n" +
+      "**Validación de adversarial inputs:**\n" +
+      "• Detectores entrenados para reconocer jailbreaks/inyecciones\n" +
+      "• Guardrails (constraint-based checkers) que bloquean salidas inapropiadas\n" +
+      "> 💡 No hay defensa perfecta; la auditoría y detección son tan importantes como la prevención.",
+    examples: [
+      "OpenAI: rate limit en la API + detección de abuso + human review team.",
+      "Claude: input filtering + output guardrails + logging de todas las queries.",
+    ],
+    related: ["OWASP LLM Top 10", "Prompt injection y jailbreaks", "Auditoría y logging"],
+  },
 
   // ── M70 · MLSecOps y ML Supply Chain ─────────────────────────────────────
   {
@@ -8198,6 +8228,33 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Monitorear la inferencia para detectar evasión/abuso.",
     ],
     related: ["Provenance e integridad", "ML supply chain"],
+  },
+  {
+    id: 734,
+    module: 70,
+    term: "Governance y compliance de modelos",
+    short: "Auditoría de modelos, trazabilidad, responsabilidad e impacto regulatorio.",
+    detail:
+      "A medida que los LLMs toman decisiones críticas, emerge la necesidad de **accountability**:\n" +
+      "**Trazabilidad:**\n" +
+      "• **Model card** — quién lo entrenó, con qué datos, sesgos conocidos, casos de uso recomendados\n" +
+      "• **Dataset statement** — origen, composición, limitaciones, cómo se etiquetó\n" +
+      "• **SBOM de modelo** (ML-BOM) — dependencias de software, versiones, licencias\n" +
+      "**Auditoría y testing:**\n" +
+      "• **Fairness audits** — detectar sesgos por grupo demográfico\n" +
+      "• **Robustness testing** — resistencia a entradas adversariales\n" +
+      "• **Responsible AI reviews** — evaluación multidisciplinaria antes de deploy\n" +
+      "**Compliance:**\n" +
+      "• **GDPR**: derecho a explicación, consentimiento informado\n" +
+      "• **EU AI Act**: clasificación de riesgo, documentación, conformidad\n" +
+      "• **Regulación sectorial** (finanzas, salud): auditoría previa a despliegue\n" +
+      "• **Retención de logs**: guardar decisiones y retroalimentación para auditorías futuras\n" +
+      "> ⚠️ La gobernanza de modelos es aún emergente pero será crítica conforme se regulen los LLMs.",
+    examples: [
+      "Model card de un LLM publicado en Hugging Face.",
+      "Audit trail de decisiones crediticias con explicación para cada una.",
+    ],
+    related: ["Seguridad del pipeline ML (MLSecOps)", "ML supply chain", "Provenance e integridad"],
   },
 
   // ── M71 · Side-Channels Microarquitectónicos ─────────────────────────────
@@ -8264,6 +8321,32 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Spectre y Meltdown", "Cache side-channels", "Mitigaciones de kernel"],
   },
+  {
+    id: 744,
+    module: 71,
+    term: "Defensa contra transient execution attacks",
+    short: "Mitigaciones aplicadas: CHG, InvisiSpec, MicroVault y el futuro del hardware seguro.",
+    detail:
+      "Las defensas contra Spectre/Meltdown avanzan en tres frentes:\n" +
+      "**Hardware moderno:**\n" +
+      "• **AMD LFENCE** — serializar ejecución especulativa (LFENCE más fuerte post-Zen 3)\n" +
+      "• **Intel CET** — Control-Flow Enforcement para evitar ROP\n" +
+      "• **ARM MTE** — Memory Tagging Extension (detecta OOB en memoria)\n" +
+      "**Arquitecturas conceptuales:**\n" +
+      "• **CHG** (Cleanup Hardware Gadgets) — ejecutar en modo seguro después de especulación\n" +
+      "• **InvisiSpec** — separar el espacio de especulación del real\n" +
+      "• **MicroVault** — aislar buffers sensibles\n" +
+      "**Compilers y runtime:**\n" +
+      "• **Retpoline/SLH** — reescribir el código para evitar branches predecibles\n" +
+      "• **Load Value Injection mitigations** — validar valores cargados\n" +
+      "• **CFI/CET integration** — control de flujo + ejecución especulativa\n" +
+      "> 💡 El futuro: chips diseñados con seguridad especulativa de base, no como parche.",
+    examples: [
+      "AMD Ryzen 7000 con LFENCE nativo.",
+      "Linux kernel con retpoline + KPTI stack vs performance baseline.",
+    ],
+    related: ["Variantes y mitigaciones", "Spectre y Meltdown", "Hardware seguro"],
+  },
 
   // ── M72 · Fault Injection y Hardware Attacks ─────────────────────────────
   {
@@ -8328,6 +8411,36 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Fault injection (glitching)", "Power/EM analysis", "Root of trust"],
   },
+  {
+    id: 754,
+    module: 72,
+    term: "Casos reales: CVEs de hardware y extracciones exitosas",
+    short: "Ejemplos reales de vulnerabilidades de hardware explotadas y lecciones de defensa.",
+    detail:
+      "Los ataques físicos no son teóricos; han ocurrido en el mundo real:\n" +
+      "**Extracciones exitosas documentadas:**\n" +
+      "• **SK Hynix firmware** (2020) — Glitching el bootloader para bypassar verificación de firma\n" +
+      "• **Infineon ECC** (2022) — Fault injection en curvas elípticas de tarjetas criptográficas\n" +
+      "• **TEE bypasses** — ChainSaw (Samsung Knox), Drammer (DRAM rowhammer) accedieron a secretos\n" +
+      "• **Intel SGX enclave escapes** — Spectre llevó ataques virtuales al hardware (2018)\n" +
+      "**Contexto:**\n" +
+      "Estos ataques requieren: equipamiento especializado ($5k-$100k), expertise, acceso físico. Son realistas en:\n" +
+      "→ Tarjetas de pago/SIM capturadas\n" +
+      "→ Análisis forense post-incidente\n" +
+      "→ Espionaje de estado (APTs)\n" +
+      "→ Supply chain (fabricación, logística)\n" +
+      "**Lecciones:**\n" +
+      "1. **Asumir que el atacante puede acceder físicamente** (en hardware sensible)\n" +
+      "2. **Redundancia certificada** es mejor que teoría\n" +
+      "3. **Rotación de claves** limita el daño (una extracción ≠ comprometer todo el pasado)\n" +
+      "4. **Análisis post-mortem** es crítico: logs de acceso, timestamp de eventos\n" +
+      "> ⚠️ La combinación de múltiples vectores (firmware + física + timing) es más peligrosa que cada uno aislado.",
+    examples: [
+      "Un análisis de ChainSaw: cómo 4 vulnerabilidades de Samsung Knox se combinaron para escapar TEE.",
+      "Análisis forense de una tarjeta SIM: glitching + timing side-channel → extracción de Ki (clave maestra).",
+    ],
+    related: ["Contramedidas de hardware", "Implantes y tampering", "Ataques de firmware"],
+  },
 
   // ── M73 · Firmware, UEFI y Secure Boot ───────────────────────────────────
   {
@@ -8390,6 +8503,34 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Ataques de firmware", "TPM y attestation", "La boot chain (cadena de confianza)"],
   },
+  {
+    id: 764,
+    module: 73,
+    term: "Evolución y futuro del secure boot",
+    short: "De BIOS/MBR a UEFI; certificación SecureBoot y estándares emergentes (Platform Firmware Compliance).",
+    detail:
+      "Evolución histórica:\n" +
+      "| Era | Bootloader | Amenaza | Defensa |\n" +
+      "|---|---|---|---|\n" +
+      "| DOS/Win95 | MBR + BIOS sin firma | Boot virus, rootkits | Antivirus |\n" +
+      "| UEFI (2005) | EFI binarios firmados | Firmware reemplazado | Secure Boot |\n" +
+      "| Post-2012 | UEFI Secure Boot | UEFI zero-days, DMA | Measured Boot + TPM |\n" +
+      "| Ahora | UEFI + DBX revocation | Bootkit UEFI evasivo | Platform Firmware Compliance |\n" +
+      "**Estándares emergentes:**\n" +
+      "• **UEFI Platform Firmware Compliance** (PFDL) — certificación del ecosystem\n" +
+      "• **Confidential Computing** — encryptión del firmware antes de ejecución (CXL, AMD SEV-SNP)\n" +
+      "• **Bug Bounties en firmware** — asignación de recursos a investigadores (AMD, Intel, Apple)\n" +
+      "**Retos sin resolver:**\n" +
+      "• **Rowhammer contra medidas de boot** — glitching la RAM durante verificación\n" +
+      "• **Supply chain de firmware** — confianza en los binarios EFI provistos\n" +
+      "• **Recovery y rollback** — cómo restaurar un firmware íntegro si se corrompe (intencional o accidental)\n" +
+      "> 💡 El futuro: attestation remota + revocation automática de imágenes comprometidas.",
+    examples: [
+      "BlackLotus evadió Secure Boot en 2023 (bug en BootGuard); patch en UEFI.",
+      "HPE iLO firmware update con verificación de integridad por FWUPD.",
+    ],
+    related: ["Defensas de firmware (chipsec)", "Ataques de firmware", "Measured Boot"],
+  },
 
   // ── M74 · Trusted Execution y Roots of Trust ─────────────────────────────
   {
@@ -8446,6 +8587,37 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un bug de memoria dentro del enclave que lo compromete igual.",
     ],
     related: ["TEEs y confidential computing", "Spectre y Meltdown", "Root of trust"],
+  },
+  {
+    id: 774,
+    module: 74,
+    term: "Casos de uso y deployment de TEEs",
+    short: "Dónde viven los TEEs hoy: blockchain, pagos, nube confidencial, IoT.",
+    detail:
+      "**Casos de uso reales:**\n" +
+      "| Sector | TEE | Uso |\n" +
+      "|---|---|---|\n" +
+      "| Blockchain | SGX, ARM TrustZone | Nodos privados, staking seguro |\n" +
+      "| Pagos | Secure Element, TPM | Tarjetas criptográficas, EMV |\n" +
+      "| Cloud | AMD SEV-SNP, AWS Nitro | Máquinas virtuales confidenciales |\n" +
+      "| Móvil | TrustZone, Secure Enclave | Desbloqueo por huella, Apple Pay |\n" +
+      "| Firmware | TPM | Measured boot, attestation remota |\n" +
+      "**Tendencias de deployment:**\n" +
+      "• **Confidential Computing (CC)** — AWS, Azure, Google Cloud ofrecen instancias con TEE\n" +
+      "• **Hardware Security Module (HSM)** — custodio de claves en data centers\n" +
+      "• **Edge TEE** — enclaves en routers/IoT para procesamientos sensibles\n" +
+      "• **Chain of Trust** — cada nivel verifica al siguiente (bootloader → kernel → app)\n" +
+      "**Desafíos de deployment:**\n" +
+      "1. **Costo** — TEEs profesionales son costosos (HSM ~$10k)\n" +
+      "2. **Complejidad** — requiere entender el modelo de seguridad específico\n" +
+      "3. **Heterogeneidad** — distintos TEEs, distintas APIs, código no portable\n" +
+      "4. **Auditoría** — certificaciones frágiles; nuevas CVEs emergen regularmente\n" +
+      "> 💡 La tendencia es hacia 'Confidential as a Service' (CaaS): outsource el TEE, paga por uso.",
+    examples: [
+      "AWS Nitro Enclaves ejecutando código sensible de pago sin acceso al hypervisor.",
+      "Una billetera de crypto usando un Secure Element para firmar sin exponerla.",
+    ],
+    related: ["TEEs y confidential computing", "Root of trust", "Atestación"],
   },
 
   // ── M75 · Reverse Engineering Avanzado ───────────────────────────────────
