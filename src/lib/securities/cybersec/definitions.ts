@@ -8686,6 +8686,37 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["RE workflow avanzado", "Deobfuscación", "Ejecución simbólica"],
   },
+  {
+    id: 784,
+    module: 75,
+    term: "Auditoría forense de binarios y workflow práctico",
+    short: "Análisis post-breach: identificar backdoors, exfiltración y persistencia en ejecutables.",
+    detail:
+      "El RE es crítico en **respuesta a incidentes**: descubrir qué hizo el malware.\n" +
+      "**Workflow práctico:**\n" +
+      "1. **Triage rápido** → hash, strings, metadata\n" +
+      "   - ¿Qué imports? ¿Quién firmó? ¿Packeado?\n" +
+      "2. **Ejecución segura** → sandbox (Cuckoo, Joe Sandbox)\n" +
+      "   - Red que hace, qué archivos toca, qué claves de registro modifica\n" +
+      "3. **Desempacar** (si está packed) → UPX, custom packers\n" +
+      "   - dump de memoria post-desempaque + diff con original\n" +
+      "4. **Disasm selectivo** → Ghidra en funciones interesantes\n" +
+      "   - API calls sospechosas (CreateRemoteThread, VirtualAllocEx)\n" +
+      "   - Strings ocultas (deobfuscadas a mano)\n" +
+      "5. **Emulación** → ejecutar snippets con Unicorn + Frida hookear patrones\n" +
+      "6. **Reportar** → IOCs (IPs, dominios, rutas), TTPs (técnicas), cadena de confianza rota\n" +
+      "**Herramientas de auditoría:**\n" +
+      "• **YARA** — reglas para clasificar malware\n" +
+      "• **radare2** — disasm + plugins + scripting\n" +
+      "• **Volatility** — análisis forense de memoria\n" +
+      "• **PE tools** (PEiD, ExeInfo) — detectar packer/compiler\n" +
+      "> 💡 La velocidad importa: horas vs días cuando la amenaza está activa.",
+    examples: [
+      "Análisis de Colonial Pipeline ransomware: identificar el dropper, el payload, el C2.",
+      "Descubrir un rootkit en kernel dumpado, debuggeando su inicialización.",
+    ],
+    related: ["RE workflow avanzado", "Tooling (Ghidra/Frida/Unicorn)", "Malware Analysis"],
+  },
 
   // ── M76 · Ejecución Simbólica y Concólica ────────────────────────────────
   {
@@ -8746,6 +8777,37 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Renunciar a explorar simbólicamente una rutina de descifrado AES.",
     ],
     related: ["Ejecución simbólica", "Concólica (DSE)", "Fuzzing coverage-guided"],
+  },
+  {
+    id: 794,
+    module: 76,
+    term: "Aplicaciones de angr y symbolic execution a bugs reales",
+    short: "Casos de estudio: cómo la ejecución simbólica descubrió y explota CVEs.",
+    detail:
+      "La ejecución simbólica ha sido usada para encontrar vulnerabilidades reales:\n" +
+      "**Descubrimientos notables:**\n" +
+      "• **DAFL / Dijkstra-AFL** — Fuzzing dirigido que descubrió bugs en httpd, openssl\n" +
+      "• **KLEE en Linux kernel** — encontró centenas de bugs de memoria\n" +
+      "• **Manticore / Echidna** — fuzzing simbólico de smart contracts (Ethereum)\n" +
+      "• **angr en reversing de CTFs** — resuelve crackmes complejos en segundos\n" +
+      "**Patrón de uso práctico:**\n" +
+      "1. Fuzzing tradicional (cobertura) identifica candidatos vulnerables\n" +
+      "2. Ejecución simbólica refina el input → input mínimo que explota el bug\n" +
+      "3. Genera PoC verificable (código de exploit)\n" +
+      "**Limitaciones encontradas:**\n" +
+      "• **State explosion** — incluso en programas pequeños, los estados crecen\n" +
+      "• **I/O simbólico** — leer de archivos/red es difícil de modelar\n" +
+      "• **Librerías externas** — hay que modelarlas o confiar en heurísticas\n" +
+      "**Proyectos activos:**\n" +
+      "• angr — Usado por investigadores en seguridad\n" +
+      "• Triton — Symbolic execution engine para x86/x64\n" +
+      "• KLEE — Herramienta de investigación del LLVM project\n" +
+      "> 💡 Combinar fuzzing + simbólico = mejor cobertura de bugs que cada uno aislado.",
+    examples: [
+      "angr resolviendo un crackme con 100+ instrucciones de validación en minutos.",
+      "Triton descubriendo un bypass de check de licencia por constraint solving.",
+    ],
+    related: ["Aplicaciones y límites del simbólico", "angr", "Fuzzing coverage-guided"],
   },
 
   // ── M77 · Rootkits y Bootkits ────────────────────────────────────────────
@@ -8811,6 +8873,33 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Rootkits de kernel", "Ataques de firmware", "TPM y attestation"],
   },
+  {
+    id: 804,
+    module: 77,
+    term: "Detección y respuesta contra rootkits",
+    short: "Técnicas forenses: rootkit detection tools, behavioral analysis, cross-view reconciliation.",
+    detail:
+      "Detectar un rootkit en la máquina comprometida es muy difícil (tiene más privs). Alternativas:\n" +
+      "**Desde fuera (out-of-band):**\n" +
+      "• **Memory forensics** — volcado de RAM con herramientas de hardware (JTAG, DMA) o hypervisor\n" +
+      "• **Rootkit detection tools** (Rootkit Hunter, Chkrootkit) — comparan cálculos con kern module\n" +
+      "• **Cross-view reconciliation** — kernel dice proceso X existe, pero ps no lo muestra → rootkit probable\n" +
+      "• **VM introspection** — hipervisor monitorea el kernel desde afuera sin que lo vea\n" +
+      "**Dentro (comprometido, baja confianza):**\n" +
+      "• **Comportamiento anómalo** — syscalls inesperadas, red, cargas de módulo\n" +
+      "• **EDR/XDR** — detección de patrones (si no está comprometido)\n" +
+      "• **Firmware checks** — verificación de integridad de BIOS/bootloader\n" +
+      "**Herramientas reales:**\n" +
+      "• **Volatility** — análisis de memoria (identifica hooks de kernel, procesos ocultos)\n" +
+      "• **chipsec** — audita configuración de firmware (protección de SPI, SMM)\n" +
+      "• **Process Hacker** / **WinDbg** — debuggers de bajo nivel que ven debajo de rootkits userland\n" +
+      "> ⚠️ Un rootkit de kernel bien hecho es casi indetectable desde el SO. La respuesta es hard-reboot a medios de confianza.",
+    examples: [
+      "Volatility encuentra un módulo de kernel oculto (DKOM) analizando la lista de procesos.",
+      "EDR que detecta un LD_PRELOAD hook por módulos cargados no esperados.",
+    ],
+    related: ["Tipos de rootkit", "Técnicas userland", "Rootkits de kernel"],
+  },
 
   // ── M78 · Implants, C2 y Evasión de EDR ──────────────────────────────────
   {
@@ -8872,6 +8961,35 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Yara escaneando memoria para hallar beacons conocidos.",
     ],
     related: ["Command and Control (C2)", "Evasión de EDR", "Threat hunting"],
+  },
+  {
+    id: 814,
+    module: 78,
+    term: "C2 infrastructure y operacionalización del comando",
+    short: "Construcción, ocultamiento y resiliencia de servidores de control; Cobalt Strike patterns.",
+    detail:
+      "Un C2 debe ser **resistente** a take-down, ocultarse en el ruido de internet y manejar decenas de implantes.\n" +
+      "**Arquitectura típica:**\n" +
+      "```\nImplant → Proxy/Redirector (VPS barata) → Panel de Control (servidor secreto)\n  └─ Comms cifradas (TLS, custom ciphers) para ocultar tráfico\n  └─ Beaconing: cada N segundos/minutos → difícil de detectar si noise baja\n```\n" +
+      "**Obfuscación:**\n" +
+      "• **Domain fronting** — usar dominio legítimo (google.com, cloudfront) como frente; real C2 oculto\n" +
+      "• **HTTP/DNS tunneling** — pasar comandos en Headers/TXT records\n" +
+      "• **Fast flux** — rotar IPs frecuentemente; difícil de bloquear\n" +
+      "• **Decoy traffic** — generar ruido legítimo alrededor del beaconing\n" +
+      "**Payload delivery:**\n" +
+      "• **Living-off-the-land** — usar PowerShell/certutil/BITSAdmin (forense difícil)\n" +
+      "• **Staged payloads** — descarga código en dos/tres pasos (evita detección estática)\n" +
+      "• **Code cave injection** — copiar shellcode a secciones vacías de binarios legítimos\n" +
+      "**Frameworks públicos (opsec risk):**\n" +
+      "• **Cobalt Strike** (licencia $$$, pero usado por APTs; ahora detected universalmente)\n" +
+      "• **Metasploit** — framework de auditoría; ruidoso, fácil de detectar\n" +
+      "• **Sliver** / **Empire** — alternativas open-source\n" +
+      "> ⚠️ Los operadores reales usan malware custom, no herramientas públicas. Las públicas son para ejercicios.",
+    examples: [
+      "Análisis de Emotet: decenas de proxies, beaconing cada 10 minutos, payload staged.",
+      "APT29 usando domain fronting contra infraestructura de defensa occidental.",
+    ],
+    related: ["Implants modernos", "Command and Control (C2)", "Evasión de EDR"],
   },
 
   // ── M79 · Vulnerability Research y Fuzzing ───────────────────────────────
@@ -8935,6 +9053,38 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "90 días de embargo coordinado antes de publicar el detalle.",
     ],
     related: ["Fuzzing avanzado", "Responsible disclosure", "CVE y CVSS"],
+  },
+  {
+    id: 824,
+    module: 79,
+    term: "Herramientas y metodología de fuzzing moderno",
+    short: "Libfuzzer, AFL++, Honggfuzz: mutation, coverage-guidance, feedback loops en el fuzzer.",
+    detail:
+      "El fuzzing moderno es **científico**: feedback de cobertura dirige la exploración, mutations genéticas, y corpora de seed inteligentes.\n" +
+      "**Fuzzers principales:**\n" +
+      "| Fuzzer | Especialidad | Lenguaje |\n" +
+      "|---|---|---|\n" +
+      "| **AFL++** | Cobertura + crash, extensiones | C/C++ |\n" +
+      "| **libFuzzer** | In-process, rápido (LLVM) | C/C++, Rust |\n" +
+      "| **Honggfuzz** | Feedback + multiple threads | Cualquiera (wrappers) |\n" +
+      "| **Jazzer** | Fuzzing de Java | JVM |\n" +
+      "| **go-fuzz** | Fuzzing nativo Go | Go |\n" +
+      "**Técnicas:**\n" +
+      "1. **Seeding** — corpus inicial de inputs válidos (XMLs, PNGs)\n" +
+      "2. **Mutations** — cambios aleatorios: bit flip, bytes interessantes, tokens del lenguaje\n" +
+      "3. **Coverage guidance** — mapear nuevo código → seed preservado\n" +
+      "4. **Crash deduplication** — stack trace + memory state → ¿es un crash único?\n" +
+      "5. **Regression testing** — cada crash detectado se agrega al corpus para no regresionar\n" +
+      "**Optimizaciones:**\n" +
+      "• **Taint analysis** — rastrear qué bytes del input afectan branches concretos\n" +
+      "• **Synth/DGF** — generar inputs sintéticos que maximicen cobertura\n" +
+      "• **Parallel fuzzing** — 100+ instancias compartiendo corpus\n" +
+      "> 💡 AFL++ + libFuzzer descubrieron miles de bugs en Chrome, kernel, y librerías críticas.",
+    examples: [
+      "AFL++ descubriendo un bug de desbordamiento de pila en libc en 48 horas.",
+      "Jazzer hallando una inyección SQL en un parser JDBC.",
+    ],
+    related: ["Fuzzing coverage-guided", "Fuzzing avanzado", "Triage y ciclo del 0-day"],
   },
 
   // ── M80 · Threat Intelligence y APT Tracking ─────────────────────────────
@@ -9002,6 +9152,38 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Publicar un evento MISP con IoCs y TTPs de una campaña.",
     ],
     related: ["Fundamentos de CTI", "APT tracking", "Indicadores de compromiso (IoC)"],
+  },
+  {
+    id: 834,
+    module: 80,
+    term: "Integración de CTI en defensas operacionales",
+    short: "Feedback loop: amenaza detectada → investigación → IoCs → bloqueo automático.",
+    detail:
+      "La **CTI es inútil sin operacionalización**: datos deben fluir del SOC/análisis hacia los controles.\n" +
+      "**Pipeline típico:**\n" +
+      "```\nIoC de threat feed (STIX/TAXII)\n  ↓\nValidación (¿es confiable? ¿es reciente?)\n  ↓\nEnriquecimiento (¿qué actores? ¿qué campañas?)\n  ↓\nAplicación (Firewall, EDR, DNS, proxy bloquean)\n  ↓\nMonitoreo de impacto (¿se detectó? ¿se detuvo la amenaza?)\n```\n" +
+      "**Integración técnica:**\n" +
+      "• **SIEM**: importar IoCs, crear alertas si se ven en logs\n" +
+      "• **Firewall/IPS**: actualizar ACLs, reglas Snort con IPs/dominios maliciosos\n" +
+      "• **EDR**: feed de hash malicioso → bloqueo en endpoint\n" +
+      "• **DNS resolver**: sink-hole (devolver 127.0.0.1) a dominios conocidos malignos\n" +
+      "• **Email/proxy**: sandboxing de URLs/attachments de dominios de riesgo\n" +
+      "**Desafíos:**\n" +
+      "1. **False positives** — un IoC incorrecto quiebra un servicio legítimo\n" +
+      "2. **Latencia** — CTI puede llegar tarde (amenaza ya adentro)\n" +
+      "3. **Fatiga** — demasiados IoCs → los analistas los ignoran\n" +
+      "4. **Calidad variada** — feeds de CTI terceros son inconsistentes\n" +
+      "**Mejores prácticas:**\n" +
+      "• **Scoring de confianza** (confidence + severity) en cada IoC\n" +
+      "• **Validación local** — contrastar contra tu actividad real\n" +
+      "• **Automatización conservadora** — bloqueos automáticos solo para amenazas confirmadas\n" +
+      "• **Retroalimentación del SOC** — qué IoCs resultaron útiles?\n" +
+      "> 💡 La mejor defensa integra CTI + detección behavioral: si el IoC falla, el comportamiento no.",
+    examples: [
+      "Firewall: importa IPs C2 vía feed TAXII, bloquea antes que se comunique.",
+      "EDR: recibe hashes de malware, detecta su ejecución, mata el proceso automáticamente.",
+    ],
+    related: ["Operacionalizar (STIX/TAXII)", "Fundamentos de CTI", "APT tracking"],
   },
 
   // ── M81 · Metodología de Security Research ───────────────────────────────
