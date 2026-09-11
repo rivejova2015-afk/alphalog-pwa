@@ -598,6 +598,77 @@ export const QUIZZES: Record<number, QuizQuestion[]> = {
     { q: "Una 'evidencia' de auditoría puede ser:", o: ["Un log o una política firmada", "Una opinión personal", "Un rumor"], c: 0, e: "Debe ser verificable y trazable." },
     { q: "El RGPD exige notificar una brecha de datos personales en, como máximo:", o: ["72 horas", "30 días", "1 año"], c: 0, e: "72 horas a la autoridad de control desde que se tiene constancia." },
   ],
+  // ─── M29-M38 (Lecciones 95-104) ──
+  95: [
+    { q: "MSFconsole es:", o: ["Un firewall", "La interfaz principal de Metasploit", "Un scanner de puertos"], c: 1, e: "Metasploit console = cli para orquestar exploits." },
+    { q: "¿Qué es un payload en Metasploit?", o: ["El código a instalar post-explotación", "Una contraseña débil", "Un puerto abierto"], c: 0, e: "Payload = code que se ejecuta en la máquina víctima tras explotar." },
+    { q: "Un handler en Metasploit escucha:", o: ["Conexiones HTTP", "Conexiones reversa del payload", "El tráfico de red"], c: 1, e: "Handler = listener que acepta callbacks del payload meterpreter." },
+    { q: "Módulos auxiliares de Metasploit sirven para:", o: ["Explotar sistemas", "Reconocimiento y escaneo", "Cifrar tráfico"], c: 1, e: "Auxiliary = scanners, fuzzers, etc." },
+    { q: "Un payload meterpreter permite:", o: ["Obtener shell interactiva en la víctima", "Bloquear la conexión", "Escanear puertos solo"], c: 0, e: "Meterpreter = advanced payload con múltiples comandos." },
+  ],
+  96: [
+    { q: "Burp Suite Community vs Pro:", o: ["Pro es gratis", "Community carece de Intruder y Scanner automático", "Son idénticos"], c: 1, e: "Pro agrega Intruder, Scanner activo y más funciones." },
+    { q: "El módulo Proxy de Burp:", o: ["Ejecuta exploits", "Intercepta peticiones HTTP/HTTPS del navegador", "Descarga archivos"], c: 1, e: "Proxy es el corazón para interceptar y modificar tráfico." },
+    { q: "Intruder en Burp sirve para:", o: ["Compilar código", "Fuzzing y ataque de fuerza bruta a parámetros", "Gestionar contraseñas"], c: 1, e: "Intruder = fuzzer para payload payloads en request." },
+    { q: "Repeater permite:", o: ["Ejecutar scripts", "Modificar y reintentar requests manualmente", "Compilar malware"], c: 1, e: "Repeater = editor manual para debugging de requests." },
+    { q: "Collaborator de Burp detecta:", o: ["Vulnerabilidades XSS", "SSRF y blind SQLi vía callbacks DNS/HTTP", "Buffer overflows"], c: 1, e: "Collaborator = servidor externo para detectar blind vulnerabilities." },
+  ],
+  97: [
+    { q: "¿Dónde se almacenan contraseñas en Linux?", o: ["/etc/passwd (en texto)", "/etc/shadow (hashes, solo root)", "/tmp/creds"], c: 1, e: "/etc/shadow contiene hashes con permiso 600 (solo root)." },
+    { q: "SUID bit (4000) permite:", o: ["Ejecutar como usuario", "Ejecutar un binario como su dueño", "Acceso a files solo"], c: 1, e: "SUID = binario corre con permisos del dueño (riesgo si es root)." },
+    { q: "GTFOBins documenta:", o: ["Firewalls", "Binarios explotables para escalar privilegios", "Contraseñas comunes"], c: 1, e: "GTFOBins = referencia de binarios Unix abusables en privesc." },
+    { q: "El archivo sudoers (/etc/sudoers) controla:", o: ["Permisos de archivo", "Qué comandos pueden correr sin contraseña como root", "Usuarios logueados"], c: 1, e: "sudoers = política de quién puede sudo qué sin password." },
+    { q: "Kernel exploits se usan para:", o: ["Parsear JSON", "Escalar a root abusando un bug del kernel", "Buscar archivos"], c: 1, e: "Kernel vulnerabilities (CVE) = acceso directo a root." },
+  ],
+  98: [
+    { q: "Unquoted service path permite:", o: ["Acceder a network shares", "Path traversal por espacios en exe path", "Cambiar passwords"], c: 1, e: "Si path no está quoted y tiene espacios, Windows busca múltiples ejecutables." },
+    { q: "Token impersonation requiere:", o: ["Internet", "Acceso admin en el sistema", "Que el target tenga el token en memoria"], c: 1, e: "Tools como Potato aprovechan tokens en espera en Windows." },
+    { q: "WinPEAS busca:", o: ["Firewalls", "Rutas privesc (binarios débiles, configs, scheduled tasks)", "Navegadores"], c: 1, e: "WinPEAS = script privesc auditor para Windows." },
+    { q: "ACL débiles permiten:", o: ["Acceso rápido", "Modificar archivos/llaves de usuario sin permisos", "Comunicación de red"], c: 1, e: "Access Control Lists mal configuradas = path to escalation." },
+    { q: "Potato exploit (Hot/Rotten/Juicy) abusa:", o: ["Cookies", "COM/NTLM relay para obtener token SYSTEM", "Puertos SSH"], c: 1, e: "Potato = DCOM/NTLM abuse para escalar." },
+  ],
+  99: [
+    { q: "Pivoting en redes es:", o: ["Atacar el router", "Usar un host comprometido como puente a otra red", "Cambiar DNS"], c: 1, e: "Pivot = saltar de una red a otra a través de hosts comprometidos." },
+    { q: "Un túnel SOCKS permite:", o: ["Acceso a HTTP solo", "Tunelizar traffic de múltiples protocolos a través de un host", "Bloquear DNS"], c: 1, e: "SOCKS tunnel = proxy para tráfico genérico (TCP/UDP)." },
+    { q: "Lateral movement post-compromise busca:", o: ["Escanear internet", "Acceder a otros sistemas en la misma red", "Actualizar SO"], c: 1, e: "Lateral movement = deepening inside network post-pwn." },
+    { q: "Pass-the-hash en Windows permite:", o: ["Cifrar passwords", "Autenticarse sin plaintext password usando solo el hash", "Cambiar permisos"], c: 1, e: "PtH = reutilizar NTLM hash para auth sin crackear password." },
+    { q: "Kerberoasting ataca:", o: ["SSH", "Cuentas de servicio de Windows (SPNs) extrayendo tickets TGS", "Firewalls"], c: 1, e: "Kerberoasting = extraer SPN tickets y crackear offline." },
+  ],
+  100: [
+    { q: "Social engineering es:", o: ["Un firewall", "Manipular a personas para revelar información/acceso", "Un virus"], c: 1, e: "Social eng. = psicología + deception, no técnico." },
+    { q: "Pretexting significa:", o: ["Enviar spam", "Crear una coartada falsa para obtener información", "Publicidad"], c: 1, e: "Pretexting = fabricar escenario para engañar." },
+    { q: "Baiting ofrece:", o: ["Software libre", "Algo atractivo (USB, descarga) que contiene malware", "Acceso SSH"], c: 1, e: "Baiting = carnada física o digital para comprometer." },
+    { q: "Un ataque de ingeniería social eficaz suele combinar:", o: ["Solo hacking técnico", "Research (OSINT) + pretexting + timing", "Fuerza bruta"], c: 1, e: "Social eng. eficaz: conocer el objetivo + contexto realista." },
+    { q: "La defensa contra ingeniería social es:", o: ["Imposible", "Training, verificación, OSINT de propios datos sensibles", "Un programa"], c: 1, e: "Defensa: awareness + verification procedures." },
+  ],
+  101: [
+    { q: "Phishing es:", o: ["Un software", "Enviar emails engañosos para robar credenciales/datos", "Un puerto"], c: 1, e: "Phishing = fake emails/sitios para robar info." },
+    { q: "Spear phishing:", o: ["Es igual a phishing masivo", "Phishing dirigido a persona/organización específica (personalizado)", "Es un protocolo"], c: 1, e: "Spear phishing = phishing con research previo del target." },
+    { q: "Un email de phishing típico incluye:", o: ["Contenido educativo", "Urgencia + link/attachment fake + spoofed sender", "Comandos de terminal"], c: 1, e: "Phishing = crear urgencia para que hagan click sin pensar." },
+    { q: "Clone phishing es:", o: ["Copiar un email legítimo previo", "Replicar un email real, cambiando solo el link malicioso", "Doble autenticación"], c: 1, e: "Clone phishing = copiar estructura de email real." },
+    { q: "Defensa contra phishing incluye:", o: ["Confiar en todos los emails", "SPF/DKIM/DMARC + training + verificación antes de click", "Desactivar email"], c: 1, e: "Email authentication (SPF/DKIM/DMARC) + user awareness." },
+  ],
+  102: [
+    { q: "Análisis estático de malware:", o: ["Ejecuta el malware", "Examina el archivo sin ejecutar (strings, headers, imports)", "Solo uso en windows"], c: 1, e: "Static = safe, solo lectura de estructura." },
+    { q: "Análisis dinámico requiere:", o: ["Internet", "Sandbox/máquina aislada para ver comportamiento en runtime", "Herramientas especiales solo"], c: 1, e: "Dynamic = ejecutar en entorno controlado, observar." },
+    { q: "¿Qué es un IOC (Indicator of Compromise)?", o: ["Un antivirus", "Una evidencia observable (IP, hash, dominio, string) de una intrusión", "Un firewall"], c: 1, e: "IOCs = elementos detectables de un ataque." },
+    { q: "Reverse engineering de malware sirve para:", o: ["Crear más malware", "Entender su lógica, capabilities y crear detecciones", "Acelerar SO"], c: 1, e: "Reverse eng. = desmontar el malware para entenderlo." },
+    { q: "Un sandbox para análisis debe:", o: ["Tener internet abierto", "Aislar el malware de la red real y registrar su comportamiento", "Ejecutar como admin"], c: 1, e: "Sandbox = máquina virtual aislada + logging." },
+  ],
+  103: [
+    { q: "Strings tool extrae:", o: ["Números", "Texto legible embebido en un binario", "Solo en Linux"], c: 1, e: "Strings = buscar literales en ejecutables." },
+    { q: "PE headers de un ejecutable Windows contienen:", o: ["Datos de usuario", "Metadatos: imports, exports, subsystem, architecture", "Passwords"], c: 1, e: "PE = headers con info de qué DLLs necesita, arquitectura, etc." },
+    { q: "Imports de un binario indican:", o: ["Cuándo fue descargado", "Qué librerías (DLLs) usa el programa", "Quién lo creó"], c: 1, e: "Imports = lista de funciones externas (system APIs, DLL) que llama." },
+    { q: "Análisis de entropía en malware detiene:", o: ["Virus", "Cifrado/compresión (alta entropía → posible malware empacado)", "Firewalls"], c: 1, e: "Entropía alta = posible packing/encryption." },
+    { q: "Ghidra / IDA son herramientas para:", o: ["Antivirus", "Decompilación/desassembly de binarios", "Firewalls"], c: 1, e: "Desassembler/decompilers = ver el código machine/pseudocódigo." },
+  ],
+  104: [
+    { q: "Behavioral analysis en sandbox monitorea:", o: ["Solo red", "File system, registry, network, proceso cambios en tiempo real", "CPU solo"], c: 1, e: "Behavioral = qué hace el malware mientras corre." },
+    { q: "Cuckoo Sandbox es:", o: ["Un antivirus", "Sistema open-source de análisis dinámico con automatización", "Un navegador"], c: 1, e: "Cuckoo = automated dynamic analysis sandbox." },
+    { q: "C2 (Command & Control) es:", o: ["Un lenguaje", "Servidor que el malware contacta para recibir comandos", "Un firewall"], c: 1, e: "C2 = comando center, el atacante controla malware remotamente." },
+    { q: "Beaconing malware:", o: ["Se esconde", "Contacta periódicamente al C2 para check-in", "Es raro"], c: 1, e: "Beaconing = malware hace keep-alive calls al C2." },
+    { q: "Network forensics en malware detecta:", o: ["Solo HTTP", "Tráfico de red sospechoso: DNS queries, C2 IPs, tunneling, exfiltración de datos", "Solo DNS"], c: 1, e: "Network forensics = PCAP analysis de conexiones maliciosas." },
+  ],
 };
 
 // ─── Quizzes por nivel (Fase A) ──────────────────────────────────────────────
@@ -2052,6 +2123,147 @@ export const QUIZZES_IA: Record<number, { i?: QuizQuestion[]; a?: QuizQuestion[]
       { q: "Una 'no conformidad mayor' implica:", o: ["Una observación menor", "Una falla sistémica que compromete el objetivo del control", "Un elogio del auditor"], c: 1, e: "Requiere acción correctiva antes de certificar." },
       { q: "Los Trust Services Criteria de SOC 2 incluyen Security y:", o: ["Availability, Processing Integrity, Confidentiality, Privacy", "Solo Privacy", "Velocidad de red"], c: 0, e: "5 criterios; Security (Common Criteria) es obligatorio." },
       { q: "Un plan de acción correctiva (CAPA) debe atacar:", o: ["El síntoma visible", "La causa raíz de la no conformidad", "El presupuesto"], c: 1, e: "Corrige el origen para que la desviación no se repita." },
+    ],
+  },
+  // ─── M29-M38 (Lecciones 95-104) ──
+  95: {
+    i: [
+      { q: "¿Qué diferencia hay entre un exploit y un shellcode en Metasploit?", o: ["Ninguna", "Exploit es el módulo que gatilla la vuln; shellcode es el código a ejecutar post-exploit", "Shellcode solo existe en Linux"], c: 1, e: "Exploit = activador; shellcode/payload = carga." },
+      { q: "Meterpreter multi-handler es útil para:", o: ["Enviar datos rápido", "Manejar múltiples sesiones meterpreter simultáneamente", "Detectar firewalls"], c: 1, e: "Multi-handler = gestor de múltiples shells." },
+      { q: "¿Cómo configuras LHOST/LPORT en un exploit de Metasploit?", o: ["Automático", "LHOST = tu IP, LPORT = puerto donde escucha el handler", "No se configuran"], c: 1, e: "LHOST = Local host (tu máquina); LPORT = puerto de listening." },
+      { q: "El módulo 'post' de Metasploit se ejecuta:", o: ["Antes de explotar", "Después de tener una sesión, para post-explotación (privilege escalation, data mining)", "En paralelo"], c: 1, e: "Post-exploitation = después de shell, profundizar acceso." },
+    ],
+    a: [
+      { q: "Encoding de payloads en Metasploit evita:", o: ["Pérdida de velocidad", "Detección por antivirus (signature-based evasion)", "Error de conectividad"], c: 1, e: "Encoders = ofuscar shellcode para evadir AV." },
+      { q: "¿Qué es un 'handler' en Metasploit exactamente?", o: ["Un tipo de exploit", "Un listener que acepta conexiones reversa del payload tras explotación", "Un tipo de payload"], c: 1, e: "Handler = servidor esperando conexión del target comprometido." },
+      { q: "Los módulos 'exploit' en Metasploit requieren:", o: ["Solo código escrito", "Configuración de RHOSTS, LHOST, LPORT y opcionalmente PAYLOAD", "Una contraseña admin"], c: 1, e: "Configuración mínima para atacar." },
+      { q: "¿Cómo mantienes una sesión meterpreter activa si la conexión se cae?", o: ["No se puede", "Con configuración de reconexión automática y timeouts adecuados en el handler", "Ejecutando el exploit nuevamente"], c: 1, e: "Meterpreter tiene keepalive y reconexión." },
+    ],
+  },
+  96: {
+    i: [
+      { q: "En Burp Intruder, ¿qué es un 'payload set'?", o: ["Un tipo de web request", "Colección de valores a inyectar en posiciones marcadas (§) durante fuzzing", "Un servidor externo"], c: 1, e: "Payload set = lista de strings/números a probar." },
+      { q: "¿Cuántos attack types soporta Intruder en Burp Community?", o: ["Todos", "Sniper (1 §) y Battering ram (todos §)", "Solo sniper"], c: 1, e: "Community: sniper/battering ram; Pro agrega cluster bomb + pitchfork." },
+      { q: "Burp Scanner automático está disponible en:", o: ["Community (limitado)", "Solo Professional edition", "Ambas igual"], c: 1, e: "Community: sin scanner activo; Pro: con vulnerabilities scanning." },
+      { q: "¿Cómo usas Collaborator para detectar SSRF en Burp?", o: ["Con Repeater solo", "Insertas Collaborator URL en parámetro y esperas callback (DNS/HTTP)", "Con Scanner"], c: 1, e: "Collaborator = external server para blind vulns." },
+    ],
+    a: [
+      { q: "¿Qué es una 'cookie jar' en Burp?", o: ["Un almacén de snacks", "Storage local de cookies para automatizar sesiones entre requests", "Un tipo de exploit"], c: 1, e: "Burp mantiene jar de cookies → reutiliza en siguiente request." },
+      { q: "Burp Extender te permite:", o: ["Descargar código", "Escribir plugins (Python/Java) para extender Burp con funcionalidad custom", "Solo usar el UI"], c: 1, e: "Extensiones personalizadas en Burp." },
+      { q: "¿Cómo detecta Burp una petición CSRF exitosa?", o: ["Automáticamente con scanner", "Depende del context: respuesta del server (status, cookies, content changes) o manualmente via Repeater", "Solo análisis de token"], c: 1, e: "CSRF detection = combo de análisis de token + comportamiento." },
+      { q: "El módulo Site map de Burp muestra:", o: ["Solo requests HTTP", "Árbol de la app (URLs, métodos, parámetros, respuestas capturadas)", "Solo HTML"], c: 1, e: "Visualización completa de la surface de ataque de la app." },
+    ],
+  },
+  97: {
+    i: [
+      { q: "Explain the difference between SUID y sudo para escalación de privilegios.", o: ["Son iguales", "SUID = binario específico ejecuta como dueño; sudo = usuario puede ejecutar comandos como otro (típicamente root)", "SUID es mejor"], c: 1, e: "SUID = permanent; sudo = granular + auditado." },
+      { q: "¿Qué es una 'shared library injection' en Linux?", o: ["Copiar un programa", "LD_PRELOAD/LD_LIBRARY_PATH para cargar una lib maliciosa antes que la original", "Instalar paquetes"], c: 1, e: "Lib injection = preload attacker .so para hijack funciones." },
+      { q: "Dirty CoW (CVE-2016-5195) es un exploit de:", o: ["Network", "Race condition en copy-on-write del kernel Linux", "Contraseña"], c: 1, e: "Dirty CoW = kernel bug permitía escalar a root." },
+      { q: "¿Cómo usa un attacker cgroups/namespaces para escalar?", o: ["Directamente no", "Escapar de container vía misconfiguration de namespace isolation", "No se puede"], c: 1, e: "Container escape = salir del namespace/cgroup para tocar host." },
+    ],
+    a: [
+      { q: "Capabilities en Linux reemplazan:", o: ["Nada", "SUID para granular-privilegios específicos a un binario sin darle full root", "El kernel"], c: 1, e: "Capabilities = fine-grained privileges sin need de SUID full." },
+      { q: "¿Qué es 'LD_LIBRARY_PATH' y por qué es un riesgo?", o: ["Una variable segura", "Variable que permite precargar .so custom, abusable para hijack funciones si no se valida", "Solo para desarrollo"], c: 1, e: "Env var exploitation en unix." },
+      { q: "Pwntools es útil para:", o: ["Solo crear payloads", "Scripting de exploits: gadget finding, packing de shellcode, automatización de ataques", "Solo análisis"], c: 1, e: "Pwntools = herramienta para desarrollar exploits." },
+      { q: "Race conditions en privesc ocurren cuando:", o: ["Nada", "Tiempo entre chequeo de permisos y ejecución = window para modificar archivo/symlink", "Nunca"], c: 1, e: "TOCTOU (time-of-check-time-of-use)." },
+    ],
+  },
+  98: {
+    i: [
+      { q: "¿Qué es 'SeImpersonatePrivilege' en Windows?", o: ["Un firewall", "Permiso de asumir identidad de otro usuario (risk para SYSTEM escalation)", "Un puerto"], c: 1, e: "SeImpersonate = puede actuar como otro usuario." },
+      { q: "DLL hijacking en Windows explota:", o: ["Solo en Linux", "Order de búsqueda de DLLs (CWD primero) → planta malicious DLL en path", "Protocolos"], c: 1, e: "DLL hijacking = put .dll in expected path, app loads ours." },
+      { q: "¿Cómo usa JuicyPotato token impersonation para escalar?", o: ["Fuerza bruta", "Abusa COM marshalling para impersonate SYSTEM token", "No existe"], c: 1, e: "Potato = DCOM/COM object para token theft." },
+      { q: "¿Qué es 'Registry key permissions' y cómo escala?", o: ["Una contraseña", "Si un usuario puede escribir registry keys usadas por servicios SYSTEM, puede hijack", "Solo lectura"], c: 1, e: "Registry privesc = escribir registry para que app SYSTEM ejecute code." },
+    ],
+    a: [
+      { q: "Windows Defender exclusions pueden ser abusadas por:", o: ["Nada", "Agregar paths maliciosas a exclusiones vía GPO débil o misconfig", "Red team"], c: 1, e: "WD exclusions = bypass si admin las misconfigura." },
+      { q: "Token Kidnapping en Windows usa:", o: ["Fuerza bruta", "Duplicar/secuestrar un token de un proceso elevated para asumir sus permisos", "SSH"], c: 1, e: "Handle duplication abuse." },
+      { q: "¿Qué es 'AlwaysInstallElevated' en Windows?", o: ["Regla de firewall", "GPO que permite instalar MSI packages con permisos SYSTEM (misconfig = privesc)", "Ninguno"], c: 1, e: "Dangerous GPO misconfig." },
+      { q: "El ataque 'Token Impersonation' requiere generalmente:", o: ["Nada especial", "Tener ya acceso (ej. low-priv shell) para abusar COM/DLL/service tokens SYSTEM en memoria", "Admin"], c: 1, e: "Lateral privilege escalation." },
+    ],
+  },
+  99: {
+    i: [
+      { q: "¿Qué es 'reverse SOCKS proxy'?", o: ["HTTP solo", "Túnel donde el target interno inicia conexión outbound al attacker para proxying", "VPN"], c: 1, e: "Reverse SOCKS = target connects out to attacker for tunnel." },
+      { q: "Pass-the-ticket (Kerberos) vs Pass-the-hash (NTLM):", o: ["Son iguales", "PtT = usar TGT/TGS Kerberos; PtH = usar NTLM hash sin crackear", "PtH es mejor"], c: 1, e: "PtT para Kerberos realm; PtH para NTLM legacy." },
+      { q: "¿Cómo detecta Blue Team un ataque de pivoting?", o: ["Imposible", "Monitoreo de lateral traffic (north-south dominante; east-west anómalo), conexiones raras entre systems", "Firewalls"], c: 1, e: "Detect lateral = anomaly in inter-system traffic patterns." },
+      { q: "Golden ticket en Kerberos es:", o: ["Un premio", "Ticket TGT falsificado (si tienes krbtgt hash) válido para domain", "No existe"], c: 1, e: "Golden ticket = forged TGT para acceso domain-wide." },
+    ],
+    a: [
+      { q: "¿Qué es 'Watertight' persistencia en lateral movement?", o: ["Agua en firewalls", "Múltiples puntos de entrada/backup para mantener access tras limpiar malware", "Firewall type"], c: 1, e: "Watertight = backup persistence channels." },
+      { q: "Living off the land (LOTL) en pivoting significa:", o: ["Sin herramientas externas", "Usar binarios/comandos legítimos del OS para atacar y moverse sin instalar malware", "Solo PowerShell"], c: 1, e: "LOTL = usar defensas para atacar." },
+      { q: "Relay attacks en Windows (SMB relay):", o: ["Envían emails", "Interceptar autenticación NTLM e relayarla a otro servidor (NTLM no valida destino)", "Solo en Linux"], c: 1, e: "Relay = forward auth to unintended target." },
+      { q: "¿Cómo mantiene un attacker acceso en pivoting si se parchea una máquina?", o: ["Pierde el acceso", "Múltiples puntos de entrada (backdoors, cuentas, permisos) + exfiltración de credenciales", "Re-explota"], c: 1, e: "Redundant paths = resiliencia de acceso." },
+    ],
+  },
+  100: {
+    i: [
+      { q: "Framework de manipulación psicológica en social eng.:", o: ["Miedo + Tecnología", "AIDA (Attention, Interest, Desire, Action) + confianza + urgencia", "Solo técnica"], c: 1, e: "Psicología = crear urgencia + confianza." },
+      { q: "¿Cómo valida un attacker que una persona es quién dice ser antes de revelar info?", o: ["Confía en nombre", "Verificación independiente (callback número público, match de detalles)", "Nunca verifica"], c: 1, e: "Verify victim independently (callback official number, etc)." },
+      { q: "Red flag en llamada de pretexting:", o: ["Acento extraño", "Urgencia artificial, detalles faltantes, presión a responder YA", "Voz robótica"], c: 1, e: "Red flags = rush, lack of detail, persistence." },
+      { q: "Autoridad + urgencia en social eng.:", o: ["No funcionan", "Combinadas (\"CEO requesting immediately\") = altísima tasa de éxito", "Solo authority"], c: 1, e: "Authority + urgency = powerful combo." },
+    ],
+    a: [
+      { q: "¿Cómo prepara una empresa defensas contra social eng.?", o: ["Imposible", "Training periódico, clear policies, verification procedures, testing (fake phish internos)", "Aislamiento"], c: 1, e: "Defense = awareness + procedures + testing." },
+      { q: "El 'manipulation radar' más efectivo es:", o: ["Software", "Conocimiento de tácticas psicológicas + escepticismo sano + verification habit", "Una app"], c: 1, e: "Human detection via awareness." },
+      { q: "¿Qué hace más credible un ataque de social engineering?", o: ["Mucho detalle técnico", "Contexto + detalles del target (OSINT) + escenario realista + timing", "Directo"], c: 1, e: "Research + realism = higher success rate." },
+      { q: "El 'pretexting script' más efectivo:", o: ["Genérico", "Personalizado, con details de la compañía, nombres reales, roles, asuntos actuales", "Simple"], c: 1, e: "Custom scripts work better." },
+    ],
+  },
+  101: {
+    i: [
+      { q: "¿Cómo evade un attacker DMARC/SPF/DKIM en phishing?", o: ["No se puede", "Subdomain takeover, trusted sender compromise, homograph (similar domain)", "Siempre falla"], c: 1, e: "Evasion = compromiso de sender legítimo o subdomain." },
+      { q: "QR code phishing es útil porque:", o: ["No hay", "El usuario no ve URL real → click sin sospecha → landing maliciosa", "Es fácil"], c: 1, e: "QR phishing = obfuscated URL → user doesn't verify." },
+      { q: "¿Qué es 'lookalike domain' en phishing?", o: ["Dominio igual", "Dominio similar pero no igual (e.g., amaz0n vs amazon) para confundir", "No existe"], c: 1, e: "Typosquatting / homograph attack." },
+      { q: "Attachment-based phishing evade email gateways via:", o: ["Imposible", "Archivos comprimidos, macros, polymorph, encoding, 0-day malware", "Texto solo"], c: 1, e: "Evasion = archive, macro, unknown malware, encoded payloads." },
+    ],
+    a: [
+      { q: "¿Cuál es el indicador de phishing MÁS confiable?", o: ["Spelling", "Sender address verification + user behavior (did they expect this?)", "Subject"], c: 1, e: "Verify sender infrastructure (SPF/DKIM) + user awareness." },
+      { q: "OSINT en phishing permite:", o: ["Enviar muchos emails", "Personalizar ataques conociendo nombres, roles, proyectos, idiomas de los targets", "Nada nuevo"], c: 1, e: "OSINT = personalization = higher success." },
+      { q: "El 'response rate' de phishing es más alto cuando:", o: ["Genérico", "Urgencia + autoridad + personalización + contexto realista (conocer al target)", "Masivo"], c: 1, e: "Factors = timing, authority, personalization, realism." },
+      { q: "¿Cómo detecta un usuario un phishing bien hecho?", o: ["Nunca", "Verificar sender infrastructure independientemente + conocer tácticas de urgencia/spoofing", "Visuamente"], c: 1, e: "Skepticism + verification beats visual inspection." },
+    ],
+  },
+  102: {
+    i: [
+      { q: "¿Cuál es la diferencia entre polymorphic y metamorphic malware?", o: ["Ninguna", "Polymorphic = cambia signature cada run (mismo código); metamorphic = cambia estructura del code", "Ambos iguales"], c: 1, e: "Polymorphic = encrypted engine; metamorphic = code mutation." },
+      { q: "Packing malware:", o: ["Lo hace más pequeño solo", "Lo comprime + lo encripta para evadir detección, descompilándose en memoria en runtime", "No existe"], c: 1, e: "Packer = compress + encrypt + unpack at runtime." },
+      { q: "¿Qué es 'API hooking' en análisis dinámico?", o: ["Un tipo de antivirus", "Interceptar llamadas a APIs de sistema para logging de qué hace malware", "Un protocolo"], c: 1, e: "API hooking = monitor system calls / API usage." },
+      { q: "¿Cómo detecta malware si está en sandbox?", o: ["Siempre", "Chequea VM artifacts (MAC address, processes, registry keys, timing anómalo)", "Nunca"], c: 1, e: "VM detection = check for sandbox indicators." },
+    ],
+    a: [
+      { q: "Zero-day malware es:", o: ["Exploit conocido", "Malware sin firma conocida, explotando vulnerability no parcheada", "Raro"], c: 1, e: "0-day = unknown vuln + no antivirus signature." },
+      { q: "Evasion de sandbox usando timing:", o: ["Imposible", "Detectar sandbox por ejecución lenta o presencia de herramientas de analysis", "Común"], c: 1, e: "Timing checks bypass sandbox." },
+      { q: "Comportamiento 'dormant' en malware:", o: ["No existe", "Malware espera días/condiciones antes de activarse (evita detección durante análisis)", "Siempre"], c: 1, e: "Delayed activation = evasion." },
+      { q: "¿Qué es 'code injection' y por qué se usa en malware?", o: ["Enviar código", "Inyectar código en proceso legítimo para ejecutar bajo su contexto/permisos (evasión + stealth)", "Copiar"], c: 1, e: "Process injection = stealth + privilege abuse." },
+    ],
+  },
+  103: {
+    i: [
+      { q: "De Static Analysis, ¿qué es 'taint analysis'?", o: ["Análisis de manchas", "Tracing de data flow desde entrada (tainted) hasta output para detectar info leak", "Solo en Ghidra"], c: 1, e: "Taint = track data sources/sinks." },
+      { q: "CFG (Control Flow Graph) en desassembly muestra:", o: ["Conexiones de red", "Flujo de execution (branches, jumps, decision points) en el binario", "Memoria solo"], c: 1, e: "CFG = visual de saltos/branches en código." },
+      { q: "YARA rules se usan para:", o: ["Antivirus", "Pattern-based detection de malware (strings, bytes, comportamiento)", "Solo análisis"], c: 1, e: "YARA = pattern matching engine para malware." },
+      { q: "¿Cómo identifica static analysis un backdoor hardcoded en código?", o: ["No puede", "Busca strings de C2, credenciales hardcoded, llamadas sospechosas", "Ejecutando"], c: 1, e: "Static = search for suspicious literals/APIs." },
+    ],
+    a: [
+      { q: "Hash de archivos (MD5, SHA256) en malware análisis:", o: ["Identifican al attacker", "Permiten referencing único del malware sample y sharing en threat intel", "No sirven"], c: 1, e: "Hash = unique identifier para tracking." },
+      { q: "¿Qué es 'ROP gadget finding' en reverse engineering?", o: ["Búsqueda de bugs", "Identificar sequences de instrucciones para construir exploits (Return-Oriented Programming)", "Solo en Linux"], c: 1, e: "ROP = exploit technique sin ejecutar shellcode directo." },
+      { q: "El 'cross-reference' (xref) en IDA/Ghidra permite:", o: ["Ver variables", "Encontrar todas las llamadas a una función o accesos a una dirección de memoria", "Editar código"], c: 1, e: "Xref = dependency tracing." },
+      { q: "Polymorphic malware dificulta static analysis porque:", o: ["Añade features", "Cada muestra tiene distinta signature/estructura → regex patterns falla, requiere behavioural detection", "Es más pequeño"], c: 1, e: "Polymorphism = signature evasion." },
+    ],
+  },
+  104: {
+    i: [
+      { q: "Evasion de analysis dinámico usando timing checks:", o: ["Imposible", "Malware detecta sandbox por timing lento o comandos de analysis ejecutándose", "Muy fácil"], c: 1, e: "Timing checks = sandbox detection technique." },
+      { q: "¿Cómo diferencia el malware entre usuario real vs sandbox?", o: ["No puede", "Mouse movements, keyboard input, user directory presence, human behavior timing", "Siempre sabe"], c: 1, e: "Human behavior detection." },
+      { q: "In-memory malware injection (code cave, DLL injection) evade:", o: ["Nada", "Disk-based scanning (no toca disco → AV no ve archivo malicioso)", "Firewalls"], c: 1, e: "In-memory = never hits disk → AV blind." },
+      { q: "¿Qué es 'call stack spoofing' en malware?", o: ["Un glitch", "Malware manipula stack para parecer que fue llamado desde función legítima (evade comportamiento-based detection)", "Raro"], c: 1, e: "Call stack spoofing = fake call trace." },
+    ],
+    a: [
+      { q: "¿Cómo correlaciona threat intelligence multiple sandboxes análisis del mismo malware?", o: ["Difícil", "Hash+familia+C2 IPs+MITRE ATT&CK tactics = clustering de muestras relacionadas", "Imposible"], c: 1, e: "Clustering via hashes, C2, tactics, family." },
+      { q: "Exfiltration detection en malware analysis monitorea:", o: ["Solo salida", "Volumen de datos, protocolos anómalos, destinations inusuales, timing de salidas de datos", "Puertos solo"], c: 1, e: "Data exfiltration patterns." },
+      { q: "El 'hollowing' (process hollowing) es una técnica donde:", o: ["Vacían procesos", "Se suspende un proceso legítimo, se reemplaza su código con malware y se resume (stealth injection)", "Se mata"], c: 1, e: "Process replacement attack." },
+      { q: "Sandbox fingerprinting avanza usando:", o: ["Hardware falso", "Machine learning para detectar micropatrones de sandbox behavior vs real systems", "Solo timing"], c: 1, e: "Advanced evasion = ML-based." },
     ],
   },
 };
