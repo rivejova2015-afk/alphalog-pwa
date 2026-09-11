@@ -2478,6 +2478,157 @@ export const QUIZZES_IA: Record<number, { i?: QuizQuestion[]; a?: QuizQuestion[]
       { q: "Vendor/third-party risk management en architecture:", o: ["Ignorar", "Assess suppliers (security posture, compliance, SLAs) — contractual guarantees, audit rights, offboarding", "Confiar"], c: 1, e: "Supply chain architecture." },
     ],
   },
+  // ─── M49-M58 (Lecciones 115-124) ──
+  115: {
+    i: [
+      { q: "Risk assessment comienza con:", o: ["Audit", "Asset inventory + threat identification + vulnerability analysis", "Patching"], c: 1, e: "Foundation de risk management." },
+      { q: "Risk matrix (heatmap) usa:", o: ["Un eje", "Likelihood (probabilidad) vs Impact (severidad) para priorizar", "Tres ejes"], c: 1, e: "Risk visualization tool." },
+      { q: "Risk ownership responsable de:", o: ["Nada", "Mitigación, monitoreo, y reporting del riesgo asignado (risk owner es ejecutivo)", "Solo técnica"], c: 1, e: "Risk governance." },
+      { q: "Risk aggregation correlaciona:", o: ["Riesgos individuales", "Múltiples riesgos para impacto organizacional total (ej. dos controles fallando juntos)", "Uno solo"], c: 1, e: "Portfolio risk view." },
+      { q: "Risk metrics (KRI) monitorizan:", o: ["Nada", "Indicadores leading de riesgos emergentes para alerta temprana (ej. % de systems unpatched)", "Histórico solo"], c: 1, e: "Proactive risk management." },
+    ],
+    a: [
+      { q: "Operationalize risk management:", o: ["Anual solo", "Continuous assessment, decision integration en roadmaps, escalation procedures, board reporting quarterly", "Ad-hoc"], c: 1, e: "Enterprise risk management." },
+      { q: "Risk tolerance vs appetite por dominio:", o: ["Igual para todos", "Diferentes por área (infra: bajo, innovation: alto) alineado con estrategia", "Uno global"], c: 1, e: "Strategic risk allocation." },
+      { q: "Cybersecurity risk en contexto de business:", o: ["Aislado", "Mapear a impacto de negocio (revenue, reputation, compliance) para justificar inversión", "Técnica pura"], c: 1, e: "Risk communication to exec." },
+      { q: "Emerging risk discovery (weak signals):", o: ["No necesario", "Monitoring de trends, vendor advisories, threat reports para detectar nuevos riesgos antes del exploit", "Reactivo solo"], c: 1, e: "Forward-looking risk management." },
+    ],
+  },
+  116: {
+    i: [
+      { q: "GRC (Governance, Risk, Compliance) framework integra:", o: ["Uno solo", "Estrategia (governance), análisis de riesgos (risk), y cumplimiento regulatorio (compliance)", "Técnica"], c: 1, e: "Holistic compliance." },
+      { q: "Compliance mapping significa:", o: ["Nada", "Vincular control de seguridad a requisito regulatorio específico (ej. ISO control X → PCI-DSS requirement Y)", "Genérico"], c: 1, e: "Compliance audit preparation." },
+      { q: "Control testing para compliance verifica:", o: ["Nada", "Que control implementado funciona (design testing) y se ejecuta consistentemente (operating)", "Teoría solo"], c: 1, e: "Audit readiness." },
+      { q: "Regulaciones críticas en ciberseguridad incluyen:", o: ["Una solo", "GDPR (UE), HIPAA (US health), PCI-DSS (payments), SOC 2 (SaaS), NIST (federal)", "Local solo"], c: 1, e: "Multi-jurisdiction compliance." },
+      { q: "Compliance gap remediation prioriza por:", o: ["Urgencia solo", "Business impact + regulatory deadline + remediation cost para sequencing", "Costo solo"], c: 1, e: "Remediation roadmap." },
+    ],
+    a: [
+      { q: "Compliance automation con IaC (Infrastructure-as-Code):", o: ["Imposible", "Codificar políticas (policies-as-code) + guardrails en CI/CD para auto-compliance enforcement", "Manual"], c: 1, e: "Shift-left compliance." },
+      { q: "Regulatory change management en GRC:", o: ["Ignorar nuevas regs", "Track legislative changes, assess impact, update policies/controls, re-validate compliance — continuous", "Anual"], c: 1, e: "Agile compliance." },
+      { q: "Compliance evidence collection (audit trail):", o: ["No importante", "Automated logging de control executions (quien, qué, cuándo, resultado) para audit transparency", "Manual log solo"], c: 1, e: "Audit-ready logging." },
+      { q: "GRC reporting to stakeholders:", o: ["Genérico", "Executive: risk heatmap + KRIs, compliance: audit status + findings, board: overall posture", "Un solo tipo"], c: 1, e: "Tiered GRC reporting." },
+    ],
+  },
+  117: {
+    i: [
+      { q: "SOC (Security Operations Center) función core:", o: ["Vender", "24/7 monitoring, detection, response de eventos de seguridad", "Auditoría"], c: 1, e: "Operational security." },
+      { q: "SIEM en SOC centraliza:", o: ["Nada", "Logs de múltiples fuentes (firewalls, endpoints, apps) en BD central + alerts automáticas", "IDS solo"], c: 1, e: "SOC data aggregation." },
+      { q: "Alert tuning en SOC busca:", o: ["Más alertas", "Reducir false positives (ruido) manteniendo verdaderos positivos detectados", "Menos alerts"], c: 1, e: "Signal-to-noise optimization." },
+      { q: "Incident severity levels en SOC:", o: ["Todos iguales", "Critical/High/Medium/Low con SLAs de respuesta (Critical: 15min, High: 1h, etc.)", "Ad-hoc"], c: 1, e: "SLA-driven response." },
+      { q: "SOC playbooks definen:", o: ["Nada", "Procedimiento paso-a-paso para tipos de incidentes (malware, DDoS, breach) — reducen MTTR", "Teoría"], c: 1, e: "Automated IR procedures." },
+    ],
+    a: [
+      { q: "SOC maturity levels (L1→L3):", o: ["Iguales", "L1: alert-to-ticket, L2: investigation, L3: hunting + threat research", "Uno solo"], c: 1, e: "SOC capability evolution." },
+      { q: "Threat Intel integration en SOC:", o: ["No necesario", "Feeders de IoCs/TTPs contextualizan alerts (ej. IP en threat feed = HIGH priority)", "Ad-hoc"], c: 1, e: "TI-enriched alerting." },
+      { q: "SOC metrics para medir effectiveness:", o: ["Volumen solo", "MTTR (Mean Time To Respond), MTTK (Mean Time To Know), detection rate, false positive %, escalation %", "Ticket count"], c: 1, e: "KPIs de SOC." },
+      { q: "24/7 staffing en SOC asume:", o: ["No necesario", "Shift rotations + handoffs (follow-the-sun) + escalation paths para continuidad", "Daytime solo"], c: 1, e: "Operaciones continuas." },
+    ],
+  },
+  118: {
+    i: [
+      { q: "APT (Advanced Persistent Threat) característica clave:", o: ["Script kiddie", "Atacante sofisticado + objetivo específico + persistencia prolongada (meses/años)", "One-off"], c: 1, e: "Nation-state / organized threat." },
+      { q: "ATT&CK framework en análisis APT:", o: ["Innecesario", "Mapear observables (malware, IOCs) a TTPs en MITRE — atribución y defensa", "Técnica solo"], c: 1, e: "APT profiling." },
+      { q: "Lateral movement en APT busca:", o: ["Exit solo", "Profundización: pivoting dentro de red (user-to-user, system-to-system) para alcanzar objetivo", "Entrada solo"], c: 1, e: "APT persistence." },
+      { q: "Indicators of Compromise (IOCs) en APT investigation:", o: ["Innecesarios", "Hashes, IPs, dominios C2, URLs para detectar este APT en otras víctimas (sharing)", "Sólo técnica"], c: 1, e: "Threat intelligence sharing." },
+      { q: "Attribution desafíos en APT:", o: ["Simple", "False flag operations, shared tools/TTPs entre grupos, proxy infrastructure dificultan atribución certera", "Obvio"], c: 1, e: "APT attribution complexity." },
+    ],
+    a: [
+      { q: "APT lifecycle: pre-breach reconnaissance inteligencia:", o: ["No importante", "OSINT (público) + cyber (passive scanning) de target antes de ataque — informa operación", "Irrelevante"], c: 1, e: "APT planning phases." },
+      { q: "APT supply chain implants (backdoors pre-compromise):", o: ["No existe", "Contaminar software/firmware antes de distribución para acceso inicial (ej. SolarWinds)", "Raro"], c: 1, e: "Sophistication indicator." },
+      { q: "Defense evasion tactics en APT:", o: ["No usan", "Evade EDR (syscall bypass), bypass AV (living-off-land), evasión anti-análisis (VM detection)", "Directamente"], c: 1, e: "APT operational security." },
+      { q: "APT detection mediante anomaly detection:", o: ["No detectables", "Behavioral analysis: unusual access patterns, process trees, data exfiltration volumes sugieren APT", "Obvios"], c: 1, e: "Behavioral hunting de APT." },
+    ],
+  },
+  119: {
+    i: [
+      { q: "Serverless security shift责任:", o: ["Todo proveedor", "Shared: proveedor (runtime), user (código, dependencias, secrets, config)", "Todo usuario"], c: 1, e: "Serverless shared responsibility." },
+      { q: "Container escape riesgo:", o: ["No existe", "Vulnerabilidad en runtime (Docker, containerd) permite romper aislamiento → acceso host", "Imposible"], c: 1, e: "Container security boundary." },
+      { q: "Function-level RBAC en serverless:", o: ["No existe", "Granular IAM: qué IAM role ejecuta qué función (least privilege per function)", "Todo/nada"], c: 1, e: "Serverless access control." },
+      { q: "Cold start security implication:", o: ["No importante", "Time between invocations donde función se reinicia — verificar integridad de dependencias", "Irrelevante"], c: 1, e: "Startup security check." },
+      { q: "Data encryption serverless:", o: ["No necesario", "Encryption in transit (TLS) + at rest (KMS) para datos procesados en función efímera", "No aplica"], c: 1, e: "Data protection serverless." },
+    ],
+    a: [
+      { q: "Observability en serverless detecta:", o: ["Poco relevante", "Logs detallados (request ID correlación), traces distribuidas, métricas para anomaly detection", "No importante"], c: 1, e: "Distributed tracing security." },
+      { q: "Supply chain risk en serverless (npm/PyPI packages):", o: ["No crítico", "Dependencies de terceros en función → scrutinize permisos, usar lockfiles, SBOM", "No afecta"], c: 1, e: "Dependency security serverless." },
+      { q: "Lateral movement prevention serverless:", o: ["No posible", "Network segmentation (VPC endpoint), secrets NOT in code, IAM role scoping para contención", "Inevitable"], c: 1, e: "Serverless containment." },
+      { q: "Serverless forensics challenge:", o: ["Fácil", "Functions ejecutadas en minutos, logs rotados rápido, state efímero — audit trail crítica", "Simple"], c: 1, e: "Serverless audit logging." },
+    ],
+  },
+  120: {
+    i: [
+      { q: "Microservices security perimeter:", o: ["Perímetro único", "Perímetro distribuido: cada servicio con auth/authz propia (mutual TLS, service mesh)", "Línea recta"], c: 1, e: "Service-to-service security." },
+      { q: "API Gateway function core:", o: ["Routing solo", "Autenticación, rate limiting, validación, transformación requests antes de backend", "Proxy simple"], c: 1, e: "API Gateway security." },
+      { q: "Service mesh (Istio/Linkerd) proporciona:", o: ["Red solo", "mTLS automático, policy enforcement, telemetría sin cambiar aplicación", "Connectivity"], c: 1, e: "Service mesh benefits." },
+      { q: "Data serialization risk (gRPC/protobuf):", o: ["No existe", "Deserialization RCE si untrusted data parseada → validar schema, use safe parsers", "Seguro"], c: 1, e: "Microservices serialization." },
+      { q: "API versioning security:", o: ["No importante", "Deprecate old versions con timeline, no permite mezclando protocols (HTTP 1.1 vs 2) — MiTM", "Irrelevante"], c: 1, e: "API lifecycle management." },
+    ],
+    a: [
+      { q: "Observability alerting en microservices:", o: ["No necesario", "Trace distributed requests, correlate errors across services, anomaly detection en latency/error rates", "Logging solo"], c: 1, e: "Microservices observability." },
+      { q: "Breaking API contract validation:", o: ["No existe", "API spec versioning + schema validation ensures changes don't break clients (OpenAPI testing)", "No importa"], c: 1, e: "Contract-driven security." },
+      { q: "Cross-origin resource sharing (CORS) misconfiguration:", o: ["No peligroso", "Allow-All CORS headers permiten XSS desde cualquier sitio — whitelist estricto", "Necesario"], c: 1, e: "API CORS hardening." },
+      { q: "GraphQL-specific attacks (microservices):", o: ["GraphQL seguro", "Depth limiting (previene recursion bomb), field cost analysis, query complexity enforcement", "No hay"], c: 1, e: "GraphQL security." },
+    ],
+  },
+  121: {
+    i: [
+      { q: "Database encryption layers:", o: ["Uno solo", "In-transit (TLS), at-rest (AES), column-level (sensitive fields), key management separate", "Ninguna"], c: 1, e: "Encryption strategy DB." },
+      { q: "SQL injection prevention (parameterized queries):", o: ["No funciona", "Separa código de datos → PreparedStatement safe contra inyección", "No existe"], c: 1, e: "Parameterized query defense." },
+      { q: "Row-level security (RLS) en DB:", o: ["No existe", "Policy per row: usuario solo ve datos asignado vía RLS predicate (ej. WHERE tenant_id=current_user_tenant)", "Imposible"], c: 1, e: "Database authorization." },
+      { q: "Audit logging en DB traza:", o: ["Login solo", "WHO (user), WHAT (table, operation), WHEN (timestamp), RESULT (success/fail) para compliance", "Cambios nada"], c: 1, e: "Database audit trail." },
+      { q: "Backup security includes:", o: ["Copy nada más", "Encryption, separate location, access controls, integrity verification (hashes), retention policy", "Storage solo"], c: 1, e: "Secure database backups." },
+    ],
+    a: [
+      { q: "Redaction/masking datos sensibles:", o: ["No necesario", "Dynamic masking: oculta PII en queries (user ABC ve '***' en SSN field, admin ve real)", "Visible todos"], c: 1, e: "Data masking strategy." },
+      { q: "Encryption key rotation DB:", o: ["No importa", "Periodic rotation (90-180d) + re-encryption de existing data + versioning de keys", "Una key forever"], c: 1, e: "Key lifecycle management." },
+      { q: "Transparent Data Encryption (TDE) limitations:", o: ["Total seguridad", "Protege at-rest, NOT in-memory (decrypted para query) — add field-level encryption", "Completo"], c: 1, e: "DB encryption layers." },
+      { q: "Privilege escalation vía DB (polyinstantiation):", o: ["No existe", "User A ve diferente dato que User B en misma tabla vía VIEW con WHERE — policy enforcement", "Imposible"], c: 1, e: "Database polyinstantiation." },
+    ],
+  },
+  122: {
+    i: [
+      { q: "Post-quantum cryptography necesaria porque:", o: ["No importante", "Quantum computers rompen RSA/ECC — PQC (lattice, hash-based) resisten Shor algorithm", "Irrelevante"], c: 1, e: "Quantum threat timeline." },
+      { q: "NIST PQC estándares (2022):", o: ["Pendiente", "ML-KEM (key encapsulation), ML-DSA (signatures), SLH-DSA (stateless hash) — ML = module-lattice", "Nunca"], c: 1, e: "NIST standardization." },
+      { q: "Hybrid approach en cryptography (post-quantum transition):", o: ["Reemplazar inmediatamente", "Run both classical (RSA) + PQC (Kyber) in parallel — si uno falla, otro funciona", "Esperar"], c: 1, e: "Safe cryptographic migration." },
+      { q: "Cryptographic agility requisito:", o: ["No necesario", "Ability to swap algorithms sin recompile (parameterized crypto providers) — future-proofs", "Imposible"], c: 1, e: "Algorithm flexibility." },
+      { q: "Harvest-now-decrypt-later threat:", o: ["No real", "Attackers intercept encrypted TLS traffic hoy, guardan, descifran cuando quantum existe", "Lejano"], c: 1, e: "Threat model shift." },
+    ],
+    a: [
+      { q: "Lattice problems (SVP/CVP) hardness basis:", o: ["No importante", "Shortest Vector Problem solving = NP-hard even quantum — base matemática de PQC", "Irrelevante"], c: 1, e: "Post-quantum math." },
+      { q: "Code-based cryptography (McEliece):", o: ["No usado", "Basado en error-correcting codes hardness — large keys, considered secure post-quantum", "Nunca"], c: 1, e: "PQC diversity." },
+      { q: "Cryptanalysis against PQC candidates:", o: ["No aplica", "NIST testing: side-channel attacks, quantum/classical cryptanalysis — validar antes finalize", "Sin rigor"], c: 1, e: "Cryptographic validation." },
+      { q: "Key size growth en PQC (vs classical):", o: ["Sama tamaño", "Keys más grandes (4-8 KB ML-KEM vs 256 bit RSA) — performance/storage trade-off", "Igual"], c: 1, e: "PQC practical limitations." },
+    ],
+  },
+  123: {
+    i: [
+      { q: "Adversarial examples ML:", o: ["No existen", "Perturbaciones sutiles en entrada hacen ML model clasificar mal (ej. panda → gibbon)", "Imposible"], c: 1, e: "ML robustness threat." },
+      { q: "Poisoning attack ML training:", o: ["No posible", "Atacante contamina dataset de training → model aprende comportamiento malicioso", "Seguro"], c: 1, e: "ML supply chain threat." },
+      { q: "Membership inference privacy:", o: ["No importante", "Determinar si record específico fue usado en training vía predicción patterns", "Irrelevante"], c: 1, e: "ML privacy leakage." },
+      { q: "Explainability en AI para seguridad:", o: ["No crítica", "Interpretability: por qué model rechazó login (fraud detection) — build trust + debug issues", "No necesaria"], c: 1, e: "AI transparency." },
+      { q: "Backdoor triggers en ML models:", o: ["No existe", "Hidden behavior: activarse solo en presencia de específica input pattern (trojaned model)", "Imposible"], c: 1, e: "Model manipulation." },
+    ],
+    a: [
+      { q: "Adversarial robustness training:", o: ["No funciona", "Train model on adversarial examples + perturbations → aumenta resistance a attacks", "Imposible"], c: 1, e: "ML defensive training." },
+      { q: "Data poisoning detectión via validation set:", o: ["No útil", "Holdout set (unseen during training) monitoreo para anomalies que sugieren contamination", "No aplica"], c: 1, e: "Training data integrity." },
+      { q: "Differential privacy en ML:", o: ["No existe", "Add calibrated noise a datos/gradients → individual record privacy garantizada mathematically", "Imposible"], c: 1, e: "Privacy-preserving ML." },
+      { q: "Model stealing / extraction attack:", o: ["No posible", "Atacante queries modelo público, replica funcionalidad vía reverse-engineering", "Seguro"], c: 1, e: "Intellectual property threat." },
+    ],
+  },
+  124: {
+    i: [
+      { q: "Emerging threats tracking:", o: ["No necesario", "Monitor trends (0-days, new malware families, threat actors) via threat feeds + research", "Innecesario"], c: 1, e: "Proactive threat monitoring." },
+      { q: "Web3/Blockchain security focus:", o: ["No importa", "Smart contract bugs (re-entrancy, overflow), private key management, cross-chain risks", "No crítico"], c: 1, e: "Blockchain threat vectors." },
+      { q: "IoT botnet risks (Mirai evolution):", o: ["Histórico", "Millones devices con default credentials → compromiso masivo, DDoS, reconnaissance", "Pasado"], c: 1, e: "IoT threat landscape." },
+      { q: "Synthetic media (deepfakes) security impact:", o: ["No peligroso", "Manipulated video/audio usado en social engineering, fraud, disinformation — hard to detect", "Inofensivo"], c: 1, e: "Deepfake threat." },
+      { q: "Supply chain attack sophistication:", o: ["No cambió", "Pre-compromise (SolarWinds-style), software repositories, build pipeline backdoors — harder detect", "Igual"], c: 1, e: "Supply chain evolution." },
+    ],
+    a: [
+      { q: "Quantum-resistant cryptography transition timeline:", o: ["Indefinido", "Migration 2024-2030 critical (before quantum viable) — inventory + prioritize legacy systems", "No urgente"], c: 1, e: "Crypto migration roadmap." },
+      { q: "Autonomous threat response (SOAR/playbook automation):", o: ["No existe", "Automated incident containment (isolate host, revoke creds, block C2) for high-confidence detections", "Manual siempre"], c: 1, e: "Automated IR at scale." },
+      { q: "Insider threat evolución (disgruntled + compromised):", o: ["No peligroso", "Behavioral analytics + privileged access monitoring detect anomalies (data staging, unusual access)", "Seguro"], c: 1, e: "User behavior analytics." },
+      { q: "Geopolitical cyber conflict escalation:", o: ["No real", "Nation-state APTs targeting critical infrastructure (energy, water, healthcare) — government-backed", "Improbable"], c: 1, e: "Critical infrastructure threats." },
+    ],
+  },
 };
 
 export const QUIZ_LEVELS: QuizLevel[] = ["b", "i", "a"];
