@@ -1902,6 +1902,78 @@ export const QUIZZES_IA: Record<number, { i?: QuizQuestion[]; a?: QuizQuestion[]
       { q: "Al escribir un PoC para un bug de corrupcion de memoria, una practica de research responsable es:", o: ["Distribuirlo en foros antes de avisar al vendor", "Limitar el PoC a probar el control de flujo (p.ej. crash o ret control) sin codigo danino, y coordinar con el vendor", "Incluir una payload de ransomware como demostracion"], c: 1, e: "Un PoC etico demuestra la primitiva (crash, control de EIP/RIP) sin weaponizar con payloads daninas, y se comparte de forma coordinada con el afectado." },
     ],
   },
+  87: {
+    b: [
+      { q: "Los namespaces en contenedores sirven para:", o: ["Almacenar informacion del contenedor", "Aislar procesos, redes y filesystems entre contenedores", "Cifrar la comunicacion"], c: 1, e: "Los namespaces proporcionan aislamiento de procesos, redes, filesystems, permitiendo multiples contenedores coexistir sin interferirse." },
+      { q: "¿Que hace la flag --privileged en un contenedor?", o: ["Ejecuta el contenedor sin restricciones, accediendo al host", "Autentifica el contenedor", "Cifra el volumen"], c: 0, e: "El flag --privileged deshabilita aislamiento, otorgando acceso de root sin restricciones al host; es peligroso en produccion." },
+      { q: "Un admission controller en Kubernetes:", o: ["Registra eventos de auditoria", "Valida o rechaza cambios antes de persistirse en etcd", "Distribuye carga entre nodos"], c: 1, e: "Los admission controllers actuan como guardianes que interceptan y pueden rechazar requests (p.ej. de containers privilegiados)." },
+      { q: "¿Cual es una proteccion comun contra escaparse del contenedor?", o: ["Desactivar cgroups", "Permitir syscalls peligrosas", "Usar fsReadOnlyRootFilesystem para raiz de solo lectura"], c: 2, e: "fsReadOnlyRootFilesystem hace que el filesystem raiz sea de solo lectura, evitando que un atacante escriba backdoors." },
+      { q: "Falco es una herramienta que:", o: ["Compila contenedores", "Monitorea comportamiento anormal en runtime (syscalls)", "Gestiona registos de DNS"], c: 1, e: "Falco detecta anomalias en runtime analizando syscalls, alertando si un contenedor exhibe actividad sospechosa." },
+    ],
+  },
+  88: {
+    b: [
+      { q: "Una SBOM (Software Bill of Materials) documenta:", o: ["La arquitectura de red de la app", "Todos los componentes y dependencias en un artefacto", "Las contraseñas de los desarrolladores"], c: 1, e: "Una SBOM lista cada libreria, version y dependencia transitiva para transparencia y deteccion de componentes vulnerables." },
+      { q: "¿Cual es la diferencia entre typosquatting y dependency confusion?", o: ["Ambas son sinonimos", "Typosquatting: nombre similar en registry publico; confusion: versiones indirectas apuntando a registry malicioso", "Confusion solo aplica a Python"], c: 1, e: "Typosquatting ataca el nombre (npm: `legas` vs `lodash`); confusion ataca la resolucion de versions en dependencias transitivas." },
+      { q: "Los niveles SLSA definen:", o: ["Severidad de CVE", "Grados de seguridad e integridad en el proceso de compilacion", "Tipos de malware"], c: 1, e: "SLSA (Supply chain Levels for Software Artifacts) establece 4 niveles de aseguramiento de compilacion, desde build replicable hasta auditorias cripto." },
+      { q: "Cosign se usa para:", o: ["Analizar malware", "Firmar digitalmente imagenes de contenedores y verificar provenance", "Compilar codigo"], c: 1, e: "Cosign integra firmas criptograficas en artefactos OCI, permitiendo verificar que una imagen viene de una fuente confiable." },
+      { q: "¿Cual fue el riesgo en el ataque event-stream 2018?", o: ["Un virus Windows en npm", "Dependency transitiva fue transferida a atacante quien inyecto malware para robar crypto privkeys", "Un falso positivo de antivirus"], c: 1, e: "El paquete event-stream (dependencia popular pero poco mantenida) fue transferido; el atacante inyecto codigo en una sub-dependencia para robar bitcoins." },
+    ],
+  },
+  89: {
+    b: [
+      { q: "En STRIDE, que amenaza describe impersonation (falsificar identidad)?", o: ["Tampering", "Spoofing", "Elevation of Privilege"], c: 1, e: "Spoofing es suplantacion de identidad: fingerprint falso, IP spoofed, sesion hijack; STRIDE abbr: Spoofing, Tampering, Repudiation, Information-disclosure, DoS, Elevation." },
+      { q: "¿Cual es una ventaja de PASTA sobre STRIDE?", o: ["PASTA es mas antiguo", "PASTA es centrado en activos/datos, top-down; STRIDE es bottom-up de amenazas", "PASTA no se usa en la practica"], c: 1, e: "PASTA (Process for Threat modelling Application) comienza identificando activos y objetivos del negocio (top-down), mientras STRIDE comienza en componentes (bottom-up)." },
+      { q: "Un attack tree en threat modeling sirve para:", o: ["Describir la arquitectura de microservicios", "Representar jerarquicamente como un atacante alcanza un objetivo raiz", "Listar todas las funcionalidades de la app"], c: 1, e: "El arbol de ataque tiene como raiz el objetivo del atacante; cada rama representa una ruta alternativa; las hojas son acciones atomicas." },
+      { q: "En risk quantification, ALE significa:", o: ["Advanced Layer Encryption", "Annualized Loss Expectancy = probabilidad anual × impacto en dolares", "Application Level Egress"], c: 1, e: "ALE = Single Loss Expectancy × Annualized Rate of Occurrence; permite comparar riesgos en terminos monetarios." },
+      { q: "Clasificar datos en Publico/Sensible/Secreto/Restringido es un ejemplo de:", o: ["Encriptacion", "Clasificacion de datos / Data classification", "Compresion"], c: 1, e: "La clasificacion de datos asigna etiquetas basadas en potencial dano si se filtran; guia politicas de proteccion (encriptacion, acceso, retencion)." },
+    ],
+  },
+  90: {
+    b: [
+      { q: "La cadena de custodia en forense documenta:", o: ["Quien fue el atacante", "Quien, cuando y como se manipulo cada evidencia para admisibilidad legal", "El antivirus que se usaria"], c: 1, e: "Chain of custody es registro ininterrumpido de posesion y manejo de evidencia; su incumplimiento invalida el hallazgo ante la ley." },
+      { q: "¿Cual es el orden correcto de volatilidad en adquisicion forense?", o: ["Disco > RAM > logs remotos", "Registro > RAM > disco > red > logs remotos", "RAM > disco > registro"], c: 1, e: "Orden de volatilidad: CPU/registro (desaparece en shutdown) > RAM > disco > red > logs remotos (menos volatile); capturar primero los efimeros." },
+      { q: "La tecnica del 5 Whys busca:", o: ["Encontrar 5 funciones diferentes", "Preguntar repetidamente 'por que' para hallar la causa raiz de un incidente", "Contar 5 archivos modificados"], c: 1, e: "5 Whys es iteracion: 'por que paso X?' → 'porque Y' → 'por que Y?' hasta llegar a la causa fundamental, no solo el sintoma." },
+      { q: "El malware analysis incluye:", o: ["Redactar reportes de prensa", "Analisis estatico (strings, headers) y dinamico (runtime en sandbox) de un binario malicioso", "Cifrar archivos"], c: 1, e: "El analysis estatico examina el binario sin ejecutar (PE headers, imports, strings); el dinamico lo detona en VM/sandbox aislada y monitorea comportamiento." },
+      { q: "Los IOCs (Indicators of Compromise) son:", o: ["Metricas de memoria", "Hashes, IPs, dominios, URLs asociados a un incidente para detectar compromiso", "Numeros de serie del hardware"], c: 1, e: "IOCs son artefactos observables del compromiso; utiles para buscar signos en la red/endpoints, aunque volatiles pues atacantes cambian infraestructura." },
+    ],
+  },
+  91: {
+    b: [
+      { q: "Las tacticas en MITRE ATT&CK describen:", o: ["Herramientas especificas del atacante", "Categorias de alto nivel del 'que' quiere lograr (persistence, privilege-escalation, etc)", "Firmas de antivirus"], c: 1, e: "Las tacticas responden 'que intenta lograr': inicial access, persistence, privilege-escalation, credential-access, discovery, lateral-movement, collection, command-control, exfiltration, impact." },
+      { q: "¿Cual es la diferencia entre tecnicas y sub-tecnicas en ATT&CK?", o: ["No hay diferencia", "Tecnicas son metodos generales; sub-tecnicas son variantes bajo un SO/protocolo/herramienta especifica", "Las sub-tecnicas son mas antiguas"], c: 1, e: "Tecnica: T1110 Brute Force; Sub-tecnica: T1110.001 Brute Force: Password (contraseña), T1110.004 Brute Force: Credential Stuffing (robadas)." },
+      { q: "La atribucion en ciberinteligencia busca:", o: ["Determinar si hay malware en el sistema", "Vincular actividad observada a un actor/grupo/pais especifico", "Buscar logs de acceso"], c: 1, e: "Attribution rastrea TTPs, infraestructura, herramientas compartidas para identificar con confianza quien realizó un ataque (gobierno, crimen, hacktivista)." },
+      { q: "¿Cual es la primera fase del Cyber Kill Chain?", o: ["Weaponization", "Reconnaissance (recopilacion pasiva de inteligencia sobre el objetivo)", "Delivery"], c: 1, e: "Cyber Kill Chain de Lockheed Martin: Recon → Weaponization → Delivery → Exploitation → Installation → Command & Control → Actions on Objectives." },
+      { q: "Los threat feeds (amenaza en tiempo real) sirven para:", o: ["Compilar codigo", "Distribuir indicadores de ataque/IOCs/TTPs para que defensores actualicen sus detectores", "Hacer backups"], c: 1, e: "Los threat feeds (CISA, Recorded Future, etc) publican IOCs, reportes de APTs y TTPs para que organizaciones actualicen sus reglas SIEM/IDS." },
+    ],
+  },
+  92: {
+    b: [
+      { q: "Las 6 fases del SDLC tradicional son:", o: ["Solo codigo y testing", "Requiere → Diseña → Desarrolla → Testea → Deploya → Mantiene", "Marketing → Venta → Support"], c: 1, e: "SDLC: Requirements → Design → Development → Testing → Deployment → Maintenance; Secure SDLC integra seguridad en cada una." },
+      { q: "¿Que significa 'shift-left' en Secure SDLC?", o: ["Cambiar el team de derecha a izquierda", "Mover testing de seguridad a etapas tempranas (diseño, desarrollo) en lugar de esperar a produccion", "Reducir el presupuesto de seguridad"], c: 1, e: "Shift-left: descubrir vulns en diseño/desarrollo es mas barato que en produccion; incluir security en reqs, architecture review, code review." },
+      { q: "SAST (Static Application Security Testing) trabaja sobre:", o: ["Bytecode ejecutable", "Codigo fuente sin ejecutar (white-box analysis)", "Solo binarios compilados"], c: 1, e: "SAST examina el codigo fuente buscando patrones inseguros (SQLi, XSS, hardcoded secrets) sin ejecutar; herramientas: SonarQube, Checkmarx, Semgrep." },
+      { q: "DAST difiere de SAST en que:", o: ["Es mucho mas lento", "Ejecuta la app (black-box) y prueba externamente como un atacante (penetration testing)", "No encuentra vulnerabilidades"], c: 1, e: "DAST (Dynamic) ejecuta y ataca la app en vivo (requiere un ambiente de test running); SAST (Static) analiza codigo sin ejecutar." },
+      { q: "Un programa de bug bounty incentiva:", o: ["A los empleados a guardar secretos", "A investigadores externos a reportar vulns coordinadamente a cambio de recompensa", "A comprar antivirus"], c: 1, e: "Bug bounty: pagar por vulnerabilidades reportadas responsablemente (HackerOne, Bugcrowd) da acceso a miles de investigadores, mas eficiente que pentesting puntual." },
+    ],
+  },
+  93: {
+    b: [
+      { q: "El axioma central de Zero Trust es:", o: ["Confiar en la red corporativa", "No confiar en nada solo por ubicacion de red; verificar siempre", "Solo confiar en dispositivos propios"], c: 1, e: "ZT: 'Never trust, always verify'; elimina el concepto de red 'confiable'; cada acceso requiere verificacion de identidad, dispositivo y contexto." },
+      { q: "¿Cuantos pilares define NIST SP 800-207 para Zero Trust?", o: ["3", "7 pilares de arquitectura", "10"], c: 1, e: "NIST 800-207 define 7 pilares: identidad, dispositivos, red, aplicacion, datos, visibilidad/analytics, automatizacion; todos deben colaborar." },
+      { q: "La microsegmentacion en ZT divide la red en:", o: ["Una sola red", "Zonas granulares por workload con politicas de acceso finas", "Subredes de clase C"], c: 1, e: "Microsegmentacion aísla cargas de trabajo individuales, no confía en estar en la 'misma red'; cada conexión es validada independientemente." },
+      { q: "Device posture checks verifican que:", o: ["El hardware es nuevo", "El dispositivo cumple requisitos minimos de seguridad (OS parched, antivirus activo, encryption)", "La bateria esta cargada"], c: 1, e: "Posture checks evaluan: version de SO, ultima actualizacion, antivirus/MDM activos, encryption habilitado; acceso se niega si falla." },
+      { q: "En Zero Trust, 'continuous authentication' significa:", o: ["Pedir contraseña cada 5 segundos", "Verificar identidad en cada request/acceso, no solo en login", "Cambiar el MFA cada dia"], c: 1, e: "Verificacion continua de quien eres + desde donde + con que dispositivo en cada peticion, no es una sola vez en login." },
+    ],
+  },
+  94: {
+    b: [
+      { q: "ISO 27001 define:", o: ["Solo estandares de redes", "Un SGSI certificable con 114 controles de seguridad de informacion", "Protocolos de internet"], c: 1, e: "ISO 27001 es el estandar internacional de SGSI (Sistema de Gestion de Seguridad de Informacion) con 114 controles; ISO 27002 da guia de implementacion." },
+      { q: "SOC 2 Type II se diferencia del Type I en que:", o: ["No tiene controles", "Type I audita diseño en un momento; Type II audita efectividad durante un periodo (3-12 meses)", "Type II cubre solo confidencialidad"], c: 1, e: "Type I: punto en el tiempo (diseño); Type II: periodo sostenido (operacion); Type II requiere revision de cambios, logs, incidents durante meses." },
+      { q: "El RGPD aplica a:", o: ["Solo empresas europeas", "Cualquier organizacion que procese datos personales de residentes de la UE", "Solo bancos"], c: 1, e: "RGPD (General Data Protection Regulation) es extraterritorial; cualquier empresa EU-facing debe cumplir: privacidad por diseño, derecho al olvido, notificacion de brecha." },
+      { q: "Un risk register en GRC documenta:", o: ["Solo los activos de IT", "Matriz de riesgos identificados con amenaza, vulnerabilidad, probabilidad, impacto y tratamiento", "Solo los controles implementados"], c: 1, e: "Risk register: inventario vivo de riesgos conocidos, su valoracion (probabilidad × impacto), tratamiento propuesto (mitigar/transferir/evitar/aceptar) y dueño." },
+      { q: "Compliance by design en GDPR significa:", o: ["Cumplir solo al final de proyecto", "Integrar requisitos de privacidad/seguridad desde el diseño inicial, no como add-on", "Usar un checklist de plantilla"], c: 1, e: "Privacy by design: privacidad es requisito desde el inicio (data minimization, pseudonymization, encryption, consent) no un parche post-desarrollo." },
+    ],
+  },
   82: {
     i: [
       { q: "Los metodos formales en seguridad buscan:", o: ["Acelerar la compilacion del codigo", "Cifrar el codigo fuente", "Probar matematicamente propiedades de un sistema en lugar de solo testearlo"], c: 2, e: "Los metodos formales usan logica y matematicas para verificar (o refutar) propiedades de correccion/seguridad de forma exhaustiva, complementando al testing empirico." },
