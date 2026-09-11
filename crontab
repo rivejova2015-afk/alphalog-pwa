@@ -86,6 +86,14 @@
 # y racha quedan idénticas). Semanal (domingo 03:30 UTC), el crecimiento es lento.
 30   3    *  *  0   curl --fail --max-time 120 -X GET -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/quiz-dedup
 
+# CyberSec Academy — Sprint 6 gamificación + mantenimiento.
+# - check-badges: diario a las 02:00 UTC, evalúa condiciones y otorga insignias
+# - lab-cleanup: diario a las 03:00 UTC, limpia sesiones inactivas >24h, libera recursos
+# - calculate-leaderboard: cada 6 horas, recalcula rankings y cachea top 100 para API rápida
+0    2    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/check-badges
+0    3    *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/lab-cleanup
+0    */6  *  *  *   curl --fail --max-time 120 -X POST -H "x-cron-secret: $CRON_SECRET" http://alphalog-pwa.internal:3000/api/cron/securities/calculate-leaderboard
+
 # Coinarb auto-deploy — reemplaza al workflow de GitHub Actions. Cada 5 min:
 # fetch origin/main, diff coinarb/, si hay commits nuevos hace
 # `flyctl deploy --app coinarb-50x`. Token vive como Fly secret
