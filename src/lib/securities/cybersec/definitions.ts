@@ -8747,6 +8747,28 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Hacer investigación en seguridad", "Responsible disclosure", "Portfolio y carrera"],
   },
+  {
+    id: 844,
+    module: 81,
+    term: "Herramientas y automatización para investigación",
+    short: "Fuzzing, análisis dinámico, ejecución simbólica, emulación — automatiza la búsqueda de bugs.",
+    detail:
+      "Herramientas modernas de investigación:\n" +
+      "| Herramienta | Técnica | Caso de uso |\n" +
+      "|---|---|---|\n" +
+      "| **libFuzzer / AFL++** | Fuzzing dirigido | Parsers, codecs, protocolos |\n" +
+      "| **Frida** | Instrumentación dinámica | Análisis de malware, reversing en vivo |\n" +
+      "| **angr / Triton** | Ejecución simbólica | Condiciones complejas, patches ciegos |\n" +
+      "| **QEMU / Unicorn** | Emulación | Análisis de firmware, binarios alternativos |\n" +
+      "| **Radamsa / honggfuzz** | Fuzzing estadístico | Robustez contra inputs aleatorios |\n" +
+      "> 💡 La investigación eficiente automatiza: escribes la máquina de estados, la herramienta explore.",
+    examples: [
+      "Fuzzing de un servidor con libFuzzer y asan para detectar memory leaks.",
+      "Usar Frida para inspeccionar el cifrado in-vivo en una app.",
+      "Symbolic execution con angr para encontrar el input que alcanza un path específico.",
+    ],
+    related: ["Hacer investigación en seguridad", "Comunicar (papers, PoCs, charlas)", "Reversing y análisis"],
+  },
 
   // ── M82 · Formal Methods y Verificación ──────────────────────────────────
   {
@@ -8808,6 +8830,29 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "Un bug fuera de la spec verificada que igual causa una vuln.",
     ],
     related: ["Sistemas verificados", "Por qué formal methods", "Hacer investigación en seguridad"],
+  },
+  {
+    id: 854,
+    module: 82,
+    term: "Herramientas y asistentes de verificación",
+    short: "TLA+, Coq, Lean, Isabelle: software para escribir pruebas formales — desde aprendiz hasta producción.",
+    detail:
+      "Ecosistema de herramientas:\n" +
+      "| Asistente | Paradigma | Curva | Producción | Ejemplos |\n" +
+      "|---|---|---|---|---|\n" +
+      "| **TLA+** | Model checking + spec | Media | AWS, Azure, Kubernetes | Protocolos distribuidos |\n" +
+      "| **Coq** | Theorem proving intuitivo | Alta | CompCert, Fiat-Crypto | Compiladores, criptografía |\n" +
+      "| **Lean** | Theorem proving moderno | Alta | mathlib, Polyrith | Matemáticas, educación |\n" +
+      "| **Isabelle/HOL** | Proof checker robusto | Alta | seL4, TEZOS | Kernels, smart contracts |\n" +
+      "| **Z3 / CVC5** | SMT solvers | Baja | Mozilla, Amazon, Google | Síntesis, testing simbólico |\n" +
+      "| **Dafny** | Programa + invariantes | Media | Microsoft | Programación verificada |\n" +
+      "> 💡 Empieza con TLA+ o Dafny; salta a Coq/Isabelle si necesitas garantías de oro puro.",
+    examples: [
+      "Escribir la spec de un protocolo en TLA+ y checkearlo antes de codificar.",
+      "Probar en Coq que un compilador preserva la semántica del programa.",
+      "Usar Z3 desde un fuzzer para generar inputs que satisfagan restricciones.",
+    ],
+    related: ["Model checking y theorem proving", "Sistemas verificados", "Investigación en seguridad"],
   },
 
   // ── M83 · Gestión de Identidades y Accesos (IAM) ─────────────────────────
@@ -9181,6 +9226,25 @@ export const DEFINITIONS: ConceptDefinition[] = [
     ],
     related: ["Tratamiento del riesgo", "ISO/IEC 27001", "NIST Cybersecurity Framework (CSF)"],
   },
+  {
+    id: 884,
+    module: 85,
+    term: "Scoring de riesgos y priorización",
+    short: "CVSS, FAIR, heat maps — métodos para ordenar qué tratar primero cuando todo es urgente.",
+    detail:
+      "Cuando identificas 50 riesgos, necesitas **priorizarlos**. Métodos estándar:\n" +
+      "• **CVSS (Common Vulnerability Scoring System)** — severity 0–10 de una vulnerabilidad: ataque remoto + sin auth = CVSS 9.8.\n" +
+      "• **FAIR (Factor Analysis of Information Risk)** — modelo cuantitativo: Loss Event Frequency × Magnitude Of Impact.\n" +
+      "• **Risk heat maps** — eje X: probabilidad; eje Y: impacto; dibuja los riesgos y colorea: rojo extremo → amarillo bajo.\n" +
+      "• **Risk scoring composite** — combina: amenaza probable (inteligencia), vulnerabilidades (CVSS), valor del activo. Resultado: ranking priorizado.\n" +
+      "> 💡 Sin scoring, suena todo urgente. Con scoring, sabes dónde poner los recursos.",
+    examples: [
+      "Una base de datos con SQL injection (CVSS 9.8) vs. una UI con typo en la contraseña (CVSS 2.3).",
+      "Heat map de 50 riesgos: 2 en rojo (extremo), 12 en amarillo (alto), 36 en verde (bajo) → planificar anual.",
+      "FAIR: probabilidad de ransomware × costo de operación 1 semana = $ esperado anual.",
+    ],
+    related: ["Identificación y análisis de riesgos", "Tratamiento del riesgo", "Metodologías de riesgo"],
+  },
 
   // ── M86 · Cumplimiento Normativo y Auditoría ─────────────────────────────
   {
@@ -9254,6 +9318,26 @@ export const DEFINITIONS: ConceptDefinition[] = [
       "No conformidad: la política exige MFA y un sistema crítico no lo tiene.",
     ],
     related: ["Proceso de auditoría", "ISO 27001, SGSI y SoA", "Gobernanza de seguridad"],
+  },
+  {
+    id: 894,
+    module: 86,
+    term: "Automatización de evidencias y auditoría continua",
+    short: "SIEM, ITSM, osquery — pruebas automáticas de cumplimiento que corre cada noche, sin esperar la auditoría.",
+    detail:
+      "Las auditorías anuales son **snapshots**. La auditoría continua es **viva**:\n" +
+      "• **SIEM (Splunk, ELK)** — agrega logs centrales: login fallidos, cambios, deletes. Auditor revisa reportes instead de pedirle al admin.\n" +
+      "• **ITSM (ServiceNow, Jira)** — compliance tickets auto-creados; cierre auditado. Change advisory board = workflow con rastro.\n" +
+      "• **Scanners de compliance** (CloudSploit, Prowler) — chequean policy cada día: encryption on, MFA on, IAM roles narrow. Reporta desvíos.\n" +
+      "• **osquery** — agent en endpoints que responde queries SQL sobre sistema: installs, network, process, file integrity. Audit-ready.\n" +
+      "• **Access reviews automáticas** (Okta, Azure) — lista quién tiene qué acceso, requiere manager review, deja audit trail.\n" +
+      "> ⚠️ Sin automatización, auditoría = pedir a admins que junten papeles. Con automatización, auditor revisa el log vivo.",
+    examples: [
+      "Prowler detecta S3 bucket público → ticket auto-creado en Jira → dev lo arregla → audit trail cierra solo.",
+      "osquery reporta binary sin firma en servidor crítico → alert → investigación forense inmediata.",
+      "Okta access review: 2000 usuarios, manager review por email, 95% completan en 2 días, audit trail listo para auditor externo.",
+    ],
+    related: ["Marcos regulatorios clave", "Proceso de auditoría", "ISO 27001, SGSI y SoA"],
   },
 ];
 
