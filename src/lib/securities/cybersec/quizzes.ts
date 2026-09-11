@@ -2266,6 +2266,218 @@ export const QUIZZES_IA: Record<number, { i?: QuizQuestion[]; a?: QuizQuestion[]
       { q: "Sandbox fingerprinting avanza usando:", o: ["Hardware falso", "Machine learning para detectar micropatrones de sandbox behavior vs real systems", "Solo timing"], c: 1, e: "Advanced evasion = ML-based." },
     ],
   },
+  // ─── M39-M48 (Lecciones 105-114) ──
+  105: [
+    { q: "Forense digital es:", o: ["Análisis de perforaciones", "Recolección, preservación y análisis de evidencia digital en investigaciones", "Solo antivirus"], c: 1, e: "Digital forensics = evidence handling del mundo digital." },
+    { q: "Chain of custody es fundamental porque:", o: ["Acelera investigaciones", "Garantiza integridad de evidencia (probado en corte = 'no fue alterado')", "Reduce costos"], c: 1, e: "CoC = cadena de custodios para admitibilidad legal." },
+    { q: "Imaging forense captura:", o: ["Solo archivos visibles", "Copia bit-a-bit (incluso deleted files, free space, swap) para análisis offline", "Solo texto"], c: 1, e: "Forensic image = snapshot completo de almacenamiento." },
+    { q: "FTK/Autopsy son herramientas para:", o: ["Email", "Análisis de imágenes forenses (file carving, timeline, keyword search)", "Redes"], c: 1, e: "Forensic tools = analyzers de datos digitales." },
+    { q: "Artefactos forenses en Windows incluyen:", o: ["Solo logs", "MFT, Registry, pagefile, prefetch, event logs, links de recent", "Papelera"], c: 1, e: "Artifacts = residual data tras acciones del usuario." },
+  ],
+  106: [
+    { q: "Incident response fase DETECTION busca:", o: ["Prevenir ataques", "Identificar compromise/anomalías vía alertas, logs, user reports", "Arrestar atacantes"], c: 1, e: "Detection = primer paso de IR." },
+    { q: "NIST IR lifecycle incluye:", o: ["Prepatching", "Preparation, Detection, Containment, Eradication, Recovery, Post-incident", "Solo remediar"], c: 1, e: "NIST = estándar de IR process." },
+    { q: "Containment en IR significa:", o: ["Purgar datos", "Aislar sistemas comprometidos para evitar propagación (short-term + long-term)", "Borrar backdoor"], c: 1, e: "Containment = detener avance del attacker." },
+    { q: "Post-incident review/lessons learned busca:", o: ["Blame", "Mejorar procesos identificando gaps (qué falló en detection/response)", "Solucionar"], c: 1, e: "Post-IR = continuous improvement." },
+    { q: "Un IR playbook documenta:", o: ["Historia de incidentes", "Procedimientos paso-a-paso para tipos de incidentes (malware, breach, DDoS)", "Presupuesto"], c: 1, e: "Playbook = automated procedures para IR." },
+  ],
+  107: [
+    { q: "Threat intelligence es:", o: ["Antivirus", "Colección y análisis de información sobre amenazas, adversarios y tácticas para decision-making", "Firewall"], c: 1, e: "TI = actionable info de riesgos." },
+    { q: "Niveles de TI (pyramid model):", o: ["Solo técnico", "Strategic (qué), Tactical (cómo), Operational (quién/cuándo) y Technical (IOCs/TTP)", "Gerencial"], c: 1, e: "TI pyramid = tres capas decision + technical." },
+    { q: "Indicators of Compromise (IOCs) incluyen:", o: ["Ideas", "Hashes, IPs, dominios, emails, URLs maliciosos observable en un ataque", "Hipótesis"], c: 1, e: "IOCs = evidencia técnica de breach." },
+    { q: "Threat feeds proporcionan:", o: ["Noticias generales", "IOCs, TTPs, CVEs en tiempo real de múltiples fuentes (OSINT, vendors, ISACs)", "Contenido"], c: 1, e: "Feeds = TI sources actualizadas." },
+    { q: "ATT&CK framework cataloga:", o: ["Vulnerabilidades solo", "Tactics (qué quieren lograr) y Techniques (cómo) usado por threat actors", "Malware"], c: 1, e: "ATT&CK = MITRE knowledge base de TTPs." },
+  ],
+  108: [
+    { q: "Threat hunting es:", o: ["Un tipo de firewall", "Búsqueda proactiva de indicios de compromise no detectados por alertas", "Email scanning"], c: 1, e: "Hunting = buscador de amenazas ocultas." },
+    { q: "Hunting hipótesis típica:", o: ["Genérica", "\"Basado en TI reciente o patrón de comportamiento anómalo, espero encontrar X en Y\"", "Aleatoria"], c: 1, e: "Hypothesis-driven hunting." },
+    { q: "Endpoint Detection & Response (EDR) permite:", o: ["Solo antivirus", "Visibilidad completa de procesos, network, files en endpoints + respuesta (quarantine, kill)", "Networking solo"], c: 1, e: "EDR = herramienta de hunting y contención." },
+    { q: "Anomaly detection en hunting busca:", o: ["Firmas conocidas", "Comportamientos raros (logon times, process trees, data access, network connections)", "Exploits"], c: 1, e: "Anomaly = behavioral detection." },
+    { q: "Threat hunting data sources incluyen:", o: ["Solo logs", "Logs, EDR, netflow, DNS, proxy, filesystem, memory, threat feeds", "Emails"], c: 1, e: "Multi-source correlation para hunting." },
+  ],
+  109: [
+    { q: "Cloud security responsabilidad compartida significa:", o: ["AWS/Azure responsable de todo", "Cloud provider (infraestructura) + customer (app, datos, access) comparten seguridad", "Solo customer"], c: 1, e: "Shared responsibility model en cloud." },
+    { q: "Identity and Access Management (IAM) en cloud es crítico porque:", o: ["No se usa", "Acceso mal configurado (buckets públicos, exceso de permisos) = fácil exfiltración", "Solo admin"], c: 1, e: "IAM misconfiguration = top cloud breach cause." },
+    { q: "Hardening de instancias cloud incluye:", o: ["Aumentar RAM", "Security groups restrictivos, OS patching, minimal services, encryption, logging", "Más CPU"], c: 1, e: "Cloud hardening = defense-in-depth." },
+    { q: "Data residency en cloud es importante porque:", o: ["No importa", "Regulaciones (GDPR, CCPA) requieren datos en región específica", "Es costoso"], c: 1, e: "Compliance requirement en cloud." },
+    { q: "Cloud-native security debe automatizar:", o: ["Nada", "Policies, patching, secrets rotation, compliance checks via Infrastructure-as-Code (IaC)", "Manually"], c: 1, e: "Automation en cloud security." },
+  ],
+  110: [
+    { q: "Kubernetes orquesta:", o: ["Bases de datos", "Containerización y deployment de aplicaciones (replicas, scaling, load balancing)", "Redes solo"], c: 1, e: "K8s = container orchestration." },
+    { q: "Pod en Kubernetes es:", o: ["Una máquina", "Unidad mínima: 1+ containers que comparten namespace/storage", "Un nodo"], c: 1, e: "Pod = wrapper de containers." },
+    { q: "Network policies en K8s permiten:", o: ["Velocidad solo", "Segmentación: controlar tráfico entre pods (default deny, whitelist)", "Nada"], c: 1, e: "Microsegmentation en K8s." },
+    { q: "RBAC (Role-Based Access Control) en K8s:", o: ["No existe", "Granular: ServiceAccounts + Roles/ClusterRoles + Bindings para least privilege", "Full access"], c: 1, e: "Authorization model de K8s." },
+    { q: "Container image scanning detecta:", o: ["Nada", "Vulnerabilidades en librerías (base image) antes de deployar", "Malware solo"], c: 1, e: "Scanning = shift-left security." },
+  ],
+  111: [
+    { q: "APIs REST vulnerables permiten:", o: ["Nada", "Acceso no autenticado/autorizado, injection, data exposure, rate limit bypass", "Solo lentitud"], c: 1, e: "API security crítica en modern apps." },
+    { q: "API authentication común:", o: ["Nada", "API keys, OAuth 2.0, JWTs, mTLS para verificar caller identity", "Passwords solo"], c: 1, e: "Auth en APIs." },
+    { q: "Rate limiting previene:", o: ["Nada", "DDoS y brute force (limitar requests/segundo por IP/user)", "Acceso"], c: 1, e: "Rate limiting = DoS defense." },
+    { q: "CORS (Cross-Origin Resource Sharing) mal configurado:", o: ["Nada", "Permite browser requests de cualquier domain (CSRF/XSS window)", "Es seguro"], c: 1, e: "CORS = browser security flaw." },
+    { q: "GraphQL vs REST vulnerabilidades:", o: ["Iguales", "GraphQL: query complexity attacks, deep nesting DoS, field exposure; REST: endpoint enumeration", "GraphQL es seguro"], c: 1, e: "API type-specific threats." },
+  ],
+  112: [
+    { q: "SDLC (Secure Software Development Lifecycle) integra:", o: ["Nada", "Seguridad en cada fase: requirements (threat model), design, dev (code review), test, deploy, maintain", "Solo en deploy"], c: 1, e: "Security-first SDLC." },
+    { q: "Threat modeling en SDLC sirve para:", o: ["Nada", "Identificar assets, amenazas, vulnerabilidades en arquitectura pre-código", "Solo test"], c: 1, e: "Threat model = preventivo." },
+    { q: "Code review de seguridad busca:", o: ["Typos", "CWEs: injection, XSS, CSRF, crypto weak, auth/authz bypass, secrets hardcoded", "Performance"], c: 1, e: "Security code review." },
+    { q: "Secure coding standards (OWASP Top 10, CWE Top 25):", o: ["No existen", "Guías de qué evitar en desarrollo (input validation, output encoding, parameterized queries)", "Opcionales"], c: 1, e: "Coding best practices." },
+    { q: "Dependency management en SDLC:", o: ["Nada", "Audit librerías de terceros por vulnerabilidades, mantener versiones actualizadas", "No importa"], c: 1, e: "Supply chain risk en SDLC." },
+  ],
+  113: [
+    { q: "DevSecOps integra seguridad en:", o: ["Solo desarrollo", "DevOps pipeline: SCM → build (SAST) → test (DAST) → deploy (RASP) → monitor", "Solo deploy"], c: 1, e: "Security throughout pipeline." },
+    { q: "SAST (Static Application Security Testing) analiza:", o: ["Binarios", "Código fuente sin ejecutar (regex patterns, AST, taint analysis)", "Network"], c: 1, e: "Static analysis = early detection." },
+    { q: "DAST (Dynamic Application Security Testing) ejecuta:", o: ["Código fuente", "La app viva (fuzzing, injection attempts, auth bypass) descubriendo runtime vulnerabilities", "Binarios"], c: 1, e: "Dynamic testing = runtime testing." },
+    { q: "Infrastructure-as-Code (IaC) security valida:", o: ["Solo funcionamiento", "Misconfigurations en YAML/JSON antes de provisionar (Terraform, CloudFormation, Helm)", "Performance"], c: 1, e: "IaC scanning." },
+    { q: "Secrets management en DevSecOps previene:", o: ["Nada", "Hardcoded credentials en code/config vía vault + rotation automática", "Acceso"], c: 1, e: "Secret handling en pipeline." },
+  ],
+  114: [
+    { q: "Security architecture define:", o: ["Solo firewall", "Principios (defense-in-depth, zero trust), controles, threat models, compliance mapping para toda la org", "Red only"], c: 1, e: "Arch = blueprints de seguridad." },
+    { q: "Defense-in-depth significa:", o: ["Un firewall fuerte", "Múltiples capas redundantes de controles (network, host, app, data, user)", "Solo software"], c: 1, e: "Layered security." },
+    { q: "Zero Trust architecture reemplaza:", o: ["Nada", "Perímetro de confianza por verificación continua (never trust, always verify)", "Seguridad"], c: 1, e: "Zero trust = modern model." },
+    { q: "Enterprise security frameworks (NIST CSF, ISO 27001):", o: ["Recomendaciones", "Estructura de controles, políticas y procesos de seguridad de la org", "Opcionales"], c: 1, e: "Compliance frameworks." },
+    { q: "CISO (Chief Information Security Officer) es responsable de:", o: ["Solo técnica", "Estrategia, governance, risk management, asignación de budget, reporte a board", "Admins"], c: 1, e: "CISO = executive role." },
+  ],
+  // ─── M39-M48 (Lecciones 105-114) Intermediate/Advanced ──
+  105: {
+    i: [
+      { q: "¿Qué diferencia hay entre volatile memory (RAM) y non-volatile (disco)?", o: ["Nada", "RAM pierde datos al apagar; disco persiste. Ambas son críticas en forense", "Son iguales"], c: 1, e: "Volatility = tiempo de captura crítico en RAM." },
+      { q: "Write blocker en forense:", o: ["Bloquea escritura", "Hardware/software que previene modificación de evidencia durante análisis", "Antivirus"], c: 1, e: "Write blocker = preservación de integridad." },
+      { q: "Timeline analysis en forense construye:", o: ["Historias falsas", "Secuencia de eventos (accesos, modificaciones, creaciones) para reconstruir attack progression", "Nada"], c: 1, e: "Timeline = attack reconstruction." },
+      { q: "Steganography en forense es:", o: ["No existe", "Ocultación de datos dentro de otros (imagen, audio) — forense busca detalles sospechosos", "Solo fotos"], c: 1, e: "Stego detection = análisis avanzado." },
+    ],
+    a: [
+      { q: "NTFS Master File Table (MFT) contiene:", o: ["Solo fotos", "Metadatos de archivos (timestamps, permissions, data runs) — recuperable post-delete", "Textos"], c: 1, e: "MFT recovery = key forense technique." },
+      { q: "Registry hibernation/hive recovery permite:", o: ["Nada", "Acceder a versiones antiguas de registry claves para auditar cambios de config/persistence", "Solo current"], c: 1, e: "Registry timeline analysis." },
+      { q: "Photogrammetry en forense digital:", o: ["No existe", "Análisis de metadata de imágenes (EXIF, GPS, timestamps) para geolocación/timeline", "Solo visión"], c: 1, e: "Image metadata forense." },
+      { q: "Cross-device correlation en forense:", o: ["No existe", "Correlacionar eventos entre múltiples devices (phone, PC, cloud) para unified timeline", "Imposible"], c: 1, e: "Multi-device reconstruction." },
+    ],
+  },
+  106: {
+    i: [
+      { q: "¿Qué diferencia hay entre containment SHORT-TERM vs LONG-TERM en IR?", o: ["Ninguna", "Short (aislar NOW para detener avance); Long (investigar root cause, remediación permanente)", "Ambos igual"], c: 1, e: "Containment strategy tiers." },
+      { q: "Eradication en IR requiere:", o: ["Detectar", "Remover COMPLETAMENTE la amenaza (malware, backdoors, escalated accounts, misconfigs)", "Solo limpiar"], c: 1, e: "Complete threat removal." },
+      { q: "Recovery en IR busca:", o: ["Nada", "Restaurar sistemas a operational state confiable (backup, rebuild, re-deploy clean images)", "Ignorar"], c: 1, e: "Service restoration." },
+      { q: "Incident severity scoring típico:", o: ["Fijo", "Combination de impact (# usuarios, data breached, revenue loss) + urgency + exploitability", "Subjetivo"], c: 1, e: "Risk scoring framework." },
+    ],
+    a: [
+      { q: "Escalation procedures en IR workflow:", o: ["No existen", "Criterios claros para escalar a CISO/board (breach confirmado, impact > threshold) y timing", "Informal"], c: 1, e: "IR escalation matrix." },
+      { q: "Coordination in multi-org incidents (supply chain):", o: ["No existe", "Comunicación sincronizada: forensic findings shared, timelines aligned, root cause analysis cross-org", "Solo interno"], c: 1, e: "Cross-org IR coordination." },
+      { q: "Recovery Time Objective (RTO) y RPO en IR:", o: ["No importa", "RTO = max downtime acceptable; RPO = max data loss acceptable — define restore priorities", "Iguales"], c: 1, e: "Business continuity metrics." },
+      { q: "Post-incident report debe documentar:", o: ["Excusas", "Timeline, impact, root cause, detection gap, response effectiveness, improvements for prevention", "Nada"], c: 1, e: "IR report documentation." },
+    ],
+  },
+  107: {
+    i: [
+      { q: "¿Cuál es la fuente TI PRIMARIA: interno vs externo?", o: ["Ambos equal", "Interno (EDR/logs) + externo (OSINT/feeds/vendors) — correlacionar > confianza", "Solo interno"], c: 1, e: "TI source diversity." },
+      { q: "TTP (Tactic, Technique, Procedure) en TI:", o: ["No existe", "Patrón de cómo un attacker opera (tácticas = objetivo alto nivel; técnicas = específicas)", "Solo TTT"], c: 1, e: "TTP profiling de adversarios." },
+      { q: "Attribution en TI es:", o: ["Seguro", "Determinar quién atacó basado en TTP + tools + targeting — difícil, requiere alto confidence", "Imposible"], c: 1, e: "Attribution confidence levels." },
+      { q: "Crowdsourced threat intelligence (VirusTotal, Shodan):", o: ["No confiable", "Useful para IOCs pero unverified — valida siempre con fuentes primarias", "100% fiable"], c: 1, e: "TI source validation." },
+    ],
+    a: [
+      { q: "Kill chain framework (Lockheed Martin) vs MITRE ATT&CK:", o: ["Iguales", "Kill chain = linear attack progression; ATT&CK = matrix de tácticas/técnicas — ATT&CK más moderno", "Kill chain mejor"], c: 1, e: "Frameworks de ataque." },
+      { q: "Threat actor profiling (APT vs script kiddie):", o: ["No importa", "Skill level + resources + motivation define capability — APTs son sophisticated, organized", "Iguales"], c: 1, e: "Attacker classification." },
+      { q: "Indicator decay en TI significa:", o: ["Nada", "IOCs envejecen (domainos cambian, IPs se reusan) — validar contexto + timing antes de bloquear", "Eterno"], c: 1, e: "IOC lifespan management." },
+      { q: "Threat modeling for YOUR org usando TI:", o: ["No se usa", "Mapear: qué APTs targeting tu industria, qué técnicas usan, qué data buscan — priorizar defenses", "No aplica"], c: 1, e: "Risk-based TI application." },
+    ],
+  },
+  108: {
+    i: [
+      { q: "¿Cómo formulas una hunting hypothesis?", o: ["Adivinar", "Basado en: TI reciente + patrón sospechoso observado + comportamiento anómalo esperado", "Aleatoria"], c: 1, e: "Hypothesis-driven approach." },
+      { q: "Hunting queries en SIEM/EDR buscan:", o: ["Malware conocido", "Comportamientos anómalos (process creation chains, unexpected network, privilege escalation attempts)", "Firmas"], c: 1, e: "Anomaly-based hunting." },
+      { q: "False positive management en hunting:", o: ["Ignorarlos", "Automatizar baseline (qué es normal) → filtrar FPs → investigar verdaderos positivos", "Todos reales"], c: 1, e: "Signal-to-noise ratio." },
+      { q: "Persistence mechanisms en hunting—buscar:", o: ["Nada", "Registry Run keys, scheduled tasks, WMI subscriptions, startup folders, service installation", "Malware solo"], c: 1, e: "Persistence hunting indicators." },
+    ],
+    a: [
+      { q: "Advanced hunting using machine learning:", o: ["No existe", "Algoritmos entrenan en baseline normal → detectan outliers (login timing, data volume, network patterns)", "No funciona"], c: 1, e: "ML-based threat detection." },
+      { q: "Living off the land (LOLBin) hunting:", o: ["No existe", "Buscar abuso de Windows built-in tools (PowerShell, WMI, rundll32) para evadir AV", "Fácil detectar"], c: 1, e: "LOTL detection via command line audit." },
+      { q: "Command line obfuscation detection:", o: ["No existe", "Detectar: encoding, variable usage, character replacements — EDR decifra y correlaciona", "Imposible"], c: 1, e: "Obfuscation evasion detection." },
+      { q: "Internal lateral movement patterns hunting:", o: ["No existe", "Monitoreo de access anómalo: admin lateral moves, data access patterns, share enumeration", "Imposible"], c: 1, e: "Lateral movement discovery." },
+    ],
+  },
+  109: {
+    i: [
+      { q: "¿Cuál es el principal vector de breach en cloud?", o: ["DDoS", "Misconfiguración (public buckets, overpermissioned IAM, default credentials)", "Malware"], c: 1, e: "Misconfiguration = #1 cloud threat." },
+      { q: "Privilege escalation en cloud ocurre cuando:", o: ["No existe", "IAM policy permite action no intended (wildcard perms, service account reuse, role assumption)", "Imposible"], c: 1, e: "Cloud IAM attack surface." },
+      { q: "Encryption in transit + at rest en cloud:", o: ["Una sola", "Ambas críticas: TLS en transporte, AES/KMS para storage — keys must be managed securely", "Nada"], c: 1, e: "Cloud encryption layers." },
+      { q: "Multi-cloud security challenges:", o: ["No hay", "Diferentes IAM modelos, APIs, compliance rules — require unified policy, monitoring, tooling", "Fácil"], c: 1, e: "Multi-cloud complexity." },
+    ],
+    a: [
+      { q: "CSPM (Cloud Security Posture Management) monitorea:", o: ["Solo firewalls", "Configuration drift (IaC compliance), IAM policies, encryption settings, compliance mapping real-time", "Nada"], c: 1, e: "Continuous compliance in cloud." },
+      { q: "Lateral movement en cloud infrastructure:", o: ["No existe", "Service-to-service auth exploitation (service principal, assume role, metadata service abuse)", "Imposible"], c: 1, e: "Cloud lateral movement vectors." },
+      { q: "Supply chain risk en cloud (vendor/dependency):", o: ["No existe", "Acceso de proveedores a tu account, malicious dependencies, compromised container images", "Ignorar"], c: 1, e: "Third-party cloud risk." },
+      { q: "Cloud-native threat: serverless/functions abuse:", o: ["No existe", "Función invoked maliciously, resource exhaustion (DoS), information disclosure from logs", "Seguro"], c: 1, e: "Serverless security." },
+    ],
+  },
+  110: {
+    i: [
+      { q: "¿Cuál es el principal riesgo en Kubernetes?", o: ["Lentitud", "Container escape, RBAC misconfiguration, exposed API server, supply chain (malicious images)", "Networking"], c: 1, e: "K8s security attack surface." },
+      { q: "Secrets management en K8s:", o: ["Hardcoded", "Use external vault (HashiCorp, Azure Key Vault); K8s Secrets base64 (not encrypted) es pobre", "Base64 seguro"], c: 1, e: "K8s secrets handling." },
+      { q: "Network policies default en K8s:", o: ["Allow all", "Allow all — explicit DENY rules requeridos for segmentation", "Deny all"], c: 1, e: "K8s network security posture." },
+      { q: "Container image scanning busca:", o: ["Velocidad", "CVEs en dependencies (libraries), malware, secrets accidentally baked, compliance violations", "Performance"], c: 1, e: "Image scanning benefits." },
+    ],
+    a: [
+      { q: "Pod security policies/standards en K8s enfuerzan:", o: ["Nada", "Baseline: no root, read-only filesystem, capability drops — restricted: hardened further", "Ninguno"], c: 1, e: "K8s pod hardening policies." },
+      { q: "RBAC bypass via service account tokens:", o: ["No existe", "Si token leaked (mounted in pod), attacker gana permisos del SA — restrict RBAC bindings", "Imposible"], c: 1, e: "K8s SA token exposure." },
+      { q: "API server exposure in K8s:", o: ["No risky", "6443 public = full cluster compromise — network ACLs CRITICAL, kubeconfig secrets", "Fine"], c: 1, e: "K8s control plane security." },
+      { q: "Container escape via kernel CVE:", o: ["Imposible", "Si container kernel outdated, escape a host possible (shared kernel) — patch aggressively", "Seguro"], c: 1, e: "Container isolation limits." },
+    ],
+  },
+  111: {
+    i: [
+      { q: "¿Cuál es el principal riesgo en REST APIs?", o: ["Lentitud", "Broken authentication, authorization bypass, injection, data exposure, rate limit gaps", "Timing"], c: 1, e: "OWASP API top 10." },
+      { q: "API versioning seguridad:", o: ["No importa", "Old versions may retain vulns — deprecate cleanly, force upgrades, don't leave legacy open", "No afecta"], c: 1, e: "API version lifecycle." },
+      { q: "Request/response validation en API:", o: ["No necesario", "Crucial: schema validation (input + output) previene injection/bypass/data leakage", "Opcional"], c: 1, e: "API data validation." },
+      { q: "API logging/monitoring detecta:", o: ["Nada", "Anomalías: rate spike, unusual params, large payloads, repeated failures, timing patterns", "Performance"], c: 1, e: "API security monitoring." },
+    ],
+    a: [
+      { q: "GraphQL-specific vulns (query complexity DoS):", o: ["No existe", "Deep nesting + field expansion = exponential resource use — implement limits (depth, breadth, timeout)", "No riesgo"], c: 1, e: "GraphQL DoS prevention." },
+      { q: "API token rotation strategy:", o: ["Never", "Short-lived tokens (15min-1hr) + refresh token for re-auth — minimize compromise window", "Forever"], c: 1, e: "Token lifecycle management." },
+      { q: "Third-party API integration risks:", o: ["No hay", "Trust inherited: if 3rd-party breached, your API exposed — audit dependencies, isolate access", "Confiable"], c: 1, e: "Supply chain API risk." },
+      { q: "mTLS (mutual TLS) en API:", o: ["No necesario", "Client + server certificates verify identidad bi-directional — crítico para service-to-service", "Básico TLS suficiente"], c: 1, e: "Zero trust API auth." },
+    ],
+  },
+  112: {
+    i: [
+      { q: "¿Cuándo ocurre threat modeling en SDLC?", o: ["En deploy", "Post-design, pre-code: arquitectura es dibujada, amenazas identificadas, mitigaciones diseñadas", "En test"], c: 1, e: "Threat modeling timing." },
+      { q: "Secure coding training en SDLC reduce:", o: ["Nada", "CWEs comunes (injection, crypto weak, auth bypass) — cuanto antes se entrena, menos bugs", "No afecta"], c: 1, e: "Training effectiveness." },
+      { q: "Dependency supply chain en SDLC (SCA):", o: ["No importante", "Software Composition Analysis: audit librerías por CVEs, license risks, malicious packages", "No se audita"], c: 1, e: "Dependency security." },
+      { q: "Secrets scanning en CI/CD:", o: ["No se usa", "Detectar hardcoded API keys, passwords, certs en código antes de commit/push — previene leaks", "No necesario"], c: 1, e: "Pre-commit security scanning." },
+    ],
+    a: [
+      { q: "Threat model artifacts (data flow diagrams):", o: ["Decoración", "Mapeo: entities, assets, trust boundaries, flows — visualiza donde ocurren amenazas", "No útil"], c: 1, e: "TM documentation value." },
+      { q: "Secure design patterns (OWASP, CWE Top 25):", o: ["Opcional", "Establecer patterns ANTES de código reduce re-work post-review (authentication, encryption design)", "No afecta"], c: 1, e: "Design patterns security impact." },
+      { q: "Backward compatibility vs security en SDLC:", o: ["Siempre compat", "Conflicts: old deprecated code vuelve vulnerabilities — deprecation schedule + migration crítica", "Siempre seguridad"], c: 1, e: "Legacy code risk management." },
+      { q: "Privacy by design en SDLC (GDPR/CCPA):", o: ["Compliance solo", "Integral: data minimization, purpose limitation, user consent — embebido en arquitectura inicial", "Afterthought"], c: 1, e: "Privacy engineering." },
+    ],
+  },
+  113: {
+    i: [
+      { q: "¿En qué etapa del pipeline DevSecOps integra SAST?", o: ["Pre-deploy", "Build stage: código fuente analizado automaticamente — fail build si crítico encontrado", "Post-deploy"], c: 1, e: "SAST pipeline placement." },
+      { q: "DAST en pipeline DevSecOps corre:", o: ["Antes de compilar", "Post-deployment (staging): app viva atacada automáticamente (fuzzing, injection, auth bypass)", "En desarrollo"], c: 1, e: "DAST timing." },
+      { q: "Infrastructure-as-Code scanning en DevSecOps:", o: ["Opcional", "Pre-provision: Terraform/CloudFormation/Helm analizados por policy violations, misconfigs", "Post-provision"], c: 1, e: "IaC validation stage." },
+      { q: "Container image scanning en DevSecOps:", o: ["No se hace", "Pre-push: imagen analizada por CVEs (base layer), malware, secrets — block si falla política", "Post-push"], c: 1, e: "Image scanning placement." },
+    ],
+    a: [
+      { q: "Shift-left security philosophy DevSecOps:", o: ["No existe", "Mover detección left (dev → build) en lugar de late (test/deploy) — costo reducido", "Shift right mejor"], c: 1, e: "Shift-left paradigm." },
+      { q: "Container registry security (pull policy):", o: ["Pull any", "Solo signed images de registries confiables — image signatures (cosign/notary) verificadas", "Trust any"], c: 1, e: "Supply chain verification." },
+      { q: "Secrets in pipeline: environment vars vs vault:", o: ["Env vars safe", "Vault: encrypted, centralized, auditable — env vars hardcoded/logged (bad) — use CSI drivers", "Env vars"], c: 1, e: "Secrets management in CD." },
+      { q: "Compliance-as-code en DevSecOps (continuous audit):", o: ["Manual check", "Políticas en código (OPA/Sentinel) — automaticamente enforced en deploy, audit logging continuo", "Post-deploy"], c: 1, e: "Automated compliance." },
+    ],
+  },
+  114: {
+    i: [
+      { q: "¿Quién es responsable de estrategia de seguridad?", o: ["IT admin", "CISO (Chief Info Security Officer) en colaboración con exec team + board", "Solo técnicos"], c: 1, e: "CISO executive role." },
+      { q: "Security governance framework establece:", o: ["Nada", "Políticas, roles, responsibility matriz, decision-making authority, compliance mapping", "Técnica solo"], c: 1, e: "Governance structures." },
+      { q: "Risk appetite vs risk tolerance:", o: ["Iguales", "Appetite: qué riesgo org asume (strategic); tolerance: cuánto en control specific (táctico)", "No importa"], c: 1, e: "Risk management levels." },
+      { q: "Security roadmap en architecture:", o: ["No existe", "Plan 3-5 años: qué mejorar, prioridades, budget, milestones — alineado con business goals", "Anual solo"], c: 1, e: "Strategic planning." },
+    ],
+    a: [
+      { q: "Defense-in-depth layers (technology + process + people):", o: ["Solo tech", "Puertas de defensa: red/endpoint/app/data/user layer — si una falla, otras contienen", "Múltiple mejor"], c: 1, e: "Layered security architecture." },
+      { q: "Zero trust architecture (BeyondCorp model):", o: ["No existe", "Cada request verificado (device, user, context) independiente de network location — microsegmentación", "Trust network"], c: 1, e: "Modern authentication model." },
+      { q: "Security culture embedding en org:", o: ["No crítica", "Training regular, incentives para reporting, blameless post-incident — transforma comportamiento", "Técnica solo"], c: 1, e: "Human-centric security." },
+      { q: "Vendor/third-party risk management en architecture:", o: ["Ignorar", "Assess suppliers (security posture, compliance, SLAs) — contractual guarantees, audit rights, offboarding", "Confiar"], c: 1, e: "Supply chain architecture." },
+    ],
+  },
 };
 
 export const QUIZ_LEVELS: QuizLevel[] = ["b", "i", "a"];
