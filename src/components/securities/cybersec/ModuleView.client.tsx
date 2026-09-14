@@ -102,14 +102,18 @@ export function ModuleView({ module: mod }: Props) {
 
       <header className="space-y-2">
         <div className="flex items-center gap-3 text-[10px] uppercase tracking-wider text-[#475569] font-mono">
-          <span>M{mod.m}</span>
+          <span>🗡️ Quest {mod.m}</span>
           <span>·</span>
           <span>{mod.cat}</span>
           <span>·</span>
           <span>Semana {mod.wk}</span>
           <ProgressBadge status={status} size="md" />
         </div>
-        <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono">{mod.title}</h1>
+        <h1 className="text-2xl font-bold text-[#e2e8f0] font-mono">🗡️ {mod.title}</h1>
+        <p className="text-sm text-[#94a3b8]">
+          {completed.size}/{LEVEL_ORDER.length} niveles completados
+          {researchDone && " · Research hecha"}
+        </p>
       </header>
 
       <section className="space-y-3">

@@ -7,6 +7,11 @@ import { toast } from "sonner";
 import type { QuizQuestion, QuizLevel } from "@/lib/securities/cybersec";
 import { shuffle, formatClock, QUIZ_LEVEL_LABELS } from "@/lib/securities/cybersec";
 import { CelebrationOverlay } from "./CelebrationOverlay.client";
+import { playSound, triggerHaptic, addXp, updateStreak, getLevelProgress, checkAndAwardBadges } from "@/lib/securities/cybersec/adhd-gamification";
+import { StreakHeader } from "./adhd/StreakHeader.client";
+import { ProgressTowardBadge } from "./adhd/ProgressTowardBadge.client";
+import { XPPopup } from "./adhd/XPPopup.client";
+import { BadgeAnimation } from "./adhd/BadgeAnimation.client";
 
 interface Props {
   lessonId: number;
@@ -47,6 +52,12 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
   // Confeti inline: se remonta (key) en cada aprobación para re-disparar la animación.
   const [celebration, setCelebration] = useState<{ key: number; score: number; total: number } | null>(null);
 
+  // ADHD Gamification State
+  const [xpPopup, setXpPopup] = useState<{ key: number; amount: number; x: number; y: number } | null>(null);
+  const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
+  const [currentBadgeAnimation, setCurrentBadgeAnimation] = useState<string | null>(null);
+  const [quizzesInSession, setQuizzesInSession] = useState(0);
+
   // Load persisted "wrong" set so the user can review only failed questions.
   useEffect(() => {
     try {
@@ -54,6 +65,22 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
       if (raw) setSavedWrong(JSON.parse(raw) as string[]);
     } catch { /* ignore */ }
   }, [lessonId, level]);
+
+  // Handle earned badges one by one with animation
+  useEffect(() => {
+    if (earnedBadges.length === 0) return;
+    let index = 0;
+
+    const showNextBadge = () => {
+      if (index < earnedBadges.length) {
+        setCurrentBadgeAnimation(earnedBadges[index]);
+        index += 1;
+        setTimeout(showNextBadge, 3500); // Wait for animation + delay
+      }
+    };
+
+    showNextBadge();
+  }, [earnedBadges]);
 
   const total = session.length;
   const score = useMemo(
@@ -99,6 +126,21 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
     if (passed) {
       // Confeti inmediato (reutiliza CelebrationOverlay).
       setCelebration((c) => ({ key: (c?.key ?? 0) + 1, score: finalScore, total: sess.length }));
+
+      // ADHD Gamification: Check for badge unlocks
+      const { currentLevel } = getLevelProgress();
+      const newBadges = checkAndAwardBadges({
+        score: finalScore,
+        total: sess.length,
+        currentLevel,
+      });
+
+      if (newBadges.length > 0) {
+        setEarnedBadges(newBadges);
+        playSound("badge");
+        triggerHaptic("pulse");
+      }
+
       // Marca el nivel del quiz como progreso del módulo (best-effort, no bloquea).
       if (moduleId != null) {
         void fetch("/api/securities/cybersec/progress", {
@@ -158,8 +200,47 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
   const revealFeedback = (i: number) =>
     mode === "practica" ? answers[i] !== undefined : submitted;
 
+  // ADHD Gamification: Handle answer selection with immediate feedback
+  const handleAnswer = useCallback((questionIdx: number, optionIdx: number, isCorrect: boolean) => {
+    // Play sound
+    playSound(isCorrect ? "correct" : "incorrect");
+    triggerHaptic(isCorrect ? "tick" : "pulse");
+
+    // Show XP popup (only on correct answers)
+    if (isCorrect) {
+      const xpReward = level === "a" ? 25 : level === "i" ? 15 : 10;
+      setXpPopup({
+        key: Date.now(),
+        amount: xpReward,
+        x: 50 + (Math.random() - 0.5) * 20,
+        y: 30 + (Math.random() - 0.5) * 20,
+      });
+
+      // Award XP
+      const { leveledUp } = addXp(xpReward);
+      if (leveledUp) {
+        playSound("levelup");
+        triggerHaptic("burst");
+      }
+
+      // Track quiz progress
+      setQuizzesInSession(prev => prev + 1);
+    }
+  }, [level]);
+
   return (
     <div className="space-y-6">
+      {/* XP Popup Animation */}
+      {xpPopup && <XPPopup key={xpPopup.key} amount={xpPopup.amount} x={xpPopup.x} y={xpPopup.y} />}
+
+      {/* Badge Animation */}
+      {currentBadgeAnimation && (
+        <BadgeAnimation
+          badgeName={currentBadgeAnimation}
+          onDismiss={() => setCurrentBadgeAnimation(null)}
+        />
+      )}
+
       {celebration && (
         <CelebrationOverlay
           key={celebration.key}
@@ -171,14 +252,24 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
         />
       )}
 
+      {/* Streak Header - Always visible */}
+      <StreakHeader compact={false} />
+
       <Link href={`/securities/cybersec/lessons/${lessonId}`} className="inline-flex items-center gap-1.5 text-sm text-[#94a3b8] hover:text-[#22d3ee]">
         <ArrowLeft size={14} /> Volver a la lección
       </Link>
 
       <header className="space-y-1">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[#475569]">Quiz · Lección {lessonId} · Nivel {QUIZ_LEVEL_LABELS[level]}</p>
-        <h1 className="text-xl font-bold text-[#e2e8f0] font-mono">{lessonTitle}</h1>
+        <p className="text-[10px] font-mono uppercase tracking-wider text-[#475569]">Quest · Lección {lessonId} · Nivel {QUIZ_LEVEL_LABELS[level]}</p>
+        <h1 className="text-xl font-bold text-[#e2e8f0] font-mono">🗡️ {lessonTitle}</h1>
       </header>
+
+      {/* Progress toward next badge */}
+      <ProgressTowardBadge
+        quizzesCompleted={quizzesInSession}
+        quizzesTilBadge={Math.max(0, 5 - (quizzesInSession % 5))}
+        badgeTitle="Badge"
+      />
 
       {/* Mode selector */}
       <div className="flex flex-wrap items-center gap-2">
@@ -217,7 +308,13 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
                   return (
                     <button
                       key={oIdx}
-                      onClick={() => !locked && setAnswers((p) => ({ ...p, [i]: oIdx }))}
+                      onClick={() => {
+                        if (!locked) {
+                          const isCorrect = oIdx === q.c;
+                          handleAnswer(i, oIdx, isCorrect);
+                          setAnswers((p) => ({ ...p, [i]: oIdx }));
+                        }
+                      }}
                       disabled={locked}
                       className={`w-full text-left px-3 py-2 rounded text-sm border transition-colors ${
                         showCorrect ? "bg-[#34d399]/10 border-[#34d399]/40 text-[#34d399]"
