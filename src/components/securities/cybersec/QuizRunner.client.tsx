@@ -15,6 +15,10 @@ import { BadgeAnimation } from "./adhd/BadgeAnimation.client";
 import { DailyAttemptsDisplay } from "./adhd/DailyAttemptsDisplay.client";
 import { CosmeticDisplay } from "./adhd/CosmeticDisplay.client";
 import { LeaderboardPercentile } from "./adhd/LeaderboardPercentile.client";
+import { HintDisplay } from "./adhd/HintDisplay.client";
+import { HackerRankProgress } from "./adhd/HackerRankProgress.client";
+import { AdaptiveScaffoldingIndicator } from "./adhd/AdaptiveScaffoldingIndicator.client";
+import { detectStruggle, type PerformanceMetrics } from "@/lib/securities/cybersec/adhd-adaptive";
 
 interface Props {
   lessonId: number;
@@ -60,6 +64,18 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
   const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
   const [currentBadgeAnimation, setCurrentBadgeAnimation] = useState<string | null>(null);
   const [quizzesInSession, setQuizzesInSession] = useState(0);
+
+  // Phase 3: Adaptive Difficulty
+  const [consecutiveWrong, setConsecutiveWrong] = useState(0);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics>({
+    consecutiveWrong: 0,
+    accuracyRate: 1.0,
+    timePerQuestion: 0,
+    totalQuestionsAnswered: 0,
+    strugglingModules: new Set(),
+  });
+  const [scaffoldingLevel, setScaffoldingLevel] = useState<"flowing" | "struggling" | "mastering">("flowing");
+  const [showHint, setShowHint] = useState(false);
 
   // Load persisted "wrong" set so the user can review only failed questions.
   useEffect(() => {
@@ -209,6 +225,36 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
     playSound(isCorrect ? "correct" : "incorrect");
     triggerHaptic(isCorrect ? "tick" : "pulse");
 
+    // Phase 3: Track performance for adaptive difficulty
+    if (isCorrect) {
+      setConsecutiveWrong(0);
+      setShowHint(false);
+    } else {
+      setConsecutiveWrong(prev => prev + 1);
+    }
+
+    // Update performance metrics
+    const newMetrics: PerformanceMetrics = {
+      ...performanceMetrics,
+      consecutiveWrong: isCorrect ? 0 : consecutiveWrong + 1,
+      totalQuestionsAnswered: performanceMetrics.totalQuestionsAnswered + 1,
+      accuracyRate:
+        isCorrect
+          ? performanceMetrics.accuracyRate
+          : (performanceMetrics.totalQuestionsAnswered * performanceMetrics.accuracyRate) /
+            (performanceMetrics.totalQuestionsAnswered + 1),
+    };
+    setPerformanceMetrics(newMetrics);
+
+    // Detect struggle level
+    const level = detectStruggle(newMetrics);
+    setScaffoldingLevel(level);
+
+    // Show hint if struggling
+    if (!isCorrect && newMetrics.consecutiveWrong >= 2) {
+      setShowHint(true);
+    }
+
     // Show XP popup (only on correct answers)
     if (isCorrect) {
       const xpReward = level === "a" ? 25 : level === "i" ? 15 : 10;
@@ -229,7 +275,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
       // Track quiz progress
       setQuizzesInSession(prev => prev + 1);
     }
-  }, [level]);
+  }, [level, performanceMetrics, consecutiveWrong]);
 
   return (
     <div className="space-y-6">
@@ -269,6 +315,15 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
 
       {/* Daily Attempts Display */}
       <DailyAttemptsDisplay lessonId={lessonId} compact={false} />
+
+      {/* Phase 3: Adaptive Scaffolding Indicator */}
+      <AdaptiveScaffoldingIndicator level={scaffoldingLevel} showDetails={true} />
+
+      {/* Phase 3: Hacker Rank Progress */}
+      <HackerRankProgress
+        totalXp={getLevelProgress().currentXp}
+        currentLevel={getLevelProgress().currentLevel}
+      />
 
       {/* Leaderboard Percentile */}
       <LeaderboardPercentile
@@ -315,11 +370,26 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
           const reveal = revealFeedback(i);
           const isCorrect = userAnswer === q.c;
           const locked = mode === "practica" ? answers[i] !== undefined : submitted;
+          const questionWrongCount = i === session.length - 1 ? consecutiveWrong : 0;
           return (
-            <div key={i} className="rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-4">
-              <p className="text-sm font-bold text-[#e2e8f0] mb-3">
-                <span className="text-[#22d3ee] mr-2">{i + 1}.</span> {q.q}
-              </p>
+            <div key={i} className="space-y-3">
+              {/* Phase 3: Show hint if struggling on current question */}
+              {showHint && i === session.length - 1 && !locked && (
+                <HintDisplay
+                  isVisible={true}
+                  difficulty={level}
+                  wrongCount={questionWrongCount}
+                  onUseHint={() => {
+                    // Reduce XP reward by 25% and move to next question
+                    setShowHint(false);
+                  }}
+                />
+              )}
+
+              <div className="rounded-lg border border-[#1f2937] bg-[#0a0e1a] p-4">
+                <p className="text-sm font-bold text-[#e2e8f0] mb-3">
+                  <span className="text-[#22d3ee] mr-2">{i + 1}.</span> {q.q}
+                </p>
               <div className="space-y-1.5">
                 {q.o.map((opt, oIdx) => {
                   const isSelected = userAnswer === oIdx;
@@ -352,11 +422,12 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
                   );
                 })}
               </div>
-              {reveal && (
-                <p className={`mt-2 text-xs ${isCorrect ? "text-[#34d399]" : "text-[#94a3b8]"}`}>
-                  {isCorrect ? "✓ Correcto. " : "✗ "} {q.e}
-                </p>
-              )}
+                {reveal && (
+                  <p className={`mt-2 text-xs ${isCorrect ? "text-[#34d399]" : "text-[#94a3b8]"}`}>
+                    {isCorrect ? "✓ Correcto. " : "✗ "} {q.e}
+                  </p>
+                )}
+              </div>
             </div>
           );
         })}
