@@ -19,6 +19,16 @@ import { HintDisplay } from "./adhd/HintDisplay.client";
 import { HackerRankProgress } from "./adhd/HackerRankProgress.client";
 import { AdaptiveScaffoldingIndicator } from "./adhd/AdaptiveScaffoldingIndicator.client";
 import { detectStruggle, type PerformanceMetrics } from "@/lib/securities/cybersec/adhd-adaptive";
+import { ClanSelector } from "./adhd/ClanSelector.client";
+import { HallOfFame } from "./adhd/HallOfFame.client";
+import { RareBadges } from "./adhd/RareBadges.client";
+import {
+  getUserClan,
+  addXpToClan,
+  recordAchievement,
+  detectAndUnlockRareBadges,
+  type BadgeDetectionContext,
+} from "@/lib/securities/cybersec/adhd-social-leaderboards";
 
 interface Props {
   lessonId: number;
@@ -77,6 +87,10 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
   const [scaffoldingLevel, setScaffoldingLevel] = useState<"flowing" | "struggling" | "mastering">("flowing");
   const [showHint, setShowHint] = useState(false);
 
+  // Phase 4: Social Leaderboards & Rare Badges
+  const [userClan, setUserClan] = useState<any>(null);
+  const [rareUnlockedThisSession, setRareUnlockedThisSession] = useState<string[]>([]);
+
   // Load persisted "wrong" set so the user can review only failed questions.
   useEffect(() => {
     try {
@@ -84,6 +98,12 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
       if (raw) setSavedWrong(JSON.parse(raw) as string[]);
     } catch { /* ignore */ }
   }, [lessonId, level]);
+
+  // Load user's clan (Phase 4)
+  useEffect(() => {
+    const clan = getUserClan("user_123"); // Default user ID for now
+    setUserClan(clan);
+  }, []);
 
   // Handle earned badges one by one with animation
   useEffect(() => {
@@ -147,7 +167,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
       setCelebration((c) => ({ key: (c?.key ?? 0) + 1, score: finalScore, total: sess.length }));
 
       // ADHD Gamification: Check for badge unlocks
-      const { currentLevel } = getLevelProgress();
+      const { currentLevel, currentXp } = getLevelProgress();
       const newBadges = checkAndAwardBadges({
         score: finalScore,
         total: sess.length,
@@ -158,6 +178,32 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
         setEarnedBadges(newBadges);
         playSound("badge");
         triggerHaptic("pulse");
+      }
+
+      // Phase 4: Add XP to clan and record achievement
+      if (userClan) {
+        const quizLevel = level as "a" | "b" | "i";
+        const xpReward = quizLevel === "a" ? 25 : quizLevel === "i" ? 15 : 10;
+        addXpToClan(userClan.id, xpReward * finalScore);
+        recordAchievement(currentLevel, currentXp, "Hacker", `Quiz Completado: ${lessonTitle}`);
+
+        // Detect and unlock rare badges
+        const badgeContext: BadgeDetectionContext = {
+          currentStreak: 0, // Get from streak state if available
+          accuracy: finalScore / sess.length,
+          consecutiveWrong,
+          avgTimePerQuestion: performanceMetrics.timePerQuestion,
+          hackerLevel: currentLevel,
+          questionsAnsweredThisSession: performanceMetrics.totalQuestionsAnswered,
+          clanRank: 1, // Placeholder, could calculate real rank
+        };
+
+        const unlockedRare = detectAndUnlockRareBadges(badgeContext);
+        if (unlockedRare.length > 0) {
+          setRareUnlockedThisSession(unlockedRare.map((b) => b.name));
+          playSound("badge");
+          triggerHaptic("burst");
+        }
       }
 
       // Marca el nivel del quiz como progreso del módulo (best-effort, no bloquea).
@@ -257,7 +303,8 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
 
     // Show XP popup (only on correct answers)
     if (isCorrect) {
-      const xpReward = level === "a" ? 25 : level === "i" ? 15 : 10;
+      const quizLevel = level as "a" | "b" | "i";
+      const xpReward = quizLevel === "a" ? 25 : quizLevel === "i" ? 15 : 10;
       setXpPopup({
         key: Date.now(),
         amount: xpReward,
@@ -357,10 +404,34 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
       {submitted && (
         <>
           <ScoreBanner score={score} total={total} saveState={saveState} />
+
+          {/* Phase 4: Clan Selector */}
+          <ClanSelector userId="user_123" onClanChange={setUserClan} />
+
+          {/* Phase 4: Hall of Fame */}
+          <HallOfFame maxEntries={5} />
+
+          {/* Phase 4: Rare Badges */}
+          <RareBadges showAll={true} />
+
           {/* Show cosmetics when quiz is completed */}
           <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
             <CosmeticDisplay weekNumber={Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))} />
           </div>
+
+          {/* Show newly unlocked rare badges notification */}
+          {rareUnlockedThisSession.length > 0 && (
+            <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/5 p-4 space-y-2">
+              <p className="text-sm font-bold text-yellow-400">🎊 Rare Badges Unlocked!</p>
+              <div className="flex flex-wrap gap-2">
+                {rareUnlockedThisSession.map((name) => (
+                  <span key={name} className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-300">
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -377,7 +448,7 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
               {showHint && i === session.length - 1 && !locked && (
                 <HintDisplay
                   isVisible={true}
-                  difficulty={level}
+                  difficulty={level === "a" ? "advanced" : level === "i" ? "intermediate" : "basic"}
                   wrongCount={questionWrongCount}
                   onUseHint={() => {
                     // Reduce XP reward by 25% and move to next question
