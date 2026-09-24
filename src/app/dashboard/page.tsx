@@ -2,9 +2,19 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import dynamicImport from "next/dynamic";
 import LogoutButton from "@/components/LogoutButton";
 import DashboardPerformancePanel from "@/components/dashboard/DashboardPerformancePanel";
 import { getAccountGroups, getPerformanceMetrics } from "@/lib/dashboard/queries";
+
+// Lazy-load gamification dashboard (client-side only)
+const GamificationDashboard = dynamicImport(
+  () =>
+    import("@/components/securities/cybersec/adhd/GamificationDashboard.client").then(
+      (mod) => mod.GamificationDashboard
+    ),
+  { ssr: false, loading: () => <div className="h-40 animate-pulse" /> }
+);
 
 export const metadata: Metadata = {
   title: "Dashboard — AlphaLog",
@@ -60,6 +70,11 @@ export default async function Dashboard() {
         </div>
 
         <DashboardPerformancePanel metrics={metrics} />
+
+        {/* Gamification Dashboard */}
+        <div className="mt-8">
+          <GamificationDashboard />
+        </div>
 
         {/* Quick links */}
         <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
