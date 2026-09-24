@@ -29,6 +29,14 @@ import {
   detectAndUnlockRareBadges,
   type BadgeDetectionContext,
 } from "@/lib/securities/cybersec/adhd-social-leaderboards";
+import {
+  getActiveVariant,
+  generateSessionId,
+  recordSessionMetrics,
+  type SessionMetrics,
+} from "@/lib/securities/cybersec/adhd-ab-testing";
+import { VariantSelector } from "./adhd/VariantSelector.client";
+import { ABTestingDashboard } from "./adhd/ABTestingDashboard.client";
 
 interface Props {
   lessonId: number;
@@ -91,6 +99,12 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
   const [userClan, setUserClan] = useState<any>(null);
   const [rareUnlockedThisSession, setRareUnlockedThisSession] = useState<string[]>([]);
 
+  // Phase 4: A/B Testing
+  const [sessionId, setSessionId] = useState<string>("");
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0);
+  const [activeVariant, setActiveVariant] = useState<string>("control");
+  const [sessionXpEarned, setSessionXpEarned] = useState<number>(0);
+
   // Load persisted "wrong" set so the user can review only failed questions.
   useEffect(() => {
     try {
@@ -103,6 +117,16 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
   useEffect(() => {
     const clan = getUserClan("user_123"); // Default user ID for now
     setUserClan(clan);
+  }, []);
+
+  // Initialize A/B testing session (Phase 4)
+  useEffect(() => {
+    const newSessionId = generateSessionId();
+    setSessionId(newSessionId);
+    setSessionStartTime(Date.now());
+
+    const variant = getActiveVariant();
+    setActiveVariant(variant.id);
   }, []);
 
   // Handle earned badges one by one with animation
@@ -204,6 +228,25 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
           playSound("badge");
           triggerHaptic("burst");
         }
+      }
+
+      // Phase 4: A/B Testing - Record session metrics
+      if (sessionId && sessionStartTime) {
+        const sessionMetrics: SessionMetrics = {
+          variantId: activeVariant as "control" | "treatment",
+          sessionId,
+          startTime: sessionStartTime,
+          endTime: Date.now(),
+          duration: Date.now() - sessionStartTime,
+          questionsAnswered: sess.length,
+          correctAnswers: finalScore,
+          accuracy: finalScore / sess.length,
+          xpEarned: sessionXpEarned + (finalScore * 10), // Approximate
+          badgesUnlocked: newBadges.length,
+          streakMaintained: true, // Could track actual streak
+        };
+
+        recordSessionMetrics(sessionMetrics);
       }
 
       // Marca el nivel del quiz como progreso del módulo (best-effort, no bloquea).
@@ -377,6 +420,12 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
         userXp={getLevelProgress().currentXp + (level === "a" ? 0 : level === "i" ? 150 : 100)}
         userLevel={getLevelProgress().currentLevel}
       />
+
+      {/* Phase 4: A/B Testing Variant Selector */}
+      <VariantSelector onVariantChange={(id) => setActiveVariant(id)} />
+
+      {/* Phase 4: A/B Testing Dashboard */}
+      <ABTestingDashboard showRawData={false} />
 
       {/* Progress toward next badge */}
       <ProgressTowardBadge
