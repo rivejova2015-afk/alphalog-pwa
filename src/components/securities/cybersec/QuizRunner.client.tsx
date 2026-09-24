@@ -12,6 +12,9 @@ import { StreakHeader } from "./adhd/StreakHeader.client";
 import { ProgressTowardBadge } from "./adhd/ProgressTowardBadge.client";
 import { XPPopup } from "./adhd/XPPopup.client";
 import { BadgeAnimation } from "./adhd/BadgeAnimation.client";
+import { DailyAttemptsDisplay } from "./adhd/DailyAttemptsDisplay.client";
+import { CosmeticDisplay } from "./adhd/CosmeticDisplay.client";
+import { LeaderboardPercentile } from "./adhd/LeaderboardPercentile.client";
 
 interface Props {
   lessonId: number;
@@ -264,6 +267,15 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
         <h1 className="text-xl font-bold text-[#e2e8f0] font-mono">🗡️ {lessonTitle}</h1>
       </header>
 
+      {/* Daily Attempts Display */}
+      <DailyAttemptsDisplay lessonId={lessonId} compact={false} />
+
+      {/* Leaderboard Percentile */}
+      <LeaderboardPercentile
+        userXp={getLevelProgress().currentXp + (level === "a" ? 0 : level === "i" ? 150 : 100)}
+        userLevel={getLevelProgress().currentLevel}
+      />
+
       {/* Progress toward next badge */}
       <ProgressTowardBadge
         quizzesCompleted={quizzesInSession}
@@ -287,7 +299,15 @@ export function QuizRunner({ lessonId, lessonTitle, questions, level = "b", modu
         )}
       </div>
 
-      {submitted && <ScoreBanner score={score} total={total} saveState={saveState} />}
+      {submitted && (
+        <>
+          <ScoreBanner score={score} total={total} saveState={saveState} />
+          {/* Show cosmetics when quiz is completed */}
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <CosmeticDisplay weekNumber={Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))} />
+          </div>
+        </>
+      )}
 
       <div className="space-y-4">
         {session.map((q, i) => {
